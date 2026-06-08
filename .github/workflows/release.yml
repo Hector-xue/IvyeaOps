@@ -205,6 +205,7 @@ jobs:
           Copy-Item scripts/start-hidden.ps1 "$stage/scripts/start-hidden.ps1"
           Copy-Item scripts/stop-hidden.ps1 "$stage/scripts/stop-hidden.ps1"
           Copy-Item scripts/install-exe.ps1 "$stage/scripts/install-exe.ps1"
+          Copy-Item scripts/install-components.ps1 "$stage/scripts/install-components.ps1"
           Copy-Item "启动 IvyeaOps (后台).vbs" "$stage/启动 IvyeaOps (后台).vbs"
           Copy-Item "停止 IvyeaOps.bat" "$stage/停止 IvyeaOps.bat"
           Copy-Item "安装 IvyeaOps Windows x64.bat" "$stage/安装 IvyeaOps Windows x64.bat"

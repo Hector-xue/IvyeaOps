@@ -206,15 +206,15 @@ function AgentRow({
         <span style={S.pill(isOk)}>
           {isOk ? "✓ 已就绪" : state === "installing" ? "⏳ 安装中…" : state === "error" ? "✗ 失败" : "✗ 未安装"}
         </span>
-        {!isOk && state !== "installing" && name !== "hermes" && (
+        {!isOk && state !== "installing" && (
           <button
             style={{ ...S.btnPrimary, padding: "4px 12px", fontSize: 11 }}
             onClick={startInstall}
           >
-            安装
+            安装/修复
           </button>
         )}
-        {!isOk && state === "error" && name !== "hermes" && (
+        {!isOk && state === "error" && (
           <button
             style={{ ...S.btnSecondary, padding: "4px 10px", fontSize: 11 }}
             onClick={startInstall}
@@ -224,14 +224,14 @@ function AgentRow({
         )}
       </div>
 
-      {/* Hermes: can't auto-install, show link */}
-      {!isOk && name === "hermes" && (
+      {/* Hermes/GBrain installers are optional; failures do not block setup. */}
+      {!isOk && (name === "hermes" || name === "gbrain") && (
         <div style={S.hint}>
-          Hermes 需要手动安装。请参考项目文档完成安装后，点「跳过」继续。
+          将在线安装可选组件；如网络较慢或失败，可先跳过，稍后在系统配置或脚本中重试。
         </div>
       )}
 
-      {installHint && !isOk && state === "idle" && name !== "hermes" && (
+      {installHint && !isOk && state === "idle" && (
         <div style={S.hint}>{installHint}</div>
       )}
 
@@ -309,7 +309,8 @@ function StepAgents({
   const agents: Array<{ name: string; label: string; hint?: string }> = [
     {
       name: "hermes",
-      label: "Hermes（推荐 · 自带 MCP + 飞书集成）",
+      label: "Hermes（推荐 · 自带 MCP + 工具调用）",
+      hint: "使用 Hermes 官方安装器；需要联网，安装失败不影响继续配置。",
     },
     {
       name: "codex",
@@ -339,6 +340,12 @@ function StepAgents({
           installHint={a.hint}
         />
       ))}
+      <AgentRow
+        name="gbrain"
+        label="GBrain（可选 · 本地知识库 CLI）"
+        found={!!checks.agents.gbrain}
+        installHint="自动安装 Bun + GBrain，并初始化本地 ~/brain；失败不影响主程序。"
+      />
       <div style={{ ...S.hint, marginTop: 4 }}>
         💡 一个都不想装也可以「跳过」——下一步配置「全局兜底大模型」后，所有 AI 功能照样能用。
       </div>

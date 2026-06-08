@@ -39,6 +39,7 @@ _INSTALLABLE: dict[str, str] = {
     "codex":  "@openai/codex",
     "claude": "@anthropic-ai/claude-code",
 }
+_COMPONENTS = {"hermes", "gbrain", "all"}
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +61,8 @@ def setup_status(_u: str = Depends(require_user)):
     )
 
     agents_found = {name: bool(_find_bin(name)) for name in RUNNER_ORDER}
-    any_agent_found = any(agents_found.values())
+    agents_found["gbrain"] = bool(shutil.which("gbrain") or (Path.home() / ".bun" / "bin" / "gbrain.exe").exists())
+    any_agent_found = any(agents_found.get(name) for name in RUNNER_ORDER)
     apimart_set: bool = bool(cfg.get("apimart_key"))
 
     # Trigger the wizard only for genuine fresh installs.
@@ -99,10 +101,73 @@ def _npm_bin() -> str | None:
     return None
 
 
+async def _component_install_stream(component: str) -> AsyncGenerator[str, None]:
+    if component not in _COMPONENTS:
+        yield f"data: ERROR: unknown component '{component}'. Supported: {', '.join(sorted(_COMPONENTS))}\n\n"
+        yield "data: __ERROR__\n\n"
+        return
+
+    root = Path(__file__).resolve().parents[3]
+    script = root / "scripts" / "install-components.ps1"
+    if sys.platform.startswith("win") and script.is_file():
+        cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), "-Component", component]
+    elif component == "hermes":
+        cmd = ["bash", "-lc", "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash"]
+    elif component == "gbrain":
+        cmd = ["bash", "-lc", "command -v bun >/dev/null || curl -fsSL https://bun.sh/install | bash; export PATH=\"$HOME/.bun/bin:$PATH\"; bun install -g github:garrytan/gbrain; mkdir -p \"$HOME/brain\"; cd \"$HOME/brain\" && (gbrain init --pglite || true)"]
+    else:
+        cmd = ["bash", "-lc", "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash; command -v bun >/dev/null || curl -fsSL https://bun.sh/install | bash; export PATH=\"$HOME/.bun/bin:$PATH\"; bun install -g github:garrytan/gbrain; mkdir -p \"$HOME/brain\"; cd \"$HOME/brain\" && (gbrain init --pglite || true)"]
+
+    yield f"data: > {' '.join(cmd)}\n\n"
+    env = {**os.environ}
+    home = Path.home()
+    extra = [
+        str(home / ".bun" / "bin"),
+        str(home / ".hermes" / "bin"),
+        str(home / ".hermes" / "node" / "bin"),
+        str(home / ".local" / "bin"),
+        "/usr/local/bin",
+        "/usr/bin",
+    ]
+    env["PATH"] = os.pathsep.join(dict.fromkeys(p for p in extra + env.get("PATH", "").split(os.pathsep) if p))
+    env.setdefault("HOME", str(home))
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            env=env,
+            **no_window_kwargs(),
+        )
+        assert proc.stdout is not None
+        async for raw in proc.stdout:
+            line = raw.decode("utf-8", errors="replace").rstrip()
+            if line:
+                yield f"data: {line}\n\n"
+        await proc.wait()
+        if proc.returncode == 0:
+            yield "data: \n\n"
+            yield f"data: ✓ {component} installed / repaired.\n\n"
+            yield "data: __DONE__\n\n"
+        else:
+            yield f"data: ✗ installer exited with code {proc.returncode}\n\n"
+            yield "data: __ERROR__\n\n"
+    except Exception as exc:
+        yield f"data: ERROR: {exc}\n\n"
+        yield "data: __ERROR__\n\n"
+
+
 async def _install_stream(agent: str) -> AsyncGenerator[str, None]:
+    if agent in _COMPONENTS:
+        async for event in _component_install_stream(agent):
+            yield event
+        return
+
     package = _INSTALLABLE.get(agent)
     if not package:
-        yield f"data: ERROR: unknown agent '{agent}'. Supported: {', '.join(_INSTALLABLE)}\n\n"
+        supported = sorted([*_INSTALLABLE.keys(), *_COMPONENTS])
+        yield f"data: ERROR: unknown agent/component '{agent}'. Supported: {', '.join(supported)}\n\n"
         return
 
     npm = _npm_bin()

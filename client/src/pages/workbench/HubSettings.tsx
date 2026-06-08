@@ -6,6 +6,7 @@ import {
   testSetting, autodetectSettings,
   type HubSettings, type HealthResp, type TestResult,
 } from "../../api/settings";
+import { installAgentStreamUrl } from "../../api/setup";
 
 type SaveStatus = "idle" | "saving" | "ok" | "error";
 
@@ -416,6 +417,8 @@ function HealthPanel() {
   const [health, setHealth] = useState<HealthResp | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [installing, setInstalling] = useState<string | null>(null);
+  const [installLog, setInstallLog] = useState<string[]>([]);
 
   const check = useCallback(async () => {
     setLoading(true); setErr("");
@@ -426,14 +429,41 @@ function HealthPanel() {
 
   useEffect(() => { check(); }, [check]);
 
-  const rows: Array<{ label: string; key: keyof HealthResp | string; nested?: string }> = [
+  const installComponent = useCallback((component: "hermes" | "gbrain" | "all") => {
+    if (installing) return;
+    setInstalling(component);
+    setInstallLog([]);
+    const es = new EventSource(installAgentStreamUrl(component));
+    es.onmessage = (ev) => {
+      const line = ev.data as string;
+      if (line === "__DONE__") {
+        es.close();
+        setInstalling(null);
+        setInstallLog(prev => [...prev, "✓ 安装/修复完成，正在重新检测…"]);
+        check();
+      } else if (line === "__ERROR__") {
+        es.close();
+        setInstalling(null);
+        setInstallLog(prev => [...prev, "✗ 安装失败，可查看上方日志后重试"]);
+      } else {
+        setInstallLog(prev => [...prev, line]);
+      }
+    };
+    es.onerror = () => {
+      es.close();
+      setInstalling(null);
+      setInstallLog(prev => [...prev, "连接中断，请稍后重试"]);
+    };
+  }, [check, installing]);
+
+  const rows: Array<{ label: string; key: keyof HealthResp | string; nested?: string; install?: "hermes" | "gbrain" }> = [
     { label: "AI · 文本链可用",           key: "ai_chain", nested: "text" },
     { label: "AI · 全局兜底大模型",       key: "ai_chain", nested: "global_fallback" },
     { label: "AI · 视觉识别",             key: "ai_chain", nested: "vision" },
     { label: "Apimart · 图片 / AI 服务", key: "apimart" },
     { label: "Sorftime · 市场数据",       key: "sorftime" },
-    { label: "GBrain · 知识库 CLI",       key: "gbrain_bin" },
-    { label: "Agent · hermes",            key: "runners", nested: "hermes" },
+    { label: "GBrain · 知识库 CLI",       key: "gbrain_bin", install: "gbrain" },
+    { label: "Agent · hermes",            key: "runners", nested: "hermes", install: "hermes" },
     { label: "Agent · codex",             key: "runners", nested: "codex" },
     { label: "Agent · claude",            key: "runners", nested: "claude" },
     { label: "Agent · kiro",              key: "runners", nested: "kiro" },
@@ -480,10 +510,25 @@ function HealthPanel() {
               <Dot ok={item?.ok} loading={loading || (!health && !err)} />
               <span className="hs-health-label">{row.label}</span>
               <span className="hs-health-detail" title={full}>{shortDetail(full)}</span>
+              {row.install && !item?.ok && (
+                <button
+                  className="hs-refresh-btn"
+                  style={{ padding: "2px 8px", fontSize: 10 }}
+                  disabled={!!installing}
+                  onClick={() => installComponent(row.install!)}
+                >
+                  {installing === row.install ? "安装中…" : "安装/修复"}
+                </button>
+              )}
             </div>
           );
         })}
       </div>
+      {installLog.length > 0 && (
+        <pre className="hs-health-err" style={{ maxHeight: 180, overflow: "auto", whiteSpace: "pre-wrap" }}>
+          {installLog.slice(-80).join("\n")}
+        </pre>
+      )}
     </div>
   );
 }

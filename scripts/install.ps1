@@ -207,39 +207,15 @@ if (-not (Test-Path "$RepoRoot\data")) { New-Item -ItemType Directory -Path "$Re
 
 # ── 4.5 可选：本地 AI Agent (Hermes) + 知识库 (GBrain) ────────────────────────
 # 二者均可选；不装也能用（首启向导填「全局兜底大模型」即可）。装上后解锁
-# 需要本地工具/MCP 的进阶功能。两个安装器都是官方一行命令、自带依赖。
+# 需要本地工具/MCP 的进阶功能。失败不阻断主程序，后续可在首启向导/系统配置重试。
 Write-Host ""
 $ai = Read-Host "顺便安装本地 AI Agent (Hermes) + 知识库 (GBrain)？联网较慢，可跳过 (y/N)"
 if ($ai -eq "y" -or $ai -eq "Y") {
-    Write-Info "安装 Hermes Agent（官方 Windows 安装器，自带 uv/Python/Node/git-bash）..."
     try {
-        Invoke-Expression (Invoke-RestMethod "https://hermes-agent.nousresearch.com/install.ps1")
-        Refresh-Path
-        Write-Info "  Hermes 安装完成。"
+        & powershell -NoProfile -ExecutionPolicy Bypass -File "$RepoRoot\scripts\install-components.ps1" -Component all
     } catch {
-        Write-Warn "Hermes 安装失败（可稍后手动重试：iex (irm https://hermes-agent.nousresearch.com/install.ps1)）：$_"
-    }
-
-    Write-Info "安装 Bun + GBrain..."
-    try {
-        if (-not (Test-Cmd "bun")) {
-            Invoke-Expression (Invoke-RestMethod "https://bun.sh/install.ps1")
-            $env:Path = "$env:USERPROFILE\.bun\bin;" + $env:Path
-            Refresh-Path
-        }
-        $bun = if (Test-Cmd "bun") { "bun" } else { "$env:USERPROFILE\.bun\bin\bun.exe" }
-        & $bun install -g github:garrytan/gbrain
-        $gbrain = "$env:USERPROFILE\.bun\bin\gbrain.exe"
-        if (Test-Path $gbrain) {
-            $brain = "$env:USERPROFILE\brain"
-            if (-not (Test-Path $brain)) { New-Item -ItemType Directory -Path $brain | Out-Null }
-            Push-Location $brain
-            try { & $gbrain init --pglite 2>$null } catch {}
-            Pop-Location
-            Write-Info "  GBrain 安装完成（本地 PGLite，已初始化 ~\brain）。"
-        }
-    } catch {
-        Write-Warn "GBrain 安装失败（可稍后手动重试：bun install -g github:garrytan/gbrain）：$_"
+        Write-Warn "Hermes/GBrain 组件安装失败（不影响 IvyeaOps 主程序）：$_"
+        Write-Warn "稍后可运行：powershell -ExecutionPolicy Bypass -File scripts\install-components.ps1 -Component all"
     }
     Write-Host "  安装路径会被 IvyeaOps 自动发现；如未识别，可在「系统配置 → 智能体」里填路径。" -ForegroundColor Yellow
 }
