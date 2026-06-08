@@ -28,6 +28,54 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Setup Python for Windows wheels
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build Windows backend wheelhouse
+        run: |
+          python -m pip install --upgrade pip wheel
+          mkdir -p server/vendor/wheels
+          REQ_WIN="$(mktemp)"
+          python - <<'PY' > "$REQ_WIN"
+          from pathlib import Path
+          for line in Path('server/requirements.txt').read_text(encoding='utf-8').splitlines():
+              # Cross-downloading uvicorn[standard] from Linux tries to resolve uvloop,
+              # even though uvloop is not used on Windows. Download uvicorn itself and
+              # append the Windows-compatible standard extras explicitly.
+              if line.startswith('uvicorn[standard]'):
+                  print(line.replace('uvicorn[standard]', 'uvicorn', 1))
+              else:
+                  print(line)
+          print('# Windows-compatible uvicorn[standard] extras; uvloop is not used on Windows.')
+          print('colorama>=0.4')
+          print('httptools>=0.6')
+          print('PyYAML>=5.1')
+          print('watchfiles>=0.13')
+          print('websockets>=10.4')
+          PY
+          # A couple of transitive dependencies are source-only on PyPI but pure
+          # Python; build universal wheels for them so offline install stays wheel-only.
+          python -m pip wheel --wheel-dir server/vendor/wheels docopt==0.6.2 sgmllib3k==1.0.0
+          # Pre-download Windows x64 wheels so the Windows installer can install
+          # backend deps offline / semi-offline. If users install from source or a
+          # wheel is missing, scripts/install.ps1 falls back to normal online pip.
+          python -m pip download \
+            --dest server/vendor/wheels \
+            --find-links server/vendor/wheels \
+            --only-binary=:all: \
+            --platform win_amd64 \
+            --implementation cp \
+            --python-version 312 \
+            --abi cp312 \
+            -r "$REQ_WIN"
+          # requirements has a Python <3.10 compatibility marker; the bundled
+          # wheelhouse targets the installer default Python 3.12, so that marker
+          # is harmless if present in the cache.
+          test -n "$(find server/vendor/wheels -maxdepth 1 -type f -name '*.whl' -print -quit)"
+          du -sh server/vendor/wheels
+
       - name: Build frontend
         working-directory: client
         env:
@@ -80,9 +128,9 @@ jobs:
             IvyeaOps-${{ steps.tag.outputs.tag }}.zip
             IvyeaOps.zip
           body: |
-            **预构建发行包** —— 已包含编译好的前端 `client/dist`，下载即用、无需在本机构建。
-            安装脚本检测到已自带前端，会**跳过 Node 安装与前端构建**（含小内存机的 swap 步骤），
-            只配置 Python 后端，从而避开绝大多数「前端构建失败 / npm 报错 / 内存不足卡死」的坑。
+            **预构建发行包** —— 已包含编译好的前端 `client/dist` 和 Windows Python 3.12 后端依赖包 `server/vendor/wheels`。
+            Windows 安装脚本会优先从预置 wheelhouse 离线安装后端依赖；如果用户是源码包、Python 版本不匹配或离线包缺失，
+            会自动回退在线 pip 安装。安装脚本检测到已自带前端，会**跳过 Node 安装与前端构建**（含小内存机的 swap 步骤）。
 
             ### Windows 用户（无需安装 Node）
             下载下方 `IvyeaOps.zip` → 解压 → 双击「安装 IvyeaOps.bat」。

@@ -116,8 +116,26 @@ if (-not (Test-Path $VenvPy)) {
     & $Python -m venv "$RepoRoot\server\.venv"
 }
 if (-not (Test-Path $VenvPy)) { Write-Fail "创建虚拟环境失败。" }
-& $VenvPy -m pip install -q @PipMirror --upgrade pip
-& $VenvPy -m pip install -q @PipMirror -r "$RepoRoot\server\requirements.txt"
+
+$Wheelhouse = "$RepoRoot\server\vendor\wheels"
+$HasWheelhouse = (Test-Path $Wheelhouse) -and [bool](Get-ChildItem -Path $Wheelhouse -Filter "*.whl" -ErrorAction SilentlyContinue | Select-Object -First 1)
+$PyTag = & $VenvPy -c "import sys; print(f'cp{sys.version_info.major}{sys.version_info.minor}')"
+$CanUseWheelhouse = $HasWheelhouse -and ($PyTag -eq "cp312")
+
+if ($CanUseWheelhouse) {
+    Write-Info "  检测到预置 Windows 后端依赖包（$PyTag）——优先离线安装。"
+    & $VenvPy -m pip install -q --no-index --find-links "$Wheelhouse" -r "$RepoRoot\server\requirements.txt"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warn "离线依赖安装失败，回退在线 pip 安装。"
+        & $VenvPy -m pip install -q @PipMirror --upgrade pip
+        & $VenvPy -m pip install -q @PipMirror -r "$RepoRoot\server\requirements.txt"
+    }
+} else {
+    if ($HasWheelhouse) { Write-Warn "预置依赖包面向 Python 3.12，当前为 $PyTag —— 将在线安装后端依赖。" }
+    & $VenvPy -m pip install -q @PipMirror --upgrade pip
+    & $VenvPy -m pip install -q @PipMirror -r "$RepoRoot\server\requirements.txt"
+}
+if ($LASTEXITCODE -ne 0) { Write-Fail "后端依赖安装失败。请检查网络、Python 版本或磁盘空间后重试。" }
 Write-Info "  后端依赖已装进 server\.venv。"
 
 # ── 3. 前端构建（预构建包已自带 dist 则整段跳过）──────────────────────────────
