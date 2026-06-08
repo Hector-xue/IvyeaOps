@@ -264,8 +264,9 @@ try {
     $Shortcut.TargetPath = $Launcher
     $Shortcut.WorkingDirectory = $RepoRoot
     $Shortcut.Description = "启动 IvyeaOps 工作台"
-    if (Test-Path "$RepoRoot\client\public\favicon.ico") {
-        $Shortcut.IconLocation = "$RepoRoot\client\public\favicon.ico"
+    $ShortcutIcon = "$RepoRoot\client\public\favicon.ico"  # 圆角多尺寸 ICO，用于 Windows 桌面快捷方式
+    if (Test-Path $ShortcutIcon) {
+        $Shortcut.IconLocation = $ShortcutIcon
     }
     $Shortcut.Save()
     Write-Info "  桌面快捷方式已创建：IvyeaOps"
