@@ -403,7 +403,7 @@ app.include_router(help_router.router, prefix="/api", tags=["help"])
 #   /assets/*           -> static files (JS/CSS chunks hashed by Vite)
 #   /favicon.ico        -> static file if exists
 #   everything else     -> index.html (SPA fallback for React Router)
-_CLIENT_DIST = Path(__file__).resolve().parents[2] / "client" / "dist"
+_CLIENT_DIST = settings.root_dir / "client" / "dist"
 
 
 if _CLIENT_DIST.exists():

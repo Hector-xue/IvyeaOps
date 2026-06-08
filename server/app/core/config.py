@@ -3,15 +3,31 @@ from __future__ import annotations
 
 import os
 import secrets
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-_ROOT = Path(__file__).resolve().parents[3]  # repo root
+
+def _detect_root() -> Path:
+    """Return the IvyeaOps runtime root for source and frozen exe builds."""
+    explicit = os.getenv("IVYEA_OPS_ROOT", "").strip()
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    if getattr(sys, "frozen", False):
+        # PyInstaller one-file/one-folder builds run from the packaged exe.
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[3]  # repo root
+
+
+_ROOT = _detect_root()
 load_dotenv(_ROOT / "server" / ".env")
 
 
 class Settings:
+    # --- Runtime paths ---
+    root_dir: Path = _ROOT
+
     # --- Networking ---
     host: str = os.getenv("IVYEA_OPS_HOST", "127.0.0.1")
     port: int = int(os.getenv("IVYEA_OPS_PORT", "8001"))

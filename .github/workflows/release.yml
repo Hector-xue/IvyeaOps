@@ -141,5 +141,83 @@ jobs:
             unzip IvyeaOps.zip && cd IvyeaOps && bash scripts/install.sh
             ```
 
+            ### Windows x64 免 Python 版
+            如果不想安装 Python，可下载 `IvyeaOps-Windows-x64.zip` → 解压 → 双击「安装 IvyeaOps Windows x64.bat」。
+
             ### 开发者
             也可 `git clone` 源码自行构建（需 Node 18+ 与 ≥2G 内存）。
+
+  build-windows-x64:
+    name: Build Windows x64 exe bundle
+    runs-on: windows-latest
+    needs: build-and-release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build frontend
+        working-directory: client
+        env:
+          NODE_ENV: development
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          if (!(Test-Path dist/index.html)) { throw "client/dist/index.html missing" }
+
+      - name: Build backend exe
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip wheel pyinstaller
+          python -m pip install -r server/requirements.txt
+          pyinstaller --noconfirm --clean --onefile --name IvyeaOpsServer --paths server server/ivyeaops_server.py
+          if (!(Test-Path dist/IvyeaOpsServer.exe)) { throw "IvyeaOpsServer.exe missing" }
+
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package Windows x64 bundle
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.tag.outputs.tag }}"
+          $stage = "staging/IvyeaOps"
+          New-Item -ItemType Directory -Force -Path $stage, "$stage/server", "$stage/client", "$stage/scripts", "$stage/docs" | Out-Null
+          Copy-Item dist/IvyeaOpsServer.exe "$stage/IvyeaOpsServer.exe"
+          Copy-Item -Recurse client/dist "$stage/client/dist"
+          Copy-Item -Recurse client/public "$stage/client/public"
+          Copy-Item -Recurse docs "$stage/docs"
+          Copy-Item scripts/start-hidden.ps1 "$stage/scripts/start-hidden.ps1"
+          Copy-Item scripts/stop-hidden.ps1 "$stage/scripts/stop-hidden.ps1"
+          Copy-Item scripts/install-exe.ps1 "$stage/scripts/install-exe.ps1"
+          Copy-Item "启动 IvyeaOps (后台).vbs" "$stage/启动 IvyeaOps (后台).vbs"
+          Copy-Item "停止 IvyeaOps.bat" "$stage/停止 IvyeaOps.bat"
+          Copy-Item "安装 IvyeaOps Windows x64.bat" "$stage/安装 IvyeaOps Windows x64.bat"
+          if (Test-Path README.md) { Copy-Item README.md "$stage/README.md" }
+          Compress-Archive -Path staging/IvyeaOps -DestinationPath "IvyeaOps-Windows-x64-$tag.zip" -Force
+          Copy-Item "IvyeaOps-Windows-x64-$tag.zip" "IvyeaOps-Windows-x64.zip"
+          Get-ChildItem "IvyeaOps-Windows-x64-$tag.zip", "IvyeaOps-Windows-x64.zip" | Format-Table Name,Length
+
+      - name: Upload Windows x64 bundle to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
+          files: |
+            IvyeaOps-Windows-x64-${{ steps.tag.outputs.tag }}.zip
+            IvyeaOps-Windows-x64.zip
