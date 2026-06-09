@@ -20,10 +20,12 @@ from __future__ import annotations
 from app.core.proc import no_window_kwargs
 
 import asyncio
+import json
 import os
 import shutil
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 from typing import AsyncGenerator
 
@@ -32,6 +34,7 @@ from fastapi.responses import StreamingResponse
 
 from app.core import hub_settings as _hs
 from app.core.security import require_user
+from app.core.version import app_version
 
 router = APIRouter()
 
@@ -41,6 +44,26 @@ _INSTALLABLE: dict[str, str] = {
     "claude": "@anthropic-ai/claude-code",
 }
 _COMPONENTS = {"hermes", "gbrain", "ollama", "codex", "claude", "all"}
+_LATEST_RELEASE_API = "https://api.github.com/repos/Hector-xue/IvyeaOps/releases/latest"
+
+
+def _version_tuple(value: str) -> tuple[int, int, int] | None:
+    text = (value or "").strip().lstrip("vV")
+    parts = text.split(".")
+    if len(parts) < 3:
+        return None
+    nums: list[int] = []
+    for p in parts[:3]:
+        digits = ""
+        for ch in p:
+            if ch.isdigit():
+                digits += ch
+            else:
+                break
+        if not digits:
+            return None
+        nums.append(int(digits))
+    return nums[0], nums[1], nums[2]
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +147,60 @@ def _runtime_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
+def _windows_update_supported(root: Path) -> bool:
+    return (
+        sys.platform.startswith("win")
+        and (root / "IvyeaOpsServer.exe").is_file()
+        and (root / "scripts" / "windows-action-gui.ps1").is_file()
+    )
+
+
+@router.get("/setup/update-info")
+def update_info(_u: str = Depends(require_user)):
+    current = app_version()
+    root = _runtime_root()
+    supported = _windows_update_supported(root)
+    fallback_url = "https://github.com/Hector-xue/IvyeaOps/releases/latest"
+    result = {
+        "current": current,
+        "latest": "",
+        "update_available": False,
+        "release_url": fallback_url,
+        "platform_update_supported": supported,
+        "detail": "已是最新版本",
+    }
+
+    try:
+        req = urllib.request.Request(
+            _LATEST_RELEASE_API,
+            headers={
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "IvyeaOps-update-check",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+    except Exception as exc:
+        result["detail"] = f"暂时无法检测新版本：{exc}"
+        return result
+
+    latest = str(data.get("tag_name") or "")
+    release_url = str(data.get("html_url") or fallback_url)
+    result["latest"] = latest
+    result["release_url"] = release_url
+
+    current_v = _version_tuple(current)
+    latest_v = _version_tuple(latest)
+    available = bool(current_v and latest_v and latest_v > current_v)
+    result["update_available"] = available
+    if available:
+        if supported:
+            result["detail"] = f"发现新版本 {latest}"
+        else:
+            result["detail"] = f"发现新版本 {latest}，当前平台请查看 Release 手动更新"
+    return result
+
+
 @router.post("/setup/update")
 def start_windows_update(_u: str = Depends(require_user)):
     """Launch the Windows x64 updater GUI from inside the running app.
@@ -131,10 +208,10 @@ def start_windows_update(_u: str = Depends(require_user)):
     The updater stops this backend process, so this endpoint only starts the
     detached updater and returns immediately.
     """
-    if not sys.platform.startswith("win"):
+    root = _runtime_root()
+    if not _windows_update_supported(root):
         raise HTTPException(400, "应用内更新仅支持 Windows x64 免 Python 包。")
 
-    root = _runtime_root()
     script = root / "scripts" / "windows-action-gui.ps1"
     if not script.is_file():
         raise HTTPException(404, f"更新窗口脚本不存在：{script}")

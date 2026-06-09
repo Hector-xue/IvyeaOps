@@ -22,6 +22,15 @@ type NavSection = {
   items: NavItem[];
 };
 
+type UpdateInfo = {
+  current: string;
+  latest: string;
+  update_available: boolean;
+  release_url: string;
+  platform_update_supported: boolean;
+  detail: string;
+};
+
 const NAV: NavSection[] = [
   {
     title: "工具",
@@ -123,6 +132,7 @@ export default function MainLayout() {
   const [termMounted, setTermMounted] = useState(false);
   const [agentsMounted, setCcuiMounted] = useState(false);
   const [appVersion, setAppVersion] = useState("dev");
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updating, setUpdating] = useState(false);
   const THEMES = [
     "dark", "deep-space", "smoke-gold", "catppuccin", "hermes", "light",
@@ -233,8 +243,38 @@ export default function MainLayout() {
     return () => { alive = false; };
   }, []);
 
+  useEffect(() => {
+    if (!isAdmin) return;
+    let alive = true;
+    const checkUpdate = async () => {
+      try {
+        const { data } = await api.get<UpdateInfo>("/setup/update-info", { timeout: 8000 });
+        if (!alive) return;
+        setUpdateInfo(data);
+        if (data.current) setAppVersion(data.current);
+      } catch {
+        // Silent: a blocked GitHub/network check should not distract normal use.
+      }
+    };
+    checkUpdate();
+    const timer = window.setInterval(checkUpdate, 6 * 60 * 60 * 1000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [isAdmin]);
+
   const startUpdate = async () => {
     if (updating) return;
+    if (updateInfo && !updateInfo.update_available) {
+      alert("当前已经是最新版本。");
+      return;
+    }
+    if (updateInfo && !updateInfo.platform_update_supported) {
+      alert(updateInfo.detail || "当前平台暂不支持应用内自动更新，将打开 Release 页面。");
+      window.open(updateInfo.release_url || "https://github.com/Hector-xue/IvyeaOps/releases/latest", "_blank");
+      return;
+    }
     setUpdating(true);
     try {
       await api.post("/setup/update");
@@ -303,6 +343,10 @@ export default function MainLayout() {
 
   const path = PATH_LABEL[location.pathname] || "~/";
   const versionLabel = appVersion.startsWith("v") ? appVersion : `v${appVersion}`;
+  const hasUpdate = !!updateInfo?.update_available;
+  const updateTitle = updateInfo
+    ? updateInfo.detail
+    : "检测更新";
 
   return (
     <div className="app">
@@ -370,17 +414,20 @@ export default function MainLayout() {
         <div className="sb-bot">
           <div className="sb-status">
             <div className="dot" />
-            <span className="sb-bot-text">{versionLabel}</span>
+            <span className="sb-version-wrap" title={updateTitle}>
+              <span className="sb-bot-text">{versionLabel}</span>
+              {hasUpdate && <span className="sb-update-dot" aria-label="发现新版本" />}
+            </span>
           </div>
           {isAdmin && (
             <button
-              className="sb-update-btn"
+              className={"sb-update-btn" + (hasUpdate ? " has-update" : "")}
               onClick={startUpdate}
               disabled={updating}
-              title="更新 IvyeaOps"
+              title={updateTitle}
             >
               ↻
-              <span className="sb-update-label">{updating ? "启动中" : "更新"}</span>
+              <span className="sb-update-label">{updating ? "启动中" : hasUpdate ? "更新" : "检查"}</span>
             </button>
           )}
         </div>

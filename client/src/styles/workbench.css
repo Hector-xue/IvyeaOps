@@ -256,9 +256,13 @@ body::after{
 .nb{margin-left:auto;font-size:9px;padding:1px 5px;background:color-mix(in srgb, var(--acc) 12%, transparent);color:var(--acc);border-radius:8px}
 .sb-bot{padding:9px 10px;border-top:1px solid var(--b);display:flex;align-items:center;gap:8px}
 .sb-status{display:flex;align-items:center;gap:7px;min-width:0;flex:1}
+.sb-version-wrap{display:inline-flex;align-items:center;gap:5px;min-width:0}
 .sb-bot-text{font-size:10px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-update-dot{width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 0 3px rgba(248,113,113,.14);flex-shrink:0}
 .sb-update-btn{display:inline-flex;align-items:center;gap:4px;min-width:0;padding:3px 7px;border:1px solid var(--b);border-radius:4px;background:var(--bg2);color:var(--t2);font-family:var(--font);font-size:10px;line-height:1.2;cursor:pointer;transition:all .12s;flex-shrink:0}
 .sb-update-btn:hover:not(:disabled){color:var(--acc);border-color:color-mix(in srgb,var(--acc) 45%,var(--b));background:color-mix(in srgb,var(--acc) 7%,transparent)}
+.sb-update-btn.has-update{color:var(--red);border-color:rgba(248,113,113,.45);background:rgba(248,113,113,.08)}
+.sb-update-btn.has-update:hover:not(:disabled){color:var(--red);border-color:rgba(248,113,113,.65);background:rgba(248,113,113,.12)}
 .sb-update-btn:disabled{opacity:.55;cursor:not-allowed}
 .dot{width:5px;height:5px;border-radius:50%;background:var(--acc);flex-shrink:0;animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
