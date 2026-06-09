@@ -489,6 +489,10 @@ function HealthPanel() {
     return detail;
   };
 
+  const isInstallErrorLine = (line: string): boolean => {
+    return /(^|\s)(ERROR|Error|error|失败|中断|exited with code|Traceback)/.test(line);
+  };
+
   return (
     <div className="hs-health" data-tour="settings-health">
       <div className="hs-health-hd">
@@ -528,9 +532,13 @@ function HealthPanel() {
         })}
       </div>
       {installLog.length > 0 && (
-        <pre className="hs-health-err" style={{ maxHeight: 180, overflow: "auto", whiteSpace: "pre-wrap" }}>
-          {installLog.slice(-80).join("\n")}
-        </pre>
+        <div className="hs-install-log" role="log" aria-live="polite">
+          {installLog.slice(-80).map((line, i) => (
+            <div key={`${i}-${line}`} className={isInstallErrorLine(line) ? "err" : undefined}>
+              {line || " "}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
