@@ -459,7 +459,6 @@ function HealthPanel() {
   }, [check, installing]);
 
   const rows: Array<{ label: string; key: keyof HealthResp | string; nested?: string; install?: InstallableComponent }> = [
-    { label: "IvyeaOps · 当前版本",        key: "version" },
     { label: "AI · 文本链可用",           key: "ai_chain", nested: "text" },
     { label: "AI · 全局兜底大模型",       key: "ai_chain", nested: "global_fallback" },
     { label: "AI · 视觉识别",             key: "ai_chain", nested: "vision" },

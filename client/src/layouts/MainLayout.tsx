@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { logout } from "../api/client";
+import { api, logout } from "../api/client";
 import { useAuth } from "../App";
 import Terminal from "../pages/workbench/Terminal";
 import Agents from "../pages/workbench/Agents";
@@ -122,6 +122,8 @@ export default function MainLayout() {
 
   const [termMounted, setTermMounted] = useState(false);
   const [agentsMounted, setCcuiMounted] = useState(false);
+  const [appVersion, setAppVersion] = useState("dev");
+  const [updating, setUpdating] = useState(false);
   const THEMES = [
     "dark", "deep-space", "smoke-gold", "catppuccin", "hermes", "light",
     "klein", "mars", "hermes-orange", "burgundy", "mummy",
@@ -219,6 +221,30 @@ export default function MainLayout() {
   useEffect(() => {
     if (location.pathname === "/agents") setCcuiMounted(true);
   }, [location.pathname]);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/health", { credentials: "include" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (alive && data?.version) setAppVersion(String(data.version));
+      })
+      .catch(() => void 0);
+    return () => { alive = false; };
+  }, []);
+
+  const startUpdate = async () => {
+    if (updating) return;
+    setUpdating(true);
+    try {
+      await api.post("/setup/update");
+      alert("更新窗口已打开。更新过程中 IvyeaOps 会自动停止并重启。");
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || e?.message || "启动更新失败");
+    } finally {
+      setUpdating(false);
+    }
+  };
   const [clock, setClock] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
 
@@ -276,6 +302,7 @@ export default function MainLayout() {
   };
 
   const path = PATH_LABEL[location.pathname] || "~/";
+  const versionLabel = appVersion.startsWith("v") ? appVersion : `v${appVersion}`;
 
   return (
     <div className="app">
@@ -341,10 +368,21 @@ export default function MainLayout() {
           )}
         </nav>
         <div className="sb-bot">
-          <div className="dot" />
-          <span className="sb-bot-text" style={{ fontSize: 10, color: "var(--t3)" }}>
-            All systems online
-          </span>
+          <div className="sb-status">
+            <div className="dot" />
+            <span className="sb-bot-text">{versionLabel}</span>
+          </div>
+          {isAdmin && (
+            <button
+              className="sb-update-btn"
+              onClick={startUpdate}
+              disabled={updating}
+              title="更新 IvyeaOps"
+            >
+              ↻
+              <span className="sb-update-label">{updating ? "启动中" : "更新"}</span>
+            </button>
+          )}
         </div>
       </aside>
 

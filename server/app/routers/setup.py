@@ -22,11 +22,12 @@ from app.core.proc import no_window_kwargs
 import asyncio
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.core import hub_settings as _hs
@@ -121,6 +122,53 @@ def _runtime_root() -> Path:
         if (root / "scripts" / "install-components.ps1").is_file():
             return root
     return Path(__file__).resolve().parents[3]
+
+
+@router.post("/setup/update")
+def start_windows_update(_u: str = Depends(require_user)):
+    """Launch the Windows x64 updater GUI from inside the running app.
+
+    The updater stops this backend process, so this endpoint only starts the
+    detached updater and returns immediately.
+    """
+    if not sys.platform.startswith("win"):
+        raise HTTPException(400, "应用内更新仅支持 Windows x64 免 Python 包。")
+
+    root = _runtime_root()
+    script = root / "scripts" / "windows-action-gui.ps1"
+    if not script.is_file():
+        raise HTTPException(404, f"更新窗口脚本不存在：{script}")
+
+    ps = _powershell_bin()
+    if not ps:
+        raise HTTPException(500, "PowerShell 不可用，无法启动更新窗口。")
+
+    cmd = [
+        ps,
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-WindowStyle",
+        "Hidden",
+        "-File",
+        str(script),
+        "-Mode",
+        "update",
+    ]
+    try:
+        subprocess.Popen(
+            cmd,
+            cwd=str(root),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            **no_window_kwargs(),
+        )
+    except Exception as exc:
+        raise HTTPException(500, f"启动更新失败：{exc}") from exc
+
+    return {"ok": True, "detail": "更新窗口已启动。"}
 
 
 async def _component_install_stream(component: str) -> AsyncGenerator[str, None]:

@@ -148,7 +148,7 @@ bash scripts/start.sh
 1. **免 Python 包**：双击 `IvyeaOpsServer.exe`。
 2. **普通包 / 源码包**：双击「安装 IvyeaOps.bat」—— 自动检测 Python、装后端依赖、生成配置、创建桌面快捷方式。
 3. 以后**双击桌面「IvyeaOps」**—— 浏览器自动打开 **http://127.0.0.1:8001**。
-4. x64 包如需更新，双击 **「更新 IvyeaOps Windows x64.bat」**；如需停止，双击 **「停止 IvyeaOps.bat」**。
+4. x64 包如需更新，可在 IvyeaOps 侧边栏左下角点击 **更新**；也可双击 **「更新 IvyeaOps Windows x64.bat」**。如需停止，双击 **「停止 IvyeaOps.bat」**。
 
 > Hermes / GBrain / Ollama 同样是可选组件：安装时可选，也可在首启向导或「系统配置 → 系统状态」里点「安装/修复」。
 
