@@ -3,12 +3,13 @@
 # Components:
 #   hermes  - official Hermes Agent installer
 #   gbrain  - Bun + GBrain CLI + ~/brain initialization
+#   ollama  - Ollama + nomic-embed-text for local GBrain embeddings
 #   codex   - Node.js + OpenAI Codex CLI
 #   claude  - Node.js + Claude Code CLI
 #   all     - hermes + gbrain
 
 param(
-    [ValidateSet("all", "hermes", "gbrain", "codex", "claude", "status")]
+    [ValidateSet("all", "hermes", "gbrain", "ollama", "codex", "claude", "status")]
     [string]$Component = "all"
 )
 
@@ -26,6 +27,7 @@ function Refresh-Path {
         "$env:USERPROFILE\.hermes\bin",
         "$env:USERPROFILE\.hermes\node\bin",
         "$env:USERPROFILE\.ivyeaops\node",
+        "$env:LOCALAPPDATA\Programs\Ollama",
         "$env:USERPROFILE\.local\bin"
     )
     $env:Path = (($extras + $machine + $user) -join ";")
@@ -38,6 +40,7 @@ function Show-Status {
     $gbrain = Get-Command gbrain -ErrorAction SilentlyContinue
     $node = Get-Command node -ErrorAction SilentlyContinue
     $npm = Get-Command npm -ErrorAction SilentlyContinue
+    $ollama = Get-Command ollama -ErrorAction SilentlyContinue
     $codex = Get-Command codex -ErrorAction SilentlyContinue
     $claude = Get-Command claude -ErrorAction SilentlyContinue
     Write-Host "Hermes: $(if ($hermes) { $hermes.Source } else { 'not installed' })"
@@ -45,6 +48,7 @@ function Show-Status {
     Write-Host "GBrain: $(if ($gbrain) { $gbrain.Source } else { 'not installed' })"
     Write-Host "Node:   $(if ($node) { $node.Source } else { 'not installed' })"
     Write-Host "npm:    $(if ($npm) { $npm.Source } else { 'not installed' })"
+    Write-Host "Ollama: $(if ($ollama) { $ollama.Source } else { 'not installed' })"
     Write-Host "Codex:  $(if ($codex) { $codex.Source } else { 'not installed' })"
     Write-Host "Claude: $(if ($claude) { $claude.Source } else { 'not installed' })"
     Write-Host "Brain:  $env:USERPROFILE\brain"
@@ -150,7 +154,7 @@ function Install-GBrain {
     $bun = Get-Command bun -ErrorAction SilentlyContinue
     if (-not $bun) {
         $fallback = "$env:USERPROFILE\.bun\bin\bun.exe"
-        if (Test-Path $fallback) { $bun = Get-Item $fallback }
+        if (Test-Path $fallback) { $bun = [pscustomobject]@{ Source = $fallback } }
     }
     if (-not $bun) { throw "bun not found. Cannot install GBrain." }
 
@@ -162,7 +166,7 @@ function Install-GBrain {
     $gbrain = Get-Command gbrain -ErrorAction SilentlyContinue
     if (-not $gbrain) {
         $fallback = "$env:USERPROFILE\.bun\bin\gbrain.exe"
-        if (Test-Path $fallback) { $gbrain = Get-Item $fallback }
+        if (Test-Path $fallback) { $gbrain = [pscustomobject]@{ Source = $fallback } }
     }
     if (-not $gbrain) { throw "gbrain command not found after installation." }
 
@@ -175,9 +179,90 @@ function Install-GBrain {
     Write-Info "Brain root: $brain"
 }
 
+function Get-OllamaCommand {
+    Refresh-Path
+    $ollama = Get-Command ollama -ErrorAction SilentlyContinue
+    if ($ollama) { return $ollama.Source }
+    $fallback = "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe"
+    if (Test-Path $fallback) {
+        Add-UserPath (Split-Path -Parent $fallback)
+        return $fallback
+    }
+    return $null
+}
+
+function Set-GBrainOllamaEmbedding {
+    $dir = "$env:USERPROFILE\.gbrain"
+    $file = Join-Path $dir "config.json"
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+
+    $cfg = @{}
+    if (Test-Path $file) {
+        try {
+            $raw = Get-Content $file -Raw
+            if ($raw.Trim()) {
+                $obj = $raw | ConvertFrom-Json
+                foreach ($p in $obj.PSObject.Properties) { $cfg[$p.Name] = $p.Value }
+            }
+        } catch {
+            Write-Warn "Could not parse existing GBrain config; rewriting embedding fields only."
+        }
+    }
+    $cfg["embedding_model"] = "ollama:nomic-embed-text"
+    $cfg["embedding_dimensions"] = 768
+    ($cfg | ConvertTo-Json -Depth 10) | Set-Content -Path $file -Encoding UTF8
+
+    $gbrain = Get-Command gbrain -ErrorAction SilentlyContinue
+    if (-not $gbrain) {
+        $fallback = "$env:USERPROFILE\.bun\bin\gbrain.exe"
+        if (Test-Path $fallback) { $gbrain = [pscustomobject]@{ Source = $fallback } }
+    }
+    if ($gbrain) {
+        try { & $gbrain.Source config set embedding_model "ollama:nomic-embed-text" | Out-Host } catch {}
+    }
+    Write-Info "GBrain embedding configured: ollama:nomic-embed-text"
+}
+
+function Install-Ollama {
+    Refresh-Path
+    $ollamaPath = Get-OllamaCommand
+    if (-not $ollamaPath) {
+        Write-Info "Installing Ollama..."
+        $winget = Get-Command winget -ErrorAction SilentlyContinue
+        if ($winget) {
+            & $winget.Source install --id Ollama.Ollama --exact --silent --accept-source-agreements --accept-package-agreements
+            if ($LASTEXITCODE -ne 0) { Write-Warn "winget install returned code $LASTEXITCODE; trying official installer." }
+        }
+        $ollamaPath = Get-OllamaCommand
+        if (-not $ollamaPath) {
+            $installer = Join-Path $env:TEMP "OllamaSetup.exe"
+            Invoke-WebRequest "https://ollama.com/download/OllamaSetup.exe" -OutFile $installer -UseBasicParsing
+            $p = Start-Process -FilePath $installer -ArgumentList "/S" -Wait -PassThru
+            if ($p.ExitCode -ne 0) { Write-Warn "Ollama installer exited with code $($p.ExitCode)." }
+        }
+        Refresh-Path
+        $ollamaPath = Get-OllamaCommand
+    } else {
+        Write-Info "Ollama already installed: $ollamaPath"
+    }
+    if (-not $ollamaPath) { throw "ollama command not found after installation." }
+
+    Write-Info "Starting Ollama if needed..."
+    try { Start-Process -FilePath $ollamaPath -ArgumentList "serve" -WindowStyle Hidden | Out-Null } catch {}
+    Start-Sleep -Seconds 2
+
+    Write-Info "Pulling local embedding model: nomic-embed-text"
+    & $ollamaPath pull nomic-embed-text
+    if ($LASTEXITCODE -ne 0) { throw "ollama pull nomic-embed-text failed." }
+
+    Set-GBrainOllamaEmbedding
+    Write-Info "Ollama ready: $ollamaPath"
+}
+
 if ($Component -eq "status") { Show-Status; exit 0 }
 if ($Component -eq "all" -or $Component -eq "hermes") { Install-Hermes }
 if ($Component -eq "all" -or $Component -eq "gbrain") { Install-GBrain }
+if ($Component -eq "ollama") { Install-Ollama }
 if ($Component -eq "codex") { Install-NpmPackage "codex" "@openai/codex" }
 if ($Component -eq "claude") { Install-NpmPackage "claude" "@anthropic-ai/claude-code" }
 Show-Status

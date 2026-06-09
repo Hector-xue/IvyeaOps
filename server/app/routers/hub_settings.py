@@ -122,6 +122,21 @@ async def settings_health(_u: str = Depends(require_user)):
             return {"ok": True, "detail": p}
         return {"ok": False, "detail": "未安装"}
 
+    def _check_command(name: str, *extra: str) -> Dict[str, Any]:
+        import shutil
+        found = shutil.which(name)
+        if found:
+            detail = found
+            for p in extra:
+                if Path(p).exists():
+                    detail = p
+                    break
+            return {"ok": True, "detail": detail}
+        for p in extra:
+            if Path(p).exists():
+                return {"ok": True, "detail": p}
+        return {"ok": False, "detail": "未安装"}
+
     imgflow_url = (cfg.get("imgflow_url") or "http://127.0.0.1:3001").rstrip("/")
     gbrain_bin = cfg.get("gbrain_bin") or ""
     if not gbrain_bin:
@@ -168,6 +183,10 @@ async def settings_health(_u: str = Depends(require_user)):
         "sorftime":  _check_key("sorftime_key", "API Key 已设置"),
         "imgflow":   imgflow_result,
         "gbrain_bin": _check_bin(gbrain_bin),
+        "ollama": _check_command(
+            "ollama",
+            str(Path.home() / "AppData" / "Local" / "Programs" / "Ollama" / "ollama.exe"),
+        ),
         "brain_root": {
             "ok": Path(brain_root).exists(),
             "detail": brain_root if Path(brain_root).exists() else f"目录不存在：{brain_root}",

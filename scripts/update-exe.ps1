@@ -8,7 +8,8 @@
 #   5. restart IvyeaOpsServer.exe
 
 param(
-    [string]$DownloadUrl = "https://github.com/Hector-xue/IvyeaOps/releases/latest/download/IvyeaOps-Windows-x64.zip"
+    [string]$DownloadUrl = "https://github.com/Hector-xue/IvyeaOps/releases/latest/download/IvyeaOps-Windows-x64.zip",
+    [switch]$NonInteractive
 )
 
 Set-StrictMode -Version Latest
@@ -19,7 +20,13 @@ Set-Location $RepoRoot
 
 function Write-Info($msg) { Write-Host "[IvyeaOps] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "[IvyeaOps] WARN: $msg" -ForegroundColor Yellow }
-function Write-Fail($msg) { Write-Host "[IvyeaOps] ERROR: $msg" -ForegroundColor Red; Read-Host "Press Enter to exit"; exit 1 }
+function Write-Fail($msg) {
+    Write-Host "[IvyeaOps] ERROR: $msg" -ForegroundColor Red
+    if (-not $NonInteractive -and $env:IVYEAOPS_NONINTERACTIVE -ne "1") {
+        Read-Host "Press Enter to exit"
+    }
+    exit 1
+}
 
 function Stop-IvyeaOps {
     $StopScript = Join-Path $RepoRoot "scripts\stop-hidden.ps1"

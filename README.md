@@ -104,7 +104,7 @@ bash scripts/install.sh
 bash scripts/start.sh
 ```
 
-> Hermes / GBrain 是可选增强组件：安装脚本会询问是否顺便安装；也可稍后在首启向导或「系统配置 → 系统状态」里点「安装/修复」。
+> Hermes / GBrain / Ollama 是可选增强组件：安装脚本会询问是否顺便安装；也可稍后在首启向导或「系统配置 → 系统状态」里点「安装/修复」。
 
 <details><summary>开发者：从源码构建（需 Node 18+ 与 ≥2G 内存）</summary>
 
@@ -150,7 +150,7 @@ bash scripts/start.sh
 3. 以后**双击桌面「IvyeaOps」**—— 浏览器自动打开 **http://127.0.0.1:8001**。
 4. x64 包如需更新，双击 **「更新 IvyeaOps Windows x64.bat」**；如需停止，双击 **「停止 IvyeaOps.bat」**。
 
-> Hermes / GBrain 同样是可选组件：安装时可选，也可在首启向导或「系统配置 → 系统状态」里点「安装/修复」。
+> Hermes / GBrain / Ollama 同样是可选组件：安装时可选，也可在首启向导或「系统配置 → 系统状态」里点「安装/修复」。
 
 > **团队共享（同一局域网，其他电脑/手机零安装）**：双击 **「启动 IvyeaOps (局域网共享).bat」**。
 > 它会自动探测本机局域网 IP、把服务绑到 `0.0.0.0`、将该 IP 加入 CSRF 白名单（否则跨机登录会
@@ -297,8 +297,9 @@ IvyeaOps/
 ├── scripts/
 │   ├── install.sh         Linux / macOS 一键安装
 │   ├── install.ps1        Windows 普通包一键安装
-│   ├── install-components.ps1  Windows 可选安装 / 修复 Hermes + GBrain/Codex/Claude
+│   ├── install-components.ps1  Windows 可选安装 / 修复 Hermes + GBrain/Ollama/Codex/Claude
 │   ├── update-exe.ps1     Windows x64 免 Python 包一键更新
+│   ├── windows-action-gui.ps1  Windows x64 更新 / 停止图形窗口
 │   ├── start.sh           Linux / macOS 启动
 │   └── render-deploy.sh   渲染生产部署配置
 └── docs/

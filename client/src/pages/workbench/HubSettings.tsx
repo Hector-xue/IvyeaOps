@@ -429,7 +429,7 @@ function HealthPanel() {
 
   useEffect(() => { check(); }, [check]);
 
-  type InstallableComponent = "hermes" | "gbrain" | "codex" | "claude" | "all";
+  type InstallableComponent = "hermes" | "gbrain" | "ollama" | "codex" | "claude" | "all";
 
   const installComponent = useCallback((component: InstallableComponent) => {
     if (installing) return;
@@ -466,6 +466,7 @@ function HealthPanel() {
     { label: "Apimart · 图片 / AI 服务", key: "apimart" },
     { label: "Sorftime · 市场数据",       key: "sorftime" },
     { label: "GBrain · 知识库 CLI",       key: "gbrain_bin", install: "gbrain" },
+    { label: "Ollama · 本地 Embedding",   key: "ollama", install: "ollama" },
     { label: "Agent · hermes",            key: "runners", nested: "hermes", install: "hermes" },
     { label: "Agent · codex",             key: "runners", nested: "codex", install: "codex" },
     { label: "Agent · claude",            key: "runners", nested: "claude", install: "claude" },

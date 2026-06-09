@@ -48,6 +48,10 @@ function TypedSettings(props: TypedSettingsProps) {
   return <SettingsComponent {...props} />;
 }
 
+function agentsPortalTarget() {
+  return document.getElementById('agents-portal-root') || document.getElementById('agents-root') || document.body;
+}
+
 export default function SidebarModals({
   projects,
   showSettings,
@@ -84,7 +88,7 @@ export default function SidebarModals({
             onClose={onCloseNewProject}
             onProjectCreated={onProjectCreated}
           />,
-          (document.getElementById('agents-root')||document.body),
+          agentsPortalTarget(),
         )}
 
       {showSettings &&
@@ -95,7 +99,7 @@ export default function SidebarModals({
             projects={settingsProjects}
             initialTab={settingsInitialTab}
           />,
-          (document.getElementById('agents-root')||document.body),
+          agentsPortalTarget(),
         )}
 
       {deleteConfirmation &&
@@ -149,7 +153,7 @@ export default function SidebarModals({
               </div>
             </div>
           </div>,
-          (document.getElementById('agents-root')||document.body),
+          agentsPortalTarget(),
         )}
 
       {sessionDeleteConfirmation &&
@@ -205,7 +209,7 @@ export default function SidebarModals({
               </div>
             </div>
           </div>,
-          (document.getElementById('agents-root')||document.body),
+          agentsPortalTarget(),
         )}
 
       <VersionUpgradeModal

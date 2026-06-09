@@ -2,5 +2,4 @@
 chcp 65001 >nul
 title Update IvyeaOps Windows x64
 cd /d "%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\update-exe.ps1"
-if errorlevel 1 pause
+start "" powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0scripts\windows-action-gui.ps1" -Mode update

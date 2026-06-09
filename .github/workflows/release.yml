@@ -207,6 +207,7 @@ jobs:
           Copy-Item scripts/stop-hidden.ps1 "$stage/scripts/stop-hidden.ps1"
           Copy-Item scripts/install-components.ps1 "$stage/scripts/install-components.ps1"
           Copy-Item scripts/update-exe.ps1 "$stage/scripts/update-exe.ps1"
+          Copy-Item scripts/windows-action-gui.ps1 "$stage/scripts/windows-action-gui.ps1"
           Copy-Item "停止 IvyeaOps.bat" "$stage/停止 IvyeaOps.bat"
           Copy-Item "更新 IvyeaOps Windows x64.bat" "$stage/更新 IvyeaOps Windows x64.bat"
           if (Test-Path README.md) { Copy-Item README.md "$stage/README.md" }

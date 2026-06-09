@@ -94,6 +94,7 @@ export interface HealthResp {
   sorftime: RunnerStatus;
   imgflow: RunnerStatus;
   gbrain_bin: RunnerStatus;
+  ollama: RunnerStatus;
   brain_root: RunnerStatus;
   openai: RunnerStatus;
   runners: {

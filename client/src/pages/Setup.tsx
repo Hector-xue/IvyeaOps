@@ -328,7 +328,7 @@ function StepAgents({
     <>
       <div style={S.title}>AI Agent 检测</div>
       <div style={S.sub}>
-        IvyeaOps 需要至少一个 Agent CLI 来驱动 AI 功能。检测到三个可选项，
+        IvyeaOps 需要至少一个 Agent CLI 来驱动 AI 功能。检测到以下可选项，
         安装至少一个即可。已安装的会自动识别。
       </div>
       {agents.map((a) => (
@@ -345,6 +345,12 @@ function StepAgents({
         label="GBrain（可选 · 本地知识库 CLI）"
         found={!!checks.agents.gbrain}
         installHint="自动安装 Bun + GBrain，并初始化本地 ~/brain；失败不影响主程序。"
+      />
+      <AgentRow
+        name="ollama"
+        label="Ollama（可选 · 本地免费 Embedding）"
+        found={!!checks.agents.ollama}
+        installHint="自动安装 Ollama，拉取 nomic-embed-text，并配置 GBrain 本地语义检索。"
       />
       <div style={{ ...S.hint, marginTop: 4 }}>
         💡 一个都不想装也可以「跳过」——下一步配置「全局兜底大模型」后，所有 AI 功能照样能用。

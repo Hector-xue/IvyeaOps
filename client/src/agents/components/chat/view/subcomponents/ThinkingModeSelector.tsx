@@ -235,7 +235,7 @@ function ThinkingModeSelector({ selectedMode, onModeChange, onClose, className =
             </p>
           </div>
         </div>,
-        (document.getElementById('agents-root')||document.body)
+        (document.getElementById('agents-portal-root') || document.getElementById('agents-root') || document.body)
       )}
     </div>
   );

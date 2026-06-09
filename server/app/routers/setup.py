@@ -39,7 +39,7 @@ _INSTALLABLE: dict[str, str] = {
     "codex":  "@openai/codex",
     "claude": "@anthropic-ai/claude-code",
 }
-_COMPONENTS = {"hermes", "gbrain", "codex", "claude", "all"}
+_COMPONENTS = {"hermes", "gbrain", "ollama", "codex", "claude", "all"}
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +62,10 @@ def setup_status(_u: str = Depends(require_user)):
 
     agents_found = {name: bool(_find_bin(name)) for name in RUNNER_ORDER}
     agents_found["gbrain"] = bool(shutil.which("gbrain") or (Path.home() / ".bun" / "bin" / "gbrain.exe").exists())
+    agents_found["ollama"] = bool(
+        shutil.which("ollama")
+        or (Path.home() / "AppData" / "Local" / "Programs" / "Ollama" / "ollama.exe").exists()
+    )
     any_agent_found = any(agents_found.get(name) for name in RUNNER_ORDER)
     apimart_set: bool = bool(cfg.get("apimart_key"))
 
@@ -142,6 +146,8 @@ async def _component_install_stream(component: str) -> AsyncGenerator[str, None]
         cmd = ["bash", "-lc", "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash"]
     elif component == "gbrain":
         cmd = ["bash", "-lc", "command -v bun >/dev/null || curl -fsSL https://bun.sh/install | bash; export PATH=\"$HOME/.bun/bin:$PATH\"; bun install -g github:garrytan/gbrain; mkdir -p \"$HOME/brain\"; cd \"$HOME/brain\" && (gbrain init --pglite || true)"]
+    elif component == "ollama":
+        cmd = ["bash", "-lc", "command -v ollama >/dev/null || curl -fsSL https://ollama.com/install.sh | sh; ollama pull nomic-embed-text"]
     elif component in _INSTALLABLE:
         async for event in _npm_install_stream(component, _INSTALLABLE[component]):
             yield event

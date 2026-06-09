@@ -29,10 +29,23 @@ class CcuiBoundary extends Component<{ children: ReactNode }, { err: Error | nul
 export default function Agents() {
   const hostRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<Root | null>(null);
+  const appHostRef = useRef<HTMLDivElement | null>(null);
+  const portalHostRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!hostRef.current) return;
     const host = hostRef.current;
+    const appHost = document.createElement('div');
+    const portalHost = document.createElement('div');
+
+    appHost.className = 'agents-app-root';
+    appHost.style.width = '100%';
+    appHost.style.height = '100%';
+    portalHost.id = 'agents-portal-root';
+    host.appendChild(appHost);
+    host.appendChild(portalHost);
+    appHostRef.current = appHost;
+    portalHostRef.current = portalHost;
 
     // 主题:初始注入 ops 当前主题,并监听 ops 主题切换 —— 注入到 #agents-root 容器
     const syncTheme = () => {
@@ -47,7 +60,7 @@ export default function Agents() {
     window.addEventListener('ivyea-ops:theme-changed', onThemeChange);
 
     if (!rootRef.current) {
-      rootRef.current = createRoot(host);
+      rootRef.current = createRoot(appHost);
     }
     rootRef.current.render(
       <CcuiBoundary>
@@ -58,7 +71,11 @@ export default function Agents() {
       window.removeEventListener('ivyea-ops:theme-changed', onThemeChange);
       const r = rootRef.current;
       rootRef.current = null;
-      setTimeout(() => r?.unmount(), 0);
+      r?.unmount();
+      if (portalHost.parentNode === host) host.removeChild(portalHost);
+      if (appHost.parentNode === host) host.removeChild(appHost);
+      appHostRef.current = null;
+      portalHostRef.current = null;
     };
   }, []);
 
