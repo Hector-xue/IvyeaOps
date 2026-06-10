@@ -213,6 +213,10 @@ class ImageReq(BaseModel):
     prompt: str
     size: str = "1024x1024"
     n: int = 1
+    # Optional source image(s) for image-to-image editing. Accepts http(s) URLs or
+    # base64 data URLs (data:image/...;base64,...). When present, the model edits
+    # the given image instead of generating from scratch.
+    image_urls: List[str] | None = None
 
 
 def _image_cfg() -> dict:
@@ -236,14 +240,28 @@ async def image_submit(req: ImageReq, _user: str = Depends(require_user)) -> dic
     if not req.prompt.strip():
         raise HTTPException(400, "提示词不能为空")
     payload = {"model": ic["model"], "prompt": req.prompt, "n": min(max(req.n, 1), 4), "size": req.size}
+    # Image-to-image: when source image(s) are supplied, edit them instead of
+    # generating from scratch. Mirrors the Listing board's proven approach —
+    # gpt-image's input_fidelity:"high" preserves the source; apimart may reject
+    # that field, so try high-fidelity first and fall back to a plain request.
+    refs = [u for u in (req.image_urls or []) if isinstance(u, str) and u.strip()][:2]
+    if refs:
+        payload["image_urls"] = refs
+        attempts = [{**payload, "input_fidelity": "high"}, payload]
+    else:
+        attempts = [payload]
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(30, connect=10)) as c:
-            r = await c.post(f"{ic['base_url']}/images/generations", json=payload,
-                             headers={"Authorization": f"Bearer {key}"})
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60, connect=10)) as c:
+            r = None
+            for attempt in attempts:
+                r = await c.post(f"{ic['base_url']}/images/generations", json=attempt,
+                                 headers={"Authorization": f"Bearer {key}"})
+                if r.status_code < 400:
+                    break
     except Exception as e:
         raise HTTPException(502, f"生图请求失败：{e}")
-    if r.status_code >= 400:
-        raise HTTPException(502, f"Apimart 生图失败 HTTP {r.status_code}：{r.text[:200]}")
+    if r is None or r.status_code >= 400:
+        raise HTTPException(502, f"Apimart 生图失败 HTTP {r.status_code if r is not None else '?'}：{r.text[:200] if r is not None else 'no response'}")
     item = (r.json().get("data") or [{}])[0]
     tid = item.get("task_id")
     if not tid:

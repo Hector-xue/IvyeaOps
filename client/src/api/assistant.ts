@@ -39,12 +39,14 @@ export function streamChat(
   });
 }
 
-export async function submitImage(prompt: string, size: string, n: number): Promise<string> {
+export async function submitImage(prompt: string, size: string, n: number, imageUrls?: string[]): Promise<string> {
+  const body: Record<string, unknown> = { prompt, size, n };
+  if (imageUrls && imageUrls.length > 0) body.image_urls = imageUrls;
   const r = await fetch("/api/assistant/image", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ prompt, size, n }),
+    body: JSON.stringify(body),
   });
   if (!r.ok) {
     const d = await r.json().catch(() => ({} as any));

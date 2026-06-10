@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useConfirm } from "../../components/ConfirmDialog";
 import SheetSelect from "../../components/SheetSelect";
 import { marketplaceOptions } from "../../lib/marketplaces";
@@ -149,6 +150,7 @@ const inputStyle = {
 
 export default function ListingGenerator({ onProjectAsin } = {}) {
   const confirm = useConfirm();
+  const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [project, setProject] = useState(null);
@@ -644,6 +646,30 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
     setLoading("");
   }
 
+  // Carry this generated image to the AI 生图 board for further editing
+  // (image-to-image). Fetch it as a base64 data URL, stash it for the handoff,
+  // then navigate there — ImageGen picks it up on mount.
+  async function handleOptimizeImage(slot) {
+    if (!slot.url) return;
+    setLoading(`optimize-${slot.id}`);
+    try {
+      const resp = await fetch(slot.url, { credentials: "include" });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      const dataUrl = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(String(fr.result || ""));
+        fr.onerror = () => rej(fr.error || new Error("读取图片失败"));
+        fr.readAsDataURL(blob);
+      });
+      sessionStorage.setItem("ivyea-imagegen-seed", dataUrl);
+      navigate("/imagegen");
+    } catch (e) {
+      notify("error", "打开优化失败: " + messageOf(e));
+    }
+    setLoading("");
+  }
+
   async function handleSaveTemplate(isAplus) {
     if (!activeId) return;
     const kind = isAplus ? "aplus" : "main";
@@ -779,6 +805,9 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
                 {loading === `prompt-gen-${slot.id}` ? "生成中..." : loading === `prompt-review-${slot.id}` ? "自检中..." : "单张提示词"}
               </Btn>
               <Btn onClick={() => handleGenOneImage(slot, isAplus)} primary disabled={busy}>生成图片</Btn>
+              <Btn onClick={() => handleOptimizeImage(slot)} disabled={busy || !slot.url}>
+                {loading === `optimize-${slot.id}` ? "打开中..." : "进一步优化"}
+              </Btn>
               <Btn onClick={() => handleDownloadImage(slot)} disabled={!slot.url}>下载图片</Btn>
               <Btn onClick={() => handleDownloadPsd(slot)} disabled={busy || !slot.url}>
                 {loading === `psd-${slot.id}` ? "下载中..." : "下载PSD"}

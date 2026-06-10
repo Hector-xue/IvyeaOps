@@ -1,15 +1,29 @@
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type MouseEvent } from "react";
 import { submitImage, imageStatus } from "../../api/assistant";
 import SheetSelect from "../../components/SheetSelect";
 
 const SIZES = ["1024x1024", "1024x1536", "1536x1024"];
 const SESSIONS_KEY = "ivyea-ops-imagegen-sessions";
+// One-shot handoff key: the Listing board writes a source image (data URL) here,
+// then navigates to /imagegen; this page picks it up on mount for editing.
+const SEED_KEY = "ivyea-imagegen-seed";
 const MAX_SESSIONS = 20;
+
+// Read a File/Blob as a base64 data URL (for image-to-image, sent as image_urls).
+function fileToDataUrl(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result || ""));
+    fr.onerror = () => reject(fr.error || new Error("读取图片失败"));
+    fr.readAsDataURL(file);
+  });
+}
 
 interface ImageTurn {
   id: string;
   prompt: string;
   images: string[];
+  source?: string;
   loading?: boolean;
   progress?: number;
   error?: string;
@@ -48,10 +62,33 @@ export default function ImageGen() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [sourceImage, setSourceImage] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const uploadRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
+
+  // Pick up a source image handed off from the Listing board ("进一步优化").
+  useEffect(() => {
+    try {
+      const seed = sessionStorage.getItem(SEED_KEY);
+      if (seed) {
+        setSourceImage(seed);
+        sessionStorage.removeItem(SEED_KEY);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  async function onPickImage(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+    try {
+      setSourceImage(await fileToDataUrl(file));
+    } catch { /* ignore */ }
+  }
 
   useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
@@ -76,12 +113,13 @@ export default function ImageGen() {
     const text = input.trim();
     if (!text || loading) return;
     const turnId = Date.now().toString();
-    const newTurn: ImageTurn = { id: turnId, prompt: text, images: [], loading: true, progress: 0 };
+    const src = sourceImage;
+    const newTurn: ImageTurn = { id: turnId, prompt: text, images: [], source: src || undefined, loading: true, progress: 0 };
     setTurns(prev => [...prev, newTurn]);
     setInput("");
     setLoading(true);
     try {
-      const taskId = await submitImage(text, size, n);
+      const taskId = await submitImage(text, size, n, src ? [src] : undefined);
       const started = Date.now();
       timerRef.current = window.setInterval(async () => {
         try {
@@ -153,6 +191,7 @@ export default function ImageGen() {
     setCurrentId(Date.now().toString());
     setTurns([]);
     setInput("");
+    setSourceImage(null);
     setHistoryOpen(false);
   };
 
@@ -272,8 +311,8 @@ export default function ImageGen() {
         {turns.length === 0 && (
           <div className="market-empty">
             <div className="market-empty-icon">▦</div>
-            <div className="market-empty-title">输入提示词，用 AI 生成图片</div>
-            <div className="market-empty-hint">Apimart gpt-image-2 · 英文提示词效果更佳 · 可连续追加修改要求</div>
+            <div className="market-empty-title">输入提示词生成图片，或上传 / 带入一张图来修改</div>
+            <div className="market-empty-hint">Apimart gpt-image-2 · 英文提示词效果更佳 · 上传图片或从 Listing「进一步优化」带入后，可文字描述如何改图</div>
           </div>
         )}
         {turns.map((turn) => (
@@ -290,7 +329,14 @@ export default function ImageGen() {
                 background: "color-mix(in srgb, var(--acc) 8%, transparent)",
                 border: "1px solid var(--b)", borderRadius: 10, padding: "8px 12px",
                 fontSize: 13, color: "var(--t)", lineHeight: 1.6, maxWidth: "80%",
-              }}>{turn.prompt}</div>
+                display: "flex", flexDirection: "column", gap: 6,
+              }}>
+                {turn.source && (
+                  <img src={turn.source} alt="待修改的原图" title="基于这张图修改"
+                    style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 6, border: "1px solid var(--b)" }} />
+                )}
+                <span>{turn.prompt}</span>
+              </div>
             </div>
             {/* Result */}
             {turn.loading ? (
@@ -314,7 +360,12 @@ export default function ImageGen() {
                 {turn.images.map((u, i) => (
                   <div key={i} className="imggen-card">
                     <img src={u} alt="" />
-                    <a className="tbtn" href={u} target="_blank" rel="noreferrer">下载 / 查看</a>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      <a className="tbtn" href={u} target="_blank" rel="noreferrer">下载 / 查看</a>
+                      <button className="tbtn" disabled={loading}
+                        onClick={() => { setSourceImage(u); bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight }); }}
+                        title="把这张作为原图，继续用文字描述修改">以这张继续改</button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -323,15 +374,35 @@ export default function ImageGen() {
         ))}
       </div>
 
+      {/* Source image strip (image-to-image): shown when a source is uploaded or
+          handed off from the Listing board. */}
+      {sourceImage && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10, padding: "8px 10px",
+          border: "1px solid var(--b)", borderRadius: 8, marginBottom: 8,
+          background: "color-mix(in srgb, var(--acc) 6%, transparent)",
+        }}>
+          <img src={sourceImage} alt="原图" style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6, border: "1px solid var(--b)" }} />
+          <div style={{ flex: 1, fontSize: 12, color: "var(--t2)", lineHeight: 1.5 }}>
+            <strong style={{ color: "var(--t)" }}>基于这张图修改</strong>
+            <div style={{ color: "var(--t3)", fontSize: 11 }}>用下方文字描述要怎么改（如：换成纯白背景、加上节日氛围、提亮主体…）</div>
+          </div>
+          <button className="tbtn" onClick={() => setSourceImage(null)} disabled={loading} title="移除原图，改为从文字生成">✕ 移除</button>
+        </div>
+      )}
+
       {/* Input area — stays at bottom */}
+      <input ref={uploadRef} type="file" accept="image/*" onChange={onPickImage} style={{ display: "none" }} />
       <div className="market-input-row" style={{ flexWrap: "wrap" }}>
+        <button className="tbtn" onClick={() => uploadRef.current?.click()} disabled={loading}
+          style={{ flex: "0 0 auto" }} title="上传一张图片来修改（图生图）">＋ 上传图</button>
         <textarea
           className="market-query-input"
           style={{ resize: "none", height: 44, paddingTop: 10 }}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); run(); } }}
-          placeholder={turns.length > 0 ? "继续描述修改要求，Enter 发送（Shift+Enter 换行）" : "描述你想要的图片，英文效果更佳，Enter 发送"}
+          placeholder={sourceImage ? "描述如何修改这张图，Enter 发送（Shift+Enter 换行）" : (turns.length > 0 ? "继续描述修改要求，Enter 发送（Shift+Enter 换行）" : "描述你想要的图片，英文效果更佳，Enter 发送")}
           disabled={loading}
         />
         <SheetSelect
