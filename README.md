@@ -415,7 +415,7 @@ IvyeaOps/
 IvyeaOps 站在不少优秀开源项目之上，特此致谢：
 
 - **[claudecodeui](https://github.com/siteboon/claudecodeui)**（**AGPL-3.0**）—— 「智能体会话」板块的浏览器端交互体验移植自该项目。正因如此，整个 IvyeaOps 依 AGPL-3.0 的 copyleft 要求以 **AGPL-3.0** 发布。
-- **Hermes Agent**（NousResearch）· **[GBrain](https://github.com/garrytan/gbrain)**（MIT）—— 可选集成的本地智能体与本地知识库（作为独立程序由 IvyeaOps 经子进程调用，并未内置其源码，故不影响本项目的许可证）。
+- **[Hermes Agent](https://github.com/NousResearch/hermes-agent)**（NousResearch）· **[GBrain](https://github.com/garrytan/gbrain)**（MIT）—— 可选集成的本地智能体与本地知识库（作为独立程序由 IvyeaOps 经子进程调用，并未内置其源码，故不影响本项目的许可证）。
 - 基础设施：**FastAPI** · **React** · **Vite** · **xterm.js** 等众多开源库。
 
 上述各上游项目的版权与许可证均归其原作者所有；如有疏漏，欢迎提 Issue 指正。
