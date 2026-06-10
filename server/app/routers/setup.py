@@ -220,18 +220,27 @@ def start_windows_update(_u: str = Depends(require_user)):
     if not ps:
         raise HTTPException(500, "PowerShell 不可用，无法启动更新窗口。")
 
+    # The updater is a *visible* WinForms window (it shows the progress bar) and
+    # it STOPS this backend mid-way. So it must be:
+    #   - visible: do NOT pass -WindowStyle Hidden / CREATE_NO_WINDOW, or the
+    #     progress window never appears.
+    #   - detached: DETACHED_PROCESS + CREATE_NEW_PROCESS_GROUP so killing this
+    #     backend doesn't kill the updater (previously CREATE_NO_WINDOW kept it as
+    #     a child, so stopping the service also stopped the updater — no progress,
+    #     service never actually stopped/updated).
     cmd = [
         ps,
         "-NoProfile",
         "-ExecutionPolicy",
         "Bypass",
-        "-WindowStyle",
-        "Hidden",
         "-File",
         str(script),
         "-Mode",
         "update",
     ]
+    creationflags = 0
+    if sys.platform == "win32":
+        creationflags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
     try:
         subprocess.Popen(
             cmd,
@@ -240,7 +249,7 @@ def start_windows_update(_u: str = Depends(require_user)):
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             close_fds=True,
-            **no_window_kwargs(),
+            creationflags=creationflags,
         )
     except Exception as exc:
         raise HTTPException(500, f"启动更新失败：{exc}") from exc

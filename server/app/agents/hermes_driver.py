@@ -194,6 +194,15 @@ async def query_hermes(command: str, options: dict, writer) -> None:
     elif text:
         await writer.send(create_normalized_message(
             kind="text", role="assistant", content=text, sessionId=session_id, provider=PROVIDER))
+    else:
+        # Hermes exited without producing any reply — surface it instead of leaving
+        # the user with a silent "no response". Almost always a model/provider/key
+        # config gap (hermes ran, but its underlying LLM returned nothing).
+        logger.info("hermes returned empty output session=%s rc=%s", session_id, proc.returncode)
+        await writer.send(create_normalized_message(
+            kind="error",
+            content="Hermes 没有返回任何内容。通常是 Hermes 的模型 / Provider / API Key 未正确配置（hermes 跑通了，但底层大模型没产出）。请到「系统配置 → 大模型」检查 Hermes 主模型与 Key，保存后重试。",
+            sessionId=session_id, provider=PROVIDER))
 
     # Index this session into the projects DB *now*, under hermes' REAL id (which
     # is also what the full sync uses) so it appears in the sidebar immediately

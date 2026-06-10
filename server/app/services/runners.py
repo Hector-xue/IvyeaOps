@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -66,10 +67,17 @@ def _find_bin(name: str) -> Optional[str]:
     p = shutil.which(name)
     if p:
         return p
+    # Fallback over known dirs. On Windows the executable is `name.exe` (or .cmd/
+    # .bat) and os.access(..., X_OK) is unreliable — so try those suffixes and
+    # don't gate on the exec bit. This is why a freshly-installed hermes.exe was
+    # not detected (status stayed "需安装/修复") when it wasn't on PATH.
+    win = sys.platform == "win32"
+    candidates = [name, name + ".exe", name + ".cmd", name + ".bat"] if win else [name]
     for root in _extra_paths():
-        cand = Path(root) / name
-        if cand.is_file() and os.access(cand, os.X_OK):
-            return str(cand)
+        for n in candidates:
+            cand = Path(root) / n
+            if cand.is_file() and (win or os.access(cand, os.X_OK)):
+                return str(cand)
     return None
 
 
