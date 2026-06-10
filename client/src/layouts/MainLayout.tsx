@@ -1,12 +1,33 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api, logout } from "../api/client";
 import { useAuth } from "../App";
 import Terminal from "../pages/workbench/Terminal";
 import Agents from "../pages/workbench/Agents";
+import Market from "../pages/workbench/Market";
+import Playbook from "../pages/workbench/Playbook";
+import Tools from "../pages/workbench/Tools";
+import ImageGen from "../pages/workbench/ImageGen";
 import ManualModal from "../components/ManualModal";
 import Tour from "../components/Tour";
 import { TOURS, hasTour } from "../lib/tours";
+
+// Boards with long-running tasks (research / generation / audit). These are kept
+// mounted after first visit and merely hidden when inactive — so an in-progress
+// task (its polling timer / streaming fetch + UI state) survives switching boards
+// and is still there (and lands in history) when you come back. Same technique
+// the Terminal/Agents boards already use to preserve their WebSockets.
+const KEEP_ALIVE_BOARDS: Record<string, () => ReactElement> = {
+  "/market": () => <Market />,
+  "/playbook": () => <Playbook />,
+  "/tools": () => <Tools />,
+  "/imagegen": () => <ImageGen />,
+};
+const KEEP_ALIVE_PATHS = Object.keys(KEEP_ALIVE_BOARDS);
+
+const HIDDEN_STYLE: CSSProperties = {
+  position: "absolute", width: 0, height: 0, overflow: "hidden", opacity: 0, pointerEvents: "none",
+};
 
 type NavItem = {
   to: string;
@@ -230,6 +251,15 @@ export default function MainLayout() {
   // 智能体会话(/agents):首次访问后常驻挂载,切板块秒回、WS/会话状态不丢。
   useEffect(() => {
     if (location.pathname === "/agents") setCcuiMounted(true);
+  }, [location.pathname]);
+
+  // 长任务板块(市场调研 / 打法 / 分析工具 / AI 生图):首次访问后常驻挂载,
+  // 切走再回来时正在进行的任务(轮询/流式 + UI 状态)还在,完成后也能进历史。
+  const [kaVisited, setKaVisited] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    if (KEEP_ALIVE_PATHS.includes(location.pathname)) {
+      setKaVisited((prev) => (prev.has(location.pathname) ? prev : new Set(prev).add(location.pathname)));
+    }
   }, [location.pathname]);
 
   useEffect(() => {
@@ -519,7 +549,17 @@ export default function MainLayout() {
               <Agents />
             </div>
           )}
-          {location.pathname !== "/terminal" && location.pathname !== "/agents" && <Outlet />}
+          {/* Long-task boards: mounted on first visit, hidden when inactive so
+              in-progress tasks survive board switches. */}
+          {KEEP_ALIVE_PATHS.map((p) =>
+            kaVisited.has(p) ? (
+              <div key={p} style={location.pathname === p ? { display: "contents" } : HIDDEN_STYLE}>
+                {KEEP_ALIVE_BOARDS[p]()}
+              </div>
+            ) : null,
+          )}
+          {location.pathname !== "/terminal" && location.pathname !== "/agents"
+            && !KEEP_ALIVE_PATHS.includes(location.pathname) && <Outlet />}
         </div>
       </div>
       {manualOpen && <ManualModal onClose={() => setManualOpen(false)} />}
