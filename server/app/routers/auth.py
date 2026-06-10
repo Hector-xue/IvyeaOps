@@ -1,9 +1,10 @@
 """Auth: register / login / logout / me + admin user management."""
 from __future__ import annotations
 
+import time
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
 from app.core.config import settings
@@ -19,6 +20,41 @@ from app.core.security import (
 from app.services import users_service
 
 router = APIRouter()
+
+# ── Login brute-force throttle (in-memory, per client IP) ────────────────────
+# Single-worker app, so a process-local dict is enough. Caps repeated failed
+# logins from one source; successful login clears the counter.
+_LOGIN_FAILS: dict[str, List[float]] = {}
+_LOGIN_WINDOW = 300.0   # seconds: failures older than this don't count
+_LOGIN_MAX = 8          # failures allowed within the window before lockout
+
+
+def _client_key(request: Request) -> str:
+    # Behind nginx the socket peer is 127.0.0.1; honour the first X-Forwarded-For
+    # hop (nginx sets it). Falls back to the socket peer.
+    xff = request.headers.get("x-forwarded-for", "")
+    ip = (xff.split(",")[0].strip() if xff else "") or (request.client.host if request.client else "unknown")
+    return ip
+
+
+def _login_guard(key: str) -> None:
+    now = time.time()
+    if len(_LOGIN_FAILS) > 5000:  # bound memory: drop fully-expired buckets
+        for k in [k for k, ts in _LOGIN_FAILS.items() if all(now - t >= _LOGIN_WINDOW for t in ts)]:
+            _LOGIN_FAILS.pop(k, None)
+    fails = [t for t in _LOGIN_FAILS.get(key, []) if now - t < _LOGIN_WINDOW]
+    _LOGIN_FAILS[key] = fails
+    if len(fails) >= _LOGIN_MAX:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail="登录尝试过于频繁，请稍后再试（约 5 分钟）。")
+
+
+def _login_fail(key: str) -> None:
+    _LOGIN_FAILS.setdefault(key, []).append(time.time())
+
+
+def _login_ok(key: str) -> None:
+    _LOGIN_FAILS.pop(key, None)
 
 
 def _set_cookie(response: Response, token: str) -> None:
@@ -47,13 +83,16 @@ class LoginOk(BaseModel):
 
 
 @router.post("/login", response_model=LoginOk)
-def login(body: LoginBody, response: Response) -> LoginOk:
+def login(body: LoginBody, response: Response, request: Request) -> LoginOk:
     from app.core import hub_settings as _hs
+    key = _client_key(request)
+    _login_guard(key)
     account = body.username.strip()
 
     # Admin path (env / hub_settings password).
     effective_hash = _hs.get("password_hash") or settings.admin_password_hash
     if account == settings.admin_user and verify_password(body.password, effective_hash):
+        _login_ok(key)
         _set_cookie(response, issue_session(ADMIN_ID, "admin"))
         return LoginOk(username=settings.admin_user, role="admin")
 
@@ -61,7 +100,9 @@ def login(body: LoginBody, response: Response) -> LoginOk:
     try:
         u = users_service.verify_login(account, body.password)
     except ValueError as e:
+        _login_fail(key)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    _login_ok(key)
     _set_cookie(response, issue_session(u["id"], u.get("role", "user")))
     return LoginOk(
         username=u["email"],

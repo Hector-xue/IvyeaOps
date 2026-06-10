@@ -242,13 +242,16 @@ async def apply(job_id: str) -> Dict[str, Any]:
         # The diff was generated against this same HEAD, so a plain apply
         # normally succeeds. If HEAD drifted, retry with --3way to merge.
         diff_text = job.diff if job.diff.endswith("\n") else job.diff + "\n"
-        proc = subprocess.run(
+        # Run in a thread so `git apply` (up to 60s) doesn't block the event loop.
+        proc = await asyncio.to_thread(
+            subprocess.run,
             ["git", "apply", "--whitespace=nowarn"],
             cwd=str(REPO_ROOT), input=diff_text, capture_output=True, text=True, timeout=60,
             **no_window_kwargs(),
         )
         if proc.returncode != 0:
-            proc = subprocess.run(
+            proc = await asyncio.to_thread(
+                subprocess.run,
                 ["git", "apply", "--3way", "--whitespace=nowarn"],
                 cwd=str(REPO_ROOT), input=diff_text, capture_output=True, text=True, timeout=60,
                 **no_window_kwargs(),

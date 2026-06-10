@@ -219,18 +219,30 @@ async def ingest_url(body: IngestUrlBody) -> dict[str, Any]:
             "-m",
             "gpt-5.4",
         ]
-        proc = subprocess.run(
-            cmd,
+        # Run async so the URL-ingest (up to 180s) does NOT block the single-worker
+        # event loop — a sync subprocess.run here froze the whole server for the
+        # duration of one request.
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
             cwd=str(gb.BRAIN_ROOT),
             env=bc._hermes_env(),
-            text=True,
-            capture_output=True,
-            timeout=180,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
+        try:
+            out, err = await asyncio.wait_for(proc.communicate(), timeout=180)
+        except asyncio.TimeoutError:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            raise
+        stdout = out.decode("utf-8", "replace")
+        stderr = err.decode("utf-8", "replace")
         if proc.returncode == 0:
-            markdown = bc._strip_hermes_output(proc.stdout)
+            markdown = bc._strip_hermes_output(stdout)
         else:
-            detail = (proc.stderr or proc.stdout or "").strip()[-1200:]
+            detail = (stderr or stdout or "").strip()[-1200:]
             errors.append(detail or "Hermes CLI 未知错误")
     except Exception as e:
         errors.append(str(e))

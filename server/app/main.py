@@ -2,8 +2,18 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# Central logging config: one place sets level + format (was previously left to
+# per-module getLogger with no root setup). Override level via IVYEA_OPS_LOG_LEVEL.
+_log_level = os.environ.get("IVYEA_OPS_LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, _log_level, logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
