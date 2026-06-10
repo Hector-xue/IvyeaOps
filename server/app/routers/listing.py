@@ -191,17 +191,23 @@ async def scrape(project_id: str, _user: str = Depends(require_user)):
 
     data = {}
 
-    # 1) Try imgflow scrape
+    # 1) Try imgflow scrape (amazon-image-workflow on :3001). This is the only
+    #    source that returns a listing's FULL main-image set (all carousel images).
+    imgflow_ok = False
     if imgflow_id:
         try:
             async with httpx.AsyncClient(timeout=120) as client:
                 resp = await client.post(f"{_imgflow_base()}/scrape/{imgflow_id}")
                 if resp.status_code == 200:
                     data = resp.json()
+                    imgflow_ok = bool(data.get("imageUrls") or data.get("images"))
         except Exception:
             pass
 
-    # 2) If imgflow returned empty data, fall back to sorftime product_detail
+    # 2) If imgflow returned empty data, fall back to sorftime product_detail.
+    #    NOTE: sorftime only carries ONE (white-background) main image, so this
+    #    path can never recover the full set — the UI surfaces a hint to enable
+    #    the scrape service (see `scrape_source` below).
     has_title = bool(data.get("title"))
     has_bullets = bool(data.get("bullets"))
     if not has_title and not has_bullets:
@@ -237,6 +243,12 @@ async def scrape(project_id: str, _user: str = Depends(require_user)):
     image_urls = data.get("imageUrls") or data.get("images") or []
     if image_urls:
         data["reference_images"] = image_urls
+
+    # Tell the frontend where the data came from so it can prompt the user to
+    # enable the scrape service when only the single sorftime image is available.
+    data["scrape_source"] = "imgflow" if imgflow_ok else ("sorftime" if image_urls else "none")
+    # Full image set is only available via the imgflow scrape service.
+    data["full_images_available"] = imgflow_ok
 
     conn = _db()
     conn.execute(

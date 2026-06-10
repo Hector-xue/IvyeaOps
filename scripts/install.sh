@@ -244,25 +244,35 @@ if [ "$ANS" = "y" ] || [ "$ANS" = "Y" ]; then
   info "  安装路径会被 IvyeaOps 自动发现；如未识别，可在「系统配置 → 智能体」里填路径。"
 fi
 
-# ── 5.6 Optional: Listing 采集服务 (amazon-image-workflow, via Docker) ─────────
+# ── 5.6 Listing 采集服务 (amazon-image-workflow, via Docker) ──────────────────
 # Self-contained docker-compose (bundles Postgres). Free scraping (curl/puppeteer),
-# no API keys. Skip if Docker is absent — Listing still works (manual + AI),
-# just without auto-scrape.
+# no API keys. This is what pulls a listing's FULL main-image set (all 7 carousel
+# images). Without it, IvyeaOps falls back to sorftime, which only returns a
+# single (white-background) main image — so this is recommended-on, not optional.
 if [ -f "$REPO_ROOT/amazon-image-workflow/docker-compose.yml" ]; then
   if command -v docker &>/dev/null && (docker compose version &>/dev/null || command -v docker-compose &>/dev/null); then
     echo ""
-    printf "  启动 Listing 采集服务（amazon-image-workflow，Docker，免密钥）？(y/N) "
+    info "Listing 采集服务（amazon-image-workflow）能抓取竞品的【完整主图组（全部 7 张）】。"
+    info "不启用则只能经 sorftime 拿到 1 张白底主图。强烈建议启用。"
+    printf "  启动 Listing 采集服务（Docker，免密钥，推荐）？(Y/n) "
     read -r ANS2 || ANS2=""
-    if [ "$ANS2" = "y" ] || [ "$ANS2" = "Y" ]; then
+    if [ "$ANS2" != "n" ] && [ "$ANS2" != "N" ]; then
       info "启动采集服务（首次会构建镜像，较慢）..."
-      ( cd "$REPO_ROOT/amazon-image-workflow" && (docker compose up -d --build || docker-compose up -d --build) ) \
-        && info "  采集服务已启动（:3001）。IvyeaOps 默认已指向它。" \
-        || warn "采集服务启动失败，可稍后手动：cd amazon-image-workflow && docker compose up -d --build"
+      if ( cd "$REPO_ROOT/amazon-image-workflow" && (docker compose up -d --build || docker-compose up -d --build) ); then
+        info "  采集服务已启动（:3001）。IvyeaOps 默认已指向它，可采集完整主图组。"
+      else
+        warn "采集服务启动失败 —— Listing 采集将只能拿 1 张白底主图。"
+        warn "  可稍后重试：cd amazon-image-workflow && docker compose up -d --build"
+      fi
+    else
+      warn "已跳过采集服务 —— Listing 采集将只能经 sorftime 拿 1 张白底主图。"
+      warn "  想拿完整主图组，随时可启用：cd amazon-image-workflow && docker compose up -d --build"
     fi
   else
-    warn "未检测到 Docker —— Listing 采集服务需要 Docker。装上 Docker 后："
+    warn "未检测到 Docker —— Listing 采集服务需要 Docker，缺它则采集只能拿 1 张白底主图。"
+    warn "  装上 Docker 后启用（即可采集完整 7 张主图组）："
     warn "  cd amazon-image-workflow && docker compose up -d --build"
-    warn "（不装也行：Listing 其余功能照常，仅无法自动抓竞品。）"
+    warn "（不装也行：Listing 其余功能照常，仅无法自动抓取完整竞品主图。）"
   fi
 fi
 

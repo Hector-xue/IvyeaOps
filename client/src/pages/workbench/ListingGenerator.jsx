@@ -857,6 +857,14 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
           <span className="tag tg">图片 {scraped.images.length}</span>
           {scraped.description && <span className="tag tg">描述 1</span>}
         </div>
+        {scrapeData.scrape_source === "sorftime" && (
+          <div style={{ fontSize: 10, padding: 10, background: "rgba(245,158,11,.10)", border: "1px solid rgba(245,158,11,.35)", borderRadius: 4, lineHeight: 1.6, color: "var(--t2)" }}>
+            <strong>只采到 1 张白底主图？</strong> 完整主图组（全部 7 张）需要本地「采集服务」（amazon-image-workflow，Docker）。
+            当前未检测到它，已回退到 sorftime（只返回 1 张主图）。启用方式：
+            <code style={{ display: "block", marginTop: 4, color: "var(--t)" }}>cd amazon-image-workflow &amp;&amp; docker compose up -d --build</code>
+            启动后重新「采集ASIN数据」即可拿到完整主图组。
+          </div>
+        )}
         <div style={{ fontSize: 10, padding: 10, background: "var(--bg2)", border: "1px solid var(--b)", borderRadius: 4, lineHeight: 1.6 }}>
           <div style={{ color: "var(--t3)", marginBottom: 4 }}>采集标题</div>
           <div style={{ color: "var(--t)" }}>{scraped.title || "未采集到标题"}</div>
