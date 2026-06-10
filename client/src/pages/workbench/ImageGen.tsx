@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type ChangeEvent, type MouseEvent } from "
 import { submitImage, imageStatus } from "../../api/assistant";
 import SheetSelect from "../../components/SheetSelect";
 
-const SIZES = ["1024x1024", "1024x1536", "1536x1024"];
+// Datalist suggestions only — the size field is free-form, so any WxH works.
+const SIZES = ["1024x1024", "1024x1536", "1536x1024", "1200x1200", "1400x1400", "1600x1600", "2000x2000", "1200x800", "800x1200"];
 const SESSIONS_KEY = "ivyea-ops-imagegen-sessions";
 // One-shot handoff key: the Listing board writes a source image (data URL) here,
 // then navigates to /imagegen; this page picks it up on mount for editing.
@@ -119,7 +120,8 @@ export default function ImageGen() {
     setInput("");
     setLoading(true);
     try {
-      const taskId = await submitImage(text, size, n, src ? [src] : undefined);
+      const sz = size.trim() || "1024x1024";
+      const taskId = await submitImage(text, sz, n, src ? [src] : undefined);
       const started = Date.now();
       timerRef.current = window.setInterval(async () => {
         try {
@@ -405,15 +407,19 @@ export default function ImageGen() {
           placeholder={sourceImage ? "描述如何修改这张图，Enter 发送（Shift+Enter 换行）" : (turns.length > 0 ? "继续描述修改要求，Enter 发送（Shift+Enter 换行）" : "描述你想要的图片，英文效果更佳，Enter 发送")}
           disabled={loading}
         />
-        <SheetSelect
+        <input
           className="market-query-input"
-          style={{ flex: "0 0 auto", minWidth: 110 }}
+          style={{ flex: "0 0 auto", minWidth: 100, maxWidth: 130, textAlign: "center" }}
+          list="imggen-sizes"
           value={size}
-          onChange={setSize}
+          onChange={e => setSize(e.target.value.trim())}
           disabled={loading}
-          title="图片尺寸"
-          options={SIZES}
+          title="图片尺寸（可自定义，如 1200x800；也可选预设）"
+          placeholder="宽x高"
         />
+        <datalist id="imggen-sizes">
+          {SIZES.map(s => <option key={s} value={s} />)}
+        </datalist>
         <SheetSelect
           className="market-query-input"
           style={{ flex: "0 0 auto", minWidth: 60 }}
