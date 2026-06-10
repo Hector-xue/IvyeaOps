@@ -153,18 +153,25 @@ def _validate_workspace_path(requested: str) -> str:
     if not normalized:
         raise HTTPException(400, "Workspace path is required")
     absolute = repos.normalize_project_path(os.path.abspath(normalized))
-    if absolute in _FORBIDDEN or absolute == "/":
+    root = repos.normalize_project_path(os.path.realpath(WORKSPACES_ROOT))
+    # Containment: the workspace must live inside the configured root. This is the
+    # primary security boundary.
+    if absolute != root and not absolute.startswith(root + "/"):
+        raise HTTPException(400, f"Workspace path must be within the allowed workspace root: {WORKSPACES_ROOT}")
+    if absolute == "/":
         raise HTTPException(400, "Cannot use system-critical directories as workspace locations")
+    # Block system-critical dirs — but never the workspace root itself or its
+    # subtree. When the server runs as root, home (== WORKSPACES_ROOT) is /root,
+    # which is also listed in _FORBIDDEN; without this exemption *every* path under
+    # the user's own home is rejected and project creation is impossible.
     for forbidden in _FORBIDDEN:
+        if root == forbidden or root.startswith(forbidden + "/"):
+            continue  # the workspace root legitimately lives at/under this dir
         if absolute == forbidden or absolute.startswith(forbidden + "/"):
             if forbidden == "/var" and (absolute.startswith("/var/tmp") or absolute.startswith("/var/folders")):
                 continue
             raise HTTPException(400, f"Cannot create workspace in system directory: {forbidden}")
-    root = repos.normalize_project_path(os.path.realpath(WORKSPACES_ROOT))
-    resolved = absolute
-    if resolved != root and not resolved.startswith(root + "/"):
-        raise HTTPException(400, f"Workspace path must be within the allowed workspace root: {WORKSPACES_ROOT}")
-    return resolved
+    return absolute
 
 
 class CreateProjectBody(BaseModel):

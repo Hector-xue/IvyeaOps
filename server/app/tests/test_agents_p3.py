@@ -117,3 +117,19 @@ def test_create_folder(ctx):
     r = c.post("/api/agents/create-folder", json={"path": target}, headers=_HDR)
     assert r.status_code == 200 and r.json()["success"]
     assert Path(target).is_dir()
+
+
+def test_workspace_root_in_blocklist_still_allows_subpaths(monkeypatch):
+    """Regression: when the server runs as root, WORKSPACES_ROOT defaults to /root,
+    which is also a system-critical dir in the blocklist. Project creation must
+    still work for paths *under* the workspace root, while paths outside it (and
+    real system dirs) stay rejected. Before the fix every /root/* path was a 400
+    ("Cannot create workspace in system directory: /root") and no agent project
+    could be created on a root install."""
+    from app.agents.routers import projects as P
+    monkeypatch.setattr(P, "WORKSPACES_ROOT", "/root")
+    assert P._validate_workspace_path("/root/my-project") == "/root/my-project"
+    assert P._validate_workspace_path("/root/agents/demo") == "/root/agents/demo"
+    for bad in ("/etc/passwd", "/tmp/x", "/home/other/p", "/"):
+        with pytest.raises(Exception):
+            P._validate_workspace_path(bad)
