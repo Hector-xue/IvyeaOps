@@ -5,7 +5,11 @@ no filesystem. Safe to expose to registered (non-admin) users.
 """
 from __future__ import annotations
 
+import asyncio
+import base64
 import json
+import time
+import uuid
 from typing import AsyncGenerator, List
 
 import httpx
@@ -229,39 +233,93 @@ def _image_cfg() -> dict:
     }
 
 
+# ── Image-to-image editing via /images/edits ────────────────────────────────
+# /images/edits truly EDITS the given image (preserves its content), unlike
+# /images/generations + image_urls which only generates a *new* image inspired by
+# the reference. The edits endpoint is synchronous (~70-90s), so we run it as a
+# small in-memory background job and expose the same task_id/poll interface the
+# text-to-image path already uses.
+_EDIT_JOBS: dict[str, dict] = {}
+
+
+def _prune_edit_jobs() -> None:
+    if len(_EDIT_JOBS) <= 60:
+        return
+    for k in sorted(_EDIT_JOBS, key=lambda j: _EDIT_JOBS[j].get("ts", 0.0))[: len(_EDIT_JOBS) - 60]:
+        _EDIT_JOBS.pop(k, None)
+
+
+async def _source_to_bytes(url: str) -> tuple[bytes, str]:
+    """Return (image_bytes, mime) from a base64 data URL or an http(s) URL."""
+    if url.startswith("data:"):
+        head, _, b64 = url.partition(",")
+        mime = head[5:].split(";")[0] or "image/png"
+        return base64.b64decode(b64), mime
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60, connect=10)) as c:
+        r = await c.get(url)
+        r.raise_for_status()
+        return r.content, (r.headers.get("content-type") or "image/png").split(";")[0]
+
+
+async def _run_edit_job(job_id: str, model: str, prompt: str, size: str, key: str, base: str, image_url: str) -> None:
+    ts = _EDIT_JOBS.get(job_id, {}).get("ts", time.time())
+    try:
+        img, mime = await _source_to_bytes(image_url)
+        ext = "jpg" if ("jpe" in mime or "jpg" in mime) else ("webp" if "webp" in mime else "png")
+        files = {"image": (f"source.{ext}", img, mime or "image/png")}
+        data = {"model": model, "prompt": prompt, "size": size, "n": "1"}
+        async with httpx.AsyncClient(timeout=httpx.Timeout(280, connect=10)) as c:
+            r = await c.post(f"{base}/images/edits", data=data, files=files,
+                             headers={"Authorization": f"Bearer {key}"})
+        if r.status_code >= 400:
+            _EDIT_JOBS[job_id] = {"status": "failed", "images": [], "error": f"编辑失败 HTTP {r.status_code}：{r.text[:200]}", "ts": ts}
+            return
+        images: list[str] = []
+        for item in (r.json().get("data") or []):
+            u = item.get("url")
+            if isinstance(u, list):
+                images.extend(x for x in u if isinstance(x, str))
+            elif isinstance(u, str):
+                images.append(u)
+            elif item.get("b64_json"):
+                images.append("data:image/png;base64," + item["b64_json"])
+        _EDIT_JOBS[job_id] = {"status": "completed" if images else "failed", "images": images,
+                              "error": None if images else "编辑未返回图片", "ts": ts}
+    except Exception as e:  # noqa: BLE001
+        _EDIT_JOBS[job_id] = {"status": "failed", "images": [], "error": f"编辑失败：{e}", "ts": ts}
+
+
 @router.post("/image")
 async def image_submit(req: ImageReq, _user: str = Depends(require_user)) -> dict:
-    """Submit an image-gen job (async). Returns a task_id the client then polls
-    via /image/status (generation takes ~60s)."""
+    """Submit an image job (async). Returns a task_id the client polls via
+    /image/status. With a source image -> true editing (/images/edits, run as a
+    background job); otherwise text-to-image (/images/generations)."""
     ic = _image_cfg()
     key = ic["api_key"]
     if not key:
         raise HTTPException(400, "生图 key 未配置（系统配置 → 应用模型 → AI 生图）")
     if not req.prompt.strip():
         raise HTTPException(400, "提示词不能为空")
-    payload = {"model": ic["model"], "prompt": req.prompt, "n": min(max(req.n, 1), 4), "size": req.size}
-    # Image-to-image: when source image(s) are supplied, edit them instead of
-    # generating from scratch. Mirrors the Listing board's proven approach —
-    # gpt-image's input_fidelity:"high" preserves the source; apimart may reject
-    # that field, so try high-fidelity first and fall back to a plain request.
-    refs = [u for u in (req.image_urls or []) if isinstance(u, str) and u.strip()][:2]
+
+    refs = [u for u in (req.image_urls or []) if isinstance(u, str) and u.strip()]
     if refs:
-        payload["image_urls"] = refs
-        attempts = [{**payload, "input_fidelity": "high"}, payload]
-    else:
-        attempts = [payload]
+        # Image-to-image: edit the (first) source image so its content is kept.
+        job_id = "edit_" + uuid.uuid4().hex[:16]
+        _EDIT_JOBS[job_id] = {"status": "running", "images": [], "error": None, "ts": time.time()}
+        _prune_edit_jobs()
+        asyncio.create_task(_run_edit_job(job_id, ic["model"], req.prompt, req.size, key, ic["base_url"], refs[0]))
+        return {"task_id": job_id}
+
+    # Text-to-image
+    payload = {"model": ic["model"], "prompt": req.prompt, "n": min(max(req.n, 1), 4), "size": req.size}
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(60, connect=10)) as c:
-            r = None
-            for attempt in attempts:
-                r = await c.post(f"{ic['base_url']}/images/generations", json=attempt,
-                                 headers={"Authorization": f"Bearer {key}"})
-                if r.status_code < 400:
-                    break
+            r = await c.post(f"{ic['base_url']}/images/generations", json=payload,
+                             headers={"Authorization": f"Bearer {key}"})
     except Exception as e:
         raise HTTPException(502, f"生图请求失败：{e}")
-    if r is None or r.status_code >= 400:
-        raise HTTPException(502, f"Apimart 生图失败 HTTP {r.status_code if r is not None else '?'}：{r.text[:200] if r is not None else 'no response'}")
+    if r.status_code >= 400:
+        raise HTTPException(502, f"Apimart 生图失败 HTTP {r.status_code}：{r.text[:200]}")
     item = (r.json().get("data") or [{}])[0]
     tid = item.get("task_id")
     if not tid:
@@ -271,6 +329,14 @@ async def image_submit(req: ImageReq, _user: str = Depends(require_user)) -> dic
 
 @router.get("/image/status")
 async def image_status(task_id: str, _user: str = Depends(require_user)) -> dict:
+    # Local image-edit jobs (image-to-image) are tracked in-process.
+    if task_id.startswith("edit_") or task_id in _EDIT_JOBS:
+        j = _EDIT_JOBS.get(task_id)
+        if not j:
+            return {"status": "failed", "progress": 0, "images": [], "error": "任务不存在或已过期，请重试"}
+        running = j["status"] == "running"
+        return {"status": "processing" if running else j["status"],
+                "progress": 50 if running else 100, "images": j["images"], "error": j["error"]}
     ic = _image_cfg()
     key = ic["api_key"]
     if not key:

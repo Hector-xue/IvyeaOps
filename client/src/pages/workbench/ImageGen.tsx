@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type MouseEvent } from "react";
 import { submitImage, imageStatus } from "../../api/assistant";
-import SheetSelect from "../../components/SheetSelect";
 
 // Datalist suggestions only — the size field is free-form, so any WxH works.
 const SIZES = ["1024x1024", "1024x1536", "1536x1024", "1200x1200", "1400x1400", "1600x1600", "2000x2000", "1200x800", "800x1200"];
@@ -59,7 +58,7 @@ export default function ImageGen() {
   const [currentId, setCurrentId] = useState<string>(() => Date.now().toString());
   const [turns, setTurns] = useState<ImageTurn[]>([]);
   const [size, setSize] = useState(SIZES[0]);
-  const [n, setN] = useState(1);
+  const n = 1; // gpt-image returns a single image per request; count selector removed
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -202,7 +201,6 @@ export default function ImageGen() {
     setCurrentId(s.id);
     setTurns(s.turns);
     setSize(s.size);
-    setN(s.n);
     setInput("");
     setHistoryOpen(false);
   };
@@ -420,15 +418,6 @@ export default function ImageGen() {
         <datalist id="imggen-sizes">
           {SIZES.map(s => <option key={s} value={s} />)}
         </datalist>
-        <SheetSelect
-          className="market-query-input"
-          style={{ flex: "0 0 auto", minWidth: 60 }}
-          value={String(n)}
-          onChange={v => setN(Number(v))}
-          disabled={loading}
-          title="生成数量"
-          options={[1, 2, 3, 4].map(x => ({ value: String(x), label: `${x} 张` }))}
-        />
         <button className="market-btn market-btn-submit" onClick={run} disabled={loading || !input.trim()}>
           {loading ? <><span className="spin" style={{ marginRight: 6 }} />生成中…</> : "生成"}
         </button>
