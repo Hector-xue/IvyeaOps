@@ -15,7 +15,7 @@ import textwrap
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterator
 
 from app.core.config import settings
 from app.services import gbrain_service as gb
@@ -682,18 +682,32 @@ def _hermes_env() -> dict[str, str]:
 
 
 def chat_model_status() -> dict[str, Any]:
-    try:
-        hermes = _hermes_bin()
-    except BrainChatError:
-        return {"configured": False, "provider": "hermes", "base_url": "", "model": "", "hermes_bin": "", "mode": "hermes-cli"}
-    return {
-        "configured": True,
-        "provider": "hermes",
-        "base_url": "",
-        "model": "Hermes Agent",
-        "hermes_bin": hermes,
-        "mode": "hermes-cli",
-    }
+    if hermes_available():
+        try:
+            hermes = _hermes_bin()
+        except BrainChatError:
+            hermes = _HERMES_VENV_PYTHON
+        return {
+            "configured": True,
+            "provider": "hermes",
+            "base_url": "",
+            "model": "Hermes Agent",
+            "hermes_bin": hermes,
+            "mode": "hermes-cli",
+        }
+    # No Hermes — the chat still works via the unified global text chain
+    # (DeepSeek / Apimart / 全局兜底大模型), the same chain every other panel uses.
+    from app.services import ai_synthesis_service as _ai
+    if _ai.has_text_provider():
+        return {
+            "configured": True,
+            "provider": "global",
+            "base_url": "",
+            "model": "全局兜底大模型",
+            "hermes_bin": "",
+            "mode": "http-fallback",
+        }
+    return {"configured": False, "provider": "none", "base_url": "", "model": "", "hermes_bin": "", "mode": "none"}
 
 
 def _messages_to_hermes_prompt(messages: list[dict[str, str]]) -> str:
@@ -720,9 +734,8 @@ def _strip_hermes_output(output: str) -> str:
     return text
 
 
-def _call_llm(messages: list[dict[str, str]]) -> str:
+def _hermes_chat_text(prompt: str) -> str:
     hermes = _hermes_bin()
-    prompt = _messages_to_hermes_prompt(messages)
     cmd = [
         hermes,
         "chat",
@@ -754,6 +767,30 @@ def _call_llm(messages: list[dict[str, str]]) -> str:
         detail = (proc.stderr or proc.stdout or "").strip()[-1200:]
         raise BrainChatError(f"Hermes 调用失败：{detail or '未知错误'}")
     return _strip_hermes_output(proc.stdout)
+
+
+def _global_answer_sync(prompt: str) -> str:
+    """Run the unified async text chain from sync code (send_message path)."""
+    import asyncio
+    from app.services import ai_synthesis_service as _ai
+    return (asyncio.run(_ai.generate_text(prompt))).strip()
+
+
+def _call_llm(messages: list[dict[str, str]]) -> str:
+    prompt = _messages_to_hermes_prompt(messages)
+    # Prefer Hermes when present; on a missing/empty/failed answer, degrade to the
+    # unified global text chain so chat works without any local agent CLI.
+    if hermes_available():
+        try:
+            out = _hermes_chat_text(prompt)
+            if out.strip():
+                return out
+        except BrainChatError:
+            pass  # fall through to the global chain
+    answer = _global_answer_sync(prompt)
+    if not answer:
+        raise BrainChatError("未能生成回答：请安装 Hermes，或在「系统配置 → 全局兜底大模型」配置一个文本模型。")
+    return answer
 
 
 def _build_prompt(user_message: str, citations: list[dict[str, Any]], mode: str) -> list[dict[str, str]]:
@@ -936,3 +973,23 @@ def stream_spec(prompt: str) -> dict[str, Any]:
         "env": _hermes_env(),
         "cwd": str(gb.BRAIN_ROOT),
     }
+
+
+def hermes_available() -> bool:
+    """True when the no-tools streaming wrapper can actually run — i.e. the Hermes
+    agent venv is present. When False, the SSE route answers via the unified
+    global text chain instead, so the knowledge-base chat works without Hermes."""
+    return Path(_HERMES_VENV_PYTHON).exists()
+
+
+async def stream_global_answer(prompt: str) -> AsyncIterator[str]:
+    """Fallback answer via the unified text chain (DeepSeek → Apimart → 全局兜底
+    大模型), used when Hermes is unavailable or returns an empty response. Yields
+    the answer in small chunks so the SSE stream still renders incrementally."""
+    from app.services import ai_synthesis_service as _ai
+    text = (await _ai.generate_text(prompt)).strip()
+    if not text:
+        return
+    step = 48
+    for i in range(0, len(text), step):
+        yield text[i:i + step]

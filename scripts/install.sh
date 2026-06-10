@@ -235,8 +235,43 @@ if [ "$ANS" = "y" ] || [ "$ANS" = "Y" ]; then
     GBRAIN="$HOME/.bun/bin/gbrain"
     if [ -x "$GBRAIN" ]; then
       mkdir -p "$HOME/brain"
-      ( cd "$HOME/brain" && "$GBRAIN" init --pglite >/dev/null 2>&1 || true )
-      info "  GBrain 安装完成（本地 PGLite，已初始化 ~/brain）。"
+      # Initialise the local PGLite database. Do NOT silence this: a failed init
+      # leaves ~/.gbrain/config.json without a database, and the 知识库 board then
+      # errors "No database URL". Capture output and verify the result.
+      info "  初始化 GBrain 本地知识库（PGLite）..."
+      GB_INIT_OUT="$( cd "$HOME/brain" && "$GBRAIN" init --pglite 2>&1 )" || true
+      GB_CFG="$HOME/.gbrain/config.json"
+      if [ -s "$GB_CFG" ] && grep -q '"database_path"' "$GB_CFG" 2>/dev/null; then
+        info "  GBrain 数据库已就绪（$GB_CFG）。"
+        # Wire local embeddings when Ollama is present, so semantic search works
+        # out of the box. gbrain's loadConfig() reads embedding_model from
+        # config.json (NOT via `gbrain config set`), so write it directly.
+        if command -v ollama &>/dev/null; then
+          info "  检测到 Ollama —— 拉取 embedding 模型 nomic-embed-text（本地免费）..."
+          ollama pull nomic-embed-text >/dev/null 2>&1 \
+            || warn "    拉取 nomic-embed-text 失败，可稍后手动：ollama pull nomic-embed-text"
+          if "$VENV_PY" - "$GB_CFG" <<'PYEOF'
+import json, sys
+p = sys.argv[1]
+cfg = json.load(open(p, encoding="utf-8"))
+cfg["embedding_model"] = "ollama:nomic-embed-text"
+cfg["embedding_dimensions"] = 768
+json.dump(cfg, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+          then
+            info "    已配置本地语义检索（ollama:nomic-embed-text，768 维）。"
+          else
+            warn "    写入 embedding 配置失败，可在「系统配置 → 智能体 → GBrain Embedding」手动设置。"
+          fi
+        else
+          info "  未检测到 Ollama —— GBrain 暂用关键词检索（功能正常）；装 Ollama 后可在"
+          info "  「系统配置 → 智能体 → GBrain Embedding」开启本地语义检索。"
+        fi
+      else
+        warn "  GBrain 初始化未完成 —— 知识库板块会报 'No database URL'。gbrain init 输出："
+        printf '%s\n' "$GB_INIT_OUT" | sed 's/^/    /'
+        warn "  可手动重试：cd ~/brain && \"$GBRAIN\" init --pglite"
+      fi
     fi
   else
     warn "未找到 bun，GBrain 跳过。可手动：bun install -g github:garrytan/gbrain"

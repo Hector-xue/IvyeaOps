@@ -300,62 +300,81 @@ async def chat_message_stream(session_id: str, body: ChatStreamBody):
             "regenerated": turn.get("regenerated", False),
         })
 
-        spec = bc.stream_spec(turn["prompt"])
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *spec["argv"],
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
-                cwd=spec["cwd"],
-                env=spec["env"],
-            )
-        except Exception as e:  # noqa: BLE001
-            yield _sse({"type": "error", "detail": f"启动 Hermes 失败：{e}"})
-            return
-
-        try:
-            proc.stdin.write(spec["stdin"])
-            await proc.stdin.drain()
-            proc.stdin.close()
-        except Exception:
-            pass
-
-        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-        deadline = time.monotonic() + _STREAM_DEADLINE_S
         parts: list[str] = []
         timed_out = False
-        try:
-            while True:
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    timed_out = True
-                    break
+
+        # Prefer Hermes (token-by-token) when its agent venv is present.
+        if bc.hermes_available():
+            spec = bc.stream_spec(turn["prompt"])
+            proc = None
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *spec["argv"],
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.DEVNULL,
+                    cwd=spec["cwd"],
+                    env=spec["env"],
+                )
+            except Exception:  # noqa: BLE001 — degrade to the global chain below
+                proc = None
+
+            if proc is not None:
                 try:
-                    data = await asyncio.wait_for(proc.stdout.read(1024), timeout=min(remaining, 15))
-                except asyncio.TimeoutError:
-                    yield ":hb\n\n"  # heartbeat keeps proxies from closing the stream
-                    continue
-                if not data:
-                    break
-                text = decoder.decode(data)
-                if text:
-                    parts.append(text)
-                    yield _sse({"type": "token", "text": text})
-        finally:
-            if proc.returncode is None:
-                try:
-                    proc.kill()
+                    proc.stdin.write(spec["stdin"])
+                    await proc.stdin.drain()
+                    proc.stdin.close()
                 except Exception:
                     pass
+
+                decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+                deadline = time.monotonic() + _STREAM_DEADLINE_S
+                try:
+                    while True:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            timed_out = True
+                            break
+                        try:
+                            data = await asyncio.wait_for(proc.stdout.read(1024), timeout=min(remaining, 15))
+                        except asyncio.TimeoutError:
+                            yield ":hb\n\n"  # heartbeat keeps proxies from closing the stream
+                            continue
+                        if not data:
+                            break
+                        text = decoder.decode(data)
+                        if text:
+                            parts.append(text)
+                            yield _sse({"type": "token", "text": text})
+                finally:
+                    if proc.returncode is None:
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
+                    try:
+                        await proc.wait()
+                    except Exception:
+                        pass
+
+        # Fall back to the unified global text chain (DeepSeek → Apimart → 全局兜底
+        # 大模型) when Hermes is absent or produced nothing — so the knowledge-base
+        # chat works without any local agent CLI, and an empty Hermes reply still
+        # yields an answer.
+        if not "".join(parts).strip():
             try:
-                await proc.wait()
-            except Exception:
-                pass
+                async for chunk in bc.stream_global_answer(turn["prompt"]):
+                    parts.append(chunk)
+                    yield _sse({"type": "token", "text": chunk})
+                timed_out = False
+            except Exception as e:  # noqa: BLE001
+                if not "".join(parts).strip():
+                    yield _sse({"type": "error", "detail": f"对话失败（Hermes 不可用，全局兜底也失败）：{e}"})
+                    return
 
         answer = "".join(parts)
-        if timed_out and not answer.strip():
-            yield _sse({"type": "error", "detail": "Hermes 对话超时，请稍后重试或缩短问题。"})
+        if not answer.strip():
+            yield _sse({"type": "error", "detail": "未能生成回答：请安装 Hermes，或在「系统配置 → 全局兜底大模型」配置一个文本模型。"})
             return
         try:
             assistant = bc.commit_chat_answer(session_id, answer, turn["citations"])

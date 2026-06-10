@@ -924,6 +924,16 @@ ASSISTANT_PROVIDER_BASE = {
 }
 
 
+def has_text_provider() -> bool:
+    """True when at least one HTTP text provider (DeepSeek / Apimart / the global
+    fallback model) is configured — i.e. ``generate_text`` can answer even when
+    no local agent CLI (Hermes/Codex/Claude) is installed."""
+    try:
+        return bool(_deepseek_key() or _apimart_key() or assistant_text_cfg().get("api_key"))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def assistant_text_cfg() -> dict:
     """The global fallback text model (== AI 问答 assistant slot), or {} if the
     user hasn't configured one. Keys: provider / model / api_key / base_url."""
