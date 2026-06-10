@@ -2018,7 +2018,7 @@ body::after{
 .hs-health{background:var(--bg1);border:1px solid var(--b);border-radius:8px;overflow:hidden}
 .hs-health-hd{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--bg2);border-bottom:1px solid var(--b)}
 .hs-health-err{padding:8px 16px;color:var(--red);font-size:11px}
-.hs-refresh-btn{padding:4px 12px;font-size:11px;font-family:var(--font);background:var(--bg3);border:1px solid var(--b2);color:var(--t2);border-radius:4px;cursor:pointer;transition:all .12s}
+.hs-refresh-btn{padding:4px 12px;font-size:11px;font-family:var(--font);background:var(--bg3);border:1px solid var(--b2);color:var(--t2);border-radius:4px;cursor:pointer;transition:all .12s;white-space:nowrap;flex-shrink:0}
 .hs-refresh-btn:hover:not(:disabled){color:var(--t);border-color:var(--acc)}
 .hs-refresh-btn:disabled{opacity:.5;cursor:not-allowed}
 .hs-health-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;padding:6px 0}

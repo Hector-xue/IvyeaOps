@@ -146,9 +146,31 @@ async def settings_health(_u: str = Depends(require_user)):
     if not brain_root:
         brain_root = __import__("os").environ.get("IVYEA_OPS_BRAIN_ROOT") or str(Path.home() / "brain")
 
-    imgflow_result, = await asyncio.gather(_check_http(imgflow_url + "/"))
+    # Probe the local ollama server directly — the most reliable "installed &
+    # running" signal. `shutil.which` alone gives false negatives because the
+    # systemd service PATH often omits /usr/local/bin where ollama lives.
+    ollama_host = (cfg.get("gbrain_embed_base_url") or "http://127.0.0.1:11434").rstrip("/")
+    imgflow_result, ollama_http = await asyncio.gather(
+        _check_http(imgflow_url + "/"),
+        _check_http(ollama_host + "/api/tags", 1.5),
+    )
 
     from app.core import integrations as _integ
+
+    def _check_ollama() -> Dict[str, Any]:
+        if ollama_http.get("ok"):
+            return {"ok": True, "detail": f"运行中 · {ollama_host}"}
+        import shutil
+        found = shutil.which("ollama")
+        if not found:
+            cands = [
+                *(f"{d}/ollama" for d in _integ.extra_path_dirs()),
+                "/usr/local/bin/ollama",
+                str(Path.home() / ".local" / "bin" / "ollama"),
+                str(Path.home() / "AppData" / "Local" / "Programs" / "Ollama" / "ollama.exe"),
+            ]
+            found = next((c for c in cands if Path(c).exists()), None)
+        return {"ok": True, "detail": f"已安装 · {found}"} if found else {"ok": False, "detail": "未安装"}
 
     # AI readiness: can the standard text chain / vision actually run? Gives a
     # fresh install an at-a-glance answer for "why is AI not working".
@@ -183,10 +205,7 @@ async def settings_health(_u: str = Depends(require_user)):
         "sorftime":  _check_key("sorftime_key", "API Key 已设置"),
         "imgflow":   imgflow_result,
         "gbrain_bin": _check_bin(gbrain_bin),
-        "ollama": _check_command(
-            "ollama",
-            str(Path.home() / "AppData" / "Local" / "Programs" / "Ollama" / "ollama.exe"),
-        ),
+        "ollama": _check_ollama(),
         "brain_root": {
             "ok": Path(brain_root).exists(),
             "detail": brain_root if Path(brain_root).exists() else f"目录不存在：{brain_root}",
