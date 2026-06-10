@@ -230,8 +230,13 @@ if [ "$ANS" = "y" ] || [ "$ANS" = "Y" ]; then
     curl -fsSL https://bun.sh/install | bash || warn "Bun 安装失败"
   fi
   BUN="$HOME/.bun/bin/bun"; [ -x "$BUN" ] || BUN="$(command -v bun || true)"
+  # Pin GBrain to a known-good commit. Upstream HEAD (v0.35+) changed the config
+  # schema to require database_url (supabase/url) and broke `init --pglite`, so an
+  # unpinned install made the 知识库 board error "No database URL: database_url is
+  # missing from config". v0.33.2.0 keeps the local PGLite (database_path) flow.
+  GBRAIN_REF="github:garrytan/gbrain#1a6b543cc536cb8c379ce30518390a38e6d2ee57"
   if [ -n "$BUN" ] && [ -x "$BUN" ]; then
-    "$BUN" install -g github:garrytan/gbrain || warn "GBrain 安装失败"
+    "$BUN" install -g "$GBRAIN_REF" || warn "GBrain 安装失败"
     GBRAIN="$HOME/.bun/bin/gbrain"
     if [ -x "$GBRAIN" ]; then
       mkdir -p "$HOME/brain"
@@ -274,7 +279,7 @@ PYEOF
       fi
     fi
   else
-    warn "未找到 bun，GBrain 跳过。可手动：bun install -g github:garrytan/gbrain"
+    warn "未找到 bun，GBrain 跳过。可手动：bun install -g \"$GBRAIN_REF\""
   fi
   info "  安装路径会被 IvyeaOps 自动发现；如未识别，可在「系统配置 → 智能体」里填路径。"
 fi

@@ -133,3 +133,16 @@ def test_workspace_root_in_blocklist_still_allows_subpaths(monkeypatch):
     for bad in ("/etc/passwd", "/tmp/x", "/home/other/p", "/"):
         with pytest.raises(Exception):
             P._validate_workspace_path(bad)
+
+
+def test_normalize_project_path_windows_backslashes():
+    """Regression: Windows paths must normalize to forward slashes so containment
+    checks (path.startswith(root + '/')) work. Before the fix, posixpath kept the
+    backslashes and every Windows project path was rejected ('Failed to create
+    project')."""
+    from app.agents import repos
+    assert repos.normalize_project_path("C:\\Users\\x\\proj") == "C:/Users/x/proj"
+    assert repos.normalize_project_path("C:/Users/x/proj") == "C:/Users/x/proj"
+    assert repos.normalize_project_path("C:\\Users\\x\\a\\..\\b") == "C:/Users/x/b"
+    # Linux paths are unaffected.
+    assert repos.normalize_project_path("/root/p") == "/root/p"

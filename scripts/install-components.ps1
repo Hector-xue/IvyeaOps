@@ -159,8 +159,13 @@ function Install-GBrain {
     if (-not $bun) { throw "bun not found. Cannot install GBrain." }
 
     Write-Info "Installing/updating GBrain..."
-    & $bun.Source install -g github:garrytan/gbrain
-    if ($LASTEXITCODE -ne 0) { throw "bun install -g github:garrytan/gbrain failed." }
+    # Pin to a known-good commit. Upstream HEAD (v0.35+) changed the config schema
+    # to require database_url and broke `init --pglite`, so an unpinned install made
+    # the knowledge-base board error "No database URL: database_url is missing from
+    # config". v0.33.2.0 keeps the local PGLite (database_path) flow.
+    $GbrainRef = "github:garrytan/gbrain#1a6b543cc536cb8c379ce30518390a38e6d2ee57"
+    & $bun.Source install -g $GbrainRef
+    if ($LASTEXITCODE -ne 0) { throw "bun install -g $GbrainRef failed." }
     Refresh-Path
 
     $gbrain = Get-Command gbrain -ErrorAction SilentlyContinue
@@ -172,9 +177,21 @@ function Install-GBrain {
 
     $brain = "$env:USERPROFILE\brain"
     if (-not (Test-Path $brain)) { New-Item -ItemType Directory -Path $brain | Out-Null }
+    # Initialise the local PGLite database. Do NOT silence this: a failed init leaves
+    # ~/.gbrain/config.json without a database, and the board then errors
+    # "No database URL". Capture output and verify the result.
+    Write-Info "Initializing GBrain local knowledge base (PGLite)..."
     Push-Location $brain
-    try { & $gbrain.Source init --pglite 2>$null } catch { Write-Warn "gbrain init can be retried later: $_" }
+    $gbInit = & $gbrain.Source init --pglite 2>&1 | Out-String
     Pop-Location
+    $gbCfg = "$env:USERPROFILE\.gbrain\config.json"
+    if ((Test-Path $gbCfg) -and ((Get-Content $gbCfg -Raw) -match '"database_path"')) {
+        Write-Info "GBrain database ready: $gbCfg"
+    } else {
+        Write-Warn "GBrain init did not complete — the board will error 'No database URL'."
+        Write-Warn "gbrain init output:`n$gbInit"
+        Write-Warn "Retry: cd `"$brain`"; & `"$($gbrain.Source)`" init --pglite"
+    }
     Write-Info "GBrain installed: $($gbrain.Source)"
     Write-Info "Brain root: $brain"
 }

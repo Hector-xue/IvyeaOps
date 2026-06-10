@@ -19,11 +19,14 @@ from typing import Any, Optional
 # --- path / display-name helpers (shared/utils.ts) --------------------------
 
 def normalize_project_path(input_path: Any) -> str:
-    """Canonicalize a project path for stable DB keys (POSIX rules on Linux):
-    trim, normalize dot segments, strip trailing separators except root."""
+    """Canonicalize a project path for stable DB keys. Backslashes are converted
+    to forward slashes first so Windows paths (``C:\\Users\\x\\proj``) normalize
+    consistently — otherwise posixpath keeps the backslashes and containment
+    checks like ``path.startswith(root + "/")`` fail, which broke agent project
+    creation on Windows ('Failed to create project'). On Linux this is a no-op."""
     if not isinstance(input_path, str):
         return ""
-    trimmed = input_path.strip()
+    trimmed = input_path.strip().replace("\\", "/")
     if not trimmed:
         return ""
     norm = posixpath.normpath(trimmed)
