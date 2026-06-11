@@ -67,6 +67,11 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+# Versioned migrations for this DB (see app/core/db_migrations). The baseline
+# schema below is "version 0"; append future breaking changes here.
+_MIGRATIONS: tuple = ()
+
+
 def init_db() -> None:
     with _connect() as conn:
         conn.executescript(
@@ -99,6 +104,8 @@ def init_db() -> None:
               ON terminal_history(session_id, seq);
             """
         )
+        from app.core.db_migrations import apply_migrations
+        apply_migrations(conn, _MIGRATIONS)
 
 
 def list_sessions(user_id: str = "root", include_archived: bool = False, limit: int = 200) -> list[dict[str, Any]]:

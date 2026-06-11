@@ -29,6 +29,12 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+# Versioned migrations for this DB (see app/core/db_migrations). The baseline
+# schema below (+ the legacy position/permissions ALTERs) is "version 0";
+# append future breaking changes here.
+_MIGRATIONS: tuple = ()
+
+
 def init_db() -> None:
     with _connect() as conn:
         conn.execute("""
@@ -50,6 +56,8 @@ def init_db() -> None:
                 conn.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT NOT NULL DEFAULT {default}")
             except sqlite3.OperationalError:
                 pass  # column already exists
+        from app.core.db_migrations import apply_migrations
+        apply_migrations(conn, _MIGRATIONS)
 
 
 def _hash(pw: str) -> str:

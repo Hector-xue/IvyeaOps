@@ -45,6 +45,11 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+# Versioned migrations for this DB (see app/core/db_migrations). The baseline
+# schema below is "version 0"; append future breaking changes here.
+_MIGRATIONS: tuple = ()
+
+
 def init_db() -> None:
     with _connect() as conn:
         conn.executescript(
@@ -85,6 +90,8 @@ def init_db() -> None:
               ON brain_uploads(created_at DESC);
             """
         )
+        from app.core.db_migrations import apply_migrations
+        apply_migrations(conn, _MIGRATIONS)
 
 
 def _row_dict(row: sqlite3.Row) -> dict[str, Any]:

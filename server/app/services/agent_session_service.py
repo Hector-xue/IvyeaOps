@@ -69,6 +69,12 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+# Versioned migrations for this DB (see app/core/db_migrations). The baseline
+# schema below (+ the legacy resume_target ALTER) is "version 0"; append future
+# breaking changes here instead of ad-hoc ALTERs.
+_MIGRATIONS: tuple = ()
+
+
 def init_db() -> None:
     with _connect() as conn:
         conn.executescript(
@@ -146,6 +152,8 @@ def init_db() -> None:
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(agent_sessions)").fetchall()}
         if "resume_target" not in cols:
             conn.execute("ALTER TABLE agent_sessions ADD COLUMN resume_target TEXT")
+        from app.core.db_migrations import apply_migrations
+        apply_migrations(conn, _MIGRATIONS)
         if "meta_json" not in cols:
             conn.execute("ALTER TABLE agent_sessions ADD COLUMN meta_json TEXT NOT NULL DEFAULT '{}'")
 
