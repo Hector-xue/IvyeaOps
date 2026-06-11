@@ -99,9 +99,20 @@ def db_conn() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+# Versioned, append-only migrations for this DB. The baseline schema (_SCHEMA
+# above, created with CREATE TABLE IF NOT EXISTS) is "version 0"; ship future
+# *breaking* changes here instead of ad-hoc ALTERs, e.g.:
+#   _MIGRATIONS = (lambda c: c.execute("ALTER TABLE sessions ADD COLUMN pinned INTEGER DEFAULT 0"),)
+# Never reorder or delete an already-shipped migration. Other DBs (brain_chat,
+# terminal_live, agent_session, listing, users...) can adopt the same pattern.
+_MIGRATIONS: tuple = ()
+
+
 def init_db() -> None:
-    """Idempotently ensure the tables this backend owns exist. Safe to call on
-    every startup; a no-op against the already-populated live DB."""
+    """Idempotently ensure the tables this backend owns exist + run any pending
+    versioned migrations. Safe to call on every startup."""
+    from app.core.db_migrations import apply_migrations
     with db_conn() as conn:
         for ddl in _SCHEMA:
             conn.execute(ddl)
+        apply_migrations(conn, _MIGRATIONS)
