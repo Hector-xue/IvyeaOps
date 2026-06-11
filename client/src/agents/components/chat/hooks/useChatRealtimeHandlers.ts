@@ -236,8 +236,6 @@ export function useChatRealtimeHandlers({
         // We no longer synthesize client-side placeholder IDs. Until the provider
         // announces `session_created`, the active id is expected to be null.
         if (!currentSessionId) {
-          console.log('Session created with ID:', newSessionId);
-          console.log('Existing session ID:', currentSessionId);
           setCurrentSessionId(newSessionId);
           setPendingPermissionRequests((prev) =>
             prev.map((r) => (r.sessionId ? r : { ...r, sessionId: newSessionId })),

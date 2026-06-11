@@ -17,5 +17,18 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        // Single vendor chunk: split node_modules out of the app code so the
+        // ~2.7MB of rarely-changing deps cache across app updates (app updates
+        // then re-download only the smaller app chunk). One combined vendor
+        // chunk avoids the circular cross-vendor-chunk init that white-screened
+        // a finer-grained split.
+        manualChunks(id: string) {
+          if (id.includes("node_modules")) return "vendor";
+          return undefined;
+        },
+      },
+    },
   },
 });
