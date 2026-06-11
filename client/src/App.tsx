@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, lazy, useContext, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -7,31 +7,35 @@ import AutoFixProvider from "./components/AutoFixProvider";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import Home from "./pages/workbench/Home";
-import Tools from "./pages/workbench/Tools";
-import SkillStudio from "./pages/skill/SkillStudio";
-import StatsOverview from "./pages/skill/StatsOverview";
-import SkillBrowse from "./pages/skill/SkillBrowse";
-import TrashList from "./pages/skill/TrashList";
-import SettingsPage from "./pages/skill/SettingsPage";
-import Terminal from "./pages/workbench/Terminal";
-import ServerMonitor from "./pages/workbench/ServerMonitor";
-import News from "./pages/workbench/News";
-import Brain from "./pages/workbench/Brain";
-import ListingWorkbench from "./pages/workbench/ListingWorkbench";
-import Agents from "./pages/workbench/Agents";
-import Market from "./pages/workbench/Market";
-import Playbook from "./pages/workbench/Playbook";
-import HubSettings from "./pages/workbench/HubSettings";
 import Setup from "./pages/Setup";
-import FreightQuote from "./pages/workbench/FreightQuote";
-import Users from "./pages/workbench/Users";
-import Assistant from "./pages/workbench/Assistant";
-import ImageGen from "./pages/workbench/ImageGen";
-import IdeaSkill from "./pages/workbench/IdeaSkill";
-import SkillTools from "./pages/workbench/SkillTools";
-import SkillHub from "./pages/workbench/SkillHub";
-import DeepAnalysis from "./pages/workbench/DeepAnalysis";
-import LingXing from "./pages/workbench/LingXing";
+// Workbench boards are lazy-loaded (each becomes its own chunk fetched on first
+// navigation), so the initial bundle no longer ships every board up front. The
+// Suspense boundary lives in MainLayout (around <Outlet/> and the persistent /
+// keep-alive boards). Home / Login / NotFound / Setup stay eager (shell).
+const Tools = lazy(() => import("./pages/workbench/Tools"));
+const SkillStudio = lazy(() => import("./pages/skill/SkillStudio"));
+const StatsOverview = lazy(() => import("./pages/skill/StatsOverview"));
+const SkillBrowse = lazy(() => import("./pages/skill/SkillBrowse"));
+const TrashList = lazy(() => import("./pages/skill/TrashList"));
+const SettingsPage = lazy(() => import("./pages/skill/SettingsPage"));
+const Terminal = lazy(() => import("./pages/workbench/Terminal"));
+const ServerMonitor = lazy(() => import("./pages/workbench/ServerMonitor"));
+const News = lazy(() => import("./pages/workbench/News"));
+const Brain = lazy(() => import("./pages/workbench/Brain"));
+const ListingWorkbench = lazy(() => import("./pages/workbench/ListingWorkbench"));
+const Agents = lazy(() => import("./pages/workbench/Agents"));
+const Market = lazy(() => import("./pages/workbench/Market"));
+const Playbook = lazy(() => import("./pages/workbench/Playbook"));
+const HubSettings = lazy(() => import("./pages/workbench/HubSettings"));
+const FreightQuote = lazy(() => import("./pages/workbench/FreightQuote"));
+const Users = lazy(() => import("./pages/workbench/Users"));
+const Assistant = lazy(() => import("./pages/workbench/Assistant"));
+const ImageGen = lazy(() => import("./pages/workbench/ImageGen"));
+const IdeaSkill = lazy(() => import("./pages/workbench/IdeaSkill"));
+const SkillTools = lazy(() => import("./pages/workbench/SkillTools"));
+const SkillHub = lazy(() => import("./pages/workbench/SkillHub"));
+const DeepAnalysis = lazy(() => import("./pages/workbench/DeepAnalysis"));
+const LingXing = lazy(() => import("./pages/workbench/LingXing"));
 import { me } from "./api/client";
 import { getSetupStatus, type SetupChecks } from "./api/setup";
 

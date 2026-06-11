@@ -19,13 +19,17 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        // Single vendor chunk: split node_modules out of the app code so the
-        // ~2.7MB of rarely-changing deps cache across app updates (app updates
-        // then re-download only the smaller app chunk). One combined vendor
-        // chunk avoids the circular cross-vendor-chunk init that white-screened
-        // a finer-grained split.
+        // Pin only react/router into a stable, cacheable chunk. Everything else
+        // is left to rollup's automatic splitting: with the boards now route-lazy
+        // loaded, each board's heavy deps (xterm with Terminal, codemirror with
+        // the editors, syntax-highlighter/katex with markdown views) land in that
+        // board's on-demand chunk instead of an always-loaded vendor blob.
+        // (A finer manual split of interdependent vendors caused a circular-init
+        // white-screen, so we only force the safe react leaf chunk.)
         manualChunks(id: string) {
-          if (id.includes("node_modules")) return "vendor";
+          if (/[\\/]node_modules[\\/](react|react-dom|react-router-dom|scheduler)[\\/]/.test(id)) {
+            return "react-vendor";
+          }
           return undefined;
         },
       },

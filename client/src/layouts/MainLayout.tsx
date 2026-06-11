@@ -1,13 +1,20 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api, logout } from "../api/client";
 import { useAuth } from "../App";
-import Terminal from "../pages/workbench/Terminal";
-import Agents from "../pages/workbench/Agents";
-import Market from "../pages/workbench/Market";
-import Playbook from "../pages/workbench/Playbook";
-import Tools from "../pages/workbench/Tools";
-import ImageGen from "../pages/workbench/ImageGen";
+// Lazy-loaded: these boards stay mounted (terminal/agents) or keep-alive
+// (market/playbook/tools/imagegen), but their code is split into its own chunk
+// and only fetched on first visit — keeps the initial bundle small.
+const Terminal = lazy(() => import("../pages/workbench/Terminal"));
+const Agents = lazy(() => import("../pages/workbench/Agents"));
+const Market = lazy(() => import("../pages/workbench/Market"));
+const Playbook = lazy(() => import("../pages/workbench/Playbook"));
+const Tools = lazy(() => import("../pages/workbench/Tools"));
+const ImageGen = lazy(() => import("../pages/workbench/ImageGen"));
+
+function BoardFallback() {
+  return <div style={{ padding: 40, textAlign: "center", color: "var(--t3)", fontSize: 13 }}>加载中…</div>;
+}
 import ManualModal from "../components/ManualModal";
 import Tour from "../components/Tour";
 import { TOURS, hasTour } from "../lib/tours";
@@ -538,15 +545,17 @@ export default function MainLayout() {
         )}>
           {/* Terminal is always mounted (after first visit) but hidden when
               not active, so the iframe WebSocket survives tab switches. */}
+          {/* Each lazy board gets its OWN Suspense so first-loading one never
+              flips another (mounted, hidden) keep-alive board into a fallback. */}
           {termMounted && (
             <div style={location.pathname === "/terminal" ? { display: "contents" } : { position: "absolute", width: 0, height: 0, overflow: "hidden", opacity: 0, pointerEvents: "none" }}>
-              <Terminal />
+              <Suspense fallback={<BoardFallback />}><Terminal /></Suspense>
             </div>
           )}
           {/* Agents 原生版常驻挂载(独立 React root),切板块时不卸载,保持 WS/会话状态、秒切。 */}
           {agentsMounted && (
             <div style={location.pathname === "/agents" ? { display: "contents" } : { position: "absolute", width: 0, height: 0, overflow: "hidden", opacity: 0, pointerEvents: "none" }}>
-              <Agents />
+              <Suspense fallback={<BoardFallback />}><Agents /></Suspense>
             </div>
           )}
           {/* Long-task boards: mounted on first visit, hidden when inactive so
@@ -554,12 +563,14 @@ export default function MainLayout() {
           {KEEP_ALIVE_PATHS.map((p) =>
             kaVisited.has(p) ? (
               <div key={p} style={location.pathname === p ? { display: "contents" } : HIDDEN_STYLE}>
-                {KEEP_ALIVE_BOARDS[p]()}
+                <Suspense fallback={<BoardFallback />}>{KEEP_ALIVE_BOARDS[p]()}</Suspense>
               </div>
             ) : null,
           )}
           {location.pathname !== "/terminal" && location.pathname !== "/agents"
-            && !KEEP_ALIVE_PATHS.includes(location.pathname) && <Outlet />}
+            && !KEEP_ALIVE_PATHS.includes(location.pathname) && (
+              <Suspense fallback={<BoardFallback />}><Outlet /></Suspense>
+            )}
         </div>
       </div>
       {manualOpen && <ManualModal onClose={() => setManualOpen(false)} />}
