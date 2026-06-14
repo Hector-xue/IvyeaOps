@@ -7,6 +7,7 @@ import {
   type HubSettings, type HealthResp, type TestResult,
 } from "../../api/settings";
 import { installAgentStreamUrl } from "../../api/setup";
+import { lockBodyScroll } from "../../lib/scrollLock";
 
 type SaveStatus = "idle" | "saving" | "ok" | "error";
 
@@ -235,12 +236,11 @@ function ProviderPicker({
   // Lock body scroll while the modal is open.
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScroll = lockBodyScroll();
     const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("keydown", onEsc);
     return () => {
-      document.body.style.overflow = prev;
+      releaseScroll();
       document.removeEventListener("keydown", onEsc);
     };
   }, [open]);

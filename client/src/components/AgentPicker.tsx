@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AgentInfo, fetchAgents, rediscoverAgents } from "../api/agents";
+import { lockBodyScroll } from "../lib/scrollLock";
 
 type Props = {
   open: boolean;
@@ -18,12 +19,11 @@ function ModelPicker({ models, value, onChange }: {
 
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScroll = lockBodyScroll();
     const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("keydown", onEsc);
     return () => {
-      document.body.style.overflow = prev;
+      releaseScroll();
       document.removeEventListener("keydown", onEsc);
     };
   }, [open]);

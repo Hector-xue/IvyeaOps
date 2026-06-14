@@ -1,4 +1,5 @@
 import { ReactNode, useEffect } from "react";
+import { lockBodyScroll } from "../../lib/scrollLock";
 
 export type ModalProps = {
   title: string;
@@ -24,14 +25,13 @@ export default function Modal({
   footer,
 }: ModalProps) {
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScroll = lockBodyScroll();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !locked) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = prev;
+      releaseScroll();
       window.removeEventListener("keydown", onKey);
     };
   }, [locked, onClose]);

@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type R
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api, logout } from "../api/client";
 import { useAuth } from "../App";
+import { resetBodyScrollLock } from "../lib/scrollLock";
 // Lazy-loaded: these boards stay mounted (terminal/agents) or keep-alive
 // (market/playbook/tools/imagegen), but their code is split into its own chunk
 // and only fetched on first visit — keeps the initial bundle small.
@@ -256,15 +257,13 @@ export default function MainLayout() {
     if (location.pathname === "/terminal") setTermMounted(true);
   }, [location.pathname]);
 
-  // Safety net for the Windows "页面无法滚动、刷新才好" report: modals/dropdowns
-  // lock `document.body.style.overflow = "hidden"` and restore it on unmount.
-  // If one leaks (e.g. unmounted mid-transition), every page stays scroll-locked
-  // until a hard refresh. On each route change no page-scoped overlay should
-  // still be open, so clear a stuck lock — cheap, and a no-op when nothing leaked.
+  // Safety net for the "页面偶尔无法滚动、刷新才好" report. Modals/drawers now use
+  // a ref-counted body scroll lock (lib/scrollLock) which is leak-safe even when
+  // overlays overlap; this last-resort reset zeros the counter on every route
+  // change, so a missed release can never leave the page permanently locked.
+  // A no-op when nothing leaked.
   useEffect(() => {
-    if (document.body.style.overflow === "hidden") {
-      document.body.style.overflow = "";
-    }
+    resetBodyScrollLock();
   }, [location.pathname]);
 
   // 智能体会话(/agents):首次访问后常驻挂载,切板块秒回、WS/会话状态不丢。

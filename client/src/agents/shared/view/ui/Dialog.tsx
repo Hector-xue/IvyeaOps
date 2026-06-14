@@ -2,6 +2,7 @@ import * as React from 'react';
 import { createPortal } from 'react-dom';
 
 import { cn } from '../../../lib/utils';
+import { lockBodyScroll } from '../../../../lib/scrollLock';
 
 interface DialogContextValue {
   open: boolean;
@@ -147,13 +148,12 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
 
       document.addEventListener('keydown', handleKeyDown, true);
 
-      // Prevent body scroll
-      const prev = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
+      // Prevent body scroll (ref-counted — leak-safe when dialogs overlap)
+      const releaseScroll = lockBodyScroll();
 
       return () => {
         document.removeEventListener('keydown', handleKeyDown, true);
-        document.body.style.overflow = prev;
+        releaseScroll();
       };
     }, [open, onOpenChange, onEscapeKeyDown]);
 
