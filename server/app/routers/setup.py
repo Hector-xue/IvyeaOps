@@ -28,6 +28,7 @@ import sys
 import tempfile
 import threading
 import urllib.request
+import zipfile
 from pathlib import Path
 from typing import AsyncGenerator
 
@@ -290,8 +291,26 @@ def _update_download_worker(url: str, dest: Path) -> None:
                     _UPDATE_STATE.update(
                         downloaded=done,
                         percent=round(100 * done / total, 1) if total else 0)
-        if dest.stat().st_size < 1024 * 1024:  # sanity: a real bundle is ~90MB
+        # Integrity gate — a truncated/corrupt download must NEVER reach robocopy,
+        # or it installs a broken onefile exe whose python3xx.dll fails to load
+        # ("找不到指定的模块"). Three checks, cheap → definitive:
+        size = dest.stat().st_size
+        if size < 1024 * 1024:  # sanity: a real bundle is ~90MB
             raise RuntimeError("下载文件异常偏小，可能不是有效安装包")
+        if total and size != total:  # byte count must match Content-Length exactly
+            raise RuntimeError(
+                f"下载不完整（{size}/{total} 字节），请重试更新")
+        # Full CRC scan of the archive — catches silent truncation/corruption that
+        # a size match alone can miss, and confirms the exe entry is present.
+        try:
+            with zipfile.ZipFile(dest) as zf:
+                bad = zf.testzip()
+                if bad is not None:
+                    raise RuntimeError(f"安装包损坏（{bad} 校验失败），请重试更新")
+                if not any(n.endswith("IvyeaOpsServer.exe") for n in zf.namelist()):
+                    raise RuntimeError("安装包内未找到 IvyeaOpsServer.exe，下载可能损坏")
+        except zipfile.BadZipFile:
+            raise RuntimeError("下载的文件不是有效的 zip 安装包，请重试更新")
         _UPDATE_STATE.update(phase="downloaded", percent=100, zip_path=str(dest))
     except Exception as exc:  # noqa: BLE001
         _UPDATE_STATE.update(phase="error", error=f"下载失败：{exc}")
