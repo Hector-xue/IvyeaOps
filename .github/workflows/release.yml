@@ -184,12 +184,18 @@ jobs:
           # native ConPTY DLLs so the server-terminal board works in the frozen exe.
           # Best-effort: if winpty isn't importable, build without it (the terminal
           # then degrades gracefully) rather than failing the whole release.
-          $piArgs = @("--noconfirm","--clean","--onefile","--windowed","--hidden-import","tkinter","--hidden-import","tkinter.messagebox")
+          # --onedir (NOT --onefile): ship python3xx.dll + all deps permanently in
+          # _internal\ next to the exe. onefile re-extracts ~81MB to %TEMP%\_MEI on
+          # EVERY launch, and antivirus quarantining a DLL mid-extraction made the
+          # exe fail with "Failed to load Python DLL ... _MEI\python312.dll 找不到
+          # 指定的模块" right after the in-app updater relaunched it. onedir has no
+          # launch-time extraction → no AV race, and starts faster.
+          $piArgs = @("--noconfirm","--clean","--onedir","--windowed","--hidden-import","tkinter","--hidden-import","tkinter.messagebox")
           try { python -c "import winpty"; $piArgs += @("--collect-all","winpty"); Write-Host "bundling pywinpty (ConPTY)" }
           catch { Write-Host "winpty not importable; building without ConPTY bundle" }
           $piArgs += @("--icon","client/public/favicon.ico","--name","IvyeaOpsServer","--paths","server","server/ivyeaops_server.py")
           pyinstaller @piArgs
-          if (!(Test-Path dist/IvyeaOpsServer.exe)) { throw "IvyeaOpsServer.exe missing" }
+          if (!(Test-Path dist/IvyeaOpsServer/IvyeaOpsServer.exe)) { throw "IvyeaOpsServer.exe missing" }
 
       - name: Resolve tag
         id: tag
@@ -211,13 +217,16 @@ jobs:
           # Copy-Item create it so docs land at $stage/docs/*.md.
           New-Item -ItemType Directory -Force -Path $stage, "$stage/server", "$stage/client", "$stage/scripts" | Out-Null
           Set-Content -Path "$stage/VERSION" -Value $tag -Encoding ascii
-          Copy-Item dist/IvyeaOpsServer.exe "$stage/IvyeaOpsServer.exe"
+          # onedir: lay IvyeaOpsServer.exe + _internal\ at the bundle root (next to
+          # server\, client\, …). sys.executable.parent then resolves to the bundle
+          # root exactly as it did for onefile, so runtime_root()/path logic is unchanged.
+          Copy-Item -Recurse dist/IvyeaOpsServer/* "$stage/"
           Copy-Item -Recurse client/dist "$stage/client/dist"
           Copy-Item -Recurse client/public "$stage/client/public"
           Copy-Item -Recurse docs "$stage/docs"
           # Skills are seeded into ~/.hermes/skills on startup (ASIN/广告审计、Listing
           # 板块依赖它们);the frozen exe reads them from next to itself, so they MUST
-          # ship in the bundle — onefile PyInstaller does not embed them.
+          # ship in the bundle — the frozen build does not embed them.
           Copy-Item -Recurse skills "$stage/skills"
           # amazon-image-workflow = the Docker 采集服务 (完整主图组). Ship the source so
           # the listing board's 「一键启动采集服务」 can find + `docker compose up` it.

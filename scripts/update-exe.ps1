@@ -120,6 +120,10 @@ try {
 
     Write-Info "Extracting update package..."
     Expand-Archive -Path $ZipPath -DestinationPath $ExtractDir -Force
+    # Strip the Mark-of-the-Web (Zone.Identifier) the download carries, so Windows
+    # SmartScreen / antivirus do not block the freshly-copied exe or the _internal\
+    # DLLs at launch. Best-effort — never let it abort the update.
+    try { Get-ChildItem $ExtractDir -Recurse -File | Unblock-File -ErrorAction SilentlyContinue } catch {}
     $PackageRoot = Find-PackageRoot $ExtractDir
     if (-not $PackageRoot) { Write-Fail "Invalid update package: IvyeaOpsServer.exe not found." }
 
