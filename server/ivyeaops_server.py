@@ -244,10 +244,42 @@ def _run_with_control_window() -> None:
     ui = "Microsoft YaHei UI"
     mono = "Consolas"
 
+    # High-DPI fix: make the process DPI-aware BEFORE creating the window, so
+    # Windows stops bitmap-stretching the canvas (that stretch is what blurred the
+    # content while the DWM-drawn title bar stayed sharp). We then scale every
+    # coord & font to physical pixels ourselves via `dpi`.
+    try:
+        import ctypes
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)  # per-monitor v2
+        except Exception:
+            ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
     root = tk.Tk()
     root.title("IvyeaOps")
     root.resizable(False, False)
-    WS, HS = int(W * S), int(H * S)
+
+    # Real DPI scale of the window's monitor (1.0 @ 96dpi, 1.5 @ 150%, …). All
+    # design coords/fonts below are multiplied by K = S * dpi → physical pixels.
+    dpi = 1.0
+    try:
+        root.update_idletasks()
+        import ctypes
+        d = ctypes.windll.user32.GetDpiForWindow(root.winfo_id())
+        if d:
+            dpi = d / 96.0
+    except Exception:
+        try:
+            dpi = root.winfo_fpixels("1i") / 96.0
+        except Exception:
+            dpi = 1.0
+    if dpi < 1.0:
+        dpi = 1.0
+    K = S * dpi
+
+    WS, HS = round(W * K), round(H * K)
     sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
     root.geometry(f"{WS}x{HS}+{(sw - WS) // 2}+{(sh - HS) // 3}")
     try:
@@ -260,17 +292,20 @@ def _run_with_control_window() -> None:
     cv.pack(fill="both", expand=True)
 
     def s(n):
-        return round(n * S)
+        return round(n * K)
 
+    # Fonts use NEGATIVE sizes = pixels, so Tk does NOT apply its own point→pixel
+    # DPI scaling on top of ours (that double-scaling overflowed boxes → clipped
+    # borders). max(...) keeps a readable floor on low-DPI displays.
     def fui(n, *a):
-        return (ui, max(7, round(n * S)), *a)
+        return (ui, -max(round(8 * dpi), round(n * K)), *a)
 
     def fmono(n):
-        return (mono, max(7, round(n * S)))
+        return (mono, -max(round(8 * dpi), round(n * K)))
 
     def _w(kw):
         if "width" in kw:
-            kw["width"] = max(1, round(kw["width"] * S))
+            kw["width"] = max(1, round(kw["width"] * K))
         return kw
 
     # Primitive wrappers: author in design coords, draw at scaled integer pixels.
