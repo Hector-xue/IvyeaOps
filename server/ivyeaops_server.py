@@ -226,7 +226,7 @@ def _run_with_control_window() -> None:
     # Authored in 600x384 design coords; every primitive (rr/oval/line/rect/text)
     # is scaled by S to crisp integer pixels at draw time. No post-hoc cv.scale —
     # that put 1px borders on fractional pixels and blurred the text. Window ≈ 2/3.
-    W, H, S = 600, 384, 0.66
+    W, H, S = 600, 388, 0.78
     white = "#ffffff"
     cbord = "#e5e7eb"      # card border
     badge_bg = "#dcfce7"   # light-green icon badge
@@ -281,7 +281,11 @@ def _run_with_control_window() -> None:
 
     WS, HS = round(W * K), round(H * K)
     sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-    root.geometry(f"{WS}x{HS}+{(sw - WS) // 2}+{(sh - HS) // 3}")
+    # Size is driven by the canvas (width=WS,height=HS) + resizable(False); set
+    # ONLY the position here. Forcing "WSxHS" via geometry can be read as the total
+    # size INCLUDING the title bar on some Windows/DPI combos → the client area
+    # ends up shorter than the canvas and the bottom button row gets clipped.
+    root.geometry(f"+{(sw - WS) // 2}+{(sh - HS) // 3}")
     try:
         root.iconbitmap(str(_runtime_root() / "client" / "public" / "favicon.ico"))
     except Exception:
