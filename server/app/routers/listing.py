@@ -300,7 +300,7 @@ def _db():
 _db().close()
 
 # Migration: add columns if missing
-for _col in ["image_slots TEXT", "templates TEXT", "copy_result TEXT", "copy_job_id TEXT"]:
+for _col in ["image_slots TEXT", "templates TEXT", "copy_result TEXT", "copy_job_id TEXT", "highlights TEXT"]:
     try:
         conn = _db()
         conn.execute(f"ALTER TABLE listing_projects ADD COLUMN {_col}")
@@ -1141,14 +1141,29 @@ async def generate_copy(project_id: str, body: GenerateCopyReq, _user: str = Dep
 
     prompts = {
         "title": f"""你是Amazon Listing优化专家。生成3个优化后的产品标题候选。
-要求：每个≤200字符，品牌+核心关键词+特性+规格，英文输出。
+要求（亚马逊2026-07-27新规）：每个标题**不超过75个字符（含空格）**，所有分类统一上限。
+结构：品牌 + 产品类型 + 1-2个最核心关键词/特性，前80字符内前置产品类型与主关键词（手机端友好）。
+不要堆砌关键词、不要塞规格清单——次要关键词放到「商品亮点」和五点里。Title Case，英文输出。
 产品信息：
 {product_context}
 {f"额外要求：{body.context}" if body.context else ""}
-输出3个标题，数字编号，每个单独一行。""",
+输出3个标题，数字编号，每个单独一行。每个标题后用括号标注字符数，如 (62 chars)。""",
 
-        "bullets": f"""你是Amazon Listing优化专家。生成5条Bullet Points。
+        "highlights": f"""你是Amazon Listing优化专家。生成「商品亮点 Product Highlights」（亚马逊2026-07-27新增字段）。
+要求：
+- 一行短语串，**总长度不超过125个字符（含空格）**。
+- 用「产品特性/优势」的**短语**，不是完整句子；多个短语用英文逗号 ", " 分隔。
+- 覆盖材质、核心功能、使用场景、兼容性等关键信息（参考示例：Non-stick, Food Grade, Heat Resistant 220°C, Fits Ninja Crispi）。
+- 该字段**可被搜索**，自然嵌入与标题不重复的核心关键词。
+- 仅当标题<75字符时前台展示，所以要言之有物、信息密度高。英文输出。
+产品信息：
+{product_context}
+{f"额外要求：{body.context}" if body.context else ""}
+直接输出一行亮点短语串，并在末尾用括号标注字符数，如 (118 chars)。""",
+
+        "bullets": f"""你是Amazon Listing优化专家。生成5条Bullet Points（五点描述，新规下保持不变）。
 要求：大写关键词开头(如 PREMIUM QUALITY:)，每条150-250字符，英文输出。
+覆盖产品细节、使用场景、材质说明、注意事项、售后信息。
 产品信息：
 {product_context}
 {f"额外要求：{body.context}" if body.context else ""}""",
@@ -1179,7 +1194,7 @@ async def generate_copy(project_id: str, body: GenerateCopyReq, _user: str = Dep
         fallback_used = True
         warning = f"AI 当前不可用（Hermes/全局兜底/Codex/Claude 均失败），已使用本地规则生成一版可编辑文案。原因：{detail[:220]}"
 
-    field_map = {"title": "title", "bullets": "bullets", "search_terms": "search_terms", "aplus": "aplus_copy"}
+    field_map = {"title": "title", "bullets": "bullets", "search_terms": "search_terms", "aplus": "aplus_copy", "highlights": "highlights"}
     conn = _db()
     conn.execute(
         f"UPDATE listing_projects SET {field_map[body.type]} = ?, updated_at = ? WHERE id = ?",
@@ -2350,19 +2365,30 @@ _AMAZON_LISTING_RULES = """# Amazon Listing Generation Rules
 The final deliverable must include:
 - 1 generation plan/rationale
 - 5 compliant Amazon titles
+- 1 Product Highlights string (NEW Amazon field, effective 2026-07-27)
 - 2 bullet point sets, each with exactly 5 bullet points
 - 2 backend search term strings
 - A compliance checklist
 
-## Title Rules
+## Title Rules (Amazon policy effective 2026-07-27)
 - Generate exactly 5 title options.
 - Target the marketplace language. For US, write titles in English.
-- Mobile Optimization: Front-load the product type and 1-2 primary keywords within the first 80 characters.
-- Length: Keep titles concise. Prefer 120-180 characters. Do not exceed 200 characters.
+- Length: Every title MUST NOT exceed 75 characters INCLUDING spaces. This is the single hard limit for ALL categories. Count spaces.
+- Mobile Optimization: Front-load the product type and 1-2 primary keywords within the first ~60 characters.
+- Do NOT keyword-stuff or list specs in the title. Move secondary keywords/attributes to Product Highlights and bullets instead.
+- Put "what the product IS" in the title; "what advantages it has" go in Product Highlights.
 - Use title case. Do not use ALL CAPS.
 - Forbidden Words: "Gift", "Free", "Bonus", "Warranty", "Hot Item", "Best Seller", "No.1", price/delivery promises.
 - Do not include unsupported claims, medical claims, or subjective claims such as "best" or "top-rated".
-- Include the product type, most important buyer intent, and differentiating feature naturally.
+
+## Product Highlights Rules (NEW field, effective 2026-07-27)
+- Generate exactly 1 highlights string.
+- Length: MUST NOT exceed 125 characters INCLUDING spaces.
+- Use short, benefit/feature-driven PHRASES, NOT full sentences. Separate phrases with ", " (comma + space).
+- Cover the most decisive of: material, core function, usage scenario, compatibility/fit, key spec.
+  Example: "Non-stick, Food Grade, Heat Resistant 220°C, Fits Ninja Crispi, 100 PCS".
+- This field IS searchable: naturally embed core keywords that are NOT already in the title (avoid duplication).
+- It only displays on the storefront when the title is under 75 characters, so make it information-dense.
 
 ## Bullet Point Rules
 - Generate exactly 2 bullet point sets.
@@ -2382,7 +2408,8 @@ The final deliverable must include:
 Return a JSON object with these fields:
 {
   "rationale": "Strategy explanation",
-  "titles": ["Title 1", "Title 2", "Title 3", "Title 4", "Title 5"],
+  "titles": ["Title 1 (<=75 chars incl spaces)", "Title 2", "Title 3", "Title 4", "Title 5"],
+  "highlights": "phrase1, phrase2, phrase3, ... (single string, <=125 chars incl spaces)",
   "bullets_a": ["Bullet 1", "Bullet 2", "Bullet 3", "Bullet 4", "Bullet 5"],
   "bullets_b": ["Bullet 1", "Bullet 2", "Bullet 3", "Bullet 4", "Bullet 5"],
   "search_terms": ["string 1 under 249 chars", "string 2 under 249 chars"],

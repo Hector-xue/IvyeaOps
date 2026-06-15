@@ -17,6 +17,7 @@ interface CopyJob {
   result?: {
     rationale?: string;
     titles?: string[];
+    highlights?: string;
     bullets_a?: string[];
     bullets_b?: string[];
     search_terms?: string[];
@@ -371,12 +372,40 @@ export default function NewListingCopy({ initialAsins }: { initialAsins?: string
                   <span style={{ flex: 1, fontSize: 12, color: "var(--t)", lineHeight: 1.5, fontFamily: "var(--sans)" }}>
                     {t}
                   </span>
+                  <span title="字符数（含空格），亚马逊2026-07-27起标题上限75" style={{ fontSize: 10, flexShrink: 0,
+                    fontFamily: "var(--font)", fontWeight: 600,
+                    color: t.length > 75 ? "#dc2626" : "#16a34a" }}>
+                    {t.length}/75
+                  </span>
                   <button className="tbtn" style={{ fontSize: 10, flexShrink: 0 }}
                     onClick={() => copyText(t, `title-${i}`)}>
                     {copiedIdx === `title-${i}` ? "✓" : "复制"}
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Product Highlights (NEW Amazon field, effective 2026-07-27) */}
+          {res.highlights && (
+            <div style={{ background: "var(--bg1)", border: "1px solid var(--b)", borderRadius: 8, overflow: "hidden" }}>
+              <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--b)", display: "flex",
+                alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--t)", fontFamily: "var(--font)" }}>
+                  商品亮点 Product Highlights
+                  <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 600, fontFamily: "var(--font)",
+                    color: res.highlights.length > 125 ? "#dc2626" : "#16a34a" }}>
+                    {res.highlights.length}/125
+                  </span>
+                </span>
+                <button className="tbtn" style={{ fontSize: 10 }}
+                  onClick={() => copyText(res.highlights!, "highlights")}>
+                  {copiedIdx === "highlights" ? "✓ 已复制" : "复制"}
+                </button>
+              </div>
+              <div style={{ padding: "10px 14px", fontSize: 12, color: "var(--t)", lineHeight: 1.6, fontFamily: "var(--sans)" }}>
+                {res.highlights}
+              </div>
             </div>
           )}
 

@@ -1156,11 +1156,25 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
                               <div key={i} style={{ padding: "7px 10px", borderTop: "1px solid var(--b)", display: "flex", gap: 8, alignItems: "flex-start" }}>
                                 <span style={{ fontSize: 9, color: "var(--t3)", minWidth: 18 }}>T{i+1}</span>
                                 <span style={{ flex: 1, fontSize: 10, color: "var(--t)", lineHeight: 1.6 }}>{t}</span>
+                                <span title="字符数（含空格），亚马逊2026-07-27起标题上限75" style={{ fontSize: 9, fontWeight: 700, flexShrink: 0, color: t.length > 75 ? "#dc2626" : "#16a34a" }}>{t.length}/75</span>
                                 <button onClick={() => copyAdvText(t, `t${i}`)} style={{ ...inputStyle, padding: "1px 6px", cursor: "pointer", fontSize: 9, flexShrink: 0 }}>
                                   {advCopyCopied === `t${i}` ? "✓" : "复制"}
                                 </button>
                               </div>
                             ))}
+                          </div>
+                        )}
+
+                        {/* Product Highlights (NEW Amazon field, effective 2026-07-27) */}
+                        {res.highlights && (
+                          <div style={{ border: "1px solid var(--b)", borderRadius: 4, overflow: "hidden" }}>
+                            <div style={{ padding: "7px 10px", background: "var(--bg2)", fontSize: 10, fontWeight: 600, display: "flex", justifyContent: "space-between" }}>
+                              <span>商品亮点 Highlights <span style={{ color: res.highlights.length > 125 ? "#dc2626" : "#16a34a" }}>{res.highlights.length}/125</span></span>
+                              <button onClick={() => copyAdvText(res.highlights, "hl")} style={{ ...inputStyle, padding: "1px 6px", cursor: "pointer", fontSize: 9 }}>
+                                {advCopyCopied === "hl" ? "✓ 已复制" : "复制"}
+                              </button>
+                            </div>
+                            <div style={{ padding: "7px 10px", borderTop: "1px solid var(--b)", fontSize: 10, color: "var(--t)", lineHeight: 1.6 }}>{res.highlights}</div>
                           </div>
                         )}
 
@@ -1241,7 +1255,7 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
                   {/* Empty state */}
                   {!advCopyJob && (
                     <div style={{ fontSize: 10, color: "var(--t3)", textAlign: "center", padding: "24px 0" }}>
-                      点击"生成文案"，AI 将结合产品信息和竞品数据生成<br />标题×5 · 五点×2套 · Search Terms×2
+                      点击"生成文案"，AI 将结合产品信息和竞品数据生成<br />标题×5（≤75字符）· 商品亮点×1（≤125字符）· 五点×2套 · Search Terms×2
                     </div>
                   )}
                 </div>
@@ -1256,9 +1270,10 @@ export default function ListingGenerator({ onProjectAsin } = {}) {
                   {advCopyJob?.status === "done" && advCopyJob.result?.titles ? (
                     <pre style={{ whiteSpace: "pre-wrap", color: "var(--t2)", fontSize: 10, background: "var(--bg2)", padding: 10, borderRadius: 4 }}>
                       {[
-                        "=== 标题方案 ===",
-                        ...(advCopyJob.result.titles || []).map((t, i) => `T${i+1}: ${t}`),
+                        "=== 标题方案 (≤75字符) ===",
+                        ...(advCopyJob.result.titles || []).map((t, i) => `T${i+1}: ${t}  [${t.length}/75]`),
                         "",
+                        ...(advCopyJob.result.highlights ? ["=== 商品亮点 Highlights (≤125字符) ===", `${advCopyJob.result.highlights}  [${advCopyJob.result.highlights.length}/125]`, ""] : []),
                         "=== 五点 Set A ===",
                         ...(advCopyJob.result.bullets_a || []).map((b, i) => `${i+1}. ${b}`),
                         "",
