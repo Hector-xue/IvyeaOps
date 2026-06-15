@@ -18,6 +18,7 @@ from typing import Dict, List
 # they stay admin-only and are never grantable.
 MODULE_CATALOG: List[Dict[str, object]] = [
     {"key": "listing",   "label": "Listing 工作台", "sensitive": False},
+    {"key": "image-translate", "label": "一键图片翻译", "sensitive": False},
     {"key": "tools",     "label": "分析工具",        "sensitive": False},
     {"key": "skill-hub", "label": "Skill 中心",      "sensitive": False},
     {"key": "agents",    "label": "智能体会话",      "sensitive": True},
@@ -36,9 +37,9 @@ BASE_MODULES: List[str] = ["market", "playbook", "assistant", "imagegen", "freig
 # Position presets: applied as a starting point, then the admin can tweak the
 # per-user module list. Only GRANTABLE_KEYS are meaningful here.
 POSITION_PRESETS: Dict[str, List[str]] = {
-    "运营专员": ["listing"],
-    "运营主管": ["listing", "tools", "skill-hub", "news"],
-    "设计":     ["listing", "skill-hub"],
+    "运营专员": ["listing", "image-translate"],
+    "运营主管": ["listing", "image-translate", "tools", "skill-hub", "news"],
+    "设计":     ["listing", "image-translate", "skill-hub"],
     "技术助理": ["agents", "terminal", "servmon", "brain", "tools", "skill-hub"],
     "客服":     ["brain"],
 }

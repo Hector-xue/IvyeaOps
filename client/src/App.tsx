@@ -31,6 +31,7 @@ const FreightQuote = lazy(() => import("./pages/workbench/FreightQuote"));
 const Users = lazy(() => import("./pages/workbench/Users"));
 const Assistant = lazy(() => import("./pages/workbench/Assistant"));
 const ImageGen = lazy(() => import("./pages/workbench/ImageGen"));
+const ImageTranslate = lazy(() => import("./pages/workbench/ImageTranslate"));
 const IdeaSkill = lazy(() => import("./pages/workbench/IdeaSkill"));
 const SkillTools = lazy(() => import("./pages/workbench/SkillTools"));
 const SkillHub = lazy(() => import("./pages/workbench/SkillHub"));
@@ -146,6 +147,7 @@ export default function App() {
             <Route path="users" element={<Users />} />
             <Route path="assistant" element={<Assistant />} />
             <Route path="imagegen" element={<ImageGen />} />
+            <Route path="image-translate" element={<ImageTranslate />} />
             <Route path="idea-skill" element={<IdeaSkill />} />
             <Route path="skill-tools" element={<SkillTools />} />
             <Route path="skill-hub" element={<SkillHub />} />

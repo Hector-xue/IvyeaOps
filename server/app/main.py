@@ -29,6 +29,7 @@ from app.core.skill_paths import (
 )
 from app.routers import ad_audit, agent_hub, amazon, auth, brain, health, monitor, news, skill, terminal
 from app.routers import listing as listing_router
+from app.routers import image_translate as image_translate_router
 from app.routers import market as market_router
 from app.routers import playbook as playbook_router
 from app.routers import home as home_router
@@ -380,6 +381,7 @@ app.include_router(skill.router, prefix="/api/skill", tags=["skill"], dependenci
 app.include_router(news.router, prefix="/api/news", tags=["news"], dependencies=[Depends(require_module("news"))])
 app.include_router(brain.router, prefix="/api/brain", tags=["brain"], dependencies=[Depends(require_module("brain"))])
 app.include_router(listing_router.router, prefix="/api/listing", tags=["listing"], dependencies=[Depends(require_module("listing"))])
+app.include_router(image_translate_router.router, prefix="/api/image-translate", tags=["image-translate"], dependencies=[Depends(require_module("image-translate"))])
 app.include_router(terminal.router, prefix="/api/terminal", tags=["terminal"], dependencies=[Depends(require_module("terminal"))])
 # /agents (old native Workspace agent hub) retired — superseded by the native
 # Agents backend below. agent_hub/mcp routers are no longer mounted; the

@@ -2041,6 +2041,14 @@ async def generate_single_image(project_id: str, body: ImageGenReq, _user: str =
                 raise HTTPException(502, f"未返回task_id: {resp.text[:300]}")
 
             url = await _poll_task(client, task_id)
+            # Auto-ingest into the 图片工作区 (一键图片翻译 sub-board) so generated
+            # images are reusable for multi-site translation. Best-effort: never let
+            # a workspace hiccup fail image generation.
+            try:
+                from app.routers.image_translate import ingest_url
+                await ingest_url(url, source="listing", project_id=project_id)
+            except Exception:
+                pass
             return {"slot": body.slot, "url": url}
     except HTTPException:
         raise
