@@ -229,32 +229,59 @@ def _parse_amazon_html(html_text: str) -> dict:
     return {"title": title, "bullets": bullets[:5], "description": "", "imageUrls": images}
 
 
-async def _scrape_amazon_native(asin: str, marketplace: str) -> Optional[dict]:
+async def _scrape_amazon_native(asin: str, marketplace: str, attempts: int = 3) -> Optional[dict]:
     """Fetch the Amazon product page via curl and parse the full main-image set.
-    Returns None when curl is unavailable, the page is too small (anti-bot
-    challenge), or a captcha is hit — callers then fall back to sorftime."""
+    Returns None when curl is unavailable or EVERY attempt hits an anti-bot
+    challenge / captcha / image-less page — callers then fall back to sorftime.
+
+    Amazon's anti-bot is intermittent: the same IP gets the full ~1.5MB page for
+    one request and a ~2-5KB stub for the next, so we retry a few times before
+    giving up. A blocked response is tiny and returns almost instantly, so the
+    retries add little latency. Tested empirically: richer browser headers AND a
+    newer Chrome UA both make the block WORSE, so we deliberately keep the
+    request minimal (UA only) — do not "improve" the headers here.
+
+    Uses a synchronous subprocess.run in a worker thread (NOT
+    asyncio.create_subprocess_exec): the async variant needs a ProactorEventLoop
+    on Windows and silently raised NotImplementedError under uvicorn's loop there,
+    so EVERY Windows scrape fell back to the 1-image source. subprocess.run works
+    regardless of the event loop — this is the project's Windows-safe pattern."""
     import shutil
+    import subprocess
+    import logging
     from app.core.proc import no_window_kwargs
     curl = shutil.which("curl")
     if not curl:
+        logging.warning("[scrape-native] curl 不在 PATH 上 — 无法本机直连采集 (asin=%s)", asin)
         return None
     url = f"https://www.{_amazon_domain(marketplace)}/dp/{asin}"
     args = [curl, "-sS", "-L", "--max-time", "25", "--compressed", "-A", _REAL_UA, url]
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
-            **no_window_kwargs())
-        out, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
-    except Exception:
-        return None
-    html_text = (out or b"").decode("utf-8", "replace")
-    if len(html_text) < 50_000:
-        return None  # likely an anti-bot challenge page, not the real product page
-    if re.search(r"Type the characters you see in this image", html_text, re.I) or \
-       re.search(r"we just need to make sure you're not a robot", html_text, re.I):
-        return None
-    parsed = _parse_amazon_html(html_text)
-    return parsed if parsed.get("imageUrls") else None
+    for i in range(attempts):
+        try:
+            cp = await asyncio.to_thread(
+                subprocess.run, args,
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=30,
+                **no_window_kwargs())
+            out = cp.stdout or b""
+        except Exception:
+            out = b""
+        html_text = (out or b"").decode("utf-8", "replace")
+        blocked = (
+            len(html_text) < 50_000  # anti-bot stub, not the real product page
+            or bool(re.search(r"Type the characters you see in this image", html_text, re.I))
+            or bool(re.search(r"we just need to make sure you're not a robot", html_text, re.I))
+        )
+        n_imgs = 0
+        if not blocked:
+            parsed = _parse_amazon_html(html_text)
+            n_imgs = len(parsed.get("imageUrls", []))
+            if n_imgs:
+                logging.info("[scrape-native] %s 第%d次成功: %dB, %d图", asin, i + 1, len(html_text), n_imgs)
+                return parsed
+        logging.info("[scrape-native] %s 第%d次未果: %dB blocked=%s imgs=%d", asin, i + 1, len(html_text), blocked, n_imgs)
+        if i < attempts - 1:
+            await asyncio.sleep(2.0)  # brief backoff — blocks are often transient
+    return None
 
 
 def _apimart_key() -> str:
