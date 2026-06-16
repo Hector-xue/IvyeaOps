@@ -229,7 +229,7 @@ def _parse_amazon_html(html_text: str) -> dict:
     return {"title": title, "bullets": bullets[:5], "description": "", "imageUrls": images}
 
 
-async def _scrape_amazon_native(asin: str, marketplace: str, attempts: int = 3) -> Optional[dict]:
+async def _scrape_amazon_native(asin: str, marketplace: str, attempts: int = 5) -> Optional[dict]:
     """Fetch the Amazon product page via curl and parse the full main-image set.
     Returns None when curl is unavailable or EVERY attempt hits an anti-bot
     challenge / captcha / image-less page — callers then fall back to sorftime.
@@ -245,43 +245,60 @@ async def _scrape_amazon_native(asin: str, marketplace: str, attempts: int = 3) 
     asyncio.create_subprocess_exec): the async variant needs a ProactorEventLoop
     on Windows and silently raised NotImplementedError under uvicorn's loop there,
     so EVERY Windows scrape fell back to the 1-image source. subprocess.run works
-    regardless of the event loop — this is the project's Windows-safe pattern."""
+    regardless of the event loop — this is the project's Windows-safe pattern.
+
+    Anti-bot busting via a per-scrape COOKIE JAR (-c/-b): a cold curl request is
+    erratically served Amazon's ~5KB challenge stub, but once any request sets
+    session cookies the following requests reliably pass. So we carry cookies
+    across the retry attempts (the challenge itself seeds them) — verified to turn
+    a flaky 'block/ok/block/block' pattern into 'block→ok→ok→ok'."""
     import shutil
     import subprocess
     import logging
+    import os
+    import tempfile
     from app.core.proc import no_window_kwargs
     curl = shutil.which("curl")
     if not curl:
         logging.warning("[scrape-native] curl 不在 PATH 上 — 无法本机直连采集 (asin=%s)", asin)
         return None
     url = f"https://www.{_amazon_domain(marketplace)}/dp/{asin}"
-    args = [curl, "-sS", "-L", "--max-time", "25", "--compressed", "-A", _REAL_UA, url]
-    for i in range(attempts):
+    fd, jar = tempfile.mkstemp(prefix="ivyea_ck_", suffix=".txt")
+    os.close(fd)
+    args = [curl, "-sS", "-L", "--max-time", "25", "--compressed",
+            "-A", _REAL_UA, "-c", jar, "-b", jar, url]
+    try:
+        for i in range(attempts):
+            try:
+                cp = await asyncio.to_thread(
+                    subprocess.run, args,
+                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=30,
+                    **no_window_kwargs())
+                out = cp.stdout or b""
+            except Exception:
+                out = b""
+            html_text = (out or b"").decode("utf-8", "replace")
+            blocked = (
+                len(html_text) < 50_000  # anti-bot stub, not the real product page
+                or bool(re.search(r"Type the characters you see in this image", html_text, re.I))
+                or bool(re.search(r"we just need to make sure you're not a robot", html_text, re.I))
+            )
+            n_imgs = 0
+            if not blocked:
+                parsed = _parse_amazon_html(html_text)
+                n_imgs = len(parsed.get("imageUrls", []))
+                if n_imgs:
+                    logging.info("[scrape-native] %s 第%d次成功: %dB, %d图", asin, i + 1, len(html_text), n_imgs)
+                    return parsed
+            logging.info("[scrape-native] %s 第%d次未果: %dB blocked=%s imgs=%d", asin, i + 1, len(html_text), blocked, n_imgs)
+            if i < attempts - 1:
+                await asyncio.sleep(2.0)  # brief backoff — blocks are often transient
+        return None
+    finally:
         try:
-            cp = await asyncio.to_thread(
-                subprocess.run, args,
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=30,
-                **no_window_kwargs())
-            out = cp.stdout or b""
-        except Exception:
-            out = b""
-        html_text = (out or b"").decode("utf-8", "replace")
-        blocked = (
-            len(html_text) < 50_000  # anti-bot stub, not the real product page
-            or bool(re.search(r"Type the characters you see in this image", html_text, re.I))
-            or bool(re.search(r"we just need to make sure you're not a robot", html_text, re.I))
-        )
-        n_imgs = 0
-        if not blocked:
-            parsed = _parse_amazon_html(html_text)
-            n_imgs = len(parsed.get("imageUrls", []))
-            if n_imgs:
-                logging.info("[scrape-native] %s 第%d次成功: %dB, %d图", asin, i + 1, len(html_text), n_imgs)
-                return parsed
-        logging.info("[scrape-native] %s 第%d次未果: %dB blocked=%s imgs=%d", asin, i + 1, len(html_text), blocked, n_imgs)
-        if i < attempts - 1:
-            await asyncio.sleep(2.0)  # brief backoff — blocks are often transient
-    return None
+            os.remove(jar)
+        except OSError:
+            pass
 
 
 def _apimart_key() -> str:
