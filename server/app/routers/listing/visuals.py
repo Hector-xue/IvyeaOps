@@ -430,6 +430,15 @@ def _presence_clause(presence: str, product_scale: float) -> str:
     return ""  # absent：版式模板自身已声明产品不出现
 
 
+def _is_wide_banner(image: dict) -> bool:
+    """成图是否为明显宽幅（宽高比≥1.9，如高级 A+ 1464×600）。方形画廊/主图恒为 False。"""
+    try:
+        width, height = (int(part) for part in str(image.get("size") or "").lower().split("x")[:2])
+    except (ValueError, TypeError):
+        return False
+    return bool(height) and width / height >= 1.9
+
+
 def _wide_banner_clause(image: dict) -> str:
     """宽幅 A+ 横幅（如高级 A+ 1464×600）的横向编排指令。
 
@@ -437,11 +446,7 @@ def _wide_banner_clause(image: dict) -> str:
     放到 600px 高的宽横幅上没有纵向空间，模型只能塌缩成一条"贴上去"的字幕条，还常把主标题
     整条丢掉（画廊图效果好正是因为方形画布放得下完整版式）。此子句仅在明显宽幅（宽高比≥1.9）
     时追加，方形画廊图完全不受影响。"""
-    try:
-        width, height = (int(part) for part in str(image.get("size") or "").lower().split("x")[:2])
-    except (ValueError, TypeError):
-        return ""
-    if not height or width / height < 1.9:
+    if not _is_wide_banner(image):
         return ""
     return (
         "WIDE BANNER FORMAT: this is a short, wide A+ hero module, not a square image and not a top caption bar. "
@@ -449,7 +454,11 @@ def _wide_banner_clause(image: dict) -> str:
         "side of the frame while a fully integrated editorial type block fills the opposing negative space: the "
         "headline large and dominant, the subline one calm line beneath it, the big number oversized as a graphic "
         "anchor when present. The typography is generously sized, vertically centred and part of the composition — "
-        "never a thin pasted strip. Render the complete headline and subline; do not drop the headline."
+        "never a thin pasted strip. The photographic background fills the whole canvas edge-to-edge so every corner "
+        "is completely covered — no blank, white or unfinished corner anywhere. Keep the headline, the complete "
+        "product and every essential element a small safe margin clear of all four edges (a thin outer strip may be "
+        "trimmed on delivery), never touching or bleeding past the top, bottom or side edges. Render the complete "
+        "headline and subline; do not drop the headline."
     )
 
 

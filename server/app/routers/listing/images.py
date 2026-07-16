@@ -178,10 +178,14 @@ def _crop_safe_zone_note(target_size: str, provider_size: str) -> str:
         f"CANVAS CROP NOTICE (read first, highest priority): you are painting on a {pw}×{ph} canvas, but the "
         f"delivered Amazon module is a {tw}×{th} banner produced by CENTER-CROPPING this canvas. The {edge} "
         f"~{each}% of whatever you generate WILL BE CUT OFF and never seen. Compose the ENTIRE finished banner — "
-        f"headline, subline, big number, product and every essential element — inside the {band} (the surviving "
-        f"middle ~{keep}% of the image), laid out as one complete, edge-to-edge wide hero banner with clear "
-        f"typographic hierarchy and the headline large and dominant. Leave only plain background extension in the "
-        f"{edge} ~{each}% margins; put nothing important there. Do NOT build a tall vertical poster. {override}."
+        f"headline, subline, big number, the complete product and every essential element — inside the {band} (the "
+        f"surviving middle ~{keep}% of the image), laid out as one complete, edge-to-edge wide hero banner with clear "
+        f"typographic hierarchy and the headline large and dominant. The whole product must sit inside this "
+        f"surviving band with margin — no part of the product may extend into the {edge} ~{each}% margins, or it "
+        f"will be cut off. The background must extend fully to the far left and right edges of the delivered banner "
+        f"so every corner of the final image is completely filled — no blank, white or unfinished corner. Leave only "
+        f"plain background extension in the {edge} ~{each}% margins; put nothing important there. Do NOT build a tall "
+        f"vertical poster. {override}."
     )
 
 
@@ -195,9 +199,16 @@ async def _submit_generation(prompt: str, size: str, ref_urls: list[str],
         )
     from app.services.listing_image_compositor import parse_size
     target_w, target_h = parse_size(size)
-    if abs(target_w / target_h - 1) < .12:
+    ratio = target_w / target_h if target_h else 1.0
+    if abs(ratio - 1) < .12:
         provider_size = "1024x1024"
-    elif target_w > target_h:
+    elif ratio >= 1.9:
+        # 供应商 gpt-image-2 能原生渲染宽幅（实测：请求 1464×600 → 出图约 1915×821，
+        # 2.33:1）。老逻辑硬套 1536×1024(1.5:1) 再 cover 裁掉上下各 ~19%，正是 A+ 顶部
+        # 标题、底部主体被切的根因。宽幅 A+ 直接按目标宽幅下单，出图已接近目标比例，
+        # 末端 normalise 仅需 ~2% 微裁。方形主图/画廊(<1.12) 与中度横图分支保持不变。
+        provider_size = f"{target_w}x{target_h}"
+    elif ratio > 1:
         provider_size = "1536x1024"
     else:
         provider_size = "1024x1536"
