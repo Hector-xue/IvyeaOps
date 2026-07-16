@@ -153,6 +153,7 @@ export default function IvyeaAgentDock() {
   const [historyView, setHistoryView] = useState<HistoryView>("chat");
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [sending, setSending] = useState(false);
+  const [liveStatus, setLiveStatus] = useState("");
   const [error, setError] = useState("");
   const [filesLoading, setFilesLoading] = useState(false);
   const [cards, setCards] = useState<KnowledgeCard[]>([]);
@@ -400,13 +401,22 @@ export default function IvyeaAgentDock() {
             }
           },
           onToken: (chunk) => {
+            if (!finalText) setLiveStatus("");
             finalText += chunk;
             appendAssistant(chunk);
+          },
+          onEvent: (data) => {
+            // 工具叙事（正在调研/检索/生成…）：流式正文没来之前展示在"处理中"位置，
+            // 长工具链不再是一动不动的转圈。
+            const line = String(data?.text || "").trim().split("\n").pop() || "";
+            if (line && !finalText) setLiveStatus(line.slice(0, 120));
           },
           onFinal: (data) => {
             if (data.session_id) setSessionId(data.session_id);
             const textOut = String(data.text || "");
-            if (!finalText && textOut) appendAssistant(textOut, true);
+            // final.text 是引证门通过后的规范文本，始终以它为准整体替换——
+            // 流式期间的中间草稿（引证重写前）不留脏文本。
+            if (textOut) appendAssistant(textOut, true);
           },
           onError: (data) => {
             // 抛给统一的 catch 恢复路径。区分两类错误：serve 显式报错（model_error
@@ -462,6 +472,7 @@ export default function IvyeaAgentDock() {
       }
     } finally {
       setSending(false);
+      setLiveStatus("");
       ivyeaChatSessions(30).then((data) => setSessions(data.sessions || [])).catch(() => {});
     }
   };
@@ -824,7 +835,7 @@ export default function IvyeaAgentDock() {
                       return (
                         <div key={idx} className={`ivyea-agent-msg ${m.role}`}>
                           {pendingAssistant
-                            ? <span className="ivyea-agent-typing"><Loader2 size={14} className="spin" /> 处理中...</span>
+                            ? <span className="ivyea-agent-typing"><Loader2 size={14} className="spin" /> {liveStatus || "处理中..."}</span>
                             : <div>{m.text}</div>}
                         </div>
                       );

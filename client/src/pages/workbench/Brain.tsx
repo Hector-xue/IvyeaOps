@@ -167,6 +167,7 @@ export default function Brain() {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [liveStatus, setLiveStatus] = useState("");
   const [savingKb, setSavingKb] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [sessionFilter, setSessionFilter] = useState("");
@@ -447,12 +448,19 @@ export default function Brain() {
             }
           },
           onToken: (chunk) => {
+            setLiveStatus("");
             setMessages((prev) => prev.map((m) => (m.id === tmpAsst ? { ...m, content: m.content + chunk } : m)));
+          },
+          onEvent: (data) => {
+            // 工具叙事：正文没来之前展示在"生成中"位置，长工具链不再一动不动。
+            const line = String(data?.text || "").trim().split("\n").pop() || "";
+            if (line) setLiveStatus(line.slice(0, 120));
           },
           onFinal: (data) => {
             if (data?.session_id) liveSid = data.session_id;
             const full = String(data?.text || "");
-            setMessages((prev) => prev.map((m) => (m.id === tmpAsst && !m.content && full ? { ...m, content: full } : m)));
+            // final.text 是引证门通过后的规范文本，始终整体替换（中间草稿不留脏文本）
+            setMessages((prev) => prev.map((m) => (m.id === tmpAsst && full ? { ...m, content: full } : m)));
           },
           onError: (data) => {
             // serve 显式报错（model_error 等）= 轮次已死；bridge_error/断链 = 可能仍在跑
@@ -487,6 +495,7 @@ export default function Brain() {
       }
     } finally {
       setSending(false);
+      setLiveStatus("");
     }
   };
 
@@ -724,7 +733,7 @@ export default function Brain() {
                   <div key={m.id} style={{ justifySelf: m.role === "user" ? "end" : "start", maxWidth: m.role === "user" ? "88%" : "94%" }}>
                     <div style={{ border: "1px solid var(--b)", background: m.role === "user" ? "rgba(47,129,247,.13)" : "rgba(255,255,255,.03)", color: "var(--t)", padding: "9px 11px", borderRadius: 8, fontSize: 12, lineHeight: 1.65 }}>
                       {m.role === "assistant"
-                        ? (m.content ? <BrainMarkdown>{m.content}</BrainMarkdown> : <span style={{ color: "var(--t3)" }}>{sending ? "生成中…" : "（空回答）"}</span>)
+                        ? (m.content ? <BrainMarkdown>{m.content}</BrainMarkdown> : <span style={{ color: "var(--t3)" }}>{sending ? (liveStatus || "生成中…") : "（空回答）"}</span>)
                         : <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>}
                     </div>
                     {m.role === "assistant" && m.content && !m.id.startsWith("local-") && (
