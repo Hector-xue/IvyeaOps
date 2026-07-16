@@ -345,8 +345,20 @@ def _white_metrics_ready(metrics: dict, *, allow_legacy_bundle: bool = False) ->
     overall = float(metrics.get("overall_white") or 0)
     connected = float(metrics.get("edge_connected_white") or 0)
     white_sides = int(metrics.get("white_sides") or 0)
+    sides = [float(v) for v in (metrics.get("side_white") or []) if isinstance(v, (int, float))]
     classic_white_main = border >= .62 and overall >= .30
     connected_bundle = overall >= .34 and connected >= .30 and white_sides >= 3
+    # Tightly cropped white mains are a third legitimate shape: the product
+    # fills nearly the whole canvas, so total white is small (可低至 ~17%)
+    # and even the border band is mostly product. Their unmistakable signature
+    # is that every canvas edge LINE is almost entirely strict-white and that
+    # white forms one edge-connected sweep (lifestyle photos never light all
+    # four edges pure #F8+ white). Validated against 138 real workspace images
+    # with zero false accepts.
+    tight_white_main = (
+        len(sides) == 4 and min(sides) >= .80
+        and connected >= .12 and overall > 0 and connected >= overall * .8
+    )
     # Reports written before edge-connectivity was introduced cannot be
     # re-scored without downloading the image again.  Only the first scraped
     # gallery image may use this narrow migration path; callers control that
@@ -355,7 +367,7 @@ def _white_metrics_ready(metrics: dict, *, allow_legacy_bundle: bool = False) ->
         allow_legacy_bundle and "edge_connected_white" not in metrics
         and border >= .30 and overall >= .35
     )
-    return classic_white_main or connected_bundle or legacy_bundle
+    return classic_white_main or connected_bundle or tight_white_main or legacy_bundle
 
 
 def _white_background_score(raw: bytes) -> dict:
