@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useConfirm } from "../../components/ConfirmDialog";
 import BrainMarkdown from "./BrainMarkdown";
 import SheetSelect from "../../components/SheetSelect";
@@ -135,7 +136,17 @@ function getInitialTab(): Tab {
 
 export default function Brain() {
   const confirm = useConfirm();
+  const location = useLocation();
   const [tab, setTabState] = useState<Tab>(getInitialTab);
+
+  // 路由导航（点侧边栏「知识库工作台」）时按导航目标的 query 重置 tab：无 ?tab=
+  // 就回到「对话」。此前 setTab 用 replaceState 把 ?tab=governance 写进地址栏，
+  // 刷新/重进都会带着它，"点进来就是治理中心"。页内切 tab 走 replaceState，
+  // 不触发 router location 变化，所以不会跟这里打架；深链 ?tab=xxx 仍然尊重。
+  useEffect(() => {
+    const t = new URLSearchParams(location.search).get("tab") as Tab | null;
+    setTabState(ALL_TABS.some((x) => x.key === t) ? (t as Tab) : "chat");
+  }, [location.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const [overview, setOverview] = useState<BrainOverview | null>(null);
   const [files, setFiles] = useState<BrainFileItem[]>([]);
   const [collapsedCats, setCollapsedCats] = useState<Record<string, boolean>>({});

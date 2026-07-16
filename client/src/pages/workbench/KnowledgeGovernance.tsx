@@ -414,12 +414,22 @@ export default function KnowledgeGovernancePanel() {
   }
 
   if (!governance) {
+    // 瞬时网络失败（Network Error / timeout）≠ 能力缺失：给重试出口，别把用户
+    // 引去系统配置死路。仅接口明确 404（旧版 serve 没有治理接口）才提示升级。
+    const transient = /network|timeout|超时/i.test(error || "");
     return (
       <div className="kg-unavailable">
         <AlertTriangle size={28} />
-        <strong>知识治理能力不可用</strong>
-        <p>{error || "当前 IvyeaAgent 版本没有治理接口。请先升级并重启本地服务。"}</p>
-        <a className="tbtn" href="/hub-settings">前往系统配置</a>
+        <strong>{transient ? "知识治理数据加载失败" : "知识治理能力不可用"}</strong>
+        <p>{transient
+          ? `连接失败（${error}），可能是网络瞬断或服务正在重启，重试即可。`
+          : error || "当前 IvyeaAgent 版本没有治理接口。请先升级并重启本地服务。"}</p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="tbtn" onClick={() => refresh()} disabled={loading}>
+            {loading ? <Loader2 className="spin" size={13} /> : null}重试
+          </button>
+          {!transient && <a className="tbtn" href="/hub-settings">前往系统配置</a>}
+        </div>
       </div>
     );
   }

@@ -474,7 +474,8 @@ export async function ivyeaKnowledgeFreshness() {
 }
 
 export async function ivyeaKnowledgeQuality() {
-  const { data } = await api.get<KnowledgeQuality>("/ivyea-agent/knowledge/quality", { validateStatus: () => true });
+  // 质量评测是全量跑一遍用例，可超过 axios 默认 30s
+  const { data } = await api.get<KnowledgeQuality>("/ivyea-agent/knowledge/quality", { validateStatus: () => true, timeout: 120000 });
   return data;
 }
 
