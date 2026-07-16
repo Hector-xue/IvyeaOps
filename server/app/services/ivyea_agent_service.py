@@ -517,11 +517,15 @@ def manifest() -> dict[str, Any]:
 
 
 def chat(payload: dict[str, Any]) -> dict[str, Any]:
-    return request_json("POST", "/v1/chat", payload, timeout=max(_timeout(), 180.0))
+    # 复杂运营任务一轮可跑 10 分钟以上（多次模型往返 + 慢 MCP 工具），180s 会把
+    # 仍在健康执行的轮次掐断——serve 端独立跑完落盘，用户却看到"超时"。
+    return request_json("POST", "/v1/chat", payload, timeout=max(_timeout(), 900.0))
 
 
 def chat_stream(payload: dict[str, Any]) -> Any:
-    return request_stream("POST", "/v1/chat/stream", payload, timeout=max(_timeout(), 300.0))
+    # 这是"单次 read 无字节"的静默超时：单个慢工具（如市场调研 MCP）可能几分钟
+    # 不产出任何 SSE 字节。serve 端已加 15s 心跳；900s 是老版本 serve 的兜底。
+    return request_stream("POST", "/v1/chat/stream", payload, timeout=max(_timeout(), 900.0))
 
 
 def chat_available() -> bool:

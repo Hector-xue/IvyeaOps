@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useConfirm } from "../../components/ConfirmDialog";
 import BrainMarkdown from "./BrainMarkdown";
 import SheetSelect from "../../components/SheetSelect";
@@ -28,6 +29,7 @@ import {
 } from "../../api/client";
 import {
   ivyeaAgentChatStream,
+  ivyeaAwaitSessionAnswer,
   ivyeaChatSession,
   ivyeaChatSessionDelete,
   ivyeaChatSessions,
@@ -134,7 +136,17 @@ function getInitialTab(): Tab {
 
 export default function Brain() {
   const confirm = useConfirm();
+  const location = useLocation();
   const [tab, setTabState] = useState<Tab>(getInitialTab);
+
+  // 路由导航（点侧边栏「知识库工作台」）时按导航目标的 query 重置 tab：无 ?tab=
+  // 就回到「对话」。此前 setTab 用 replaceState 把 ?tab=governance 写进地址栏，
+  // 刷新/重进都会带着它，"点进来就是治理中心"。页内切 tab 走 replaceState，
+  // 不触发 router location 变化，所以不会跟这里打架；深链 ?tab=xxx 仍然尊重。
+  useEffect(() => {
+    const t = new URLSearchParams(location.search).get("tab") as Tab | null;
+    setTabState(ALL_TABS.some((x) => x.key === t) ? (t as Tab) : "chat");
+  }, [location.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const [overview, setOverview] = useState<BrainOverview | null>(null);
   const [files, setFiles] = useState<BrainFileItem[]>([]);
   const [collapsedCats, setCollapsedCats] = useState<Record<string, boolean>>({});
@@ -155,6 +167,7 @@ export default function Brain() {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [liveStatus, setLiveStatus] = useState("");
   const [savingKb, setSavingKb] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [sessionFilter, setSessionFilter] = useState("");
@@ -414,13 +427,14 @@ export default function Brain() {
       { id: tmpAsst, role: "assistant", content: "" },
     ]);
     let liveSid = activeSession?.id || "";
+    const sentAt = Math.floor(Date.now() / 1000);
     try {
       await ivyeaAgentChatStream(
         {
           message: text,
           session_id: activeSession?.id || undefined,
           ops_context: { board: "knowledge", pathname: "/brain" },
-          max_steps: 18,
+          // max_steps 交给 agent serve 的 config 默认（200），不再从前端压死
           plan_mode: true,
           persist: true,
           inject_retrieval: true,
@@ -434,14 +448,26 @@ export default function Brain() {
             }
           },
           onToken: (chunk) => {
+            setLiveStatus("");
             setMessages((prev) => prev.map((m) => (m.id === tmpAsst ? { ...m, content: m.content + chunk } : m)));
+          },
+          onEvent: (data) => {
+            // 工具叙事：正文没来之前展示在"生成中"位置，长工具链不再一动不动。
+            const line = String(data?.text || "").trim().split("\n").pop() || "";
+            if (line) setLiveStatus(line.slice(0, 120));
           },
           onFinal: (data) => {
             if (data?.session_id) liveSid = data.session_id;
             const full = String(data?.text || "");
-            setMessages((prev) => prev.map((m) => (m.id === tmpAsst && !m.content && full ? { ...m, content: full } : m)));
+            // final.text 是引证门通过后的规范文本，始终整体替换（中间草稿不留脏文本）
+            setMessages((prev) => prev.map((m) => (m.id === tmpAsst && full ? { ...m, content: full } : m)));
           },
-          onError: (data) => { throw new Error(String(data?.detail || data?.error || "模型暂不可用")); },
+          onError: (data) => {
+            // serve 显式报错（model_error 等）= 轮次已死；bridge_error/断链 = 可能仍在跑
+            const err: any = new Error(String(data?.detail || data?.error || "模型暂不可用"));
+            err.explicit = data?.error !== "bridge_error";
+            throw err;
+          },
         },
       );
       // Re-sync from the shared store: canonical message ids (enables copy /
@@ -449,11 +475,27 @@ export default function Brain() {
       if (liveSid) await loadSession(liveSid, activeSession?.title);
       await refreshSessions();
     } catch (e: any) {
-      setErr(e?.message ?? "发送失败");
-      setMessages((prev) => prev.filter((m) => m.id !== tmpAsst && m.id !== tmpUser));
-      setChatInput(text);
+      if (liveSid && !e?.explicit) {
+        // 传输断链，但 serve 端的轮次独立继续执行并会把结果落盘——
+        // 不清空对话也不重发，等落盘的回答出现后重新同步整条会话。
+        setMessages((prev) => prev.map((m) => (
+          m.id === tmpAsst ? { ...m, content: m.content || "连接中断，但模型仍在后台生成，正在等待结果…" } : m
+        )));
+        const answer = await ivyeaAwaitSessionAnswer(liveSid, sentAt);
+        if (answer) {
+          await loadSession(liveSid, activeSession?.title);
+          await refreshSessions();
+        } else {
+          setErr("这轮生成时间较长，后台仍在处理；完成后刷新会话即可看到回答。");
+        }
+      } else {
+        setErr(e?.message ?? "发送失败");
+        setMessages((prev) => prev.filter((m) => m.id !== tmpAsst && m.id !== tmpUser));
+        setChatInput(text);
+      }
     } finally {
       setSending(false);
+      setLiveStatus("");
     }
   };
 
@@ -691,7 +733,7 @@ export default function Brain() {
                   <div key={m.id} style={{ justifySelf: m.role === "user" ? "end" : "start", maxWidth: m.role === "user" ? "88%" : "94%" }}>
                     <div style={{ border: "1px solid var(--b)", background: m.role === "user" ? "rgba(47,129,247,.13)" : "rgba(255,255,255,.03)", color: "var(--t)", padding: "9px 11px", borderRadius: 8, fontSize: 12, lineHeight: 1.65 }}>
                       {m.role === "assistant"
-                        ? (m.content ? <BrainMarkdown>{m.content}</BrainMarkdown> : <span style={{ color: "var(--t3)" }}>{sending ? "生成中…" : "（空回答）"}</span>)
+                        ? (m.content ? <BrainMarkdown>{m.content}</BrainMarkdown> : <span style={{ color: "var(--t3)" }}>{sending ? (liveStatus || "生成中…") : "（空回答）"}</span>)
                         : <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>}
                     </div>
                     {m.role === "assistant" && m.content && !m.id.startsWith("local-") && (

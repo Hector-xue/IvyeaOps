@@ -72,6 +72,41 @@ def test_dense_white_background_bundle_can_touch_canvas_edges():
     assert result["ready"] is True
 
 
+def test_tightly_cropped_white_main_with_thin_margins_is_accepted():
+    # 大产品占满画布、白边极薄（DE 站 Wildkamera 主图实况：overall_white 仅 ~.17、
+    # border_white ~.39，但四条边线 ~90%+ 纯白且连成一片）——合法白底真值。
+    tight = Image.new("RGB", (400, 340), "white")
+    ImageDraw.Draw(tight).rectangle((14, 12, 386, 328), fill=(52, 60, 48))
+    raw = io.BytesIO()
+    tight.save(raw, "PNG")
+    result = L._white_background_score(raw.getvalue())
+    assert result["border_white"] < .62
+    assert result["overall_white"] < .34
+    assert result["ready"] is True
+
+
+def test_tight_path_rejects_scene_with_one_dark_edge():
+    # 场景图哪怕整体偏亮，只要有一条边不是纯白就不能进白底真值。
+    scene = Image.new("RGB", (400, 340), "white")
+    draw = ImageDraw.Draw(scene)
+    draw.rectangle((14, 12, 386, 328), fill=(52, 60, 48))
+    draw.rectangle((0, 300, 399, 339), fill=(90, 110, 80))  # 底边草地
+    raw = io.BytesIO()
+    scene.save(raw, "PNG")
+    assert L._white_background_score(raw.getvalue())["ready"] is False
+
+
+def test_cached_tight_cropped_first_gallery_image_migrates_without_redownload():
+    # B0H2Z1D6R4/DE 真实存量指标：修复后 _cached_white_product_source 直接复活。
+    data = {"white_product_source": "", "white_product_source_check": {"candidates": [{
+        "url": "https://m.media-amazon.com/images/I/71JTUb212HL.jpg", "kind": "scraped",
+        "score": 54, "border_white": .386, "overall_white": .169,
+        "edge_connected_white": .167, "white_sides": 4,
+        "side_white": [.896, .979, .9, .972],
+    }]}}
+    assert L._cached_white_product_source(data) == "https://m.media-amazon.com/images/I/71JTUb212HL.jpg"
+
+
 def test_cached_sorftime_white_source_migrates_after_threshold_improvement():
     data = {"white_product_source": "", "white_product_source_check": {"candidates": [{
         "url": "https://img/white.jpg", "kind": "scraped", "score": 56,

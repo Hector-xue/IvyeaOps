@@ -289,8 +289,37 @@ export async function ivyeaAgentChat(payload: {
   persist?: boolean;
   inject_retrieval?: boolean;
 }) {
-  const { data } = await api.post<IvyeaChatResult>("/ivyea-agent/chat", payload, { timeout: 180000 });
+  // 复杂任务一轮可跑 10 分钟以上；180s 会掐断仍在健康生成的轮次。
+  const { data } = await api.post<IvyeaChatResult>("/ivyea-agent/chat", payload, { timeout: 600000 });
   return data;
+}
+
+// 流式中断后的恢复：serve 端的轮次独立于浏览器连接继续执行，收尾时把完整会话
+// 落盘。这里轮询会话详情，等 sentAt 之后落盘的 assistant 回复出现——绝不重发
+// 消息（重发会把同一个 8 分钟的 agentic 轮次再跑一遍）。
+export async function ivyeaAwaitSessionAnswer(
+  sessionId: string,
+  sentAtEpochSeconds: number,
+  opts?: { deadlineMs?: number; intervalMs?: number },
+): Promise<string | null> {
+  const deadline = Date.now() + (opts?.deadlineMs ?? 12 * 60 * 1000);
+  const interval = opts?.intervalMs ?? 5000;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, interval));
+    try {
+      const data = await ivyeaChatSession(sessionId);
+      const session = data?.session;
+      if (!session) continue;
+      if ((session.updated ?? 0) < sentAtEpochSeconds) continue; // 还没落盘
+      const answers = (session.messages || []).filter(
+        (m) => m.role === "assistant" && m.content && m.content.trim() && m.content.trim() !== "None",
+      );
+      if (answers.length) return answers[answers.length - 1].content.trim();
+    } catch {
+      // 后端重启/瞬时网络失败：继续等下一轮
+    }
+  }
+  return null;
 }
 
 export async function ivyeaAgentChatStream(
@@ -445,7 +474,8 @@ export async function ivyeaKnowledgeFreshness() {
 }
 
 export async function ivyeaKnowledgeQuality() {
-  const { data } = await api.get<KnowledgeQuality>("/ivyea-agent/knowledge/quality", { validateStatus: () => true });
+  // 质量评测是全量跑一遍用例，可超过 axios 默认 30s
+  const { data } = await api.get<KnowledgeQuality>("/ivyea-agent/knowledge/quality", { validateStatus: () => true, timeout: 120000 });
   return data;
 }
 

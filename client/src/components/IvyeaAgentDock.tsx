@@ -23,6 +23,7 @@ import {
   ivyeaAgentChat,
   ivyeaAgentChatStream,
   ivyeaAgentStatus,
+  ivyeaAwaitSessionAnswer,
   ivyeaChatSession,
   ivyeaChatSessionDelete,
   ivyeaChatSessions,
@@ -152,6 +153,7 @@ export default function IvyeaAgentDock() {
   const [historyView, setHistoryView] = useState<HistoryView>("chat");
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [sending, setSending] = useState(false);
+  const [liveStatus, setLiveStatus] = useState("");
   const [error, setError] = useState("");
   const [filesLoading, setFilesLoading] = useState(false);
   const [cards, setCards] = useState<KnowledgeCard[]>([]);
@@ -376,6 +378,10 @@ export default function IvyeaAgentDock() {
         return [...next, { role: "assistant", text: message }];
       });
     };
+    // max_steps 不再从前端限定：交给 agent serve 的 config 默认（200），
+    // 复杂运营任务不会再动辄撞"工具步数上限"。
+    let liveSid = sessionId || "";
+    const sentAt = Math.floor(Date.now() / 1000);
     try {
       let finalText = "";
       await ivyeaAgentChatStream(
@@ -383,61 +389,90 @@ export default function IvyeaAgentDock() {
           message: text,
           session_id: sessionId || undefined,
           ops_context: opsContext,
-          max_steps: 18,
           plan_mode: true,
           persist: true,
           inject_retrieval: true,
         },
         {
           onStart: (data) => {
-            if (data.session_id) setSessionId(data.session_id);
+            if (data.session_id) {
+              liveSid = data.session_id;
+              setSessionId(data.session_id);
+            }
           },
           onToken: (chunk) => {
+            if (!finalText) setLiveStatus("");
             finalText += chunk;
             appendAssistant(chunk);
+          },
+          onEvent: (data) => {
+            // 工具叙事（正在调研/检索/生成…）：流式正文没来之前展示在"处理中"位置，
+            // 长工具链不再是一动不动的转圈。
+            const line = String(data?.text || "").trim().split("\n").pop() || "";
+            if (line && !finalText) setLiveStatus(line.slice(0, 120));
           },
           onFinal: (data) => {
             if (data.session_id) setSessionId(data.session_id);
             const textOut = String(data.text || "");
-            if (!finalText && textOut) appendAssistant(textOut, true);
+            // final.text 是引证门通过后的规范文本，始终以它为准整体替换——
+            // 流式期间的中间草稿（引证重写前）不留脏文本。
+            if (textOut) appendAssistant(textOut, true);
           },
-          onError: async (data) => {
-            const raw = String(data.detail || data.error || "模型暂不可用");
-            if (isUsageLimitError(raw) && isKnowledgeQuestion(text)) {
-              replaceAssistant(await localKnowledgeAnswer(text));
-            } else {
-              replaceAssistantWithSystem(agentErrorMessage(raw));
-            }
+          onError: (data) => {
+            // 抛给统一的 catch 恢复路径。区分两类错误：serve 显式报错（model_error
+            // 等）= 轮次已死，不能傻等；bridge_error/传输断链 = serve 可能仍在跑。
+            const err: any = new Error(String(data.detail || data.error || "模型暂不可用"));
+            err.explicit = data?.error !== "bridge_error";
+            throw err;
           },
         },
       );
     } catch (e: any) {
-      try {
-        const res = await ivyeaAgentChat({
-          message: text,
-          session_id: sessionId || undefined,
-          ops_context: opsContext,
-          max_steps: 18,
-          plan_mode: true,
-          persist: true,
-          inject_retrieval: true,
-        });
-        if (res.session_id) setSessionId(res.session_id);
-        if (!res.ok) {
-          const raw = res.detail || res.error || "模型暂不可用";
-          if (isUsageLimitError(raw) && isKnowledgeQuestion(text)) {
-            replaceAssistant(await localKnowledgeAnswer(text));
-          } else {
-            replaceAssistantWithSystem(agentErrorMessage(raw));
-          }
+      const raw = String(e?.message || "");
+      if (isUsageLimitError(raw) && isKnowledgeQuestion(text)) {
+        replaceAssistant(await localKnowledgeAnswer(text));
+      } else if (e?.explicit) {
+        // serve 显式宣告轮次失败（模型报错/额度不足等）：直接展示，绝不轮询等待。
+        replaceAssistantWithSystem(agentErrorMessage(raw));
+      } else if (liveSid) {
+        // 传输断链，但 serve 端的轮次独立继续执行并会把结果落盘——
+        // 不重发（重发会把同一轮再跑一遍），改为等待落盘的回答。
+        replaceAssistant("连接中断，但模型仍在后台生成，正在等待结果…");
+        const answer = await ivyeaAwaitSessionAnswer(liveSid, sentAt);
+        if (answer) {
+          replaceAssistant(answer);
         } else {
-          appendAssistant(res.text || "已完成。", true);
+          replaceAssistantWithSystem("这轮生成时间较长，后台仍在处理；完成后可在「历史会话」里查看这条回答。");
         }
-      } catch (fallbackError: any) {
-        replaceAssistantWithSystem(apiErrorMessage(fallbackError, apiErrorMessage(e, "发送失败")));
+      } else {
+        // 流从未建立（后端 503/旧版本无流式接口）：走一次阻塞式请求兜底。
+        try {
+          const res = await ivyeaAgentChat({
+            message: text,
+            session_id: sessionId || undefined,
+            ops_context: opsContext,
+            plan_mode: true,
+            persist: true,
+            inject_retrieval: true,
+          });
+          if (res.session_id) setSessionId(res.session_id);
+          if (!res.ok) {
+            const detail = res.detail || res.error || "模型暂不可用";
+            if (isUsageLimitError(detail) && isKnowledgeQuestion(text)) {
+              replaceAssistant(await localKnowledgeAnswer(text));
+            } else {
+              replaceAssistantWithSystem(agentErrorMessage(detail));
+            }
+          } else {
+            appendAssistant(res.text || "已完成。", true);
+          }
+        } catch (fallbackError: any) {
+          replaceAssistantWithSystem(apiErrorMessage(fallbackError, apiErrorMessage(e, "发送失败")));
+        }
       }
     } finally {
       setSending(false);
+      setLiveStatus("");
       ivyeaChatSessions(30).then((data) => setSessions(data.sessions || [])).catch(() => {});
     }
   };
@@ -800,7 +835,7 @@ export default function IvyeaAgentDock() {
                       return (
                         <div key={idx} className={`ivyea-agent-msg ${m.role}`}>
                           {pendingAssistant
-                            ? <span className="ivyea-agent-typing"><Loader2 size={14} className="spin" /> 处理中...</span>
+                            ? <span className="ivyea-agent-typing"><Loader2 size={14} className="spin" /> {liveStatus || "处理中..."}</span>
                             : <div>{m.text}</div>}
                         </div>
                       );
