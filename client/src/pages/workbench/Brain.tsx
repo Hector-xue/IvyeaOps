@@ -28,6 +28,7 @@ import {
 } from "../../api/client";
 import {
   ivyeaAgentChatStream,
+  ivyeaAwaitSessionAnswer,
   ivyeaChatSession,
   ivyeaChatSessionDelete,
   ivyeaChatSessions,
@@ -414,13 +415,14 @@ export default function Brain() {
       { id: tmpAsst, role: "assistant", content: "" },
     ]);
     let liveSid = activeSession?.id || "";
+    const sentAt = Math.floor(Date.now() / 1000);
     try {
       await ivyeaAgentChatStream(
         {
           message: text,
           session_id: activeSession?.id || undefined,
           ops_context: { board: "knowledge", pathname: "/brain" },
-          max_steps: 18,
+          // max_steps 交给 agent serve 的 config 默认（200），不再从前端压死
           plan_mode: true,
           persist: true,
           inject_retrieval: true,
@@ -441,7 +443,12 @@ export default function Brain() {
             const full = String(data?.text || "");
             setMessages((prev) => prev.map((m) => (m.id === tmpAsst && !m.content && full ? { ...m, content: full } : m)));
           },
-          onError: (data) => { throw new Error(String(data?.detail || data?.error || "模型暂不可用")); },
+          onError: (data) => {
+            // serve 显式报错（model_error 等）= 轮次已死；bridge_error/断链 = 可能仍在跑
+            const err: any = new Error(String(data?.detail || data?.error || "模型暂不可用"));
+            err.explicit = data?.error !== "bridge_error";
+            throw err;
+          },
         },
       );
       // Re-sync from the shared store: canonical message ids (enables copy /
@@ -449,9 +456,24 @@ export default function Brain() {
       if (liveSid) await loadSession(liveSid, activeSession?.title);
       await refreshSessions();
     } catch (e: any) {
-      setErr(e?.message ?? "发送失败");
-      setMessages((prev) => prev.filter((m) => m.id !== tmpAsst && m.id !== tmpUser));
-      setChatInput(text);
+      if (liveSid && !e?.explicit) {
+        // 传输断链，但 serve 端的轮次独立继续执行并会把结果落盘——
+        // 不清空对话也不重发，等落盘的回答出现后重新同步整条会话。
+        setMessages((prev) => prev.map((m) => (
+          m.id === tmpAsst ? { ...m, content: m.content || "连接中断，但模型仍在后台生成，正在等待结果…" } : m
+        )));
+        const answer = await ivyeaAwaitSessionAnswer(liveSid, sentAt);
+        if (answer) {
+          await loadSession(liveSid, activeSession?.title);
+          await refreshSessions();
+        } else {
+          setErr("这轮生成时间较长，后台仍在处理；完成后刷新会话即可看到回答。");
+        }
+      } else {
+        setErr(e?.message ?? "发送失败");
+        setMessages((prev) => prev.filter((m) => m.id !== tmpAsst && m.id !== tmpUser));
+        setChatInput(text);
+      }
     } finally {
       setSending(false);
     }

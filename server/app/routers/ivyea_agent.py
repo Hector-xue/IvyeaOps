@@ -64,7 +64,9 @@ class ChatBody(BaseModel):
     workspace: str = Field(default="", max_length=1000)
     asin: str = Field(default="", max_length=80)
     ops_context: dict[str, Any] = Field(default_factory=dict)
-    max_steps: int = Field(default=12, ge=1, le=80)
+    # 0 = 不限定，交给 agent serve 的 config 默认（chat_max_tool_steps，默认 200）。
+    # 旧默认 12/上限 80 把 serve 端预算压死，复杂运营任务动辄撞"工具步数上限"。
+    max_steps: int = Field(default=0, ge=0, le=400)
     persist: bool = True
     plan_mode: bool = True
     inject_retrieval: bool = True
@@ -263,9 +265,17 @@ def manifest() -> dict[str, Any]:
     return _call(svc.manifest)
 
 
+def _chat_payload(body: ChatBody) -> dict[str, Any]:
+    """max_steps<=0 时从 payload 里剔除，serve 端回落到 config 默认（200）。"""
+    payload = _payload(body)
+    if int(payload.get("max_steps") or 0) <= 0:
+        payload.pop("max_steps", None)
+    return payload
+
+
 @router.post("/chat")
 def chat(body: ChatBody, request: Request) -> dict[str, Any]:
-    return _call(svc.chat, _with_ops_bridge(_payload(body), request))
+    return _call(svc.chat, _with_ops_bridge(_chat_payload(body), request))
 
 
 @router.post("/chat/stream")
@@ -274,7 +284,7 @@ def chat_stream(body: ChatBody, request: Request) -> StreamingResponse:
     if not status.get("available"):
         raise HTTPException(status_code=503, detail=f"IvyeaAgent 不可用：{status.get('error') or '服务未连接'}")
     return StreamingResponse(
-        svc.chat_stream(_with_ops_bridge(_payload(body), request)),
+        svc.chat_stream(_with_ops_bridge(_chat_payload(body), request)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
