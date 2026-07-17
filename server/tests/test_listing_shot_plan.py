@@ -43,6 +43,16 @@ def test_copy_result_repairs_one_malformed_bullet_instead_of_showing_raw_json():
     assert parsed["bullets_a"][0] == "[Simple Setup]: Works out of the box"
 
 
+def test_copy_result_keeps_first_object_when_model_answers_twice():
+    first = {"rationale": "en", "titles": ["Title A"], "bullets_a": ["b1"]}
+    second = {"rationale": "de", "titles": ["Titel B"], "bullets_a": ["b2"]}
+    raw = json.dumps(first, indent=2) + "\n" + json.dumps(second, indent=2)
+    parsed = L._parse_copy_result({"raw": raw})
+    assert parsed["titles"] == ["Title A"]
+    parsed = L._parse_copy_result({"raw": "```json\n" + raw + "\n```"})
+    assert parsed["titles"] == ["Title A"]
+
+
 def test_white_background_detection_is_conservative():
     white = Image.new("RGB", (300, 300), "white")
     ImageDraw.Draw(white).rectangle((95, 55, 205, 250), fill=(25, 28, 30))

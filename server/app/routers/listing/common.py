@@ -181,6 +181,17 @@ def _parse_copy_result(value) -> Optional[dict]:
                 return parsed
         except Exception:
             continue
+    # Some providers emit the answer twice as back-to-back JSON objects; the
+    # whole-string parse then fails with "Extra data". Keep the first object.
+    for candidate in candidates:
+        try:
+            parsed, _ = json.JSONDecoder().raw_decode(candidate)
+            if isinstance(parsed, dict) and (
+                parsed.get("titles") or parsed.get("bullets_a") or parsed.get("bullets_b")
+            ):
+                return parsed
+        except Exception:
+            continue
     return None
 
 
