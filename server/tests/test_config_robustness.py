@@ -56,7 +56,7 @@ def test_self_check_returns_matrix(monkeypatch):
     assert res["ok"] >= 2 and res["skip"] >= 1
 
 
-def test_upgrade_agent_pip_and_restart(monkeypatch):
+def test_upgrade_agent_prefers_self_update_and_restarts(monkeypatch):
     monkeypatch.setattr(svc, "_find_ivyea_cli", lambda: "/root/.local/bin/ivyea")
     monkeypatch.setattr(svc, "_venv_python", lambda cli: "/usr/bin/python")
     versions = iter(["1.0.23", "1.0.24"])
@@ -72,8 +72,30 @@ def test_upgrade_agent_pip_and_restart(monkeypatch):
 
     r = svc.upgrade_agent()
     assert r["ok"] is True and r["before"] == "1.0.23" and r["after"] == "1.0.24"
-    assert any("pip" in c for c in ran[0]) and any("--no-cache-dir" in c for c in ran[0])
-    assert any("service-stop" in c for c in ran[1])  # serve restart
+    assert ran[0][-2:] == ["self", "update"]              # updater 自选 git pull/pip
+    assert not any("pip" in " ".join(c) for c in ran)     # 成功则不再碰 pip
+    assert any("service-stop" in " ".join(c) for c in ran)  # serve restart
+
+
+def test_upgrade_agent_falls_back_to_pip_when_self_update_unavailable(monkeypatch):
+    monkeypatch.setattr(svc, "_find_ivyea_cli", lambda: "/root/.local/bin/ivyea")
+    monkeypatch.setattr(svc, "_venv_python", lambda cli: "/usr/bin/python")
+    versions = iter(["1.0.23", "1.0.24"])
+    monkeypatch.setattr(svc, "_installed_agent_version", lambda py: next(versions))
+    ran = []
+
+    def fake_run(cmd, timeout=300.0):
+        ran.append(cmd)
+        # 老版本 agent 不认识 self update → 非零退出，触发 pip 回退
+        rc = 2 if cmd[-2:] == ["self", "update"] else 0
+        return {"cmd": " ".join(cmd[:4]), "returncode": rc, "stdout": "", "stderr": ""}
+    monkeypatch.setattr(svc, "_run_step", fake_run)
+    monkeypatch.setattr(svc, "start_local_service", lambda: {"ok": True})
+
+    r = svc.upgrade_agent()
+    assert r["ok"] is True and r["before"] == "1.0.23" and r["after"] == "1.0.24"
+    pip_cmd = " ".join(ran[1])
+    assert "pip" in pip_cmd and "--no-cache-dir" in pip_cmd and "--force-reinstall" in pip_cmd
 
 
 def test_upgrade_agent_no_cli(monkeypatch):
