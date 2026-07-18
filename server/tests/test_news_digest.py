@@ -61,3 +61,17 @@ def test_repair_inner_quotes_keeps_valid_json_intact():
 def test_clean_text_strips_citation_markers():
     assert _clean_text("摘要 [K3]，其余 【K12】。") == "摘要，其余。"
     assert _clean_text("无引用") == "无引用"
+
+
+def test_round_robin_by_source_alternates():
+    from app.services.news_digest import _round_robin_by_source
+
+    items = (
+        [{"source": "A", "n": i} for i in range(5)]
+        + [{"source": "B", "n": i} for i in range(2)]
+        + [{"source": "C", "n": i} for i in range(1)]
+    )
+    out = _round_robin_by_source(items)
+    assert [x["source"] for x in out] == ["A", "B", "C", "A", "B", "A", "A", "A"]
+    # newest-first order inside each source is preserved
+    assert [x["n"] for x in out if x["source"] == "A"] == [0, 1, 2, 3, 4]

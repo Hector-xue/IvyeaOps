@@ -329,14 +329,14 @@ export default function News() {
     try {
       const r = await refreshNews();
       setFlash(r.message);
-      // Poll for new data every 10s for up to 60s
+      // Poll for new data every 10s for up to 4 min（24 源分批汇总约 2-4 分钟）
       if (r.triggered) {
         let attempts = 0;
         const poll = setInterval(async () => {
           attempts += 1;
           await loadDates();
           await loadDay(picked);
-          if (attempts >= 6) clearInterval(poll);
+          if (attempts >= 24) clearInterval(poll);
         }, 10000);
       }
     } catch (e: any) {
