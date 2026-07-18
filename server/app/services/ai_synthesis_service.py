@@ -1090,8 +1090,15 @@ async def _try_assistant(prompt: str, failures: list[str]) -> AsyncGenerator[tup
         _log.warning("assistant fallback failed: %s", exc)
 
 
-async def _stream_ivyea_agent(prompt: str) -> AsyncGenerator[str, None]:
-    """Stream text from the embedded IvyeaAgent service."""
+async def _stream_ivyea_agent(
+    prompt: str, *, inject_retrieval: bool = True
+) -> AsyncGenerator[str, None]:
+    """Stream text from the embedded IvyeaAgent service.
+
+    ``inject_retrieval=False`` is for structured-output tasks (strict JSON):
+    retrieval injection makes the agent append 引用说明/[K1] citation markers
+    that corrupt machine-parsed responses.
+    """
     from app.services import ivyea_agent_service as ivyea
 
     status = await asyncio.to_thread(ivyea.ensure_available)
@@ -1109,7 +1116,7 @@ async def _stream_ivyea_agent(prompt: str) -> AsyncGenerator[str, None]:
         # ingest cleaning), not a user chat. Persisting would spam the shared
         # agent session history that the dock and workbench chat now both read.
         "persist": False,
-        "inject_retrieval": True,
+        "inject_retrieval": inject_retrieval,
         "system": (
             "你正在作为 IvyeaOps 的内置文本生成引擎。"
             "除非用户明确要求工具诊断，否则直接基于输入数据生成最终报告。"
@@ -1148,11 +1155,13 @@ async def _stream_ivyea_agent(prompt: str) -> AsyncGenerator[str, None]:
         yield final_text
 
 
-async def _try_ivyea_agent(prompt: str, failures: list[str]) -> AsyncGenerator[tuple[str, str], None]:
+async def _try_ivyea_agent(
+    prompt: str, failures: list[str], *, inject_retrieval: bool = True
+) -> AsyncGenerator[tuple[str, str], None]:
     yield "_attempt", "ivyea-agent"
     try:
         got = False
-        async for chunk in _stream_ivyea_agent(prompt):
+        async for chunk in _stream_ivyea_agent(prompt, inject_retrieval=inject_retrieval):
             got = True
             yield "ivyea-agent", chunk
         if not got:
@@ -1847,7 +1856,7 @@ async def synthesize_native(
 
 
 async def run_text_chain(
-    prompt: str, *, order: list[str] | None = None
+    prompt: str, *, order: list[str] | None = None, agent_retrieval: bool = True
 ) -> tuple[str, str]:
     """Canonical text generation over the standard fallback chain.
 
@@ -1863,7 +1872,7 @@ async def run_text_chain(
     failures: list[str] = []
     for provider in chain:
         if provider == "ivyea-agent":
-            gen = _try_ivyea_agent(prompt, failures)
+            gen = _try_ivyea_agent(prompt, failures, inject_retrieval=agent_retrieval)
         elif provider == "deepseek":
             gen = _try_deepseek(prompt, failures)
         elif provider == "apimart":

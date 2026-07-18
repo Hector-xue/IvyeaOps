@@ -9,6 +9,8 @@ export type NewsItem = {
   source: string;
   url: string;
   summary_zh: string;
+  /** 推荐理由：这条为什么对卖家/AI从业者重要（aihot 式一句话点评） */
+  reason_zh?: string;
   category: NewsCategory | string;
   importance: number;
   is_official: boolean;
