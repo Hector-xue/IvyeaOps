@@ -52,24 +52,37 @@ function fmtGenerated(iso: string): string {
   }
 }
 
-function Stars({ n }: { n: number }) {
-  const filled = Math.max(0, Math.min(5, n));
+function HeatBadge({ n }: { n: number }) {
+  const v = Math.max(0, Math.min(5, n));
+  const color =
+    v >= 5 ? "var(--red)" : v >= 4 ? "var(--amber)" : v >= 3 ? "var(--t2)" : "var(--t3)";
   return (
     <span
+      title={`热度 ${v}/5（AI 评估的重要度）`}
       style={{
         fontSize: 9,
-        color: filled >= 4 ? "var(--red)" : "var(--t3)",
-        letterSpacing: 1,
+        color,
+        border: `1px solid ${v >= 4 ? "currentColor" : "var(--b)"}`,
+        borderRadius: 3,
+        padding: "1px 5px",
+        letterSpacing: ".05em",
+        whiteSpace: "nowrap",
       }}
-      title={`重要度 ${filled}/5`}
     >
-      {"★".repeat(filled)}
-      <span style={{ color: "var(--b)" }}>{"★".repeat(5 - filled)}</span>
+      🔥 {v}
     </span>
   );
 }
 
-function NewsCard({ n }: { n: NewsItem }) {
+function NewsCard({
+  n,
+  activeTag,
+  onTagClick,
+}: {
+  n: NewsItem;
+  activeTag: string | null;
+  onTagClick: (t: string) => void;
+}) {
   const tag = CAT_STYLE[n.category] ?? { cls: "tb-tag", label: n.category };
   return (
     <div
@@ -130,8 +143,40 @@ function NewsCard({ n }: { n: NewsItem }) {
             {n.summary_zh}
           </div>
         )}
-        <div className="ni-meta">
+        {n.reason_zh && (
+          <div
+            style={{
+              fontSize: 10,
+              color: "var(--acc)",
+              lineHeight: 1.5,
+              marginBottom: 5,
+              opacity: 0.85,
+            }}
+          >
+            💡 {n.reason_zh}
+          </div>
+        )}
+        <div className="ni-meta" style={{ flexWrap: "wrap", rowGap: 3 }}>
           <span className={"tag " + tag.cls}>{tag.label}</span>
+          {(n.tags ?? []).map((t) => (
+            <button
+              key={t}
+              onClick={() => onTagClick(t)}
+              title={activeTag === t ? "取消标签筛选" : `只看「${t}」`}
+              style={{
+                fontSize: 9,
+                color: activeTag === t ? "var(--acc)" : "var(--t3)",
+                border: `1px solid ${activeTag === t ? "var(--acc)" : "var(--b)"}`,
+                borderRadius: 3,
+                padding: "0 5px",
+                background: "none",
+                cursor: "pointer",
+                lineHeight: "16px",
+              }}
+            >
+              #{t}
+            </button>
+          ))}
           <span style={{ color: "var(--t3)" }}>{n.source}</span>
           {n.published_at && (
             <span style={{ color: "var(--t3)" }}>
@@ -139,7 +184,7 @@ function NewsCard({ n }: { n: NewsItem }) {
             </span>
           )}
           <span style={{ flex: 1 }} />
-          <Stars n={n.importance} />
+          <HeatBadge n={n.importance} />
           <a
             href={n.url}
             target="_blank"
@@ -196,6 +241,9 @@ export default function News() {
   const [picked, setPicked] = useState<string | null>(null);
   const [day, setDay] = useState<NewsDay | null>(null);
   const [cat, setCat] = useState<NewsCategory | "all">("all");
+  const [q, setQ] = useState("");
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [pickedOnly, setPickedOnly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -234,8 +282,25 @@ export default function News() {
 
   const filtered = useMemo<NewsItem[]>(() => {
     if (!day) return [];
-    return cat === "all" ? day.items : day.items.filter((i) => i.category === cat);
-  }, [day, cat]);
+    let items = cat === "all" ? day.items : day.items.filter((i) => i.category === cat);
+    if (pickedOnly) items = items.filter((i) => i.importance >= 4);
+    if (activeTag) items = items.filter((i) => (i.tags ?? []).includes(activeTag));
+    const kw = q.trim().toLowerCase();
+    if (kw) {
+      items = items.filter((i) =>
+        [i.title, i.summary_zh, i.reason_zh ?? "", i.source, ...(i.tags ?? [])]
+          .join(" ")
+          .toLowerCase()
+          .includes(kw),
+      );
+    }
+    return items;
+  }, [day, cat, q, activeTag, pickedOnly]);
+
+  const onTagClick = useCallback(
+    (t: string) => setActiveTag((prev) => (prev === t ? null : t)),
+    [],
+  );
 
   const { officialItems, regularItems } = useMemo(() => {
     const off = filtered.filter((i) => i.is_official);
@@ -264,14 +329,14 @@ export default function News() {
     try {
       const r = await refreshNews();
       setFlash(r.message);
-      // Poll for new data every 10s for up to 60s
+      // Poll for new data every 10s for up to 4 min（24 源分批汇总约 2-4 分钟）
       if (r.triggered) {
         let attempts = 0;
         const poll = setInterval(async () => {
           attempts += 1;
           await loadDates();
           await loadDay(picked);
-          if (attempts >= 6) clearInterval(poll);
+          if (attempts >= 24) clearInterval(poll);
         }, 10000);
       }
     } catch (e: any) {
@@ -314,7 +379,31 @@ export default function News() {
           );
         })}
 
+        <button
+          className={"rbtn" + (pickedOnly ? " ar" : "")}
+          onClick={() => setPickedOnly((v) => !v)}
+          title="只看热度 ≥ 4 的精选内容"
+        >
+          🔥 精选
+        </button>
+
         <span style={{ flex: 1 }} />
+
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="搜索标题 / 摘要 / 标签…"
+          style={{
+            fontSize: 10,
+            background: "none",
+            border: "1px solid var(--b)",
+            borderRadius: 4,
+            color: "var(--t)",
+            padding: "4px 8px",
+            width: 160,
+            outline: "none",
+          }}
+        />
 
         {dates && dates.dates.length > 0 && (
           <SheetSelect
@@ -368,7 +457,23 @@ export default function News() {
             共 <b style={{ color: "var(--t2)" }}>{day.items.length}</b> 条
             (官方 {counts.official})
           </span>
-          <span style={{ color: "var(--t3)" }}>· 每 3h 自动更新 · 仅保留 2 天</span>
+          <span style={{ color: "var(--t3)" }}>· 按需生成 · 保留最近 7 天</span>
+          {activeTag && (
+            <button
+              onClick={() => setActiveTag(null)}
+              style={{
+                fontSize: 9,
+                color: "var(--acc)",
+                background: "none",
+                border: "1px solid var(--acc)",
+                borderRadius: 3,
+                padding: "0 6px",
+                cursor: "pointer",
+              }}
+            >
+              #{activeTag} ✕
+            </button>
+          )}
           {day.notes && <span style={{ color: "var(--amber)" }}>· {day.notes}</span>}
         </div>
       )}
@@ -388,8 +493,8 @@ export default function News() {
         {!loading && filtered.length === 0 && (
           <div style={{ padding: 12, fontSize: 10, color: "var(--t3)" }}>
             {day && day.items.length === 0
-              ? "该日尚未生成任何资讯。等 cron 跑或点击「立即刷新」。"
-              : "当前分类下无资讯"}
+              ? "该日尚未生成任何资讯。点击「立即刷新」现场抓取 RSS 并 AI 汇总。"
+              : "当前筛选条件下无资讯（试试清掉搜索词 / 标签 / 精选开关）"}
           </div>
         )}
 
@@ -401,7 +506,7 @@ export default function News() {
               count={officialItems.length}
             />
             {officialItems.map((n, i) => (
-              <NewsCard key={"off-" + i} n={n} />
+              <NewsCard key={"off-" + i} n={n} activeTag={activeTag} onTagClick={onTagClick} />
             ))}
           </>
         )}
@@ -415,7 +520,7 @@ export default function News() {
               subtle
             />
             {regularItems.map((n, i) => (
-              <NewsCard key={"reg-" + i} n={n} />
+              <NewsCard key={"reg-" + i} n={n} activeTag={activeTag} onTagClick={onTagClick} />
             ))}
           </>
         )}

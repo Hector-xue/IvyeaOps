@@ -4,8 +4,8 @@ Daily AI industry + Amazon seller news with LLM-generated Chinese summaries.
 Data is produced by the Hermes skill ``ai-amazon-daily-digest`` and stored as
 one JSON file per day under ``$IVYEA_OPS_DATA_DIR/news/YYYY-MM-DD.json``.
 
-Retention: only the 2 most recent days are kept. Anything older is purged by
-``_cleanup_old()`` which runs on every ``/refresh`` call and on startup.
+Retention: only the ``_KEEP_DAYS`` most recent days are kept. Anything older is
+purged by ``_cleanup_old()`` which runs on every ``/refresh`` call and on startup.
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ router = APIRouter()
 
 _NEWS_DIR = settings.data_dir / "news"
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-_KEEP_DAYS = 2  # today + yesterday
+_KEEP_DAYS = 7  # a week of digests for the date switcher
 
 
 def _news_dir() -> Path:
@@ -43,6 +43,7 @@ class NewsItem(BaseModel):
     source: str
     url: str
     summary_zh: str
+    reason_zh: str = ""  # 推荐理由：为什么这条对卖家/AI从业者重要
     category: str  # "ai_industry" | "amazon_seller"
     importance: int = Field(3, ge=0, le=5)
     is_official: bool = False  # 大厂官方新闻 → 置顶区
@@ -104,6 +105,7 @@ def _load_day(d: str) -> NewsDay | None:
                     source=str(it.get("source", "")).strip(),
                     url=str(it.get("url", "")).strip(),
                     summary_zh=str(it.get("summary_zh", "")).strip(),
+                    reason_zh=str(it.get("reason_zh", "") or "").strip(),
                     category=str(it.get("category", "ai_industry")),
                     importance=int(it.get("importance", 3)),
                     is_official=bool(it.get("is_official", False)),
