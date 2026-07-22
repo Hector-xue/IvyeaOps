@@ -8,15 +8,15 @@
 ![Frontend](https://img.shields.io/badge/frontend-React%20%2B%20Vite-61DAFB?logo=react&logoColor=white)
 
 **IvyeaOps** 是一套**开源、自托管**的亚马逊运营工作台：一台服务器、一次登录，把
-Listing 制作、AI 生图、市场调研、深度分析、广告优化（含领星 ERP 接入）、内置 IvyeaAgent、
+Listing 套图制作、图片翻译、市场调研、深度分析、广告优化（含领星 ERP 接入）、内置 IvyeaAgent、
 知识库、Skill 工坊、服务器运维等运营全流程，统一收进浏览器里。
 
 > 数据与密钥都留在你自己的服务器，不绑定任何第三方云。**AGPL-3.0** 开源，可自由使用、修改、自托管。
 
 <p align="center">
-  <img src="docs/assets/screenshot-listing-main-images.png" alt="IvyeaOps · Listing 工作台 AI 主图生成" width="100%" />
+  <img src="docs/assets/screenshot-listing-main-images.png" alt="IvyeaOps · Listing 工作台 套图分镜" width="100%" />
   <br />
-  <sub>Listing 工作台 · AI 主图：一个 ASIN 批量生成白底 / 雪山 / 城市夜景 / 水下等多场景主图（更多界面见 <a href="#界面预览">界面预览</a>）</sub>
+  <sub>Listing 工作台 · 套图分镜：一张白底图锁住产品真值，整套主图 / A+ 的画面与英文文案由模型一次直出；每张过质检、人工复核后才可交付（方法论见 <a href="docs/listing-visual-studio.md">套图工作台文档</a>，更多界面见 <a href="#界面预览">界面预览</a>）</sub>
 </p>
 
 - **技术栈**：后端 FastAPI（Python）+ 前端 React / Vite（TypeScript），后端直接托管前端构建产物。
@@ -136,7 +136,7 @@ Listing 制作、AI 生图、市场调研、深度分析、广告优化（含领
 | **首页** | 工作台概览与常用入口 |
 | **市场调研** | 关键词 / 竞品 / 类目洞察，结合数据源 + AI 综合分析 |
 | **打法推荐** | 按品类给出运营策略建议 |
-| **Listing 工作台** | ASIN → 标题 · 五点 · 描述；AI 文案与改写 |
+| **Listing 工作台** | 采集 → 文案（标题 · 五点 · 描述）→ **套图分镜**：以白底图为产品真值，整套主图 / A+ 图文一次直出，逐张质检 + 整套一致性复核，人工确认后交付（见 [`docs/listing-visual-studio.md`](docs/listing-visual-studio.md)） |
 | **一键图片翻译** | 多站点卖家：一套图 → 多语言 → 多站点；上传或从图片工作区选图，按目标站点语言批量翻译图上文字（产品/版式/配色不变） |
 | **分析工具（深度分析）** | 竞品速查 · 关键词竞争 · Listing 重写 · 评论聚类 · 流量诊断 |
 | **领星 ERP** | 经官方 OpenAPI 接入领星：数据浏览 / 大盘 / 广告优化引擎 / 自动化建议 / 受控写操作 / 审计（见下文专章） |
@@ -146,9 +146,9 @@ Listing 制作、AI 生图、市场调研、深度分析、广告优化（含领
 | 板块 | 说明 |
 |---|---|
 | **AI 问答** | 浏览器内通用 AI 问答助手 |
-| **AI 生图** | Prompt → 批量主图 / 场景图（图像工作流） |
+| **AI 生图** | Prompt → 批量主图 / 场景图（通用图像工作流，不绑定某个 ASIN） |
+| **知识库工作台** | 上传 / 编辑 / 检索 / 对话 + 治理中心（变更审核、覆盖看板、冲突检查、脱敏导入）；文件保存在 `~/.ivyea/knowledge` |
 | **外部智能体** | 原生移植 claudecodeui 体验：Claude 走 stream-json 结构化输出、会话 resume、工具调用可视化、终端 |
-| **IvyeaAgent 知识库** | 右下角可视化上传文档、搜索与本地检索；文件保存在 `~/.ivyea/knowledge` |
 | **服务器终端** | 浏览器内 PTY 多终端会话（仅 Linux） |
 | **服务器监控** | CPU / 进程 / 日志等资源一屏掌握，含告警 |
 
@@ -162,7 +162,7 @@ Listing 制作、AI 生图、市场调研、深度分析、广告优化（含领
 |---|---|
 | **用户管理** | 多用户与权限 |
 | **系统配置** | 集中式运行时配置（密钥 / 集成路径 / 阈值），首启向导引导 |
-| **资讯** | 每日 AI 行业资讯摘要 |
+| **资讯** | 24 路信源并行抓取 + AI 汇总的每日行业资讯摘要（按类别均衡、附推荐理由） |
 
 > 还内置「审核制 AI 自动修复」（功能报错时用 hermes + git worktree 隔离生成修复、人工审核后应用，默认关闭）等运维能力。
 
