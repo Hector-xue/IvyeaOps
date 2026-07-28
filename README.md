@@ -69,6 +69,7 @@ Listing 套图制作、图片翻译、市场调研、深度分析、广告优化
 - [安全须知](#安全须知)
 - [致谢](#致谢)
 - [许可证](#许可证)
+- [请作者喝杯咖啡](#-请作者喝杯咖啡)
 
 ---
 
@@ -437,3 +438,24 @@ IvyeaOps 站在不少优秀开源项目之上，特此致谢：
 **AGPL-3.0**（GNU Affero General Public License v3.0）。完整条款见 [`LICENSE`](LICENSE)。
 
 本项目的「外部智能体」板块移植自 AGPL-3.0 的 [claudecodeui](https://github.com/siteboon/claudecodeui)，按其 copyleft 要求，整个 IvyeaOps 以 AGPL-3.0 发布：你可自由使用、修改、自托管；若你**修改后作为网络服务提供给他人使用**，须向这些用户提供完整的对应源码（AGPL 第 13 条「网络条款」）。
+
+---
+
+## ☕ 请作者喝杯咖啡
+
+IvyeaOps 一直是免费开源、可完全自托管的，没有内购也不卖服务。如果这套工作台帮你省下了时间、少踩了坑，欢迎请作者喝杯咖啡——一杯咖啡就是下个版本的动力。当然，点个 Star、提个 Issue、写篇使用心得，同样是很大的支持。
+
+- **公众号**：Ivyea 的精神股东们（版本更新、用法与踩坑复盘都发在这里）
+- **作者**：薛海涛
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/assets/wechat-pay-qr.png" alt="微信收款码" width="300" />
+      <br />
+      <strong>微信扫码 · 支持作者</strong>
+      <br />
+      <sub>金额随意，心意都收到了</sub>
+    </td>
+  </tr>
+</table>
