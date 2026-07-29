@@ -484,6 +484,8 @@ export default function Market() {
               ⏳ 正在调用 <code>{attemptingProvider}</code>
               {attemptingProvider === "apimart"
                 ? "（API 流式，正常 5-15s 内会有首字）"
+                : attemptingProvider === "ivyea-agent"
+                ? "（智能体逐字生成；命中知识引证时会压住草稿、只输出终稿，整篇报告通常 2-6 分钟）"
                 : "（本机 CLI，整段缓冲，单次通常 1-3 分钟；超时会自动回退下一个提供商）"}
               ，已等待 {liveTimer}s …
               {attemptingProvider !== "apimart" && (
