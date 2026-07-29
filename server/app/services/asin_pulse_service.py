@@ -1,10 +1,12 @@
 """Lightweight single-ASIN pulse for the home monitoring dashboard.
 
-Uses Sorftime's ``product_detail`` tool, which returns a plain-text
-``字段：值`` block (NOT JSON, and NOT ``product_report`` — that one returns LLM
-orchestration instructions). Field labels are Chinese; mappings below were
-calibrated against live responses. ``product_variations`` (a list of text
-lines) is fetched concurrently just for the variant count.
+Uses Sorftime's ``product_detail`` (NOT ``product_report`` — that one returns
+LLM orchestration instructions for every ASIN). It answers with a
+``{"doc": …, "data": {…}}`` envelope whose record carries English snake_case
+fields (``monthly_sales_volume``, ``star_rating``, ``top_category``:
+"Kitchen & Dining (Rank: 3662)" …). The older plain-text ``字段：值`` form is
+still parsed as a fallback. ``product_variations`` is fetched concurrently just
+for the variant count.
 """
 from __future__ import annotations
 
@@ -12,7 +14,7 @@ import asyncio
 import re
 from typing import Any, Dict, List, Optional
 
-from app.services.sorftime_service import _make_client, _safe_call
+from app.services.sorftime_service import _make_client, _safe_call, record, rows
 
 _NOT_FOUND = ("未查询到", "请检查")
 
@@ -41,10 +43,11 @@ def _num(s: Any) -> Optional[float]:
 
 
 def _rank(s: Any) -> Optional[float]:
-    """Pull a rank number out of e.g. '所属大类：Sports & Outdoors（排名:23）'."""
+    """Pull a rank number out of 'Kitchen & Dining (Rank: 3662)' or the older
+    '所属大类：Sports & Outdoors（排名:23）'."""
     if not s:
         return None
-    m = re.search(r"排名[:：]?\s*(\d+)", str(s))
+    m = re.search(r"排名[:：]?\s*(\d+)", str(s)) or re.search(r"rank[:：]?\s*(\d+)", str(s), re.I)
     return float(m.group(1)) if m else None
 
 
@@ -56,38 +59,53 @@ def _cat_name(s: Any) -> Optional[str]:
     return name or None
 
 
-def _normalize(detail: Any, variations: Any) -> Dict[str, Any]:
-    if not isinstance(detail, str):
-        return {"_not_found": False, "_unparsed": True}
-    if any(tok in detail for tok in _NOT_FOUND) and "标题" not in detail:
-        return {"_not_found": True}
+def _pick(kv: Dict[str, Any], *keys: str) -> Any:
+    for k in keys:
+        v = kv.get(k)
+        if v not in (None, "", []):
+            return v
+    return None
 
-    kv = _parse_kv(detail)
+
+def _normalize(detail: Any, variations: Any) -> Dict[str, Any]:
+    kv: Dict[str, Any] = dict(record(detail))
+    if not kv:
+        if not isinstance(detail, str):
+            return {"_not_found": False, "_unparsed": True}
+        if any(tok in detail for tok in _NOT_FOUND) and "标题" not in detail:
+            return {"_not_found": True}
+        kv = dict(_parse_kv(detail))   # legacy plain-text form
+        if not kv:
+            return {"_not_found": False, "_unparsed": True}
 
     var_count: Optional[int] = None
-    sub = _num(kv.get("子体数"))
+    sub = _num(_pick(kv, "variation_count", "子体数"))
     if sub is not None:
         var_count = int(sub)
-    elif isinstance(variations, list) and variations:
-        var_count = len(variations)
+    else:
+        var_rows = rows(variations)
+        if var_rows:
+            var_count = len(var_rows)
 
+    top_cat = _pick(kv, "top_category", "所属大类")
+    sub_cat = _pick(kv, "subcategory", "所属细分类目")
     return {
-        "title": kv.get("标题"),
-        "brand": kv.get("品牌"),
-        "image": kv.get("主图"),
-        "price": _num(kv.get("价格")),
+        "title": _pick(kv, "title", "标题"),
+        "brand": _pick(kv, "brand", "品牌"),
+        "image": _pick(kv, "main_image", "主图"),
+        "price": _num(_pick(kv, "price", "价格")),
         # BSR = the main-category (大类) Best Sellers Rank shown on Amazon's page,
         # NOT the much-smaller subcategory rank. Subcategory kept separately.
-        "bsr": _rank(kv.get("所属大类")) or _rank(kv.get("所属细分类目")),
-        "bsr_category": _cat_name(kv.get("所属大类")),
-        "sub_rank": _rank(kv.get("所属细分类目")),
-        "sub_category": _cat_name(kv.get("所属细分类目")),
-        "est_sales": _num(kv.get("月销量")),
-        "rating": _num(kv.get("星级")),
-        "review_count": _num(kv.get("评论数")),
+        "bsr": _rank(top_cat) or _rank(sub_cat),
+        "bsr_category": _cat_name(top_cat),
+        "sub_rank": _rank(sub_cat),
+        "sub_category": _cat_name(sub_cat),
+        "est_sales": _num(_pick(kv, "monthly_sales_volume", "月销量")),
+        "rating": _num(_pick(kv, "star_rating", "星级")),
+        "review_count": _num(_pick(kv, "review_count", "评论数")),
         "variations": var_count,
+        "coupon": _num(_pick(kv, "coupon")),
         # Sorftime product_detail does not expose these — left N/A.
-        "coupon": None,
         "deal": None,
         "inventory": None,
     }
@@ -97,8 +115,8 @@ async def fetch_asin_pulse(asin: str, marketplace: str) -> Dict[str, Any]:
     """Fetch + normalize one ASIN. ``error`` is set (and metric fields None)
     when product_detail failed or the ASIN isn't in Sorftime's library."""
     async with _make_client() as client:
-        detail_task = _safe_call(client, "product_detail", {"asin": asin, "amzSite": marketplace}, 1)
-        var_task = _safe_call(client, "product_variations", {"asin": asin, "amzSite": marketplace}, 2)
+        detail_task = _safe_call(client, "product_detail", {"asin": asin, "amz_site": marketplace}, 1)
+        var_task = _safe_call(client, "product_variations", {"asin": asin, "amz_site": marketplace}, 2)
         (_, detail, detail_err), (_, variations, _var_err) = await asyncio.gather(detail_task, var_task)
 
     empty = {k: None for k in

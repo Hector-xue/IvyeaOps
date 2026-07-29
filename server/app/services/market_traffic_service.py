@@ -10,9 +10,11 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.services import category_service
-from app.services.sorftime_service import _make_client, _safe_call
+from app.services.sorftime_service import _make_client, _safe_call, record
 
-_MONTH_RE = re.compile(r"(\d{4})年(\d{1,2})月")
+# Sorftime writes months either as '2024年05月' (product_trend) or '2024-05'
+# (keyword_trend) depending on the tool — accept both.
+_MONTH_RE = re.compile(r"(\d{4})年(\d{1,2})月|(\d{4})-(\d{1,2})(?!\d)")
 
 
 def _num(v: Any) -> Optional[float]:
@@ -28,12 +30,11 @@ def _num(v: Any) -> Optional[float]:
 
 
 def _parse_search_volume(detail: Any) -> Optional[float]:
-    if not isinstance(detail, dict):
-        return None
-    root = detail.get("data") if isinstance(detail.get("data"), dict) else detail
-    # Live keyword_detail uses Chinese key '月搜索量' (e.g. "1539735").
+    # Live keyword_detail: {"doc": …, "data": {"monthly_search_volume": "362", …}}.
+    root = record(detail)
     return _num(
-        root.get("月搜索量") or root.get("searchVolume") or root.get("search_volume")
+        root.get("monthly_search_volume") or root.get("月搜索量")
+        or root.get("searchVolume") or root.get("search_volume")
         or root.get("searches") or root.get("monthlySearches")
     )
 
@@ -50,7 +51,7 @@ async def fetch_market_metrics(query: str, marketplace: str) -> Dict[str, Any]:
     async with _make_client() as client:
         _, detail, kw_err = await _safe_call(
             client, "keyword_detail",
-            {"keyword": query, "keywordSupportSite": marketplace}, 1,
+            {"keyword": query, "keyword_support_site": marketplace}, 1,
         )
     search_volume = _parse_search_volume(detail)
 
@@ -77,22 +78,26 @@ async def fetch_market_metrics(query: str, marketplace: str) -> Dict[str, Any]:
 # ── Historical backfill (monthly) via trend tools ─────────────────────────────
 
 def _month_day(s: str) -> Optional[str]:
-    """'2024年05月...' -> '2024-05-01'."""
+    """'2024年05月...' / '2024-05 search volume 42' -> '2024-05-01'."""
     m = _MONTH_RE.search(str(s))
-    return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-01" if m else None
+    if not m:
+        return None
+    year, month = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+    return f"{int(year):04d}-{int(month):02d}-01"
 
 
 def parse_keyword_trend(detail: Any) -> List[Tuple[str, float]]:
-    """keyword_trend → [(YYYY-MM-01, search_volume)]. Values look like
-    '2024年05月搜索量144680'."""
+    """keyword_trend → [(YYYY-MM-01, search_volume)]. Entries look like
+    '2024-05 search volume 144680' (older responses: '2024年05月搜索量144680')."""
     out: List[Tuple[str, float]] = []
-    if not isinstance(detail, dict):
-        return out
-    arr = detail.get("搜索量趋势") or detail.get("search_volume_trend")
+    root = record(detail)
+    arr = root.get("search_volume_trend") or root.get("搜索量趋势")
     if isinstance(arr, list):
         for s in arr:
             day = _month_day(s)
-            v = re.search(r"搜索量\s*(\d+)", str(s)) or re.search(r"(\d+)\s*$", str(s))
+            v = (re.search(r"搜索量\s*(\d+)", str(s))
+                 or re.search(r"search volume\s*(\d+)", str(s), re.I)
+                 or re.search(r"(\d+)\s*$", str(s)))
             if day and v:
                 out.append((day, float(v.group(1))))
     return out
@@ -115,12 +120,12 @@ def parse_product_trend(text: Any) -> List[Tuple[str, float]]:
 async def fetch_keyword_trend_series(query: str, marketplace: str) -> Tuple[List[Tuple[str, float]], Optional[str]]:
     async with _make_client() as client:
         _, detail, err = await _safe_call(
-            client, "keyword_trend", {"keyword": query, "keywordSupportSite": marketplace}, 1)
+            client, "keyword_trend", {"keyword": query, "keyword_support_site": marketplace}, 1)
     return parse_keyword_trend(detail), err
 
 
 async def fetch_product_trend_series(asin: str, marketplace: str) -> Tuple[List[Tuple[str, float]], Optional[str]]:
     async with _make_client() as client:
         _, text, err = await _safe_call(
-            client, "product_trend", {"asin": asin, "amzSite": marketplace}, 1)
+            client, "product_trend", {"asin": asin, "amz_site": marketplace}, 1)
     return parse_product_trend(text), err

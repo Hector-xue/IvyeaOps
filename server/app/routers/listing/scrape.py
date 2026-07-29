@@ -352,10 +352,23 @@ async def run_scrape(project_id: str, handle: Optional[JobHandle] = None) -> dic
             async with sorftime_service._make_client() as client:
                 _, raw, err = await sorftime_service._safe_call(
                     client, "product_detail",
-                    {"asin": asin, "amzSite": marketplace}, 1,
+                    {"asin": asin, "amz_site": marketplace}, 1,
                 )
-                if raw and not err and isinstance(raw, str):
-                    # Parse structured text: "标题：xxx\n主图：xxx\n产品描述：xxx"
+                rec = sorftime_service.record(raw) if (raw and not err) else {}
+                if rec:
+                    # {"doc": …, "data": {"title", "main_image", "description"}}
+                    if rec.get("title"):
+                        data["title"] = str(rec["title"]).strip()
+                    if rec.get("main_image"):
+                        data["imageUrls"] = [str(rec["main_image"]).strip()]
+                    desc_text = str(rec.get("description") or "").strip()
+                    if desc_text:
+                        parts = [p.strip() for p in re.split(r'<br>|\n', desc_text) if p.strip()]
+                        if parts:
+                            data["bullets"] = parts[:5]
+                            data["description"] = desc_text
+                elif raw and not err and isinstance(raw, str):
+                    # Legacy plain text: "标题：xxx\n主图：xxx\n产品描述：xxx"
                     title_m = re.search(r'标题[：:]\s*(.+)', raw)
                     if title_m:
                         data["title"] = title_m.group(1).strip()

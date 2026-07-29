@@ -8,16 +8,17 @@ Keyword pipeline  (10 calls, 2 phases):
                                   category_report (top-100 products in category)
 
 ASIN pipeline (8 calls, 2 phases):
-  Phase 1 (concurrent): product_report, product_trend, product_traffic_terms,
+  Phase 1 (concurrent): product_detail, product_trend, product_traffic_terms,
                          product_reviews, product_variations
-  Phase 2 (depends on main keyword from phase 1): keyword_detail, keyword_search_results,
-                                                   competitor_product_keywords
+  Phase 2 (main traffic keyword + own sub-category): keyword_detail,
+                         keyword_search_results, competitor_product_keywords, category_report
 """
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 from typing import Any, Callable, Coroutine, Dict, List, Optional, Tuple
 
@@ -44,6 +45,23 @@ def _url() -> str:
     return f"{_SORFTIME_BASE}?key={key}"
 
 
+_CAMEL_RE = re.compile(r"(?<!^)(?=[A-Z])")
+
+
+def normalize_args(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """Lower-snake-case every argument key.
+
+    Sorftime's MCP schema is snake_case throughout (``amz_site``,
+    ``keyword_support_site``, ``product_name``, ``node_id``, ``start_date`` …).
+    A camelCase key is not rejected — it is silently ignored, so a call missing
+    ``amz_site`` comes back as a *successful* result whose text reads
+    "Please specify the site to query", and required-but-misnamed params make
+    the tool blow up server-side.  Normalising here means no call site can
+    reintroduce the bug.
+    """
+    return {_CAMEL_RE.sub("_", k).lower(): v for k, v in (arguments or {}).items()}
+
+
 async def _call_tool(
     client: httpx.AsyncClient,
     tool_name: str,
@@ -57,7 +75,7 @@ async def _call_tool(
         "jsonrpc": "2.0",
         "id": call_id,
         "method": "tools/call",
-        "params": {"name": tool_name, "arguments": arguments},
+        "params": {"name": tool_name, "arguments": normalize_args(arguments)},
     }
     resp = await client.post(_url(), json=payload, headers=_HEADERS)
     resp.raise_for_status()
@@ -100,8 +118,152 @@ async def _call_tool(
             try:
                 return _json.loads(text)
             except Exception:
+                # Not JSON. Most tools answer with JSON, a few (product_trend)
+                # answer with a plain data line — but Sorftime also reports some
+                # failures as *successful* prose (no isError, HTTP 200). Letting
+                # that prose through is what made the market panel "analyse" an
+                # error message instead of data, so reject it explicitly.
+                if _is_non_data_text(text):
+                    raise RuntimeError(f"sorftime/{tool_name}: {str(text).strip()[:300]}")
                 return text
     return result
+
+
+# Prose Sorftime returns *in a success envelope* when the call cannot produce
+# data: a missing/mistyped site param, an auth problem, or a tool that is really
+# a how-to (product_report just explains which other tools to combine).
+_NON_DATA_MARKERS = (
+    "please specify the site",
+    "parameter description in the method signature",
+    "authentication required",
+    "call the following tools to combine their data",
+)
+
+
+def _is_non_data_text(text: Any) -> bool:
+    low = str(text).strip().lower()
+    return any(marker in low for marker in _NON_DATA_MARKERS)
+
+
+def unwrap(payload: Any) -> Any:
+    """Return the payload's data node.
+
+    Sorftime wraps every JSON answer as ``{"doc": {field: description…},
+    "data": <dict|list>}`` — ``doc`` is a field dictionary for the model, the
+    real content is ``data``. Consumers should read through this helper so they
+    keep working if a tool answers unwrapped.
+    """
+    if isinstance(payload, dict) and "data" in payload and isinstance(payload.get("doc"), dict):
+        return payload["data"]
+    return payload
+
+
+# Row containers seen across the tool set: the data node is either the list
+# itself, or a dict holding one (``top100_products`` for category reports).
+_ROW_KEYS = ("data", "items", "results", "list", "top100_products", "analysis_results")
+
+
+def rows(payload: Any) -> List[Dict[str, Any]]:
+    """List-of-dict rows out of any tool answer, envelope-agnostic."""
+    node = unwrap(payload)
+    if isinstance(node, list):
+        return [r for r in node if isinstance(r, dict)]
+    if isinstance(node, dict):
+        for key in _ROW_KEYS:
+            arr = node.get(key)
+            if isinstance(arr, list):
+                return [r for r in arr if isinstance(r, dict)]
+    return []
+
+
+def record(payload: Any) -> Dict[str, Any]:
+    """Single-record answers (product_detail / keyword_detail) as a flat dict."""
+    node = unwrap(payload)
+    if isinstance(node, dict):
+        return node
+    if isinstance(node, list) and node and isinstance(node[0], dict):
+        return node[0]
+    return {}
+
+
+def compact(payload: Any, limit: int = 30) -> Any:
+    """Cap every row list in a tool answer at ``limit`` rows.
+
+    A full keyword pipeline is ~54KB of JSON (category_report alone carries 100
+    products), so dumping it whole into a prompt hits the size cut and the last
+    sources get chopped mid-JSON. Trimming each source instead keeps all of them
+    represented — the aggregate stats blocks (category_stats_report …) are
+    dicts and survive untouched.
+    """
+    node = unwrap(payload)
+    trimmed: Any = node
+    if isinstance(node, list) and len(node) > limit:
+        trimmed = node[:limit]
+    elif isinstance(node, dict):
+        for key in _ROW_KEYS:
+            arr = node.get(key)
+            if isinstance(arr, list) and len(arr) > limit:
+                if trimmed is node:
+                    trimmed = dict(node)
+                trimmed[key] = arr[:limit]
+    if trimmed is node:
+        return payload
+    if isinstance(payload, dict) and "data" in payload and isinstance(payload.get("doc"), dict):
+        return {**payload, "data": trimmed}
+    return trimmed
+
+
+def compact_all(data: Dict[str, Any], limit: int = 30) -> Dict[str, Any]:
+    """``compact`` across a whole pipeline result (values may be lists of answers)."""
+    out: Dict[str, Any] = {}
+    for name, value in (data or {}).items():
+        if name.endswith("_list") and isinstance(value, list):
+            out[name] = [compact(item, limit) for item in value]
+        else:
+            out[name] = compact(value, limit)
+    return out
+
+
+def summarize_for_prompt(data: Dict[str, Any], budget: int = 45000) -> str:
+    """JSON dump of a pipeline result that fits ``budget`` chars *and* keeps
+    every source in it.
+
+    A full keyword pipeline is ~148KB — dumping it and cutting the tail drops
+    whole sources (the category report and potential products sit last), so the
+    model writes those chapters with nothing to go on. Here each source gets an
+    equal share of the budget and is thinned by rows until it fits, so every
+    tool that answered is represented.
+    """
+    import json as _json
+
+    sources = list((data or {}).items())
+    if not sources:
+        return "{}"
+    share = max(budget // len(sources), 800)
+    parts: List[str] = []
+    for name, value in sources:
+        limit = 30
+        text = _json.dumps(value, ensure_ascii=False, indent=2)
+        while len(text) > share and limit > 1:
+            limit = max(1, limit // 2)
+            trimmed = ([compact(v, limit) for v in value]
+                       if name.endswith("_list") and isinstance(value, list)
+                       else compact(value, limit))
+            text = _json.dumps(trimmed, ensure_ascii=False, indent=2)
+        if len(text) > share:
+            text = text[:share] + "\n…(本项已截断)"
+        parts.append(f'  "{name}": {text}')
+    return "{\n" + ",\n".join(parts) + "\n}"
+
+
+def first_field(payload: Any, *names: str) -> str:
+    """First non-empty value of ``names`` from a record or the first row."""
+    for src in (record(payload), *rows(payload)[:1]):
+        for name in names:
+            val = src.get(name)
+            if val not in (None, "", []):
+                return str(val)
+    return ""
 
 
 async def _safe_call(
@@ -180,17 +342,17 @@ async def keyword_pipeline(
         # ── Phase 1: 6 concurrent calls ──────────────────────────────────────
         phase1_tasks = [
             _safe_call(client, "keyword_detail",
-                       {"keyword": keyword, "keywordSupportSite": marketplace}, 1),
+                       {"keyword": keyword, "keyword_support_site": marketplace}, 1),
             _safe_call(client, "keyword_trend",
-                       {"keyword": keyword, "keywordSupportSite": marketplace}, 2),
+                       {"keyword": keyword, "keyword_support_site": marketplace}, 2),
             _safe_call(client, "keyword_extends",
-                       {"keyword": keyword, "keywordSupportSite": marketplace}, 3),
+                       {"keyword": keyword, "keyword_support_site": marketplace}, 3),
             _safe_call(client, "keyword_search_results",
-                       {"keyword": keyword, "keywordSupportSite": marketplace}, 4),
+                       {"keyword": keyword, "keyword_support_site": marketplace}, 4),
             _safe_call(client, "category_search_from_product_name",
-                       {"productName": keyword, "amzSite": marketplace}, 5),
+                       {"product_name": keyword, "amz_site": marketplace}, 5),
             _safe_call(client, "similar_product_feature",
-                       {"productName": keyword, "amzSite": marketplace}, 6),
+                       {"product_name": keyword, "amz_site": marketplace}, 6),
         ]
         results = await asyncio.gather(*phase1_tasks)
         for name, val, err in results:
@@ -201,56 +363,27 @@ async def keyword_pipeline(
             await progress(name)
 
         # ── Phase 2: depends on phase 1 results ──────────────────────────────
-        top_asins: List[str] = []
-        search_res = data.get("keyword_search_results")
-        if isinstance(search_res, dict):
-            items = search_res.get("data", search_res.get("items", search_res.get("results", [])))
-            if isinstance(items, list):
-                for item in items[:2]:
-                    if isinstance(item, dict):
-                        asin = item.get("asin") or item.get("ASIN", "")
-                        if asin:
-                            top_asins.append(str(asin))
-
-        # Extract category nodeId from category_search_from_product_name
-        node_id = ""
-        cat_res = data.get("category_search_from_product_name")
-        if isinstance(cat_res, dict):
-            node_id = str(
-                cat_res.get("nodeid") or cat_res.get("nodeId") or cat_res.get("node_id") or ""
-            )
-            if not node_id:
-                for key in ("data", "items", "categories", "results"):
-                    items_inner = cat_res.get(key)
-                    if isinstance(items_inner, list) and items_inner:
-                        first = items_inner[0]
-                        if isinstance(first, dict):
-                            node_id = str(
-                                first.get("nodeid") or first.get("nodeId") or first.get("node_id") or ""
-                            )
-                        break
-        elif isinstance(cat_res, list) and cat_res:
-            first = cat_res[0]
-            if isinstance(first, dict):
-                node_id = str(
-                    first.get("nodeid") or first.get("nodeId") or first.get("node_id") or ""
-                )
+        top_asins = [
+            str(row["asin"]) for row in rows(data.get("keyword_search_results"))[:2]
+            if row.get("asin")
+        ]
+        node_id = first_field(data.get("category_search_from_product_name"), "node_id")
 
         phase2_tasks = []
         if top_asins:
             for i, asin in enumerate(top_asins[:2]):
                 phase2_tasks.append(
                     _safe_call(client, "product_detail",
-                               {"asin": asin, "amzSite": marketplace}, 10 + i)
+                               {"asin": asin, "amz_site": marketplace}, 10 + i)
                 )
         phase2_tasks.append(
             _safe_call(client, "potential_product",
-                       {"searchName": keyword, "amzSite": marketplace}, 12)
+                       {"search_name": keyword, "amz_site": marketplace}, 12)
         )
         if node_id:
             phase2_tasks.append(
                 _safe_call(client, "category_report",
-                           {"nodeId": node_id, "amzSite": marketplace}, 13)
+                           {"node_id": node_id, "amz_site": marketplace}, 13)
             )
         else:
             # No nodeId found — skip category_report and pad progress counter
@@ -278,7 +411,7 @@ async def asin_pipeline(
     on_progress: Optional[ProgressCb] = None,
 ) -> Tuple[Dict[str, Any], List[str]]:
     """Run full ASIN research pipeline. Returns (data_dict, error_list)."""
-    total = 8
+    total = 9
     done = 0
     errors: List[str] = []
     data: Dict[str, Any] = {}
@@ -291,17 +424,21 @@ async def asin_pipeline(
 
     async with _make_client() as client:
         # ── Phase 1: 5 concurrent calls ──────────────────────────────────────
+        # product_detail (not product_report): product_report is a how-to tool —
+        # for every ASIN it answers with "call the following tools to combine
+        # their data", never with data. product_detail carries the core metrics
+        # (price / sales / rating / node_id / gross margin) it points at.
         phase1_tasks = [
-            _safe_call(client, "product_report",
-                       {"asin": asin, "amzSite": marketplace}, 1),
+            _safe_call(client, "product_detail",
+                       {"asin": asin, "amz_site": marketplace}, 1),
             _safe_call(client, "product_trend",
-                       {"asin": asin, "amzSite": marketplace}, 2),
+                       {"asin": asin, "amz_site": marketplace}, 2),
             _safe_call(client, "product_traffic_terms",
-                       {"asin": asin, "amzSite": marketplace}, 3),
+                       {"asin": asin, "amz_site": marketplace}, 3),
             _safe_call(client, "product_reviews",
-                       {"asin": asin, "amzSite": marketplace}, 4),
+                       {"asin": asin, "amz_site": marketplace}, 4),
             _safe_call(client, "product_variations",
-                       {"asin": asin, "amzSite": marketplace}, 5),
+                       {"asin": asin, "amz_site": marketplace}, 5),
         ]
         results = await asyncio.gather(*phase1_tasks)
         for name, val, err in results:
@@ -312,35 +449,36 @@ async def asin_pipeline(
             await progress(name)
 
         # ── Phase 2: use main traffic keyword for market context ──────────────
-        main_kw = ""
-        traffic = data.get("product_traffic_terms")
-        if isinstance(traffic, dict):
-            terms = traffic.get("data", traffic.get("terms", traffic.get("results", [])))
-            if isinstance(terms, list) and terms:
-                first = terms[0]
-                if isinstance(first, dict):
-                    main_kw = str(first.get("keyword") or first.get("term") or first.get("search_term") or "")
-                elif isinstance(first, str):
-                    main_kw = first
+        main_kw = first_field(data.get("product_traffic_terms"), "keyword", "term", "search_term")
+        # The product's own sub-category top-100 — the market it competes in.
+        node_id = first_field(data.get("product_detail"), "node_id")
 
         phase2_tasks = []
         if main_kw:
             phase2_tasks = [
                 _safe_call(client, "keyword_detail",
-                           {"keyword": main_kw, "keywordSupportSite": marketplace}, 10),
+                           {"keyword": main_kw, "keyword_support_site": marketplace}, 10),
                 _safe_call(client, "keyword_search_results",
-                           {"keyword": main_kw, "keywordSupportSite": marketplace}, 11),
+                           {"keyword": main_kw, "keyword_support_site": marketplace}, 11),
                 _safe_call(client, "competitor_product_keywords",
-                           {"asin": asin, "keywordSupportSite": marketplace}, 12),
+                           {"asin": asin, "keyword_support_site": marketplace}, 12),
             ]
         else:
             phase2_tasks = [
                 _safe_call(client, "competitor_product_keywords",
-                           {"asin": asin, "keywordSupportSite": marketplace}, 12),
+                           {"asin": asin, "keyword_support_site": marketplace}, 12),
             ]
             # Pad progress for skipped calls
             for _ in range(2):
                 await progress("(skipped)")
+
+        if node_id:
+            phase2_tasks.append(
+                _safe_call(client, "category_report",
+                           {"node_id": node_id, "amz_site": marketplace}, 13)
+            )
+        else:
+            await progress("(category_report_skipped)")
 
         results2 = await asyncio.gather(*phase2_tasks)
         for name, val, err in results2:

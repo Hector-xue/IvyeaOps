@@ -14,18 +14,14 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.services.sorftime_service import _make_client, _safe_call
+from app.services.sorftime_service import _make_client, _safe_call, record, rows, unwrap
 
 _ASIN_RE = re.compile(r"^[A-Z0-9]{10}$")
 
 
 def _root(d: Any) -> Dict[str, Any]:
-    if isinstance(d, dict):
-        inner = d.get("data")
-        if isinstance(inner, dict):
-            return inner
-        return d
-    return {}
+    inner = unwrap(d)
+    return inner if isinstance(inner, dict) else (d if isinstance(d, dict) else {})
 
 
 def _pick(d: Dict[str, Any], *keys: str) -> Any:
@@ -48,53 +44,45 @@ def _num(v: Any) -> Optional[float]:
 
 
 def _rank_in(s: Any) -> Optional[float]:
+    """Rank out of a category_rank string: 'Category: Food Bags, Rank: 1' /
+    '类目：X，排名:1'."""
     if not s:
         return None
-    m = re.search(r"排名[:：]?\s*(\d+)", str(s))
+    m = re.search(r"排名[:：]?\s*(\d+)", str(s)) or re.search(r"rank[:：]?\s*(\d+)", str(s), re.I)
     return float(m.group(1)) if m else None
 
 
 def _extract_nodeid(cat_res: Any) -> str:
     def from_dict(d: Dict[str, Any]) -> str:
         return str(d.get("nodeid") or d.get("nodeId") or d.get("node_id") or "")
-    if isinstance(cat_res, dict):
-        nid = from_dict(cat_res)
-        if nid:
-            return nid
-        for key in ("data", "items", "categories", "results"):
-            arr = cat_res.get(key)
-            if isinstance(arr, list) and arr and isinstance(arr[0], dict):
-                return from_dict(arr[0])
-    elif isinstance(cat_res, list) and cat_res and isinstance(cat_res[0], dict):
-        return from_dict(cat_res[0])
+    nid = from_dict(record(cat_res))
+    if nid:
+        return nid
+    for row in rows(cat_res)[:1]:
+        return from_dict(row)
     return ""
 
 
 def _cat_name_of(cat_res: Any) -> Optional[str]:
-    if isinstance(cat_res, list) and cat_res and isinstance(cat_res[0], dict):
-        return cat_res[0].get("类目名称")
-    if isinstance(cat_res, dict):
-        return cat_res.get("类目名称")
+    for src in (record(cat_res), *rows(cat_res)[:1]):
+        name = _pick(src, "category_name", "类目名称")
+        if name:
+            return str(name)
     return None
 
 
 def _extract_list(report: Any) -> List[Dict[str, Any]]:
-    r = _root(report)
-    for key in ("Top100产品", "top100", "data", "items", "products", "list", "results", "top", "rows"):
-        arr = r.get(key) if isinstance(r, dict) else None
-        if isinstance(arr, list) and arr:
-            return [x for x in arr if isinstance(x, dict)]
-    if isinstance(report, list):
-        return [x for x in report if isinstance(x, dict)]
-    return []
+    return rows(report)
 
 
 def _cat_name_from_products(raw: List[Dict[str, Any]]) -> Optional[str]:
-    """Pull category name from a product's '所处类目排名: 类目：X，排名:1'."""
+    """Pull category name from a product's category_rank
+    ('Category: Disposable Food Storage Bags, Rank: 1' / '类目：X，排名:1')."""
     for p in raw:
-        s = p.get("所处类目排名")
+        s = _pick(p, "category_rank", "所处类目排名")
         if s:
-            m = re.search(r"类目[:：]\s*([^，,]+)", str(s))
+            m = (re.search(r"类目[:：]\s*([^，,]+)", str(s))
+                 or re.search(r"category[:：]\s*([^，,]+)", str(s), re.I))
             if m:
                 return m.group(1).strip()
     return None
@@ -107,10 +95,13 @@ def _normalize_product(p: Dict[str, Any], rank: int) -> Dict[str, Any]:
         "title": _pick(p, "标题", "title", "productName", "name"),
         "brand": _pick(p, "品牌", "brand", "brandName"),
         "price": _num(_pick(p, "价格", "price", "currentPrice")),
-        "bsr": _rank_in(_pick(p, "所处类目排名")) or _num(_pick(p, "bsr", "rank", "salesRank")),
-        "est_sales": _num(_pick(p, "月销量", "monthlySales", "sales", "estimatedSales")),
-        "rating": _num(_pick(p, "星级", "rating", "star", "score")),
-        "review_count": _num(_pick(p, "评论数", "reviewCount", "reviews", "ratingsTotal")),
+        "bsr": (_rank_in(_pick(p, "category_rank", "所处类目排名"))
+                or _num(_pick(p, "bsr", "rank", "salesRank"))),
+        "est_sales": _num(_pick(p, "月销量", "monthly_sales_volume", "monthlySales",
+                                "sales", "estimatedSales")),
+        "rating": _num(_pick(p, "星级", "star_rating", "rating", "star", "score")),
+        "review_count": _num(_pick(p, "评论数", "review_count", "reviewCount",
+                                   "reviews", "ratingsTotal")),
     }
 
 
@@ -144,22 +135,24 @@ async def _resolve_node(client, query: str, marketplace: str) -> Tuple[str, Opti
         return q, None, "nodeId", None
 
     if _ASIN_RE.match(q.upper()) and any(ch.isalpha() for ch in q):
-        _, detail, err = await _safe_call(client, "product_detail", {"asin": q.upper(), "amzSite": marketplace}, 1)
-        if isinstance(detail, str) and "未查询到" not in detail:
-            kv: Dict[str, str] = {}
+        _, detail, err = await _safe_call(client, "product_detail", {"asin": q.upper(), "amz_site": marketplace}, 1)
+        kv = record(detail)
+        if not kv and isinstance(detail, str) and "未查询到" not in detail:
+            # Legacy plain-text product_detail ("标题：…\n所属nodeid：…").
             for line in detail.splitlines():
                 if "：" in line:
                     k, v = line.split("：", 1)
                     kv.setdefault(k.strip(), v.strip())
-            nid = kv.get("所属nodeid") or ""
-            sub = kv.get("所属细分类目") or kv.get("所属大类") or ""
-            name = (re.split(r"[（(]", sub)[0].strip() or None) if sub else None
-            if nid:
-                return nid, name, "asin", None
-        return "", None, "asin", "未查询到该 ASIN（无法反查类目）"
+        nid = str(_pick(kv, "node_id", "所属nodeid") or "")
+        sub = str(_pick(kv, "subcategory", "top_category", "category",
+                        "所属细分类目", "所属大类") or "")
+        name = (re.split(r"[（(]", sub)[0].strip() or None) if sub else None
+        if nid:
+            return nid, name, "asin", None
+        return "", None, "asin", (err or "未查询到该 ASIN（无法反查类目）")
 
     _, cat_res, err = await _safe_call(
-        client, "category_search_from_product_name", {"productName": q, "amzSite": marketplace}, 1)
+        client, "category_search_from_product_name", {"product_name": q, "amz_site": marketplace}, 1)
     nid = _extract_nodeid(cat_res)
     name = _cat_name_of(cat_res)
     if not nid:
@@ -178,7 +171,7 @@ async def fetch_category(query: str, marketplace: str, mode: str = "category", t
     async with _make_client() as client:
         if mode == "keyword":
             _, res, err = await _safe_call(
-                client, "keyword_search_results", {"keyword": query, "keywordSupportSite": marketplace}, 1)
+                client, "keyword_search_results", {"keyword": query, "keyword_support_site": marketplace}, 1)
             raw = res if isinstance(res, list) else _extract_list(res)
             products = [_normalize_product(p, i + 1) for i, p in enumerate(raw)]
             if not products:
@@ -198,7 +191,7 @@ async def fetch_category(query: str, marketplace: str, mode: str = "category", t
         node_id, cat_name, source, rerr = await _resolve_node(client, query, marketplace)
         if not node_id:
             return _empty(query, marketplace, "category", rerr, category_name=cat_name, source=source)
-        _, report, report_err = await _safe_call(client, "category_report", {"nodeId": node_id, "amzSite": marketplace}, 2)
+        _, report, report_err = await _safe_call(client, "category_report", {"node_id": node_id, "amz_site": marketplace}, 2)
 
     if report_err:
         return _empty(query, marketplace, "category", report_err, node_id=node_id, category_name=cat_name, source=source)

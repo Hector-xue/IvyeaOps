@@ -25,13 +25,13 @@ async def keyword_competition(
     async with sorftime_service._make_client() as client:
         tasks = [
             sorftime_service._safe_call(client, "keyword_detail",
-                {"keyword": keyword, "keywordSupportSite": country}, 1),
+                {"keyword": keyword, "keyword_support_site": country}, 1),
             sorftime_service._safe_call(client, "keyword_trend",
-                {"keyword": keyword, "keywordSupportSite": country}, 2),
+                {"keyword": keyword, "keyword_support_site": country}, 2),
             sorftime_service._safe_call(client, "keyword_extends",
-                {"keyword": keyword, "keywordSupportSite": country}, 3),
+                {"keyword": keyword, "keyword_support_site": country}, 3),
             sorftime_service._safe_call(client, "keyword_search_results",
-                {"keyword": keyword, "keywordSupportSite": country}, 4),
+                {"keyword": keyword, "keyword_support_site": country}, 4),
         ]
         results = await asyncio.gather(*tasks)
 
@@ -67,11 +67,11 @@ async def competitor_keyword_signals(
     async with sorftime_service._make_client() as client:
         tasks = [
             sorftime_service._safe_call(client, "product_traffic_terms",
-                {"asin": asin, "amzSite": country}, 1),
+                {"asin": asin, "amz_site": country}, 1),
             sorftime_service._safe_call(client, "competitor_product_keywords",
-                {"asin": asin, "keywordSupportSite": country}, 2),
+                {"asin": asin, "keyword_support_site": country}, 2),
             sorftime_service._safe_call(client, "product_detail",
-                {"asin": asin, "amzSite": country}, 3),
+                {"asin": asin, "amz_site": country}, 3),
         ]
         results = await asyncio.gather(*tasks)
 
@@ -104,11 +104,12 @@ async def traffic_anomaly(
     async with sorftime_service._make_client() as client:
         tasks = [
             sorftime_service._safe_call(client, "product_traffic_terms",
-                {"asin": asin, "amzSite": country}, 1),
+                {"asin": asin, "amz_site": country}, 1),
             sorftime_service._safe_call(client, "product_trend",
-                {"asin": asin, "amzSite": country}, 2),
-            sorftime_service._safe_call(client, "product_report",
-                {"asin": asin, "amzSite": country}, 3),
+                {"asin": asin, "amz_site": country}, 2),
+            # product_detail: product_report is a how-to tool, never data.
+            sorftime_service._safe_call(client, "product_detail",
+                {"asin": asin, "amz_site": country}, 3),
         ]
         results = await asyncio.gather(*tasks)
 
@@ -128,6 +129,6 @@ async def traffic_anomaly(
         "country": country,
         "traffic_terms": data.get("product_traffic_terms"),
         "trend": data.get("product_trend"),
-        "report": data.get("product_report"),
+        "report": data.get("product_detail"),
         "errors": errors,
     }

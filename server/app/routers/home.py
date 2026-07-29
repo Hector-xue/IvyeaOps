@@ -840,13 +840,23 @@ class BackfillReq(BaseModel):
     data_source: str = "sorftime"
 
 
+def _hist_products(report: Any) -> List[dict]:
+    """Top-100 rows of a category_report_from_history answer."""
+    from app.services.sorftime_service import record
+    root = record(report)
+    lst = root.get("top100_products") or root.get("Top100产品") or []
+    return [p for p in lst if isinstance(p, dict)]
+
+
 def _hist_day_metrics(report: Any) -> tuple:
     """From a single-day category_report_from_history → (total_sales, avg_price)."""
-    root = report if isinstance(report, dict) else {}
-    rep = root.get("类目统计报告") or {}
-    total = _kx_num(rep.get("top100产品月销量")) if isinstance(rep, dict) else None
-    lst = root.get("Top100产品") or []
-    prices = [_kx_num(p.get("价格")) for p in lst if isinstance(p, dict)]
+    from app.services.sorftime_service import record
+    root = record(report)
+    rep = root.get("category_stats_report") or root.get("类目统计报告") or {}
+    total = _kx_num(
+        _kx_pick(rep, "top100_monthly_sales_volume", "top100产品月销量")
+    ) if isinstance(rep, dict) else None
+    prices = [_kx_num(_kx_pick(p, "price", "价格")) for p in _hist_products(report)]
     prices = [x for x in prices if x]
     avg = round(sum(prices) / len(prices), 2) if prices else None
     return total, avg
@@ -904,7 +914,7 @@ async def market_daily_backfill(req: DailyBackfillReq, _user: str = Depends(requ
         for i in range(days):
             d = (today - timedelta(days=i)).isoformat()
             _, rep, e = await _safe_call(client, "category_report_from_history",
-                                         {"nodeId": node, "startDate": d, "endDate": d, "amzSite": req.marketplace}, 1)
+                                         {"node_id": node, "start_date": d, "end_date": d, "amz_site": req.marketplace}, 1)
             if e or not isinstance(rep, dict):
                 continue
             total, avg = _hist_day_metrics(rep)
@@ -924,12 +934,10 @@ async def market_daily_backfill(req: DailyBackfillReq, _user: str = Depends(requ
                     filled += 1
                 # Per-ASIN daily sales for any watched ASIN present in the Top100.
                 if watched:
-                    for p in (rep.get("Top100产品") or []):
-                        if not isinstance(p, dict):
-                            continue
+                    for p in _hist_products(rep):
                         a = p.get("ASIN") or p.get("asin")
                         if a in watched:
-                            es = _kx_num(p.get("月销量"))
+                            es = _kx_num(_kx_pick(p, "monthly_sales_volume", "月销量"))
                             if es is not None:
                                 conn.execute(
                                     "DELETE FROM home_snapshot WHERE asin=? AND marketplace=? AND data_source=? "
@@ -1039,9 +1047,9 @@ async def keyword_pulse(req: KeywordPulseReq, _user: str = Depends(require_user)
         from app.services.sorftime_service import _make_client, _safe_call
         async with _make_client() as client:
             detail_task = _safe_call(client, "keyword_detail",
-                                     {"keyword": kw, "keywordSupportSite": req.marketplace}, 1)
+                                     {"keyword": kw, "keyword_support_site": req.marketplace}, 1)
             trend_task = _safe_call(client, "keyword_trend",
-                                    {"keyword": kw, "keywordSupportSite": req.marketplace}, 2)
+                                    {"keyword": kw, "keyword_support_site": req.marketplace}, 2)
             (_, detail, detail_err), (_, trend, trend_err) = await asyncio.gather(detail_task, trend_task)
         result = {
             "keyword": kw, "marketplace": req.marketplace, "data_source": source,
@@ -1116,23 +1124,23 @@ async def keyword_extends(req: KeywordPulseReq, _user: str = Depends(require_use
     if source == "sellersprite":
         items, err = await sellersprite_service.home_keyword_extends(kw, req.marketplace)
     else:
-        from app.services.sorftime_service import _make_client, _safe_call
+        from app.services.sorftime_service import _make_client, _safe_call, rows
         async with _make_client() as client:
             _, res, err = await _safe_call(client, "keyword_extends",
-                                           {"keyword": kw, "keywordSupportSite": req.marketplace}, 1)
+                                           {"keyword": kw, "keyword_support_site": req.marketplace}, 1)
         items = []
-        if not err and isinstance(res, list):
-            for x in res:
-                if not isinstance(x, dict):
-                    continue
+        if not err:
+            for x in rows(res):
                 k = _kx_pick(x, "关键词", "keyword")
                 if not k or str(k).strip().lower() == kw.lower():
                     continue
                 items.append({
                     "keyword": k,
-                    "monthly_search": _kx_num(_kx_pick(x, "月搜索量", "monthlySearches")),
-                    "cpc": _kx_num(_kx_pick(x, "cpc推荐竞价", "推荐cpc竞价", "cpc")),
-                    "seasonality": _kx_pick(x, "季节性"),
+                    "monthly_search": _kx_num(_kx_pick(x, "月搜索量", "monthly_search_volume",
+                                                       "monthlySearches")),
+                    "cpc": _kx_num(_kx_pick(x, "cpc推荐竞价", "推荐cpc竞价",
+                                            "recommended_cpc_bid", "cpc")),
+                    "seasonality": _kx_pick(x, "季节性", "seasonality"),
                     "evidence_sales": None,
                 })
     if err or not items:
@@ -1208,18 +1216,19 @@ async def keyword_extends_sales(req: KeywordPulseReq, _user: str = Depends(requi
             if evidence is not None:
                 it["evidence_sales"] = round(evidence)
     else:
-        from app.services.sorftime_service import _make_client, _safe_call
+        from app.services.sorftime_service import _make_client, _safe_call, rows
         async with _make_client() as client:
             for it in targets:
                 try:
                     _, sr, err = await _safe_call(
                         client, "keyword_search_results",
-                        {"keyword": it["keyword"], "keywordSupportSite": req.marketplace}, 1,
+                        {"keyword": it["keyword"], "keyword_support_site": req.marketplace}, 1,
                     )
-                    if isinstance(sr, list):
+                    if not err:
                         sales = sorted(
                             [s for s in (
-                                _kx_num(p.get("本产品月销量")) for p in sr if isinstance(p, dict)
+                                _kx_num(_kx_pick(p, "本产品月销量", "monthly_sales_volume"))
+                                for p in rows(sr)
                             ) if s],
                             reverse=True,
                         )[:10]

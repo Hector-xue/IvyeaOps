@@ -210,9 +210,11 @@ async def _fetch_competitor_data(asins: list[str], marketplace: str) -> dict:
         async with _make_client() as client:
             tasks = []
             for i, asin in enumerate(asins[:5]):
-                tasks.append(_safe_call(client, "product_report", {"asin": asin, "amzSite": marketplace}, i + 1))
+                # product_detail, not product_report — the latter only ever answers
+                # with "call the following tools to combine their data".
+                tasks.append(_safe_call(client, "product_detail", {"asin": asin, "amz_site": marketplace}, i + 1))
                 tasks.append(_safe_call(client, "competitor_product_keywords",
-                                        {"asin": asin, "keywordSupportSite": marketplace}, i + 10))
+                                        {"asin": asin, "keyword_support_site": marketplace}, i + 10))
             gathered = await asyncio.gather(*tasks)
             for name, val, err in gathered:
                 if err:
