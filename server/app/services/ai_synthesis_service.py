@@ -1126,6 +1126,11 @@ async def _stream_ivyea_agent(
         # agent session history that the dock and workbench chat now both read.
         "persist": False,
         "inject_retrieval": inject_retrieval,
+        # We consume the token stream and ignore the agent's `final` event, so a
+        # superseded draft can never be taken back. The citation gate makes the
+        # model rewrite the whole answer with [K#] markers — without this we
+        # streamed both copies and the panel showed the report twice.
+        "defer_citation_text": True,
         "system": (
             "你正在作为 IvyeaOps 的内置文本生成引擎。"
             "直接基于输入数据生成最终成品，不要输出查数据/找工具一类的过程叙述。"

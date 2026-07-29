@@ -43,27 +43,38 @@ function deriveCompetition(products: number | null, searches: number | null): nu
 
 function parseDetail(d: Record<string, any> | null) {
   if (!d) return null;
+  // Live Sorftime wraps answers as { doc: {…field docs}, data: {…} }; keys are
+  // English snake_case (monthly_search_volume …). Older Chinese keys kept as
+  // fallbacks so a cached/legacy payload still renders.
   const root = d.data ?? d;
-  // Live Sorftime keyword_detail uses Chinese keys (月搜索量 / 推荐cpc竞价 …);
-  // English fallbacks kept for safety.
-  const searchVolume = num(root["月搜索量"] ?? root.searchVolume ?? root.search_volume ?? root.searches ?? null);
+  const searchVolume = num(
+    root.monthly_search_volume ?? root["月搜索量"] ?? root.searchVolume
+    ?? root.search_volume ?? root.searches ?? null,
+  );
   // SellerSprite ships a derived competitionIndex; Sorftime has no such field,
-  // but exposes 搜索结果竞品数量 — derive the same index client-side so the
-  // opportunity matrix / insight panels work on both providers.
+  // but exposes the competing-product count — derive the same index client-side
+  // so the opportunity matrix / insight panels work on both providers.
   const competition = num(root.competitionIndex ?? root.competition_index ?? root.competition ?? null)
-    ?? deriveCompetition(num(root["搜索结果竞品数量"] ?? root.products ?? null), searchVolume);
+    ?? deriveCompetition(
+      num(root.search_result_competitor_count ?? root["搜索结果竞品数量"] ?? root.products ?? null),
+      searchVolume,
+    );
   return {
     searchVolume,
     competition,
-    cpc:          num(root["推荐cpc竞价"] ?? root.averageCpc ?? root.average_cpc ?? root.cpc ?? null),
+    cpc:          num(root.recommended_cpc_bid ?? root["推荐cpc竞价"] ?? root.averageCpc
+                      ?? root.average_cpc ?? root.cpc ?? null),
     purchaseRate: num(root.purchaseRate ?? root.purchase_rate ?? root.buyRate ?? null),
   };
 }
 
 function parseTrend(t: Record<string, any> | null): number[] {
   if (!t) return [];
-  // Live keyword_trend → { 搜索量趋势: ["2024年05月搜索量144680", ...] }.
-  const arr: any[] = t["搜索量趋势"] ?? t.data ?? t.trend ?? t.results ?? t.items ?? (Array.isArray(t) ? t : []);
+  // Live keyword_trend → { data: { search_volume_trend: ["2024-05 search volume 144680", …] } }
+  // (older shape: { 搜索量趋势: ["2024年05月搜索量144680", …] }).
+  const root = t.data ?? t;
+  const arr: any[] = root.search_volume_trend ?? root["搜索量趋势"] ?? root.trend
+    ?? root.results ?? root.items ?? (Array.isArray(root) ? root : []);
   return arr
     .map((item: any) => {
       if (typeof item === "string") {
