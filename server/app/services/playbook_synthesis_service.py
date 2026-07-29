@@ -38,25 +38,25 @@ _COLLECT_KEYWORD = """## 第一阶段：数据采集（必须全部完成，不�
 
 你的工具列表中有 `mcp_sorftime_*` 系列工具，请**严格按顺序**依次调用：
 
-**步骤 1** — `mcp_sorftime_keyword_detail`  参数 keyword="__QUERY__", keywordSupportSite="__MKT__"
+**步骤 1** — `mcp_sorftime_keyword_detail`  参数 keyword="__QUERY__", keyword_support_site="__MKT__"
   目的：月搜索量、CPC、转化率等核心指标（用于广告竞价与流量判断）
-**步骤 2** — `mcp_sorftime_keyword_trend`  参数 keyword="__QUERY__", keywordSupportSite="__MKT__"
+**步骤 2** — `mcp_sorftime_keyword_trend`  参数 keyword="__QUERY__", keyword_support_site="__MKT__"
   目的：12个月搜索趋势（用于上架时机与备货节奏）
-**步骤 3** — `mcp_sorftime_keyword_extends`  参数 keyword="__QUERY__", keywordSupportSite="__MKT__"
+**步骤 3** — `mcp_sorftime_keyword_extends`  参数 keyword="__QUERY__", keyword_support_site="__MKT__"
   目的：长尾词扩展（用于自然流量关键词布局与广告分组）
-**步骤 4** — `mcp_sorftime_keyword_search_results`  参数 keyword="__QUERY__", keywordSupportSite="__MKT__"
+**步骤 4** — `mcp_sorftime_keyword_search_results`  参数 keyword="__QUERY__", keyword_support_site="__MKT__"
   目的：首页竞品格局；**记录返回结果中前2个产品的 asin 字段，步骤9、10要用**
-**步骤 5** — `mcp_sorftime_category_search_from_product_name`  参数 productName="__QUERY__", amzSite="__MKT__"
-  目的：品类节点；**记录返回的 nodeid 字段，步骤6要用**
-**步骤 6** — `mcp_sorftime_category_report`  参数 nodeId=<步骤5的nodeid>, amzSite="__MKT__"
+**步骤 5** — `mcp_sorftime_category_search_from_product_name`  参数 product_name="__QUERY__", amz_site="__MKT__"
+  目的：品类节点；**记录返回的 node_id 字段，步骤6要用**
+**步骤 6** — `mcp_sorftime_category_report`  参数 node_id=<步骤5的node_id>, amz_site="__MKT__"
   目的：该品类 TOP100 产品（价格带分布、销量分布、评论门槛、垄断度）
-**步骤 7** — `mcp_sorftime_similar_product_feature`  参数 productName="__QUERY__", amzSite="__MKT__"
+**步骤 7** — `mcp_sorftime_similar_product_feature`  参数 product_name="__QUERY__", amz_site="__MKT__"
   目的：同类产品共性特征与差异点（用于差异化卖点）
-**步骤 8** — `mcp_sorftime_potential_product`  参数 searchName="__QUERY__", amzSite="__MKT__"
+**步骤 8** — `mcp_sorftime_potential_product`  参数 search_name="__QUERY__", amz_site="__MKT__"
   目的：潜力产品列表
-**步骤 9** — `mcp_sorftime_product_detail`  参数 asin=<步骤4第1个ASIN>, amzSite="__MKT__"
+**步骤 9** — `mcp_sorftime_product_detail`  参数 asin=<步骤4第1个ASIN>, amz_site="__MKT__"
   目的：首页第一名竞品详情（价格/评分/评论数/卖点）
-**步骤 10** — `mcp_sorftime_product_detail`  参数 asin=<步骤4第2个ASIN>, amzSite="__MKT__"
+**步骤 10** — `mcp_sorftime_product_detail`  参数 asin=<步骤4第2个ASIN>, amz_site="__MKT__"
   目的：首页第二名竞品详情
 """
 
@@ -66,21 +66,21 @@ _COLLECT_ASIN = """## 第一阶段：数据采集（必须全部完成，不得�
 
 你的工具列表中有 `mcp_sorftime_*` 系列工具，请**严格按顺序**依次调用：
 
-**步骤 1** — `mcp_sorftime_product_report`  参数 asin="__QUERY__", amzSite="__MKT__"
+**步骤 1** — `mcp_sorftime_product_detail`  参数 asin="__QUERY__", amz_site="__MKT__"
   目的：对标竞品画像、月销量、价格、评分、BSR
-**步骤 2** — `mcp_sorftime_product_trend`  参数 asin="__QUERY__", amzSite="__MKT__"
+**步骤 2** — `mcp_sorftime_product_trend`  参数 asin="__QUERY__", amz_site="__MKT__"
   目的：最近12个月销量与价格趋势
-**步骤 3** — `mcp_sorftime_product_traffic_terms`  参数 asin="__QUERY__", amzSite="__MKT__"
+**步骤 3** — `mcp_sorftime_product_traffic_terms`  参数 asin="__QUERY__", amz_site="__MKT__"
   目的：该竞品主要流量词；**记录搜索量最大的关键词，步骤6、7要用**
-**步骤 4** — `mcp_sorftime_product_reviews`  参数 asin="__QUERY__", amzSite="__MKT__"
+**步骤 4** — `mcp_sorftime_product_reviews`  参数 asin="__QUERY__", amz_site="__MKT__"
   目的：好评/差评分布与高频痛点（用于差异化与补评策略）
-**步骤 5** — `mcp_sorftime_product_variations`  参数 asin="__QUERY__", amzSite="__MKT__"
+**步骤 5** — `mcp_sorftime_product_variations`  参数 asin="__QUERY__", amz_site="__MKT__"
   目的：变体结构与各变体销量占比
-**步骤 6** — `mcp_sorftime_keyword_detail`  参数 keyword=<步骤3最大流量词>, keywordSupportSite="__MKT__"
+**步骤 6** — `mcp_sorftime_keyword_detail`  参数 keyword=<步骤3最大流量词>, keyword_support_site="__MKT__"
   目的：主流量词月搜索量、CPC、竞争强度
-**步骤 7** — `mcp_sorftime_keyword_search_results`  参数 keyword=<步骤3最大流量词>, keywordSupportSite="__MKT__"
+**步骤 7** — `mcp_sorftime_keyword_search_results`  参数 keyword=<步骤3最大流量词>, keyword_support_site="__MKT__"
   目的：主流量词首页竞品格局与价格带
-**步骤 8** — `mcp_sorftime_competitor_product_keywords`  参数 asin="__QUERY__", keywordSupportSite="__MKT__"
+**步骤 8** — `mcp_sorftime_competitor_product_keywords`  参数 asin="__QUERY__", keyword_support_site="__MKT__"
   目的：竞品词机会（自然/广告布词盲区）
 """
 
@@ -268,9 +268,9 @@ def _fallback_prompt(
     mode: str, query: str, marketplace: str, price: str, cost: str, data: Dict[str, Any],
     source: str = "Sorftime",
 ) -> str:
-    data_summary = json.dumps(data, ensure_ascii=False, indent=2)
-    if len(data_summary) > 40000:
-        data_summary = data_summary[:40000] + "\n...(数据已截断)"
+    from app.services.sorftime_service import summarize_for_prompt
+    # Per-source budget — see ai_synthesis_service._build_prompt.
+    data_summary = summarize_for_prompt(data)
     head = (
         "你是亚马逊跨境电商运营操盘专家，只用纯白帽、站内合规手段把新品推起来。"
         f"请根据下方 {source} 原始数据，生成完整的白帽站内打法手册。\n\n"

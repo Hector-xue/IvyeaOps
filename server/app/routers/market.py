@@ -442,11 +442,11 @@ async def market_pulse(req: PulseReq, _user: str = Depends(require_user)) -> dic
     async with _make_client() as client:
         detail_task = _safe_call(
             client, "keyword_detail",
-            {"keyword": req.keyword, "keywordSupportSite": req.marketplace}, 1,
+            {"keyword": req.keyword, "keyword_support_site": req.marketplace}, 1,
         )
         trend_task = _safe_call(
             client, "keyword_trend",
-            {"keyword": req.keyword, "keywordSupportSite": req.marketplace}, 2,
+            {"keyword": req.keyword, "keyword_support_site": req.marketplace}, 2,
         )
         (_, detail, detail_err), (_, trend, trend_err) = await asyncio.gather(
             detail_task, trend_task

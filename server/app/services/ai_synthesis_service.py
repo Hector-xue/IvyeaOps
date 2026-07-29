@@ -157,43 +157,43 @@ _HERMES_KEYWORD_NATIVE_PROMPT = """你是亚马逊跨境电商市场分析专家
 你的工具列表中有 `mcp_sorftime_*` 系列工具，请**严格按顺序**依次调用：
 
 **步骤 1** — 调用 `mcp_sorftime_keyword_detail`
-  参数：keyword="{query}", keywordSupportSite="{marketplace}"
+  参数：keyword="{query}", keyword_support_site="{marketplace}"
   目的：获取关键词月搜索量、CPC、转化率等核心指标
 
 **步骤 2** — 调用 `mcp_sorftime_keyword_trend`
-  参数：keyword="{query}", keywordSupportSite="{marketplace}"
+  参数：keyword="{query}", keyword_support_site="{marketplace}"
   目的：获取12个月搜索趋势数据
 
 **步骤 3** — 调用 `mcp_sorftime_keyword_extends`
-  参数：keyword="{query}", keywordSupportSite="{marketplace}"
+  参数：keyword="{query}", keyword_support_site="{marketplace}"
   目的：获取长尾词扩展列表（用于第五章长尾词矩阵）
 
 **步骤 4** — 调用 `mcp_sorftime_keyword_search_results`
-  参数：keyword="{query}", keywordSupportSite="{marketplace}"
+  参数：keyword="{query}", keyword_support_site="{marketplace}"
   目的：获取首页竞品列表；**记录返回结果中前2个产品的 asin 字段，步骤9和10需要用到**
 
 **步骤 5** — 调用 `mcp_sorftime_category_search_from_product_name`
-  参数：productName="{query}", amzSite="{marketplace}"
-  目的：获取品类节点；**记录返回结果中的 nodeid 字段，步骤6需要用到**
+  参数：product_name="{query}", amz_site="{marketplace}"
+  目的：获取品类节点；**记录返回结果中的 node_id 字段，步骤6需要用到**
 
 **步骤 6** — 调用 `mcp_sorftime_category_report`
-  参数：nodeId=<步骤5返回的nodeid值>, amzSite="{marketplace}"
+  参数：node_id=<步骤5返回的node_id值>, amz_site="{marketplace}"
   目的：获取该品类 TOP 100 产品数据（价格分布、销量分布、市场格局）
 
 **步骤 7** — 调用 `mcp_sorftime_similar_product_feature`
-  参数：productName="{query}", amzSite="{marketplace}"
+  参数：product_name="{query}", amz_site="{marketplace}"
   目的：获取同类产品的共同特征与差异点
 
 **步骤 8** — 调用 `mcp_sorftime_potential_product`
-  参数：searchName="{query}", amzSite="{marketplace}"
+  参数：search_name="{query}", amz_site="{marketplace}"
   目的：获取该品类潜力产品列表
 
 **步骤 9** — 调用 `mcp_sorftime_product_detail`
-  参数：asin=<步骤4记录的第1个ASIN>, amzSite="{marketplace}"
+  参数：asin=<步骤4记录的第1个ASIN>, amz_site="{marketplace}"
   目的：获取首页第一名竞品详细数据
 
 **步骤 10** — 调用 `mcp_sorftime_product_detail`
-  参数：asin=<步骤4记录的第2个ASIN>, amzSite="{marketplace}"
+  参数：asin=<步骤4记录的第2个ASIN>, amz_site="{marketplace}"
   目的：获取首页第二名竞品详细数据
 
 ---
@@ -462,36 +462,36 @@ _HERMES_ASIN_NATIVE_PROMPT = """你是亚马逊跨境电商市场分析专家。
 
 你的工具列表中有 `mcp_sorftime_*` 系列工具，请**严格按顺序**依次调用：
 
-**步骤 1** — 调用 `mcp_sorftime_product_report`
-  参数：asin="{query}", amzSite="{marketplace}"
+**步骤 1** — 调用 `mcp_sorftime_product_detail`
+  参数：asin="{query}", amz_site="{marketplace}"
   目的：获取产品基础画像、月销量、价格、评分、BSR等核心数据
 
 **步骤 2** — 调用 `mcp_sorftime_product_trend`
-  参数：asin="{query}", amzSite="{marketplace}"
+  参数：asin="{query}", amz_site="{marketplace}"
   目的：获取最近12个月的销量和价格趋势
 
 **步骤 3** — 调用 `mcp_sorftime_product_traffic_terms`
-  参数：asin="{query}", amzSite="{marketplace}"
+  参数：asin="{query}", amz_site="{marketplace}"
   目的：获取该产品的主要流量词列表；**记录搜索量最大的关键词，步骤6和7需要用到**
 
 **步骤 4** — 调用 `mcp_sorftime_product_reviews`
-  参数：asin="{query}", amzSite="{marketplace}"
+  参数：asin="{query}", amz_site="{marketplace}"
   目的：获取用户评价摘要、好评/差评分布、高频问题
 
 **步骤 5** — 调用 `mcp_sorftime_product_variations`
-  参数：asin="{query}", amzSite="{marketplace}"
+  参数：asin="{query}", amz_site="{marketplace}"
   目的：获取全部变体（颜色、尺寸、规格）及各变体销量占比
 
 **步骤 6** — 调用 `mcp_sorftime_keyword_detail`
-  参数：keyword=<步骤3记录的最大流量词>, keywordSupportSite="{marketplace}"
+  参数：keyword=<步骤3记录的最大流量词>, keyword_support_site="{marketplace}"
   目的：获取主流量词的月搜索量、CPC、竞争强度
 
 **步骤 7** — 调用 `mcp_sorftime_keyword_search_results`
-  参数：keyword=<步骤3记录的最大流量词>, keywordSupportSite="{marketplace}"
+  参数：keyword=<步骤3记录的最大流量词>, keyword_support_site="{marketplace}"
   目的：获取主流量词的首页竞品格局，用于竞品对比表
 
 **步骤 8** — 调用 `mcp_sorftime_competitor_product_keywords`
-  参数：asin="{query}", keywordSupportSite="{marketplace}"
+  参数：asin="{query}", keyword_support_site="{marketplace}"
   目的：获取竞品词机会列表（本品流量盲区）
 
 ---
@@ -741,9 +741,11 @@ def _build_prompt(mode: str, query: str, marketplace: str, data: Dict[str, Any],
     pre-fetched data. `source` is the human name of the data source (Sorftime /
     卖家精灵 / …) so the report's 数据声明 doesn't always say "Sorftime".
     """
-    data_summary = json.dumps(data, ensure_ascii=False, indent=2)
-    if len(data_summary) > 40000:
-        data_summary = data_summary[:40000] + "\n...(数据已截断)"
+    from app.services.sorftime_service import summarize_for_prompt
+    # Budget per source rather than cutting the tail: a raw pipeline dump is
+    # ~148KB, and a blind cut drops whole sources (the category report and
+    # potential products sit last) so those chapters get written blind.
+    data_summary = summarize_for_prompt(data)
 
     native = _HERMES_KEYWORD_NATIVE_PROMPT if mode == "keyword" else _HERMES_ASIN_NATIVE_PROMPT
     native_filled = native.format(query=query, marketplace=marketplace)
@@ -1091,13 +1093,19 @@ async def _try_assistant(prompt: str, failures: list[str]) -> AsyncGenerator[tup
 
 
 async def _stream_ivyea_agent(
-    prompt: str, *, inject_retrieval: bool = True
+    prompt: str, *, inject_retrieval: bool = True, use_tools: bool = False
 ) -> AsyncGenerator[str, None]:
     """Stream text from the embedded IvyeaAgent service.
 
     ``inject_retrieval=False`` is for structured-output tasks (strict JSON):
     retrieval injection makes the agent append 引用说明/[K1] citation markers
     that corrupt machine-parsed responses.
+
+    ``use_tools=False`` (the default) runs the turn with no tool schemas at all.
+    Every caller here hands the agent the material it needs and wants prose or
+    JSON back — with tools attached the agent instead spends its steps hunting
+    for data (and in plan_mode it is refused anyway), and that narration streams
+    straight into the panel as if it were the report.
     """
     from app.services import ivyea_agent_service as ivyea
 
@@ -1110,16 +1118,22 @@ async def _stream_ivyea_agent(
         headers["Authorization"] = f"Bearer {token}"
     payload = {
         "message": prompt,
-        "max_steps": 8,
+        "max_steps": 3,
+        "use_tools": use_tools,
         "plan_mode": True,
         # persist=False — this is IvyeaOps' internal text engine (report/analysis/
         # ingest cleaning), not a user chat. Persisting would spam the shared
         # agent session history that the dock and workbench chat now both read.
         "persist": False,
         "inject_retrieval": inject_retrieval,
+        # We consume the token stream and ignore the agent's `final` event, so a
+        # superseded draft can never be taken back. The citation gate makes the
+        # model rewrite the whole answer with [K#] markers — without this we
+        # streamed both copies and the panel showed the report twice.
+        "defer_citation_text": True,
         "system": (
             "你正在作为 IvyeaOps 的内置文本生成引擎。"
-            "除非用户明确要求工具诊断，否则直接基于输入数据生成最终报告。"
+            "直接基于输入数据生成最终成品，不要输出查数据/找工具一类的过程叙述。"
         ),
     }
     got_token = False

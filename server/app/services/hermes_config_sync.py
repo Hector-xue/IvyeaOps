@@ -1,6 +1,7 @@
-"""Sync IvyeaOps settings into Hermes config files.
+"""Sync IvyeaOps settings into the runner config files.
 
-Called whenever hub_settings are saved. Idempotent — safe to call repeatedly.
+Called whenever hub_settings are saved, and once per boot with the full
+settings dict. Idempotent — safe to call repeatedly.
 
 Responsibilities:
   1. LLM model config  → config.yaml model + fallback_providers
@@ -8,9 +9,14 @@ Responsibilities:
   2. Sorftime key      → mcp_servers.sorftime URL query param
   3. SIF key           → mcp_servers.sif_mcp Bearer token
   4. SellerSprite key  → mcp_servers.sellersprite (stdio MCP)
+  5. All three keys    → ~/.ivyea/mcp.json, so IvyeaAgent (the default brain)
+                          can reach the same data sources — without this a
+                          fresh install has the keys in System Settings and an
+                          agent with zero MCP servers.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -25,6 +31,12 @@ import yaml  # PyYAML — available in the IvyeaOps venv
 _HERMES_CFG  = Path.home() / ".hermes" / "config.yaml"
 _HERMES_ENV  = Path.home() / ".hermes" / ".env"
 _MCP_SCRIPT  = Path(__file__).resolve().parents[2] / "tools" / "sellersprite_mcp.py"
+
+
+def _agent_mcp_file() -> Path:
+    """IvyeaAgent's MCP registry — honours IVYEA_HOME like the agent does."""
+    home = os.environ.get("IVYEA_HOME") or str(Path.home() / ".ivyea")
+    return Path(home) / "mcp.json"
 
 # Map provider id → (env_var_name, default_base_url)
 _PROVIDER_ENV: Dict[str, tuple[str, str]] = {
@@ -116,6 +128,73 @@ def sync_sellersprite(key: str) -> None:
     entry.setdefault("timeout", 30)
 
     _save(cfg)
+
+
+def sync_agent_mcp(updates: Dict[str, Any]) -> None:
+    """Mirror the data-source keys into ~/.ivyea/mcp.json for IvyeaAgent.
+
+    Only writes: a server is registered/refreshed when IvyeaOps holds a key for
+    it, and otherwise left exactly as it is. Nothing is ever removed — boot
+    replays this with the *full* settings dict, so an unset key there is
+    indistinguishable from a cleared one, and a user who ran ``ivyea mcp add``
+    themselves must not lose their entry. Servers are marked ``trusted``: they
+    are read-only data APIs whose keys the operator entered in System Settings,
+    and an approval prompt no one can answer would just stall unattended runs.
+    """
+    path = _agent_mcp_file()
+    try:
+        cfg = json.loads(path.read_text("utf-8")) if path.exists() else {}
+    except Exception:
+        cfg = {}
+    if not isinstance(cfg, dict):
+        cfg = {}
+    servers = cfg.setdefault("mcpServers", {})
+    if not isinstance(servers, dict):
+        servers = cfg["mcpServers"] = {}
+
+    def entry(name: str) -> Dict[str, Any]:
+        item = servers.get(name)
+        return item if isinstance(item, dict) else {}
+
+    changed = False
+
+    key = str(updates.get("sorftime_key") or "").strip()
+    if key:
+        item = entry("sorftime")
+        base = re.sub(r"\?.*$", "", str(item.get("url") or "")) or "https://mcp.sorftime.com"
+        item.update({"transport": "http", "url": f"{base}?key={key}", "trusted": True})
+        servers["sorftime"] = item
+        changed = True
+
+    key = str(updates.get("sif_key") or "").strip()
+    if key:
+        item = entry("sif_mcp")
+        item.update({"transport": "http", "url": "https://mcp.sif.com/mcp", "trusted": True})
+        headers = item.get("headers")
+        item["headers"] = {**(headers if isinstance(headers, dict) else {}),
+                           "Authorization": f"Bearer {key}"}
+        servers["sif_mcp"] = item
+        changed = True
+
+    key = str(updates.get("sellersprite_key") or "").strip()
+    if key:
+        item = entry("sellersprite")
+        item.update({"transport": "stdio", "command": _python_bin(),
+                     "args": [str(_MCP_SCRIPT)], "env": {"SELLERSPRITE_KEY": key},
+                     "trusted": True})
+        servers["sellersprite"] = item
+        changed = True
+
+    if not changed:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), "utf-8")
+    tmp.replace(path)
+    try:
+        path.chmod(0o600)   # it holds API keys
+    except OSError:
+        pass
 
 
 def _python_bin() -> str:
@@ -434,6 +513,12 @@ def on_settings_saved(updates: Dict[str, Any]) -> None:
             sync_sellersprite((updates.get("sellersprite_key") or "").strip())
         except Exception as exc:  # noqa: BLE001
             _log.warning("hermes sellersprite sync failed: %s", exc)
+
+    # Same keys, IvyeaAgent's own registry (~/.ivyea/mcp.json).
+    try:
+        sync_agent_mcp(updates)
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("ivyea-agent mcp sync failed: %s", exc)
 
     if _GBRAIN_EMBED_KEYS & updates.keys():
         try:

@@ -8,6 +8,21 @@ function isPrimitive(v: unknown): v is string | number | boolean {
   return typeof v === "string" || typeof v === "number" || typeof v === "boolean";
 }
 
+/** Sorftime 把每个答案包成 { doc: {字段说明}, data: … }：doc 是给模型看的字段表，
+ *  真正的内容在 data。取行数据统一走这里，否则 `.length` 永远是 undefined，
+ *  表格会一声不响地空着。 */
+function rowsOf(value: unknown): any[] {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") {
+    const node: any = (value as any).doc && "data" in (value as any) ? (value as any).data : value;
+    if (Array.isArray(node)) return node;
+    for (const key of ["data", "items", "results", "list", "top100_products", "analysis_results"]) {
+      if (Array.isArray(node?.[key])) return node[key];
+    }
+  }
+  return [];
+}
+
 /** 通用键值表：原始值整行显示（折行），字符串数组按行列出，嵌套对象折叠。 */
 function KVTable({ obj }: { obj: Record<string, unknown> }) {
   const entries = Object.entries(obj).filter(([, v]) => v !== null && v !== undefined && v !== "");
@@ -95,9 +110,9 @@ function FlexiList({ value, max = 20 }: { value: unknown; max?: number }) {
 /* ── 1. 关键词竞争分析 ── */
 
 export function KeywordResult({ data, keyword }: { data: any; keyword: string }) {
-  const trend = data?.trend || {};
-  const extendsList = data?.extends || [];
-  const searchResults = data?.search_results || [];
+  const trend = data?.trend?.data ?? data?.trend ?? {};
+  const extendsList = rowsOf(data?.extends);
+  const searchResults = rowsOf(data?.search_results);
   const detail = data?.detail;
   const hasDetail = detail && detail !== "没有相关数据";
 
@@ -140,7 +155,7 @@ export function KeywordResult({ data, keyword }: { data: any; keyword: string })
                     <td style={{ ...cellStyle, fontFamily: "monospace", wordBreak: "break-word" }}>
                       {typeof kw === "string" ? kw : kw.keyword || kw.关键词 || JSON.stringify(kw)}
                     </td>
-                    <td style={{ ...cellStyle, textAlign: "right" }}>{typeof kw === "object" ? (kw.searchVolume || kw.搜索量 || "-") : "-"}</td>
+                    <td style={{ ...cellStyle, textAlign: "right" }}>{typeof kw === "object" ? (kw.monthly_search_volume || kw.searchVolume || kw.搜索量 || "-") : "-"}</td>
                     <td style={{ ...cellStyle, textAlign: "right" }}>{typeof kw === "object" ? (kw.competition || kw.竞争度 || "-") : "-"}</td>
                   </tr>
                 ))}
@@ -198,14 +213,14 @@ export function CompetitorResult({ data, asin }: { data: any; asin: string }) {
       {data?.traffic_terms && (
         <div style={{ marginBottom: 12 }}>
           <SectionLabel>流量关键词</SectionLabel>
-          <FlexiList value={data.traffic_terms} />
+          <FlexiList value={rowsOf(data.traffic_terms)} />
         </div>
       )}
 
       {data?.competitor_keywords && (
         <div style={{ marginBottom: 12 }}>
           <SectionLabel>竞品关键词</SectionLabel>
-          {Array.isArray(data.competitor_keywords) ? (
+          {rowsOf(data.competitor_keywords).length > 0 ? (
             <div style={{ fontSize: 10, overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
@@ -216,7 +231,7 @@ export function CompetitorResult({ data, asin }: { data: any; asin: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.competitor_keywords.slice(0, 15).map((kw: any, i: number) => (
+                  {rowsOf(data.competitor_keywords).slice(0, 15).map((kw: any, i: number) => (
                     <tr key={i} style={{ borderBottom: "1px solid var(--b)" }}>
                       <td style={{ ...cellStyle, fontFamily: "monospace", wordBreak: "break-word" }}>
                         {typeof kw === "string" ? kw : kw.keyword || kw.关键词 || "-"}
@@ -229,7 +244,7 @@ export function CompetitorResult({ data, asin }: { data: any; asin: string }) {
               </table>
             </div>
           ) : (
-            <FlexiList value={data.competitor_keywords} />
+            <FlexiList value={rowsOf(data.competitor_keywords)} />
           )}
         </div>
       )}
@@ -259,7 +274,7 @@ export function TrafficResult({ data, asin }: { data: any; asin: string }) {
       {data?.traffic_terms && (
         <div style={{ marginBottom: 12 }}>
           <SectionLabel>流量关键词</SectionLabel>
-          <FlexiList value={data.traffic_terms} max={15} />
+          <FlexiList value={rowsOf(data.traffic_terms)} max={15} />
         </div>
       )}
 
