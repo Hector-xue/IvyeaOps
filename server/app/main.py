@@ -3,9 +3,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import mimetypes
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# Ensure correct MIME types for JS modules (Windows may default to text/plain).
+# This is a no-op on Linux/macOS where the mapping is already correct.
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("application/javascript", ".mjs")
 
 # Central logging config: one place sets level + format (was previously left to
 # per-module getLogger with no root setup). Override level via IVYEA_OPS_LOG_LEVEL.
