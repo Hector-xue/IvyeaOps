@@ -48,13 +48,17 @@ from app.services.runners import (  # noqa: F401 — re-exported for tests
     runner_status as _cli_runner_status,
 )
 
+# 同 ad_audit：~/.hermes/ivyea-ops-data 是 IvyeaOps 自己的历史落盘位置，
+# 与 hermes 程序无关，改名要搬数据，保持不动。
 AUDIT_ROOT = Path.home() / ".hermes" / "ivyea-ops-data" / "amazon-audits"
 
 _log = logging.getLogger(__name__)
 AUDIT_ROOT.mkdir(parents=True, exist_ok=True)
 
 IVYEA_AGENT_RUNNER = "ivyea-agent"
-VALID_RUNNERS = (IVYEA_AGENT_RUNNER,) + RUNNER_ORDER
+# RUNNER_ORDER 自 2026-08-06 起已以 ivyea-agent 打头，这里去重后再拼，避免出现
+# 两个 ivyea-agent（历史上是靠 RUNNER_ORDER 里没有它才成立的）。
+VALID_RUNNERS = (IVYEA_AGENT_RUNNER,) + tuple(r for r in RUNNER_ORDER if r != IVYEA_AGENT_RUNNER)
 
 
 # Hard kill after this many seconds.
@@ -290,15 +294,17 @@ def _ivyea_agent_available() -> tuple[bool, str]:
 def _resolve_audit_runner(pref: str) -> tuple[Optional[str], Optional[str], str]:
     pref = (pref or "auto").lower()
     if pref == "auto":
-        # 默认用 hermes：它是 IvyeaOps 已经配好 skill(~/.hermes/skills seed) + 数据源 MCP
-        # (sorftime / sif_mcp，hermes_config_sync 写入 ~/.hermes/config.yaml) 的 runner。
-        # 审计走它才能拿到 skill 的 11 板块+结尾 JSON 结构指导 + 真实数据 → 前端才能解析出
-        # 结构化报告。ivyea-agent 现已内置该 skill、放开步数、plan_mode=False 放行 MCP，只要
-        # 用户在 ~/.ivyea/mcp.json 配好一个 trusted 数据源 MCP（ivyea mcp add）就同样可用；
-        # 未配数据源时 agent 会明说“未检测到数据源”而非臆造。默认仍保持 hermes（数据源现成）。
-        # 可在设置 audit_default_runner 改；选定 runner 不可用时按下面顺序兜底。
+        # 默认用 ivyea-agent（2026-08-06 从 hermes 切过来）：它已内置审计 skill
+        # (11 板块 + 结尾 JSON 结构指导)、放开步数、plan_mode=False 放行 MCP，且
+        # ~/.ivyea/mcp.json 里 sorftime / sellersprite / sif_mcp 均已 trusted，
+        # 取证能力与当初的 hermes 对齐。未配数据源时 agent 会明说“未检测到数据源”
+        # 而非臆造。可在设置 audit_default_runner 改；选定 runner 不可用时按下面顺序兜底。
         from app.core import hub_settings as _hs
-        default = (str(_hs.get("audit_default_runner") or "").strip().lower()) or "hermes"
+        default = (str(_hs.get("audit_default_runner") or "").strip().lower()) or IVYEA_AGENT_RUNNER
+        # 旧配置里存的是 hermes 时，不再把它当默认——它已从 RUNNER_ORDER 移除，
+        # 继续沿用会让审计落到一个不再维护的路径上。
+        if default == "hermes":
+            default = IVYEA_AGENT_RUNNER
         order: list[str] = []
         for r in [default, IVYEA_AGENT_RUNNER, *RUNNER_ORDER]:
             if r and r not in order:
@@ -586,7 +592,7 @@ async def _run_claude(job: Job) -> None:
 
     job.status = "running"
     job.started_at = _now_iso()
-    mcp_note = "（MCP: sorftime + sif_mcp）" if runner == "hermes" else ""
+    mcp_note = "（MCP: sorftime + sif_mcp）" if runner in ("ivyea-agent", "hermes") else ""
     job.progress = f"已启动 {runner} 收集证据{mcp_note}…"
     _write_meta(job)
 

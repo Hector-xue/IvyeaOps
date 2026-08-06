@@ -40,12 +40,15 @@ def _extra_paths() -> list[str]:
     ]
 
 # Ordered runner preference (auto-pick walks this list). IvyeaAgent 首选（自托管、自带亚马逊域）。
-RUNNER_ORDER = ("ivyea-agent", "hermes", "codex", "claude")
+# 2026-08-06：hermes 从自动挑选序列里移除——它不再是任何板块的默认或兜底。
+# _find_bin("hermes") / _build_runner_cmd("hermes", …) 仍然保留，供 /agents 板块里
+# 用户手动选择 hermes provider 时使用；只是系统自己不会再走到它。
+RUNNER_ORDER = ("ivyea-agent", "codex", "claude")
 
 # Human-friendly labels shown in the UI selector.
 RUNNER_LABELS = {
-    "ivyea-agent": "IvyeaAgent（推荐 · 自托管 · 亚马逊域）",
-    "hermes": "Hermes（自带 MCP）",
+    "ivyea-agent": "IvyeaAgent（推荐 · 自托管 · 亚马逊域 · 自带 MCP）",
+    "hermes": "Hermes（仅手动选择）",
     "codex":  "Codex（OpenAI）",
     "claude": "Claude Code",
 }
@@ -209,6 +212,11 @@ def resolve_with_pref(pref: str) -> tuple[Optional[str], Optional[str], Optional
     on failure.
     """
     pref = (pref or "auto").lower()
+    # 2026-08-06：hermes 已移出 RUNNER_ORDER。历史 job / 旧前端里存下来的
+    # runner_pref="hermes" 不该直接报 unknown runner 把任务打死，退回 auto
+    # （会落到 ivyea-agent）。
+    if pref == "hermes":
+        pref = "auto"
     if pref == "auto":
         name, path = _resolve_auto()
         if not name:

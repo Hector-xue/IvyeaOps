@@ -317,7 +317,9 @@ def _parse_review(text: str) -> Dict[str, Any]:
         return {"approve": False, "risk_score": 1.0, "reasons": "复核响应解析失败（fail-closed 视为不通过）"}
 
 
-_CLI_AGENTS = ("hermes", "claude", "codex")
+# 可手动选择的 CLI 复核 agent。2026-08-06：ivyea-agent 走上面的 http/agent 分支，
+# 这里只列外部 CLI；hermes 保留为手动可选项，但已不是任何默认。
+_CLI_AGENTS = ("claude", "codex", "hermes")
 
 
 def _custom_models() -> Dict[str, Dict[str, Any]]:

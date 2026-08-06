@@ -1030,7 +1030,7 @@ export default function HubSettings() {
 
         <Field
           label={<><Tag kind="opt">可选</Tag>卖家精灵 Secret Key</>}
-          hint={<>竞品关键词分析。保存后自动注册 Hermes MCP，hermes 对话中即可调用。登录 sellersprite.com → 账户 → API Key。</>}
+          hint={<>竞品关键词分析。保存后自动注册为 MCP 数据源，IvyeaAgent 对话中即可调用。登录 sellersprite.com → 账户 → API Key。</>}
         >
           <SecretInput value={vals.sellersprite_key} onChange={v => set("sellersprite_key", v)} placeholder="你的卖家精灵 Secret Key" />
           <TestButton settingKey="sellersprite_key" value={vals.sellersprite_key} label="测试" />
@@ -1145,8 +1145,8 @@ export default function HubSettings() {
         vals={vals} onSave={save}
       >
         <Field label={<><Tag kind="opt">可选</Tag>AI 提供商顺序（全局降级链）</>}
-          hint={<>逗号分隔，按顺序尝试：<code>ivyea-agent</code> <code>assistant</code>（全局兜底大模型）<code>deepseek</code> <code>codex</code> <code>claude</code>；<code>hermes</code> 仅用于旧兼容链路。</>}>
-          <TxtInput value={vals.text_ai_providers} onChange={v => set("text_ai_providers", v)} placeholder="ivyea-agent,assistant,deepseek,codex,claude" />
+          hint={<>逗号分隔，按顺序尝试：<code>ivyea-agent</code> <code>deepseek</code> <code>assistant</code>（全局兜底大模型）<code>codex</code> <code>claude</code>。<code>hermes</code> 已从降级链移除，填了也会被忽略。</>}>
+          <TxtInput value={vals.text_ai_providers} onChange={v => set("text_ai_providers", v)} placeholder="ivyea-agent,deepseek,assistant,codex,claude" />
         </Field>
         <Field label={<><Tag kind="opt">可选</Tag>视觉识别顺序（图片分析）</>}
           hint={<>Listing「AI 图片分析」走这条链。Apimart 只生图、无视觉，不在此列。</>}>
