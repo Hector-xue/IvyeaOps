@@ -182,8 +182,18 @@ def _call_tool(name: str, args: dict) -> str:
 
 # ── MCP stdio transport ───────────────────────────────────────────────────────
 
+# 两种分帧都要支持：
+#   * NDJSON —— MCP stdio 规范的分帧（一行一个 JSON 对象），ivyea-agent 用这种。
+#   * Content-Length —— LSP 风格，本脚本最初为 hermes 写的那种。
+# 只认 Content-Length 时，NDJSON 客户端发来的 `{"jsonrpc":...}` 会被当成一行
+# "header"（它含冒号），然后死等那个永远不会来的空行 —— 表现为 agent 一开工具
+# 就整轮挂死、连 SSE 响应头都发不出来。回复必须与请求同种分帧。
+_ndjson_mode = False
+
+
 def _read_msg() -> dict | None:
-    """Read one Content-Length-framed JSON-RPC message from stdin."""
+    """Read one JSON-RPC message from stdin, auto-detecting the framing."""
+    global _ndjson_mode
     headers: dict[str, str] = {}
     while True:
         raw = sys.stdin.buffer.readline()
@@ -191,21 +201,34 @@ def _read_msg() -> dict | None:
             return None
         line = raw.decode("utf-8", errors="replace").strip()
         if not line:
-            break
+            if headers:
+                break        # 空行 = Content-Length 头部结束
+            continue         # NDJSON 流里的空行，跳过
+        if line.startswith("{"):
+            # NDJSON：整行就是一条消息。
+            _ndjson_mode = True
+            try:
+                return json.loads(line)
+            except json.JSONDecodeError:
+                continue     # 半截/脏行不至于打死整个 server
         if ":" in line:
             k, _, v = line.partition(":")
             headers[k.strip().lower()] = v.strip()
     length = int(headers.get("content-length", 0))
     if not length:
         return None
+    _ndjson_mode = False
     return json.loads(sys.stdin.buffer.read(length))
 
 
 def _write_msg(msg: dict) -> None:
     body = json.dumps(msg, ensure_ascii=False).encode("utf-8")
-    sys.stdout.buffer.write(
-        f"Content-Length: {len(body)}\r\n\r\n".encode() + body
-    )
+    if _ndjson_mode:
+        sys.stdout.buffer.write(body + b"\n")
+    else:
+        sys.stdout.buffer.write(
+            f"Content-Length: {len(body)}\r\n\r\n".encode() + body
+        )
     sys.stdout.buffer.flush()
 
 
