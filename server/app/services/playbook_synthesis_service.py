@@ -20,7 +20,8 @@ import json
 from typing import Any, AsyncGenerator, Dict
 
 from app.services.ai_synthesis_service import (
-    _stream_ivyea_agent,
+    _NATIVE_SYSTEM,
+    run_ivyea_native,
     _text_provider_chain,
     _try_apimart,
     _try_assistant,
@@ -293,28 +294,16 @@ async def synthesize_native(
     Runs on ivyea-agent (2026-08-06; previously hermes) — same MCP-native shape
     as ``ai_synthesis_service.synthesize_native``."""
     prompt = _native_prompt(mode, query, marketplace, price, cost)
-    got_real_chunk = False
     try:
-        async for chunk in _stream_ivyea_agent(
-            prompt,
-            inject_retrieval=False,
-            use_tools=True,
-            plan_mode=False,      # 计划模式会拒绝 mcp_call_tool，取不到真实数据
-            max_steps=40,
-            system=(
-                "你正在作为 IvyeaOps 的打法生成智能体。"
-                "先用 mcp_list_tools 发现已配置的数据源工具，再用 mcp_call_tool 抓真实数据，"
-                "然后基于真实数据写打法。抓不到数据时必须直说，不要编造数字。"
-            ),
-        ):
-            got_real_chunk = True
-            yield "ivyea-agent", chunk
+        report = await run_ivyea_native(prompt, _NATIVE_SYSTEM.format(
+            role="打法生成智能体", deliv="打法手册"))
     except Exception as exc:  # noqa: BLE001
-        if not got_real_chunk:
-            yield "error", f"IvyeaAgent 原生取数失败：{exc}"
-            return
-    if not got_real_chunk:
+        yield "error", f"IvyeaAgent 原生取数失败：{exc}"
+        return
+    if not report:
         yield "error", "IvyeaAgent 无输出"
+        return
+    yield "ivyea-agent", report
 
 
 async def synthesize(

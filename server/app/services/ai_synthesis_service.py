@@ -1186,6 +1186,92 @@ async def _stream_ivyea_agent(
         yield final_text
 
 
+_NATIVE_SYSTEM = (
+    "你正在作为 IvyeaOps 的{role}。"
+    "先用 mcp_list_tools 发现已配置的数据源工具，再用 mcp_call_tool 抓真实数据，"
+    "然后基于真实数据写{deliv}。抓不到数据时必须直说“未取到数据源数据”，不要编造数字。"
+    "把【完整{deliv}正文】作为你最后一条消息一次性完整输出——不要在正文之后再追加"
+    "“已输出完毕/已交付”之类的收尾轮次，也不要说“{deliv}在上方”。"
+)
+
+
+async def run_ivyea_native(prompt: str, system: str, *, max_steps: int = 40) -> str:
+    """MCP-native turn: let the agent fetch its own data, return the FULL report.
+
+    为什么不复用 _stream_ivyea_agent 的 token 流：agent 是多步循环，token 流只
+    是**最后一轮**的内容，而正文往往产在更早一轮，最后一轮只剩一句「报告已输出
+    完毕」的收尾（实测 823s 只流回 159 字）。所以这里照搬 asin_audit 验证过的
+    做法——跑完后从落盘的完整会话里捞出真正的报告：
+      1) 完整持久化会话（未截断，正文可能在几十条之前）
+      2) final 事件带回的 messages（末 30 条）
+      3) final.text / token 流兜底
+    也刻意不边流边发：流出去的是收尾句，末尾再补全文会让面板出现两份内容
+    （这个双份渲染以前就踩过）。
+    """
+    from app.services import ivyea_agent_service as ivyea
+
+    status = await asyncio.to_thread(ivyea.ensure_available)
+    if not status.get("available"):
+        raise RuntimeError(status.get("error") or "IvyeaAgent 服务未连接")
+    headers = {"Content-Type": "application/json", "Accept": "text/event-stream"}
+    token = ivyea._token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    payload = {
+        "message": prompt,
+        "max_steps": max_steps,
+        "use_tools": True,
+        "plan_mode": False,      # 计划模式会拒绝 mcp_call_tool，取不到真实数据
+        "persist": True,         # 必须落盘，否则下面捞不回正文
+        "inject_retrieval": False,
+        "system": system,
+    }
+    streamed: list[str] = []
+    final_text = ""
+    final_messages: list[dict] = []
+    session_id = ""
+    event = "message"
+    # 取数轮次多、单步可能几十秒，给足读超时（实测一次完整 10 步调研约 14 分钟）。
+    async with httpx.AsyncClient(timeout=httpx.Timeout(1800, connect=30)) as client:
+        async with client.stream("POST", f"{ivyea.base_url()}/v1/chat/stream",
+                                 json=payload, headers=headers) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                line = line.strip()
+                if not line:
+                    event = "message"
+                    continue
+                if line.startswith("event:"):
+                    event = line[6:].strip() or "message"
+                    continue
+                if not line.startswith("data:"):
+                    continue
+                try:
+                    data = json.loads(line[5:].strip() or "{}")
+                except Exception:
+                    continue
+                if not session_id and data.get("session_id"):
+                    session_id = str(data["session_id"])
+                if event == "token":
+                    streamed.append(str(data.get("text") or ""))
+                elif event == "final":
+                    final_text = str(data.get("text") or "")
+                    if isinstance(data.get("messages"), list):
+                        final_messages = data["messages"]
+                elif event == "error":
+                    raise RuntimeError(str(data.get("detail") or data.get("error") or data))
+
+    from app.services.asin_audit import _best_report_from_messages, _report_from_session
+    candidates = [
+        _report_from_session(session_id) if session_id else "",
+        _best_report_from_messages(final_messages),
+        final_text,
+        "".join(streamed),
+    ]
+    # 取最长的那份：正文一定比「已输出完毕」的收尾句长得多。
+    return max((c or "" for c in candidates), key=len).strip()
+
+
 async def _try_ivyea_agent(
     prompt: str, failures: list[str], *, inject_retrieval: bool = True
 ) -> AsyncGenerator[tuple[str, str], None]:
@@ -1880,30 +1966,17 @@ async def synthesize_native(
     one (e.g. 评论聚类 / Listing 改写) while keeping the same agent+MCP path.
     """
     prompt = prompt_override or _build_mcp_native_prompt(mode, query, marketplace)
-    got_real_chunk = False
     try:
-        # plan_mode=False 放行 mcp_call_tool；步数给够（发现工具 → 逐项抓数 → 写报告）。
-        async for chunk in _stream_ivyea_agent(
-            prompt,
-            inject_retrieval=False,
-            use_tools=True,
-            plan_mode=False,
-            max_steps=40,
-            system=(
-                "你正在作为 IvyeaOps 的市场调研智能体。"
-                "先用 mcp_list_tools 发现已配置的数据源工具，再用 mcp_call_tool 抓真实数据，"
-                "然后基于真实数据写报告。抓不到数据时必须直说“未取到数据源数据”，不要编造数字。"
-            ),
-        ):
-            got_real_chunk = True
-            yield "ivyea-agent", chunk
+        report = await run_ivyea_native(prompt, _NATIVE_SYSTEM.format(
+            role="市场调研智能体", deliv="报告"))
     except Exception as exc:  # noqa: BLE001
         _log.warning("ivyea-agent native path failed: %s", exc)
-        if not got_real_chunk:
-            yield "error", f"IvyeaAgent 原生取数失败：{exc}"
-            return
-    if not got_real_chunk:
+        yield "error", f"IvyeaAgent 原生取数失败：{exc}"
+        return
+    if not report:
         yield "error", "IvyeaAgent 无输出"
+        return
+    yield "ivyea-agent", report
 
 
 async def run_text_chain(
