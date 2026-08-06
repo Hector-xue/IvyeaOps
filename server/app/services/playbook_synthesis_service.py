@@ -9,8 +9,8 @@ Reuses the low-level streaming / fallback machinery from ``ai_synthesis_service`
 public generators are new.
 
 Two entry points, mirroring the market module:
-  • ``synthesize_native``  — Hermes calls the Sorftime MCP tools itself, then
-                              writes the playbook in one pass (preferred).
+  • ``synthesize_native``  — ivyea-agent calls the Sorftime MCP tools itself,
+                              then writes the playbook in one pass (preferred).
   • ``synthesize``         — fallback: caller pre-fetches the selected source, we feed
                               it to the provider chain (deepseek / apimart / CLI).
 """
@@ -20,6 +20,8 @@ import json
 from typing import Any, AsyncGenerator, Dict
 
 from app.services.ai_synthesis_service import (
+    _NATIVE_SYSTEM,
+    run_ivyea_native,
     _text_provider_chain,
     _try_apimart,
     _try_assistant,
@@ -28,9 +30,9 @@ from app.services.ai_synthesis_service import (
     _try_ivyea_agent,
 )
 
-# ── Sorftime data-collection instructions (Hermes-native only) ────────────────
-# Identical tool sequence to the market module, so hermes gathers the same rich
-# category / competitor / review / CPC data the playbook reasons over.
+# ── Sorftime data-collection instructions (MCP-native path only) ──────────────
+# Identical tool sequence to the market module, so the agent gathers the same
+# rich category / competitor / review / CPC data the playbook reasons over.
 
 _COLLECT_KEYWORD = """## 第一阶段：数据采集（必须全部完成，不得跳过任何一步）
 
@@ -286,17 +288,22 @@ async def synthesize_native(
     price: str,
     cost: str,
 ) -> AsyncGenerator[tuple[str, str], None]:
-    """Hermes-native path: hermes fetches Sorftime data via MCP, then writes the
-    playbook. Yields (provider, chunk); on failure yields ('error', detail)."""
+    """MCP-native path: the agent fetches Sorftime data via MCP, then writes the
+    playbook. Yields (provider, chunk); on failure yields ('error', detail).
+
+    Runs on ivyea-agent (2026-08-06; previously hermes) — same MCP-native shape
+    as ``ai_synthesis_service.synthesize_native``."""
     prompt = _native_prompt(mode, query, marketplace, price, cost)
-    failures: list[str] = []
-    got_real_chunk = False
-    async for prov, chunk in _try_cli("hermes", prompt, failures):
-        yield prov, chunk
-        if prov != "_attempt":
-            got_real_chunk = True
-    if not got_real_chunk:
-        yield "error", (failures[0] if failures else "hermes 无输出")
+    try:
+        report = await run_ivyea_native(prompt, _NATIVE_SYSTEM.format(
+            role="打法生成智能体", deliv="打法手册"))
+    except Exception as exc:  # noqa: BLE001
+        yield "error", f"IvyeaAgent 原生取数失败：{exc}"
+        return
+    if not report:
+        yield "error", "IvyeaAgent 无输出"
+        return
+    yield "ivyea-agent", report
 
 
 async def synthesize(
@@ -316,9 +323,9 @@ async def synthesize(
     skip_agent=True drops ivyea-agent (caller is already the agent — the panel bridge)."""
     prompt = _fallback_prompt(mode, query, marketplace, price, cost, data, source=source)
     failures: list[str] = []
-    # Skip hermes here: in the fallback path it either already failed (native)
-    # or has no pre-fetched-data advantage over the streaming HTTP providers.
-    chain = [p for p in _text_provider_chain() if p != "hermes"] or ["assistant", "codex", "claude"]
+    # 2026-08-06: hermes 已不在 _text_provider_chain() 的候选里（见 _VALID_TEXT_PROVIDERS），
+    # 这里不必再单独过滤；兜底顺序按真实可用性排（deepseek 用官方 key，assistant 槽随用户配置）。
+    chain = _text_provider_chain() or ["deepseek", "assistant", "codex", "claude"]
     if skip_agent:
         chain = [p for p in chain if p != "ivyea-agent"]
 

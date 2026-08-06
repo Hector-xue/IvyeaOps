@@ -94,7 +94,9 @@ def _deepseek_key() -> str:
 # safe for non-admin users and acts as the standard chain's fallback step.
 # NOTE: apimart is IMAGE-GEN ONLY (no text/chat endpoint) — it must NOT appear
 # in any text chain; calling its /v1/messages returns 403.
-_VALID_TEXT_PROVIDERS = ("ivyea-agent", "hermes", "codex", "claude", "deepseek", "assistant")
+# 2026-08-06：hermes 从文本链候选中移除。旧配置里残留的 "hermes" 会在
+# _text_provider_chain() 里被静默过滤掉，不会报错、也不会再被自动调用。
+_VALID_TEXT_PROVIDERS = ("ivyea-agent", "codex", "claude", "deepseek", "assistant")
 
 
 # Providers safe for non-admin users: pure HTTP APIs, no local CLI / shell / MCP.
@@ -107,21 +109,22 @@ def _text_provider_chain() -> list[str]:
 
     SECURITY: for non-admin users, the chain is forced to HTTP-only providers
     (deepseek / apimart) so a user request can NEVER spawn a local CLI agent
-    (hermes/codex/claude) with shell / MCP / filesystem access."""
+    (codex/claude) with shell / MCP / filesystem access."""
     from app.core import hub_settings
-    # Standard chain: IvyeaAgent first, then global fallback / HTTP DeepSeek,
-    # then optional external CLI agents. Hermes remains supported, but is no
-    # longer the default deployment dependency.
+    # Standard chain: IvyeaAgent first, then HTTP DeepSeek / global fallback,
+    # then optional external CLI agents. Hermes is no longer part of any
+    # automatic chain (2026-08-06) — it stays available only where the user
+    # picks a provider by hand in the /agents board.
     raw = str(hub_settings.get("text_ai_providers") or "").strip()
     if not raw:
-        chain = ["ivyea-agent", "assistant", "deepseek", "codex", "claude"]
+        chain = ["ivyea-agent", "deepseek", "assistant", "codex", "claude"]
     else:
         out: list[str] = []
         for p in raw.split(","):
             p = p.strip().lower()
             if p in _VALID_TEXT_PROVIDERS and p not in out:
                 out.append(p)
-        chain = out or ["ivyea-agent", "assistant", "deepseek", "codex", "claude"]
+        chain = out or ["ivyea-agent", "deepseek", "assistant", "codex", "claude"]
 
     # IvyeaAgent is the default brain everywhere: lead with it regardless of the
     # configured order (graceful fallback to the rest if it's down). The panel
@@ -143,12 +146,12 @@ def _text_provider_chain() -> list[str]:
 
 _ANSI_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 
-# ─── Hermes-native prompts (hermes calls sorftime tools itself) ───────────────
-# Used when hermes is the primary provider — no pre-fetched data needed.
-# hermes has sorftime MCP configured in ~/.hermes/config.yaml, so it can
+# ─── MCP-native prompts (the agent calls sorftime tools itself) ───────────────
+# Used on the native path — no pre-fetched data needed. ivyea-agent has
+# sorftime MCP registered as trusted in ~/.ivyea/mcp.json, so it can
 # call each tool directly and synthesise from live data in one pass.
 
-_HERMES_KEYWORD_NATIVE_PROMPT = """你是亚马逊跨境电商市场分析专家。
+_MCP_KEYWORD_NATIVE_PROMPT = """你是亚马逊跨境电商市场分析专家。
 
 ## 第一阶段：数据采集（必须全部完成，不得跳过任何一步）
 
@@ -454,7 +457,7 @@ _HERMES_KEYWORD_NATIVE_PROMPT = """你是亚马逊跨境电商市场分析专家
 5. 【资金】[建议首期投入规模和节奏]"""
 
 
-_HERMES_ASIN_NATIVE_PROMPT = """你是亚马逊跨境电商市场分析专家。
+_MCP_ASIN_NATIVE_PROMPT = """你是亚马逊跨境电商市场分析专家。
 
 ## 第一阶段：数据采集（必须全部完成，不得跳过任何一步）
 
@@ -721,21 +724,21 @@ _HERMES_ASIN_NATIVE_PROMPT = """你是亚马逊跨境电商市场分析专家。
 4. **时机层**：[建议几月开始备货，几月上架，理由是季节性/竞争周期]"""
 
 
-def _build_hermes_native_prompt(mode: str, query: str, marketplace: str) -> str:
-    """Build a tool-calling prompt for hermes to collect and synthesise itself."""
-    template = _HERMES_KEYWORD_NATIVE_PROMPT if mode == "keyword" else _HERMES_ASIN_NATIVE_PROMPT
+def _build_mcp_native_prompt(mode: str, query: str, marketplace: str) -> str:
+    """Build a tool-calling prompt for the agent to collect and synthesise itself."""
+    template = _MCP_KEYWORD_NATIVE_PROMPT if mode == "keyword" else _MCP_ASIN_NATIVE_PROMPT
     return template.format(query=query, marketplace=marketplace)
 
 
 # ─── Fallback prompt builder (codex / claude — no MCP tools) ─────────────────
-# Derives the report structure from the hermes-native prompts so there is
+# Derives the report structure from the MCP-native prompts so there is
 # only ONE template to maintain. Strips the tool-calling phase and appends
 # the pre-fetched sorftime data instead.
 
 
 def _build_prompt(mode: str, query: str, marketplace: str, data: Dict[str, Any],
                   source: str = "Sorftime") -> str:
-    """Build fallback prompt (codex / claude path) from the hermes-native template.
+    """Build fallback prompt (codex / claude path) from the MCP-native template.
 
     Strips the tool-calling phase from the native prompt and appends the
     pre-fetched data. `source` is the human name of the data source (Sorftime /
@@ -747,7 +750,7 @@ def _build_prompt(mode: str, query: str, marketplace: str, data: Dict[str, Any],
     # potential products sit last) so those chapters get written blind.
     data_summary = summarize_for_prompt(data)
 
-    native = _HERMES_KEYWORD_NATIVE_PROMPT if mode == "keyword" else _HERMES_ASIN_NATIVE_PROMPT
+    native = _MCP_KEYWORD_NATIVE_PROMPT if mode == "keyword" else _MCP_ASIN_NATIVE_PROMPT
     native_filled = native.format(query=query, marketplace=marketplace)
 
     # Strip the data-collection phase; keep only the report template section.
@@ -757,7 +760,7 @@ def _build_prompt(mode: str, query: str, marketplace: str, data: Dict[str, Any],
         # Skip the "以上X个工具全部调用完毕后" instruction line
         after_header = native_filled.find("\n\n", idx + len(phase2_marker))
         report_body = native_filled[after_header:].strip()
-        # Replace hermes-tool-specific preamble with data-dump preamble
+        # Replace MCP-tool-specific preamble with data-dump preamble
         report_body = report_body.replace(
             "以上10个工具全部调用完毕后**，根据收集到的真实数据，填写以下报告模板。",
             f"请根据下方{source}原始数据，生成完整的市场调研报告。",
@@ -984,7 +987,7 @@ ASSISTANT_PROVIDER_BASE = {
 def has_text_provider() -> bool:
     """True when at least one text provider (IvyeaAgent / DeepSeek / Apimart / global
     fallback model) is configured — i.e. ``generate_text`` can answer even when
-    no local agent CLI (Hermes/Codex/Claude) is installed."""
+    no local agent CLI (IvyeaAgent/Codex/Claude) is installed."""
     try:
         from app.services import ivyea_agent_service as ivyea
         return bool(
@@ -1093,7 +1096,13 @@ async def _try_assistant(prompt: str, failures: list[str]) -> AsyncGenerator[tup
 
 
 async def _stream_ivyea_agent(
-    prompt: str, *, inject_retrieval: bool = True, use_tools: bool = False
+    prompt: str,
+    *,
+    inject_retrieval: bool = True,
+    use_tools: bool = False,
+    plan_mode: bool = True,
+    max_steps: int = 3,
+    system: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """Stream text from the embedded IvyeaAgent service.
 
@@ -1106,6 +1115,11 @@ async def _stream_ivyea_agent(
     JSON back — with tools attached the agent instead spends its steps hunting
     for data (and in plan_mode it is refused anyway), and that narration streams
     straight into the panel as if it were the report.
+
+    ``plan_mode=False`` + ``use_tools=True`` + a raised ``max_steps`` is the
+    MCP-native mode (市场调研 / 打法 的原生取数路径): plan mode refuses
+    ``mcp_call_tool``, so leaving it on means the agent can never reach sorftime
+    and silently writes from nothing. Same shape as asin_audit._run_ivyea_agent.
     """
     from app.services import ivyea_agent_service as ivyea
 
@@ -1118,9 +1132,9 @@ async def _stream_ivyea_agent(
         headers["Authorization"] = f"Bearer {token}"
     payload = {
         "message": prompt,
-        "max_steps": 3,
+        "max_steps": max_steps,
         "use_tools": use_tools,
-        "plan_mode": True,
+        "plan_mode": plan_mode,
         # persist=False — this is IvyeaOps' internal text engine (report/analysis/
         # ingest cleaning), not a user chat. Persisting would spam the shared
         # agent session history that the dock and workbench chat now both read.
@@ -1131,7 +1145,7 @@ async def _stream_ivyea_agent(
         # model rewrite the whole answer with [K#] markers — without this we
         # streamed both copies and the panel showed the report twice.
         "defer_citation_text": True,
-        "system": (
+        "system": system or (
             "你正在作为 IvyeaOps 的内置文本生成引擎。"
             "直接基于输入数据生成最终成品，不要输出查数据/找工具一类的过程叙述。"
         ),
@@ -1139,7 +1153,10 @@ async def _stream_ivyea_agent(
     got_token = False
     final_text = ""
     event = "message"
-    async with httpx.AsyncClient(timeout=httpx.Timeout(300, connect=30)) as client:
+    # 纯文本生成 300s 够用；带工具的原生取数要先跑一串 MCP 调用再写报告，
+    # 沿用 hermes 时代给这条路径的 600s（当时就是被 MCP 往返拖长才加的）。
+    read_timeout = 600 if use_tools else 300
+    async with httpx.AsyncClient(timeout=httpx.Timeout(read_timeout, connect=30)) as client:
         async with client.stream("POST", f"{ivyea.base_url()}/v1/chat/stream", json=payload, headers=headers) as resp:
             resp.raise_for_status()
             async for line in resp.aiter_lines():
@@ -1167,6 +1184,92 @@ async def _stream_ivyea_agent(
                     raise RuntimeError(str(data.get("detail") or data.get("error") or data))
     if not got_token and final_text:
         yield final_text
+
+
+_NATIVE_SYSTEM = (
+    "你正在作为 IvyeaOps 的{role}。"
+    "先用 mcp_list_tools 发现已配置的数据源工具，再用 mcp_call_tool 抓真实数据，"
+    "然后基于真实数据写{deliv}。抓不到数据时必须直说“未取到数据源数据”，不要编造数字。"
+    "把【完整{deliv}正文】作为你最后一条消息一次性完整输出——不要在正文之后再追加"
+    "“已输出完毕/已交付”之类的收尾轮次，也不要说“{deliv}在上方”。"
+)
+
+
+async def run_ivyea_native(prompt: str, system: str, *, max_steps: int = 40) -> str:
+    """MCP-native turn: let the agent fetch its own data, return the FULL report.
+
+    为什么不复用 _stream_ivyea_agent 的 token 流：agent 是多步循环，token 流只
+    是**最后一轮**的内容，而正文往往产在更早一轮，最后一轮只剩一句「报告已输出
+    完毕」的收尾（实测 823s 只流回 159 字）。所以这里照搬 asin_audit 验证过的
+    做法——跑完后从落盘的完整会话里捞出真正的报告：
+      1) 完整持久化会话（未截断，正文可能在几十条之前）
+      2) final 事件带回的 messages（末 30 条）
+      3) final.text / token 流兜底
+    也刻意不边流边发：流出去的是收尾句，末尾再补全文会让面板出现两份内容
+    （这个双份渲染以前就踩过）。
+    """
+    from app.services import ivyea_agent_service as ivyea
+
+    status = await asyncio.to_thread(ivyea.ensure_available)
+    if not status.get("available"):
+        raise RuntimeError(status.get("error") or "IvyeaAgent 服务未连接")
+    headers = {"Content-Type": "application/json", "Accept": "text/event-stream"}
+    token = ivyea._token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    payload = {
+        "message": prompt,
+        "max_steps": max_steps,
+        "use_tools": True,
+        "plan_mode": False,      # 计划模式会拒绝 mcp_call_tool，取不到真实数据
+        "persist": True,         # 必须落盘，否则下面捞不回正文
+        "inject_retrieval": False,
+        "system": system,
+    }
+    streamed: list[str] = []
+    final_text = ""
+    final_messages: list[dict] = []
+    session_id = ""
+    event = "message"
+    # 取数轮次多、单步可能几十秒，给足读超时（实测一次完整 10 步调研约 14 分钟）。
+    async with httpx.AsyncClient(timeout=httpx.Timeout(1800, connect=30)) as client:
+        async with client.stream("POST", f"{ivyea.base_url()}/v1/chat/stream",
+                                 json=payload, headers=headers) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                line = line.strip()
+                if not line:
+                    event = "message"
+                    continue
+                if line.startswith("event:"):
+                    event = line[6:].strip() or "message"
+                    continue
+                if not line.startswith("data:"):
+                    continue
+                try:
+                    data = json.loads(line[5:].strip() or "{}")
+                except Exception:
+                    continue
+                if not session_id and data.get("session_id"):
+                    session_id = str(data["session_id"])
+                if event == "token":
+                    streamed.append(str(data.get("text") or ""))
+                elif event == "final":
+                    final_text = str(data.get("text") or "")
+                    if isinstance(data.get("messages"), list):
+                        final_messages = data["messages"]
+                elif event == "error":
+                    raise RuntimeError(str(data.get("detail") or data.get("error") or data))
+
+    from app.services.asin_audit import _best_report_from_messages, _report_from_session
+    candidates = [
+        _report_from_session(session_id) if session_id else "",
+        _best_report_from_messages(final_messages),
+        final_text,
+        "".join(streamed),
+    ]
+    # 取最长的那份：正文一定比「已输出完毕」的收尾句长得多。
+    return max((c or "" for c in candidates), key=len).strip()
 
 
 async def _try_ivyea_agent(
@@ -1643,6 +1746,8 @@ async def _stream_cli_runner(runner: str, prompt: str) -> AsyncGenerator[str, No
     env.setdefault("NO_COLOR", "1")
     env.setdefault("HERMES_ACCEPT_HOOKS", "1")
 
+    # hermes 分支：自动链路已不再走它（RUNNER_ORDER/文本链均已移除），
+    # 保留仅为兼容显式传入 runner="hermes" 的调用方。
     hermes_py = _hermes_venv_python() if runner == "hermes" else None
     if runner == "hermes" and hermes_py:
         # Use the streaming wrapper: prompt delivered via stdin, no argv length
@@ -1833,7 +1938,7 @@ async def synthesize(
         + "\n".join(f"  • {f}" for f in failures)
         + "\n\n常见修法："
         + "\n  1. 在 ~/.hermes/.env 中设置 DEEPSEEK_API_KEY=sk-xxx（或在系统配置中添加）"
-        + "\n  2. 安装 hermes/codex/claude 任一 CLI，并在「系统配置 → 外部集成路径」配置绝对路径"
+        + "\n  2. 安装 ivyea/codex/claude 任一 CLI，并在「系统配置 → 外部集成路径」配置绝对路径"
         + "\n  3. 或在「系统配置 → AI 服务」填入有 Claude 权限的 Apimart 密钥"
         + f"\n\n当前提供商顺序：{', '.join(chain) or '（空）'}"
     )
@@ -1846,27 +1951,32 @@ async def synthesize_native(
     marketplace: str,
     prompt_override: str | None = None,
 ) -> AsyncGenerator[tuple[str, str], None]:
-    """Hermes-native path: skip sorftime pre-fetch, give hermes a tool-calling
-    prompt so it fetches data via its own sorftime MCP and writes the report.
+    """MCP-native path: skip sorftime pre-fetch, hand the agent a tool-calling
+    prompt so it fetches the data through its own MCP servers and writes the
+    report from real numbers.
 
-    Only tries hermes (other CLI/HTTP providers have no MCP access).
+    Runs on ivyea-agent (2026-08-06; previously hermes). ~/.ivyea/mcp.json has
+    sorftime / sellersprite / sif_mcp registered as trusted, so the MCP access
+    that used to be hermes' exclusive advantage is now the agent's too.
     Yields (provider, chunk) tuples; on failure yields ('error', detail).
     Caller should fall back to standard ``synthesize()`` with pre-fetched data
     if this generator yields an error.
 
     ``prompt_override`` replaces the generic mode prompt with a task-specific
-    one (e.g. 评论聚类 / Listing 改写) while keeping the same hermes+MCP path.
+    one (e.g. 评论聚类 / Listing 改写) while keeping the same agent+MCP path.
     """
-    prompt = prompt_override or _build_hermes_native_prompt(mode, query, marketplace)
-    failures: list[str] = []
-    got_real_chunk = False
-    async for prov, chunk in _try_cli("hermes", prompt, failures):
-        yield prov, chunk
-        if prov != "_attempt":
-            got_real_chunk = True
-    if not got_real_chunk:
-        reason = failures[0] if failures else "hermes 无输出"
-        yield "error", reason
+    prompt = prompt_override or _build_mcp_native_prompt(mode, query, marketplace)
+    try:
+        report = await run_ivyea_native(prompt, _NATIVE_SYSTEM.format(
+            role="市场调研智能体", deliv="报告"))
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("ivyea-agent native path failed: %s", exc)
+        yield "error", f"IvyeaAgent 原生取数失败：{exc}"
+        return
+    if not report:
+        yield "error", "IvyeaAgent 无输出"
+        return
+    yield "ivyea-agent", report
 
 
 async def run_text_chain(
@@ -1875,7 +1985,8 @@ async def run_text_chain(
     """Canonical text generation over the standard fallback chain.
 
     The single entry point every board should use for "write me text" tasks:
-    Hermes → global fallback model → Codex → Claude (or a custom ``order``).
+    IvyeaAgent → DeepSeek → global fallback model → Codex → Claude
+    (or a custom ``order``).
     Returns ``(provider, text)`` for the first provider that yields output.
     Raises ``RuntimeError`` with a diagnostic if the whole chain fails.
 

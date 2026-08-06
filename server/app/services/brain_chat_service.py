@@ -24,6 +24,9 @@ DB_PATH = Path(os.environ.get("IVYEA_OPS_BRAIN_CHAT_DB", str(settings.data_dir /
 MAX_UPLOAD_BYTES = int(os.environ.get("BRAIN_UPLOAD_MAX_BYTES", str(10 * 1024 * 1024)))
 ALLOWED_UPLOAD_EXTS = {".md", ".txt", ".csv", ".json", ".xlsx", ".pdf"}
 ALLOWED_CATEGORIES = {"inbox", "amazon", "products", "market", "ads", "compliance", "suppliers"}
+# CLI runner used when the in-process IvyeaAgent service isn't reachable.
+# 2026-08-06: hermes → ivyea-agent（hermes 不再是本机默认智能体）。
+_RUNNER = "ivyea-agent"
 MAX_CHAT_CHARS = 8000
 MAX_INGEST_TEXT_CHARS = int(os.environ.get("BRAIN_INGEST_TEXT_MAX_CHARS", "200000"))
 
@@ -300,15 +303,18 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
     return None
 
 
-def _call_hermes_json(prompt: str, timeout: int = 90) -> dict[str, Any] | None:
-    if os.environ.get("BRAIN_INGEST_DISABLE_HERMES", "").lower() in {"1", "true", "yes"}:
+def _call_runner_json(prompt: str, timeout: int = 90) -> dict[str, Any] | None:
+    # 旧环境变量名保留兼容，新名字与 runner 对齐。
+    _off = {"1", "true", "yes"}
+    if (os.environ.get("BRAIN_INGEST_DISABLE_AGENT", "").lower() in _off
+            or os.environ.get("BRAIN_INGEST_DISABLE_HERMES", "").lower() in _off):
         return None
-    hermes = _hermes_bin()
-    cmd = [hermes, "chat", "-q", prompt, "-Q", "--source", "IvyeaOps-web-brain-ingest", "--max-turns", "1", "--toolsets", ""]
+    from app.services.runners import _build_runner_cmd
+    cmd = _build_runner_cmd(_RUNNER, _runner_bin(), prompt)
     proc = subprocess.run(
         cmd,
         cwd=str(gb.BRAIN_ROOT),
-        env=_hermes_env(),
+        env=_runner_env(),
         text=True,
         capture_output=True,
         timeout=timeout,
@@ -317,7 +323,7 @@ def _call_hermes_json(prompt: str, timeout: int = 90) -> dict[str, Any] | None:
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or "").strip()[-800:]
         raise BrainChatError(f"Hermes 分析失败：{detail or '未知错误'}")
-    return _extract_json_object(_strip_hermes_output(proc.stdout))
+    return _extract_json_object(_strip_runner_output(proc.stdout))
 
 
 def analyze_pasted_text(text: str) -> dict[str, Any]:
@@ -347,7 +353,7 @@ def analyze_pasted_text(text: str) -> dict[str, Any]:
         """
     ).strip()
     try:
-        analysis = _call_hermes_json(prompt)
+        analysis = _call_runner_json(prompt)
     except Exception as e:
         warnings.append(f"Hermes 自动分析失败，已使用规则兜底：{e}")
     if not analysis:
@@ -667,33 +673,29 @@ def list_uploads(limit: int = 50) -> dict[str, Any]:
     return {"uploads": items}
 
 
-def _hermes_bin() -> str:
-    from app.core import integrations
-    legacy = os.environ.get("BRAIN_CHAT_HERMES_BIN", "").strip()
-    if legacy and Path(legacy).exists():
-        return legacy
-    resolved = integrations.hermes_bin()
+def _runner_bin() -> str:
+    """Absolute path of the CLI runner (2026-08-06: ivyea, was hermes).
+
+    BRAIN_CHAT_RUNNER_BIN 是新的显式覆盖；旧的 BRAIN_CHAT_HERMES_BIN 不再读取——
+    它指向的是 hermes 可执行文件，继续认它会让本函数又跑回 hermes 去。"""
+    from app.services.runners import _find_bin
+    override = os.environ.get("BRAIN_CHAT_RUNNER_BIN", "").strip()
+    if override and Path(override).exists():
+        return override
+    resolved = _find_bin(_RUNNER)
     if resolved:
         return resolved
-    raise BrainChatError("Hermes CLI 不可用：没有找到 hermes 可执行文件。")
+    raise BrainChatError("IvyeaAgent CLI 不可用：没有找到 ivyea 可执行文件。")
 
 
-def _hermes_env() -> dict[str, str]:
+def _runner_env() -> dict[str, str]:
+    """Child env for the CLI runner. ivyea 读自己的 ~/.ivyea 配置，不需要再注入
+    ~/.hermes/.env 的 key，也不需要 HERMES_* 开关（2026-08-06 切换时移除）。"""
     from app.core import integrations
     env = os.environ.copy()
     extra_paths = [*integrations.extra_path_dirs(), "/usr/local/bin", "/usr/bin"]
     env["PATH"] = os.pathsep.join(extra_paths + [env.get("PATH", "")])
     env.setdefault("PYTHONUNBUFFERED", "1")
-    env.setdefault("HERMES_ACCEPT_HOOKS", "1")
-    # Inject the API keys IvyeaOps wrote to ~/.hermes/.env so the hermes CLI
-    # authenticates even if it doesn't auto-load that file (esp. on Windows).
-    try:
-        from app.services.hermes_config_sync import _read_env_file
-        for k, v in _read_env_file().items():
-            if v:
-                env.setdefault(k, v)
-    except Exception:
-        pass
     return env
 
 
@@ -725,18 +727,19 @@ def chat_model_status() -> dict[str, Any]:
         }
     if hermes_available():
         try:
-            hermes = _hermes_bin()
+            runner_bin = _runner_bin()
         except BrainChatError:
-            hermes = _HERMES_VENV_PYTHON
+            runner_bin = ""
         return {
             "configured": True,
-            "provider": "hermes",
+            "provider": "ivyea-agent",
             "base_url": "",
-            "model": "Hermes Agent",
-            "hermes_bin": hermes,
-            "mode": "hermes-cli",
+            "model": "IvyeaAgent CLI",
+            # 键名保持 hermes_bin：前端 chat_model_status 的既有契约，改名会断消费方。
+            "hermes_bin": runner_bin,
+            "mode": "ivyea-cli",
         }
-    # No Hermes — the chat still works via the unified global text chain
+    # No CLI runner — the chat still works via the unified global text chain
     # (IvyeaAgent / DeepSeek / 全局兜底大模型), the same chain every other panel uses.
     from app.services import ai_synthesis_service as _ai
     if _ai.has_text_provider():
@@ -767,34 +770,25 @@ def _messages_to_hermes_prompt(messages: list[dict[str, str]]) -> str:
     ).strip()
 
 
-def _strip_hermes_output(output: str) -> str:
-    lines = [line for line in output.splitlines() if not line.strip().startswith("session_id:")]
+def _strip_runner_output(output: str) -> str:
+    """Runner stdout → 纯回答文本（stream-json 时取 result 事件，纯文本原样）。"""
+    from app.services.runners import extract_runner_output
+    text = extract_runner_output(_RUNNER, output or "").get("text") or (output or "")
+    lines = [line for line in text.splitlines() if not line.strip().startswith("session_id:")]
     text = "\n".join(lines).strip()
     if not text:
-        raise BrainChatError("Hermes 返回了空响应。")
+        raise BrainChatError("智能体返回了空响应。")
     return text
 
 
-def _hermes_chat_text(prompt: str) -> str:
-    hermes = _hermes_bin()
-    cmd = [
-        hermes,
-        "chat",
-        "-q",
-        prompt,
-        "-Q",
-        "--source",
-        "IvyeaOps-web-brain",
-        "--max-turns",
-        "1",
-        "--toolsets",
-        "",
-    ]
+def _runner_chat_text(prompt: str) -> str:
+    from app.services.runners import _build_runner_cmd
+    cmd = _build_runner_cmd(_RUNNER, _runner_bin(), prompt)
     try:
         proc = subprocess.run(
             cmd,
             cwd=str(gb.BRAIN_ROOT),
-            env=_hermes_env(),
+            env=_runner_env(),
             text=True,
             capture_output=True,
             timeout=int(os.environ.get("BRAIN_CHAT_HERMES_TIMEOUT", "180")),
@@ -807,7 +801,7 @@ def _hermes_chat_text(prompt: str) -> str:
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or "").strip()[-1200:]
         raise BrainChatError(f"Hermes 调用失败：{detail or '未知错误'}")
-    return _strip_hermes_output(proc.stdout)
+    return _strip_runner_output(proc.stdout)
 
 
 def _global_answer_sync(prompt: str) -> str:
@@ -826,8 +820,8 @@ def _last_user_text(messages: list[dict[str, str]]) -> str:
 
 def _call_llm(messages: list[dict[str, str]]) -> str:
     # Front door: the governed IvyeaAgent brain grounds the answer in its own
-    # built-in Amazon knowledge base. Degrade to Hermes / the unified global text
-    # chain only when the local IvyeaAgent service is unavailable or empty.
+    # built-in Amazon knowledge base. Degrade to the ivyea CLI / the unified
+    # global text chain when the local IvyeaAgent service is unavailable or empty.
     if ivyea_chat_available():
         try:
             from app.services import ivyea_agent_service as _ia
@@ -840,7 +834,7 @@ def _call_llm(messages: list[dict[str, str]]) -> str:
     prompt = _messages_to_hermes_prompt(messages)
     if hermes_available():
         try:
-            out = _hermes_chat_text(prompt)
+            out = _runner_chat_text(prompt)
             if out.strip():
                 return out
         except BrainChatError:
@@ -948,22 +942,8 @@ def send_message(session_id: str, content: str) -> dict[str, Any]:
 
 
 # ── Streaming chat (SSE) ────────────────────────────────────────────────────
-_BRAIN_STREAM_WRAPPER = str(Path(__file__).parent / "brain_stream_wrapper.py")
-
-
-def _hermes_venv_python() -> str:
-    """Path to the Hermes agent venv's python — POSIX uses venv/bin/python,
-    Windows uses venv/Scripts/python.exe. Returns whichever exists (POSIX layout
-    as the fallback string when neither does, so callers still get a path)."""
-    base = Path.home() / ".hermes" / "hermes-agent" / "venv"
-    win = base / "Scripts" / "python.exe"
-    posix = base / "bin" / "python"
-    if win.exists():
-        return str(win)
-    return str(posix)
-
-
-_HERMES_VENV_PYTHON = _hermes_venv_python()
+# 2026-08-06：hermes venv 的 token 流 wrapper（brain_stream_wrapper.py）已停用，
+# 流式回答统一走 stream_spec() 里的 `ivyea chat -p`。
 
 
 def _row_to_message(row: sqlite3.Row) -> dict[str, Any]:
@@ -1030,7 +1010,7 @@ def begin_chat_turn(session_id: str, content: str, regenerate: bool = False, cat
 
 def commit_chat_answer(session_id: str, answer: str, citations: list[dict[str, Any]]) -> dict[str, Any]:
     """Persist the streamed assistant answer once generation finishes."""
-    clean = _strip_hermes_output(answer) if answer.strip() else ""
+    clean = _strip_runner_output(answer) if answer.strip() else ""
     if not clean:
         raise BrainChatError("Hermes 返回了空响应。")
     with _connect() as conn:
@@ -1045,45 +1025,36 @@ def delete_message(message_id: str) -> dict[str, Any]:
     return {"deleted": (cur.rowcount or 0) > 0, "id": message_id}
 
 
-def _has_hermes_venv() -> bool:
-    return Path(_hermes_venv_python()).exists()
-
-
-def _has_hermes_cli() -> bool:
-    from app.core import integrations
+def _has_runner_cli() -> bool:
+    from app.services.runners import _find_bin
     try:
-        return bool(integrations.hermes_bin())
+        return bool(_find_bin(_RUNNER))
     except Exception:
         return False
 
 
 def stream_spec(prompt: str) -> dict[str, Any]:
-    """Subprocess spec for a Hermes answer. Prefer the agent venv wrapper (true
-    token-by-token streaming); fall back to `hermes chat -q … -Q --yolo` — the same
-    CLI the agents board uses — when only the CLI is present (e.g. Windows, where
-    the venv layout isn't created). The trailing `session_id:` line the CLI prints
-    is stripped by _strip_hermes_output on commit."""
-    if _has_hermes_venv():
-        return {
-            "argv": [_hermes_venv_python(), _BRAIN_STREAM_WRAPPER],
-            "stdin": prompt.encode("utf-8"),
-            "env": _hermes_env(),
-            "cwd": str(gb.BRAIN_ROOT),
-        }
+    """Subprocess spec for a CLI-runner answer (2026-08-06: ivyea-agent).
+
+    刻意不走 _build_runner_cmd —— 它会给新版 ivyea 加 --output-format stream-json，
+    而这里的 stdout 是直接当作回答正文流给 SSE 的，NDJSON 会糊到用户脸上。
+    所以这里显式拼 `ivyea chat -p <prompt>` + 审批档，拿纯文本。"""
+    from app.services.runners import _ivyea_permission_args
+    binary = _runner_bin()
     return {
-        "argv": [_hermes_bin(), "chat", "-q", prompt, "-Q", "--yolo"],
+        "argv": [binary, "chat", "-p", prompt, *_ivyea_permission_args(binary)],
         "stdin": b"",
-        "env": _hermes_env(),
+        "env": _runner_env(),
         "cwd": str(gb.BRAIN_ROOT),
     }
 
 
 def hermes_available() -> bool:
-    """True when GBrain chat can answer via Hermes — either the agent venv (token
-    streaming via brain_stream_wrapper) OR the hermes CLI (Windows, where the venv
-    layout isn't created). When False, the SSE route answers via the unified global
-    text chain instead, so the knowledge-base chat still works without Hermes."""
-    return _has_hermes_venv() or _has_hermes_cli()
+    """True when GBrain chat can answer via the CLI runner (ivyea-agent).
+
+    名字保留是为了不动 routers/brain.py 的既有调用；语义已是「CLI 兜底可用吗」。
+    False 时 SSE 路由改用统一全局文本链，知识库对话照样能用。"""
+    return _has_runner_cli()
 
 
 async def stream_global_answer(prompt: str) -> AsyncIterator[str]:

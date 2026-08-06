@@ -1,7 +1,7 @@
 """Ad-report audit job manager.
 
 Runs the ``zach-search-term-report-analyzer`` skill via an agent CLI
-(hermes / codex / claude) as a background subprocess. Each job analyses a
+(ivyea-agent / codex / claude) as a background subprocess. Each job analyses a
 single Amazon Ads search-term report (SP / SB / SD) that the user uploads.
 
 Workflow
@@ -59,6 +59,8 @@ from app.services.runners import (
     runner_status,
 )
 
+# 路径沿用 ~/.hermes/ivyea-ops-data 只是历史落盘位置（存的是 IvyeaOps 自己的
+# job 数据），与 hermes 这个程序无关；改路径要搬历史数据，故保持不动。
 AD_AUDIT_ROOT = Path.home() / ".hermes" / "ivyea-ops-data" / "ad-audits"
 AD_AUDIT_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -856,7 +858,7 @@ async def _run_agent(job: AdJob) -> None:
 
     job.status = "running"
     job.started_at = _now_iso()
-    mcp_note = "（MCP: sorftime + sif_mcp）" if runner == "hermes" else ""
+    mcp_note = "（MCP: sorftime + sif_mcp）" if runner in ("ivyea-agent", "hermes") else ""
     job.progress = f"已启动 {runner} 解析报告{mcp_note}…"
     _write_meta(job)
 

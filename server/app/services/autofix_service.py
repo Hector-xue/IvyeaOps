@@ -4,10 +4,10 @@ When a feature/tool operation fails (e.g. skill generation, visualization tool
 build), the frontend offers to launch an AI repair flow. This module is the
 backend engine for that flow. Design goals, in priority order:
 
-  1. NEVER touch production source during diagnosis. hermes runs inside an
+  1. NEVER touch production source during diagnosis. the agent runs inside an
      isolated ``git worktree`` copy of the repo; only an explicit ``apply``
      (after the user reviews the diff) writes to the real working tree.
-  2. NEVER leak resources. hermes runs as a *subprocess* (not in-process), so
+  2. NEVER leak resources. the agent runs as a *subprocess* (not in-process), so
      its memory dies with it. A single-flight lock allows at most one active
      job; a hard timeout kills a runaway process; worktrees are always removed.
   3. Be reversible. ``apply`` commits onto the real repo and records the
@@ -35,8 +35,11 @@ from typing import Any, Dict, Optional
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SERVICE_UNIT = "ivyea-ops.service"
 
+# 修复用的 runner。2026-08-06 从 hermes 切到 ivyea-agent：hermes 不再是本机
+# 的默认智能体，ivyea 自带代码工具链且 argv 由 runners._build_runner_cmd 统一产出。
+_RUNNER = "ivyea-agent"
 # Caps. Diagnosis is the only long-running step; keep a hard ceiling so a stuck
-# hermes can never pin memory/CPU indefinitely.
+# agent can never pin memory/CPU indefinitely.
 _DIAGNOSE_TIMEOUT_S = 900
 _DIFF_MAX_CHARS = 60_000
 _LOG_TAIL_CHARS = 8_000
@@ -50,7 +53,7 @@ class Job:
     id: str
     error: Dict[str, Any]
     status: str = "running"  # running|diagnosed|applying|applied|failed|rejected|restarting
-    summary: str = ""        # hermes' narrative (root cause + fix)
+    summary: str = ""        # the agent's narrative (root cause + fix)
     diff: str = ""           # proposed git diff (capped)
     changed_files: list[str] = field(default_factory=list)
     needs_restart: bool = False   # any server/**.py changed
@@ -140,8 +143,8 @@ async def start_diagnose(error: Dict[str, Any]) -> Dict[str, Any]:
         if _is_busy():
             raise RuntimeError("已有一个修复任务在进行中，请等待它完成")
         from app.services.runners import _find_bin
-        if not _find_bin("hermes"):
-            raise RuntimeError("hermes CLI 不可用，无法启动自动修复")
+        if not _find_bin(_RUNNER):
+            raise RuntimeError("ivyea CLI 不可用，无法启动自动修复")
         job = Job(id=uuid.uuid4().hex[:12], error=error)
         _active = job
         _task = asyncio.create_task(_run_diagnose(job), name=f"autofix-{job.id}")
@@ -149,7 +152,12 @@ async def start_diagnose(error: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def _run_diagnose(job: Job) -> None:
-    from app.services.runners import _find_bin, build_child_env
+    from app.services.runners import (
+        _build_runner_cmd,
+        _find_bin,
+        build_child_env,
+        extract_runner_output,
+    )
 
     wt = _WORKTREE_PARENT / job.id
     job.branch = f"autofix/{job.id}"
@@ -161,16 +169,18 @@ async def _run_diagnose(job: Job) -> None:
             raise RuntimeError(f"创建隔离副本失败: {r.stderr.strip()[:300]}")
         job.worktree = str(wt)
 
-        binary = _find_bin("hermes")
+        binary = _find_bin(_RUNNER)
         env = build_child_env(binary)
-        env["HERMES_YOLO_MODE"] = "1"        # auto-approve tool calls
-        env["HERMES_ACCEPT_HOOKS"] = "1"
         env.setdefault("TERM", "dumb")
         env.setdefault("NO_COLOR", "1")
 
         prompt = _build_prompt(job.error)
+        # _build_runner_cmd 已经带上 ivyea 的无人值守审批档（--approve-all /
+        # --permission-mode），修复必须能真正落笔改文件——安全边界是 worktree 隔离
+        # 加人工审核合并，不是靠工具审批拦。
+        cmd = _build_runner_cmd(_RUNNER, binary, prompt)
         proc = await asyncio.create_subprocess_exec(
-            binary, "-z", prompt,
+            *cmd,
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
@@ -188,10 +198,12 @@ async def _run_diagnose(job: Job) -> None:
                 pass
             raise RuntimeError(f"修复超时（>{_DIAGNOSE_TIMEOUT_S}s），已终止")
 
-        text = (out or b"").decode("utf-8", errors="replace")
+        raw = (out or b"").decode("utf-8", errors="replace")
+        # ivyea 新版走 stream-json；取出最终答案而不是把 NDJSON 原文塞给用户看。
+        text = extract_runner_output(_RUNNER, raw).get("text") or raw
         job.summary = text[-_LOG_TAIL_CHARS:].strip()
 
-        # Collect what hermes changed in the isolated copy.
+        # Collect what the agent changed in the isolated copy.
         _git("add", "-A", cwd=wt)
         diff = _git("diff", "--cached", cwd=wt).stdout
         names = _git("diff", "--cached", "--name-only", cwd=wt).stdout.strip()
@@ -202,7 +214,7 @@ async def _run_diagnose(job: Job) -> None:
 
         if not job.changed_files:
             job.status = "failed"
-            job.error_detail = "hermes 未能修改任何文件（可能根因不在代码层面）。下方为它的分析。"
+            job.error_detail = "智能体未能修改任何文件（可能根因不在代码层面）。下方为它的分析。"
         else:
             job.status = "diagnosed"
     except Exception as exc:  # noqa: BLE001 — surface everything to the UI

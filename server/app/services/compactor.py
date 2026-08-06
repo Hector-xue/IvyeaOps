@@ -29,10 +29,12 @@ from app.services import agent_session_service as svc
 # deployment via env. ~32k matches Claude/GPT context windows comfortably.
 AUTO_COMPACT_THRESHOLD = int(os.environ.get("IVYEA_OPS_AUTOCOMPACT_TOKENS", "32000"))
 
-# Model used for the summarization step. Route explicitly to GPT so we no
-# longer depend on the retired localhost:8000 gateway.
-SUMMARY_MODEL = os.environ.get("IVYEA_OPS_SUMMARY_MODEL", "gpt-5.4")
-SUMMARY_PROVIDER = os.environ.get("IVYEA_OPS_SUMMARY_PROVIDER", "openai-codex")
+# Runner used for the summarization step. 2026-08-06: hermes → ivyea-agent.
+# ivyea 用自己配置的主脑，不接受外部 --provider/-m 覆盖，所以下面两个 hermes
+# 时代的模型覆盖常量仅为兼容旧 env 保留，代码路径已不再读取它们。
+_RUNNER = "ivyea-agent"
+SUMMARY_MODEL = os.environ.get("IVYEA_OPS_SUMMARY_MODEL", "gpt-5.4")          # legacy, unused
+SUMMARY_PROVIDER = os.environ.get("IVYEA_OPS_SUMMARY_PROVIDER", "openai-codex")  # legacy, unused
 SUMMARY_MAX_TOKENS = int(os.environ.get("IVYEA_OPS_SUMMARY_MAX_TOKENS", "1200"))
 
 
@@ -94,25 +96,21 @@ def _gather_messages(session_id: str) -> list[dict[str, str]]:
     return payload
 
 
-def _hermes_bin() -> str:
-    from app.core import integrations
-    # Legacy override kept for backward compat; new code should use hub_settings.
-    legacy = os.environ.get("BRAIN_CHAT_HERMES_BIN", "").strip()
-    if legacy and Path(legacy).exists():
-        return legacy
-    resolved = integrations.hermes_bin()
+def _runner_bin() -> str:
+    """Locate the summarizer CLI. 2026-08-06: ivyea-agent replaced hermes here."""
+    from app.services.runners import _find_bin
+    resolved = _find_bin(_RUNNER)
     if resolved:
         return resolved
-    raise CompactorError("Hermes CLI 不可用：没有找到 hermes 可执行文件。")
+    raise CompactorError("IvyeaAgent CLI 不可用：没有找到 ivyea 可执行文件。")
 
 
-def _hermes_env() -> dict[str, str]:
+def _runner_env() -> dict[str, str]:
     from app.core import integrations
     env = os.environ.copy()
     extra_paths = [*integrations.extra_path_dirs(), "/usr/local/bin", "/usr/bin"]
     env["PATH"] = os.pathsep.join(extra_paths + [env.get("PATH", "")])
     env.setdefault("PYTHONUNBUFFERED", "1")
-    env.setdefault("HERMES_ACCEPT_HOOKS", "1")
     return env
 
 
@@ -124,41 +122,35 @@ def _messages_to_prompt(messages: list[dict[str, str]]) -> str:
     return "\n\n".join(chunks).strip()
 
 
-def _strip_hermes_output(output: str) -> str:
-    lines = [line for line in output.splitlines() if not line.strip().startswith("session_id:")]
+def _strip_runner_output(output: str) -> str:
+    """Normalize the runner's stdout into the bare summary text.
+
+    ivyea 新版 `-p` 会输出 stream-json，先用统一的 extract_runner_output 取最终
+    答案；旧版纯文本原样透传。再滤掉 CLI 可能附带的 session_id: 行。"""
+    from app.services.runners import extract_runner_output
+    text = extract_runner_output(_RUNNER, output or "").get("text") or (output or "")
+    lines = [line for line in text.splitlines() if not line.strip().startswith("session_id:")]
     text = "\n".join(lines).strip()
     if not text:
-        raise CompactorError("Hermes 返回了空响应")
+        raise CompactorError("摘要模型返回了空响应")
     return text
 
 
 def _call_summary_model(messages: list[dict[str, str]]) -> tuple[str, int]:
-    """Call Hermes CLI and return (summary, token_estimate)."""
+    """Call the summarizer CLI and return (summary, token_estimate)."""
     if not messages:
         raise CompactorError("没有可压缩的消息")
     prompt = _messages_to_prompt(messages)
-    cmd = [
-        _hermes_bin(),
-        "chat",
-        "-q",
-        prompt,
-        "-Q",
-        "--source",
-        "IvyeaOps-session-compactor",
-        "--max-turns",
-        "1",
-        "--toolsets",
-        "",
-        "--provider",
-        SUMMARY_PROVIDER,
-        "-m",
-        SUMMARY_MODEL,
-    ]
+    # 压缩是一次性纯文本任务：`ivyea chat -p` 一轮出结果、不需要工具，也不该
+    # 落进 agent 的会话历史。SUMMARY_PROVIDER/SUMMARY_MODEL 是 hermes 时代的
+    # provider 覆盖参数，ivyea 用自身配置的主脑，故不再透传。
+    from app.services.runners import _build_runner_cmd
+    cmd = _build_runner_cmd(_RUNNER, _runner_bin(), prompt)
     try:
         proc = subprocess.run(
             cmd,
             cwd=str(Path.home()),
-            env=_hermes_env(),
+            env=_runner_env(),
             text=True,
             capture_output=True,
             timeout=180,
@@ -171,7 +163,7 @@ def _call_summary_model(messages: list[dict[str, str]]) -> tuple[str, int]:
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or "").strip()[-1200:]
         raise CompactorError(f"压缩失败: {detail or '未知错误'}")
-    summary = _strip_hermes_output(proc.stdout)
+    summary = _strip_runner_output(proc.stdout)
     token_estimate = max(1, len(summary) // 4)
     return summary, token_estimate
 
