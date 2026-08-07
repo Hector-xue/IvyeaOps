@@ -595,6 +595,7 @@ export async function consoleSessionDelete(sessionId: string) {
   return data;
 }
 
+/** path 可选，且**仅管理员**能绑目录 —— 绑了它就是 Agent 文件工具的工作目录。 */
 export async function consoleWorkspaceCreate(name: string, path = "") {
   const { data } = await api.post<{ ok: boolean; workspace: ConsoleWorkspace }>(
     "/ivyea-agent/console/workspaces", { name, path });

@@ -213,19 +213,35 @@ def list_workspaces(principal: str, is_admin: bool) -> list[dict[str, Any]]:
     return out
 
 
-def create_workspace(name: str, principal: str, path: str = "") -> dict[str, Any]:
+def create_workspace(name: str, principal: str, path: str = "",
+                     is_admin: bool = False) -> dict[str, Any]:
+    """建一个工作区。可选绑定一个目录 —— 那会成为 Agent 文件类工具的工作目录。
+
+    绑目录**仅限管理员**：绑了之后 Agent 的相对路径读写都落在那里，等于给了一片
+    文件系统的访问面。和 MCP 的 stdio command 是同一类授权，规则保持一致。
+    """
     name = (name or "").strip()[:120]
+    path = (path or "").strip()
     if not name:
         raise ValueError("工作区名不能为空")
     if name == DEFAULT_WORKSPACE:
         raise ValueError("这是内置工作区，不需要创建")
+    if path:
+        if not is_admin:
+            raise ValueError("只有管理员可以给工作区绑定目录")
+        p = Path(path).expanduser()
+        if not p.is_absolute():
+            raise ValueError("目录必须是绝对路径")
+        if not p.is_dir():
+            raise ValueError(f"目录不存在：{p}")
+        path = str(p.resolve())
     with _conn() as conn:
         conn.execute(
             "INSERT OR REPLACE INTO console_workspaces (name, principal, path, created)"
             " VALUES (?, ?, ?, ?)",
-            (name, principal or "", (path or "").strip(), time.time()),
+            (name, principal or "", path, time.time()),
         )
-    return {"name": name, "path": (path or "").strip(), "builtin": False}
+    return {"name": name, "path": path, "builtin": False}
 
 
 def delete_workspace(name: str, principal: str, is_admin: bool) -> int:
@@ -245,7 +261,14 @@ def delete_workspace(name: str, principal: str, is_admin: bool) -> int:
 
 
 def workspace_path(name: str, principal: str) -> str:
-    """工作区绑定的目录（传给 agent 当文件类工具的工作目录）。没绑就空。"""
+    """工作区绑定的目录（传给 agent 当文件类工具的工作目录）。没绑就空。
+
+    ⚠️ 工作区名和目录是**两件事**：名字是给人看的分组标签（可能是中文），目录才是
+    路径。把名字直接当 workspace 发给 agent，会让文件工具的相对路径落到一个不存在
+    的目录上 —— 这是实测踩到过的 bug，所以路由层必须经这里换算一次。
+
+    目录后来被删了就当没绑，别把 agent 的工作目录指到一个不存在的地方。
+    """
     name = (name or "").strip()
     if not name or name == DEFAULT_WORKSPACE:
         return ""
@@ -254,4 +277,7 @@ def workspace_path(name: str, principal: str) -> str:
             "SELECT path FROM console_workspaces WHERE name = ? AND (principal = ? OR principal = '')",
             (name, principal or ""),
         ).fetchone()
-    return str(row["path"]) if row and row["path"] else ""
+    path = str(row["path"]) if row and row["path"] else ""
+    if path and not Path(path).is_dir():
+        return ""
+    return path

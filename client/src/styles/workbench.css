@@ -3133,3 +3133,5 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
   color:var(--t3)}
 .sch-run-body{padding:8px 12px;border:1px solid var(--b);border-radius:var(--r);
   background:var(--bg1);font-size:11px;line-height:1.75;max-height:420px;overflow:auto}
+.sb-ws-err{padding:1px 12px 3px;font-size:9.5px;color:var(--red);line-height:1.5}
+.sb-ws-hint{padding:1px 12px 5px;font-size:9px;color:var(--t3);line-height:1.5}

@@ -381,9 +381,28 @@ def _tee_session_events(chunks: Any, principal: str, workspace: str = "") -> Any
             buf = b""
 
 
+def _resolve_workspace(body: ChatBody, user: str) -> tuple[dict[str, Any], str]:
+    """把 payload 里的工作区**名字**换算成真实目录，返回 (payload, 名字)。
+
+    这两件事很容易混：`ChatBody.workspace` 最终落到 `ToolContext.workspace`，那是
+    **agent 文件类工具的工作目录**；而任务台前端送上来的是给人看的分组名（可能是
+    中文）。不换算就会把"选品调研"当成一个目录路径 —— 相对路径的文件操作全指向
+    一个不存在的地方。分组仍然按名字记（tee 用它登记会话归属）。
+    """
+    payload = _chat_payload(body)
+    name = str(body.workspace or "")
+    if name:
+        payload["workspace"] = console_sessions.workspace_path(name, user)
+        if not payload["workspace"]:
+            payload.pop("workspace", None)      # 没绑目录 = 用 agent 的默认 cwd
+    return payload, name
+
+
 @router.post("/chat")
-def chat(body: ChatBody, request: Request) -> dict[str, Any]:
-    return _call(svc.chat, _with_ops_bridge(_chat_payload(body), request))
+def chat(body: ChatBody, request: Request,
+         user: str = Depends(require_user)) -> dict[str, Any]:
+    payload, _ = _resolve_workspace(body, user)
+    return _call(svc.chat, _with_ops_bridge(payload, request))
 
 
 @router.post("/chat/stream")
@@ -392,10 +411,11 @@ def chat_stream(body: ChatBody, request: Request,
     status = svc.ensure_available()
     if not status.get("available"):
         raise HTTPException(status_code=503, detail=f"IvyeaAgent 不可用：{status.get('error') or '服务未连接'}")
+    payload, ws_name = _resolve_workspace(body, user)
     return StreamingResponse(
         _tee_session_events(
-            svc.chat_stream(_with_ops_bridge(_chat_payload(body), request)),
-            user, body.workspace,
+            svc.chat_stream(_with_ops_bridge(payload, request)),
+            user, ws_name,
         ),
         media_type="text/event-stream",
         headers={
@@ -567,9 +587,10 @@ def console_workspace_list(info: dict[str, Any] = Depends(require_user_info)) ->
 @router.post("/console/workspaces")
 def console_workspace_create(body: ConsoleWorkspaceBody,
                              info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
-    principal, _ = _principal_info(info)
+    principal, is_admin = _principal_info(info)
     try:
-        row = console_sessions.create_workspace(body.name, principal, body.path)
+        row = console_sessions.create_workspace(body.name, principal, body.path,
+                                                is_admin=is_admin)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True, "workspace": row}

@@ -167,11 +167,13 @@ def test_default_workspace_always_present_and_first():
     assert ws[0]["name"] == cs.DEFAULT_WORKSPACE and ws[0]["builtin"] is True
 
 
-def test_create_and_scope_workspaces():
-    cs.create_workspace("选品", "alice@x.com", path="/tmp/xuanpin")
+def test_create_and_scope_workspaces(tmp_path):
+    real = tmp_path / "xuanpin"
+    real.mkdir()
+    cs.create_workspace("选品", "alice@x.com", path=str(real), is_admin=True)
     assert [w["name"] for w in cs.list_workspaces("alice@x.com", False)] == [cs.DEFAULT_WORKSPACE, "选品"]
     assert [w["name"] for w in cs.list_workspaces("bob@x.com", False)] == [cs.DEFAULT_WORKSPACE]
-    assert cs.workspace_path("选品", "alice@x.com") == "/tmp/xuanpin"
+    assert cs.workspace_path("选品", "alice@x.com") == str(real.resolve())
 
 
 def test_cannot_create_or_delete_builtin_workspace():
@@ -230,3 +232,66 @@ def test_preview_strips_truncated_marker():
     # 别误伤正常内容
     assert cs.clean_preview("看看 [K1] 这条证据") == "看看 [K1] 这条证据"
     assert cs.clean_preview("第一行\n\n第二行") == "第一行\n\n第二行"
+
+
+# ── 工作区名 → 目录 的换算 ──────────────────────────────────────────────────
+
+def test_workspace_name_is_not_a_directory(tmp_path):
+    """核心回归：工作区名（可能是中文）绝不能被当成目录路径发给 agent。
+
+    实测踩过：前端把「选品调研」当 workspace 送下去，落到 ToolContext.workspace
+    （agent 文件工具的工作目录），相对路径的文件操作全指向一个不存在的地方。
+    """
+    cs.create_workspace("选品调研", "alice@x.com")            # 没绑目录
+    assert cs.workspace_path("选品调研", "alice@x.com") == ""  # → 用 agent 默认 cwd
+    assert cs.workspace_path(cs.DEFAULT_WORKSPACE, "alice@x.com") == ""
+    assert cs.workspace_path("不存在的工作区", "alice@x.com") == ""
+
+    real = tmp_path / "proj"
+    real.mkdir()
+    cs.create_workspace("有目录的", "alice@x.com", str(real), is_admin=True)
+    assert cs.workspace_path("有目录的", "alice@x.com") == str(real.resolve())
+
+
+def test_binding_a_directory_is_admin_only(tmp_path):
+    """绑目录 = 给 Agent 一片文件系统访问面，和 MCP 的 stdio command 同一类授权。"""
+    real = tmp_path / "proj"
+    real.mkdir()
+    with pytest.raises(ValueError, match="管理员"):
+        cs.create_workspace("越权", "bob@x.com", str(real), is_admin=False)
+    # 不绑目录的普通工作区，谁都能建
+    assert cs.create_workspace("普通分组", "bob@x.com")["path"] == ""
+
+
+def test_bad_directory_rejected_at_creation(tmp_path):
+    with pytest.raises(ValueError, match="绝对路径"):
+        cs.create_workspace("相对路径", "a@x.com", "relative/dir", is_admin=True)
+    with pytest.raises(ValueError, match="不存在"):
+        cs.create_workspace("不存在", "a@x.com", str(tmp_path / "nope"), is_admin=True)
+
+
+def test_vanished_directory_falls_back_to_default(tmp_path):
+    """目录后来被删了就当没绑，别把 agent 的工作目录指到一个不存在的地方。"""
+    real = tmp_path / "gone"
+    real.mkdir()
+    cs.create_workspace("会消失的", "a@x.com", str(real), is_admin=True)
+    real.rmdir()
+    assert cs.workspace_path("会消失的", "a@x.com") == ""
+
+
+def test_router_translates_name_to_directory(tmp_path, monkeypatch):
+    """路由层必须换算：payload 里给 agent 的是目录，登记分组用的是名字。"""
+    real = tmp_path / "ws"
+    real.mkdir()
+    cs.create_workspace("选品", "alice@x.com", str(real), is_admin=True)
+
+    payload, name = mod._resolve_workspace(
+        mod.ChatBody(message="hi", workspace="选品"), "alice@x.com")
+    assert payload["workspace"] == str(real.resolve())    # 发给 agent 的是目录
+    assert name == "选品"                                  # 记分组用的是名字
+
+    # 没绑目录的工作区：workspace 直接从 payload 拿掉，让 agent 用默认 cwd
+    cs.create_workspace("纯分组", "alice@x.com")
+    payload2, name2 = mod._resolve_workspace(
+        mod.ChatBody(message="hi", workspace="纯分组"), "alice@x.com")
+    assert "workspace" not in payload2 and name2 == "纯分组"

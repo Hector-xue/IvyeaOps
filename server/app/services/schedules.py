@@ -334,8 +334,13 @@ def run_task_now(task: dict[str, Any], trigger: str = "manual") -> dict[str, Any
         }
         if task.get("skill"):
             payload["skill"] = task["skill"]
+        # 同样要把工作区**名字**换算成目录 —— 直接把名字当路径发下去，
+        # agent 的文件工具会落到一个不存在的目录上。
         if task.get("workspace"):
-            payload["workspace"] = task["workspace"]
+            from app.services import console_sessions
+            ws_dir = console_sessions.workspace_path(task["workspace"], task.get("principal") or "")
+            if ws_dir:
+                payload["workspace"] = ws_dir
 
         # 定时任务往往在半夜/清晨触发，那时 agent daemon 未必还活着。先确保它起来
         # （和任务台的 /chat/stream 一样走 ensure_available），否则到点只会留下一条

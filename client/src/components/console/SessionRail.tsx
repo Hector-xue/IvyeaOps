@@ -51,6 +51,8 @@ export default function SessionRail({
   const [draft, setDraft] = useState("");
   const [adding, setAdding] = useState(false);
   const [newWs, setNewWs] = useState("");
+  const [newWsPath, setNewWsPath] = useState("");
+  const [wsErr, setWsErr] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -114,13 +116,15 @@ export default function SessionRail({
 
   const addWorkspace = async () => {
     const name = newWs.trim();
-    setAdding(false);
-    setNewWs("");
-    if (!name || name === DEFAULT_WS) return;
+    if (!name || name === DEFAULT_WS) { setAdding(false); setNewWs(""); return; }
     try {
-      await consoleWorkspaceCreate(name);
+      await consoleWorkspaceCreate(name, newWsPath.trim());
+      setAdding(false); setNewWs(""); setNewWsPath(""); setWsErr("");
       await load();
-    } catch { /* 名字冲突等，静默；列表会保持原样 */ }
+    } catch (e: any) {
+      // 目录非法/越权要说清楚，不能静默吞掉让人以为建成了
+      setWsErr(e?.response?.data?.detail || "创建失败");
+    }
   };
 
   const dropWorkspace = async (name: string) => {
@@ -145,18 +149,31 @@ export default function SessionRail({
       </div>
 
       {adding && (
-        <input
-          className="sb-ws-input"
-          autoFocus
-          placeholder="工作区名称，回车确认"
-          value={newWs}
-          onChange={(e) => setNewWs(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void addWorkspace();
-            if (e.key === "Escape") { setAdding(false); setNewWs(""); }
-          }}
-          onBlur={() => { setAdding(false); setNewWs(""); }}
-        />
+        <>
+          <input
+            className="sb-ws-input"
+            autoFocus
+            placeholder="工作区名称"
+            value={newWs}
+            onChange={(e) => setNewWs(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void addWorkspace();
+              if (e.key === "Escape") { setAdding(false); setNewWs(""); setNewWsPath(""); setWsErr(""); }
+            }}
+          />
+          <input
+            className="sb-ws-input"
+            placeholder="绑定目录（可选，仅管理员）"
+            value={newWsPath}
+            onChange={(e) => setNewWsPath(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void addWorkspace();
+              if (e.key === "Escape") { setAdding(false); setNewWs(""); setNewWsPath(""); setWsErr(""); }
+            }}
+          />
+          {wsErr && <div className="sb-ws-err">{wsErr}</div>}
+          <div className="sb-ws-hint">回车创建 · Esc 取消。绑了目录，Agent 的文件操作就在那个目录里。</div>
+        </>
       )}
 
       {spaces.map((ws) => {
