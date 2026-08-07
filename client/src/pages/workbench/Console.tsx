@@ -43,6 +43,7 @@ import {
   notifyConsoleSessionsChanged,
   ivyeaOpsTools,
   ivyeaSkills,
+  visionDescribe,
   type IvyeaPermissionRequest,
   type IvyeaSkillInfo,
 } from "../../api/ivyeaAgent";
@@ -129,6 +130,7 @@ function ConsoleInner() {
   const [workspaces, setWorkspaces] = useState<string[]>(["默认工作区"]);
   const [references, setReferences] = useState<ComposerRef[]>([]);
   const [picked, setPicked] = useState<ComposerRef[]>([]);
+  const [images, setImages] = useState<string[]>([]);
   const [loadingSession, setLoadingSession] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
@@ -354,6 +356,20 @@ function ConsoleInner() {
       if (failed.length) notify("warn", `这些引用读不到，已跳过：${failed.join("、")}`);
     }
 
+    // 图片：ops 侧视觉旁路读成文字再带下去（主脑没有视觉，图直接发过去会被 agent 拒）。
+    let visionSystem = "";
+    if (images.length) {
+      try {
+        const d = await visionDescribe(images);
+        if (d?.text?.trim()) {
+          visionSystem = `[用户附图 —— 由视觉模型（${d.provider || "vision"}）读出的内容]\n${d.text.trim()}`;
+        }
+      } catch (e: any) {
+        notify("error", e?.response?.data?.detail
+          || "图片没能读出来，这一轮按纯文字继续。可在「系统配置 → AI 服务」配一个视觉模型。");
+      }
+    }
+
     const startedAt = Date.now();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -378,7 +394,7 @@ function ConsoleInner() {
           auto_skill: !composer.skill,
           plan_mode,
           approval,
-          system: refSystem || undefined,
+          system: [visionSystem, refSystem].filter(Boolean).join("\n\n") || undefined,
           persist: true,
           inject_retrieval: true,
           ops_context: { board: "console", pathname: "/console" },
@@ -460,9 +476,12 @@ function ConsoleInner() {
     }
 
     setPicked([]);                      // 引用是"本轮"的，发完就清
+    setImages([]);
     notifyConsoleSessionsChanged();     // 新会话进左栏 / 已有会话更新时间
     if (finalText.trim()) void loadFollowUps(text, finalText);
-  }, [composer, busy, sessionId, patchTurn, notify, loadFollowUps]);
+    // images / picked 必须在依赖里：send 里读了它们。漏掉的话这个回调会闭包住
+    // 旧值 —— 贴完图不打字直接发，图就丢了（之前靠"总会先打字"侥幸没暴露）。
+  }, [composer, busy, sessionId, images, picked, patchTurn, notify, loadFollowUps]);
 
   const stop = () => {
     abortRef.current?.abort();
@@ -502,6 +521,8 @@ function ConsoleInner() {
       onPickedChange={setPicked}
       scenes={scenes}
       onNewTask={resetSession}
+      images={images}
+      onImagesChange={setImages}
       modelLabel={model}
       onModelClick={() => navigate("/hub-settings")}
       autoFocus={!compact}
@@ -586,6 +607,7 @@ function ConsoleInner() {
       </div>
 
       <ArtifactRail
+        answers={turns.filter((t) => t.role === "assistant" && !t.failed).map((t) => t.text)}
         todos={todos}
         approvals={railApprovals}
         sessionId={sessionId}

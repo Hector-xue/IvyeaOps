@@ -608,6 +608,53 @@ def console_workspace_delete(name: str,
     return {"ok": True, "deleted": name, "sessions_moved": moved}
 
 
+class VisionDescribeBody(BaseModel):
+    images: list[str] = Field(..., min_length=1, max_length=4)
+    prompt: str = Field(default="", max_length=2000)
+
+
+@router.post("/vision/describe")
+async def vision_describe(body: VisionDescribeBody,
+                          _user: str = Depends(require_user)) -> dict[str, Any]:
+    """把图片读成文字 —— 任务台的"贴图"靠它。
+
+    为什么在 ops 这边读而不是把图直接丢给 agent：agent serve 在主脑不支持视觉时
+    **直接抛错**（`main_brain_no_vision`），而本机主脑 deepseek 恰好没有视觉、
+    agent 自己的 `pick_vision_model()` 也返回 None —— 图片发过去必然失败。
+    ops 这边反倒有配好的视觉链（系统配置里的 vision_* ，listing 和技能商店一直在用），
+    所以在这里把图读成文字再作为文本带进那一轮。
+
+    代价要说清楚：Agent 拿到的是**图片的描述**而不是图片本身，精细看图会有损耗。
+    """
+    from app.services import ai_synthesis_service
+
+    imgs = [u for u in body.images if isinstance(u, str) and u.startswith("data:image/")]
+    if not imgs:
+        raise HTTPException(status_code=400, detail="images 必须是 data:image/... 开头的 data URI")
+    # 单张 ~8MB 的 base64 就够放一张高清截图了；再大多半是误传视频/原图
+    for u in imgs:
+        if len(u) > 8 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="单张图片过大（>8MB），请压缩后再试")
+
+    prompt = (body.prompt or "").strip() or (
+        "请客观描述这张图里的内容：文字原样抄出来，表格按行列讲清楚，"
+        "图表说明坐标轴和关键数值。不要臆测图外的信息。"
+    )
+    chunks: list[str] = []
+    provider = ""
+    error = ""
+    async for prov, chunk in ai_synthesis_service.stream_vision(prompt, imgs):
+        if prov == "error":
+            error = chunk
+            break
+        provider = prov
+        chunks.append(chunk)
+    text = "".join(chunks).strip()
+    if error or not text:
+        raise HTTPException(status_code=503, detail=error or "视觉模型没有返回内容，请稍后重试")
+    return {"ok": True, "provider": provider, "text": text}
+
+
 class AgentMCPBody(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     transport: str = Field(..., pattern="^(http|sse|stdio)$")

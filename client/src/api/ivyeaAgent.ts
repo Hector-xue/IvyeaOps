@@ -617,6 +617,17 @@ export function notifyConsoleSessionsChanged() {
   window.dispatchEvent(new CustomEvent(CONSOLE_SESSIONS_CHANGED));
 }
 
+/**
+ * 把图片读成文字（ops 侧视觉旁路）。
+ * agent serve 在主脑没有视觉时会直接抛错，而本机主脑就没有视觉 —— 所以图片不能直接
+ * 丢给 agent，得先在 ops 这边用配好的视觉链读成文字，再作为文本带进那一轮。
+ */
+export async function visionDescribe(images: string[], prompt = "") {
+  const { data } = await api.post<{ ok: boolean; provider: string; text: string }>(
+    "/ivyea-agent/vision/describe", { images, prompt }, { timeout: 180000 });
+  return data;
+}
+
 /** agent 的 MCP 注册表（~/.ivyea/mcp.json）—— 决定 Agent 能连哪些数据源。 */
 export type AgentMcpServer = {
   name: string;

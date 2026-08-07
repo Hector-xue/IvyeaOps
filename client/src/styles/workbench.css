@@ -3158,3 +3158,16 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .cc-ref>button:hover{color:var(--red)}
 /* 菜单要相对输入器定位 */
 .cc-composer{position:relative}
+.cc-rail-actions{display:flex;gap:6px;margin-bottom:8px}
+.cc-rail-actions .cs-btn{padding:3px 9px;font-size:10.5px}
+.cc-rail-report{font-size:11px;line-height:1.75;color:var(--t2);border-top:1px solid var(--b);
+  padding-top:8px}
+.cc-rail-report h1,.cc-rail-report h2,.cc-rail-report h3{font-size:12px;margin:10px 0 5px;color:var(--t)}
+.cc-rail-report pre{white-space:pre-wrap;word-break:break-word;font-size:10px}
+.cc-imgs{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px}
+.cc-img{position:relative;display:inline-flex;width:52px;height:52px;border-radius:var(--r);
+  overflow:hidden;border:1px solid var(--b2)}
+.cc-img img{width:100%;height:100%;object-fit:cover}
+.cc-img>button{position:absolute;top:0;right:0;width:16px;height:16px;border:none;
+  background:rgba(0,0,0,.6);color:#fff;font-size:9px;cursor:pointer;line-height:16px;padding:0}
+.cc-img-note{font-size:9.5px;color:var(--t3)}

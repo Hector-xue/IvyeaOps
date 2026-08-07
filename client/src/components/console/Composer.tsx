@@ -50,6 +50,8 @@ export default function Composer({
   onPickedChange,
   scenes = [],
   onNewTask,
+  images = [],
+  onImagesChange,
   modelLabel,
   onModelClick,
   placeholder = "描述任务、粘贴材料，或说说你想让 Ivyea 先看什么…",
@@ -73,6 +75,9 @@ export default function Composer({
   /** / 菜单里的场景（点一下填提示词）。 */
   scenes?: { label: string; prompt: string }[];
   onNewTask?: () => void;
+  /** 待发送的图片（data URI）。粘贴/拖入即入列，发送时由任务台读成文字带下去。 */
+  images?: string[];
+  onImagesChange?: (next: string[]) => void;
   /**
    * 当前主脑模型。**只显示，不在这里切**：agent 的模型是全局配置
    * （/v1/model/configure），不支持按轮次覆盖；做成下拉框会是个点了没反应的假开关。
@@ -208,6 +213,38 @@ export default function Composer({
     onChange({ text: e.target.value });
   };
 
+  const MAX_IMAGES = 4;
+
+  const addImageFiles = (files: File[]) => {
+    if (!onImagesChange) return;
+    const pics = files.filter((f) => f.type.startsWith("image/"));
+    if (!pics.length) return;
+    const room = MAX_IMAGES - images.length;
+    Promise.all(pics.slice(0, Math.max(0, room)).map((f) => new Promise<string>((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result || ""));
+      r.onerror = rej;
+      r.readAsDataURL(f);
+    }))).then((uris) => onImagesChange([...images, ...uris.filter(Boolean)]))
+      .catch(() => void 0);
+  };
+
+  const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.clipboardData?.files || []);
+    if (files.some((f) => f.type.startsWith("image/"))) {
+      e.preventDefault();          // 别让图片同时以文件名形式插进文本
+      addImageFiles(files);
+    }
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    const files = Array.from(e.dataTransfer?.files || []);
+    if (files.some((f) => f.type.startsWith("image/"))) {
+      e.preventDefault();
+      addImageFiles(files);
+    }
+  };
+
   const pickFile = (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (f && onAttach) onAttach(f);
@@ -245,6 +282,19 @@ export default function Composer({
         </div>
       )}
 
+      {images.length > 0 && (
+        <div className="cc-imgs">
+          {images.map((src, i) => (
+            <span className="cc-img" key={i}>
+              <img src={src} alt={`图片 ${i + 1}`} />
+              <button type="button" title="移除"
+                      onClick={() => onImagesChange?.(images.filter((_, j) => j !== i))}>✕</button>
+            </span>
+          ))}
+          <span className="cc-img-note">图片会先被视觉模型读成文字再交给 Agent</span>
+        </div>
+      )}
+
       {picked.length > 0 && (
         <div className="cc-refs">
           {picked.map((r) => (
@@ -264,6 +314,9 @@ export default function Composer({
         rows={rows}
         onChange={onInput}
         onKeyDown={onKeyDown}
+        onPaste={onPaste}
+        onDrop={onDrop}
+        onDragOver={(e) => e.preventDefault()}
         onBlur={() => window.setTimeout(() => setMenu(null), 120)}
       />
       <div className="cc-bar">
