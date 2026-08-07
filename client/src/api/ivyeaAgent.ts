@@ -594,12 +594,19 @@ export const SOURCE_PATH: Record<ConsoleSource, string> = {
 
 export type ConsoleWorkspace = { name: string; path: string; builtin: boolean };
 
-export async function consoleSessions(workspace = "", limit = 60, source = "") {
+export async function consoleSessions(
+  workspace = "", limit = 60, source = "", q = "", offset = 0,
+) {
   const { data } = await api.get<{
     ok: boolean; sessions: ConsoleSessionRow[]; workspaces: ConsoleWorkspace[];
     /** false = agent 读不到，列表是空的但不代表会话没了。 */
     agent_available?: boolean;
-  }>("/ivyea-agent/console/sessions", { params: { workspace, limit, source } });
+    /** 过滤后的总条数（不是本页条数）。 */
+    total?: number;
+    offset?: number;
+    /** 服务端算好的，前端别自己推 —— 推错就是"加载更多"点了没反应。 */
+    has_more?: boolean;
+  }>("/ivyea-agent/console/sessions", { params: { workspace, limit, source, q, offset } });
   return data;
 }
 
@@ -1052,4 +1059,19 @@ export async function consolePresetDelete(name: string) {
 export const CONSOLE_PRESETS_CHANGED = "ivyea-ops:console-presets-changed";
 export function notifyConsolePresetsChanged() {
   window.dispatchEvent(new Event(CONSOLE_PRESETS_CHANGED));
+}
+
+/** 一条会话的审批留痕（谁在什么时候批了/拒了哪一步写操作）。 */
+export type ConsoleApproval = {
+  request_id: string; session_id: string; principal: string;
+  title: string; op_type: string;
+  /** "" = 还没决定（页面中途关掉）；timeout = 超时自动拒。 */
+  decision: "" | "approve" | "session" | "deny" | "abort" | "timeout" | string;
+  requested_at: number; decided_at: number;
+};
+
+export async function consoleSessionApprovals(sessionId: string) {
+  const { data } = await api.get<{ ok: boolean; approvals: ConsoleApproval[] }>(
+    `/ivyea-agent/console/sessions/${encodeURIComponent(sessionId)}/approvals`);
+  return data.approvals || [];
 }

@@ -410,3 +410,17 @@ async def scheduler_loop() -> None:
         except Exception as e:  # noqa: BLE001
             print(f"[IvyeaOps] scheduler error: {e}")
         await asyncio.sleep(TICK_SECONDS)
+
+
+def timezone_label() -> str:
+    """调度用的时区，照实报。
+
+    `next_fire` 走的是 `datetime.fromtimestamp()`（不带 tzinfo），也就是**服务器
+    本地时区** —— 不是 UTC，也不是用户浏览器所在的时区。界面上必须写清楚，
+    否则跨时区的人会按自己的钟去理解「每天 09:00」，然后发现报告在半夜到。
+    """
+    now = datetime.now().astimezone()
+    offset = now.utcoffset() or timedelta(0)
+    total = int(offset.total_seconds() // 60)
+    sign = "+" if total >= 0 else "-"
+    return f"{time.tzname[0]} (UTC{sign}{abs(total) // 60:02d}:{abs(total) % 60:02d})"

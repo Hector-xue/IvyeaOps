@@ -24,6 +24,7 @@ import {
 const DEFAULT_WS = "默认工作区";
 const OPEN_KEY = "ivyea-ops.console.ws-open";
 const SRC_KEY = "ivyea-ops.console.src-filter";
+const PAGE = 30;
 
 /** 来源筛选的可选项。"" = 全部。 */
 const SOURCE_FILTERS: { key: "" | ConsoleSource; label: string }[] = [
@@ -61,6 +62,12 @@ export default function SessionRail({
   });
   const [src, setSrc] = useState<"" | ConsoleSource>(
     () => (localStorage.getItem(SRC_KEY) as ConsoleSource) || "");
+  const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const [limit, setLimit] = useState(PAGE);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [renaming, setRenaming] = useState("");
   const [draft, setDraft] = useState("");
   const [adding, setAdding] = useState(false);
@@ -69,18 +76,34 @@ export default function SessionRail({
   const [wsErr, setWsErr] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // 「加载更多」是把 limit 调大重取整段，而不是把新一页拼到旧数组后面。
+  // 拼接看着更省流量，但一旦有会话被改名/删除/被新一轮顶到前面，两段就会错位、
+  // 出现重复或漏条。会话本来就只有几百条，整段重取更稳。
   const load = useCallback(async () => {
     try {
-      const d = await consoleSessions("", 60, src);
+      const d = await consoleSessions("", limit, src, debouncedQ);
       setRows(d.sessions || []);
       setAgentDown(d.agent_available === false);
+      setTotal(d.total ?? (d.sessions || []).length);
+      setHasMore(!!d.has_more);
       setSpaces(d.workspaces?.length ? d.workspaces : [{ name: DEFAULT_WS, path: "", builtin: true }]);
     } catch {
       // 左栏拿不到列表不该打扰用户 —— 任务台本身照常能用
     } finally {
       setLoaded(true);
+      setLoadingMore(false);
     }
-  }, [src]);
+  }, [src, limit, debouncedQ]);
+
+  // 搜索防抖：每敲一个字就打一次接口，会把服务端和自己都拖慢
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQ(q.trim()), 260);
+    return () => window.clearTimeout(t);
+  }, [q]);
+
+  // 换筛选条件/换关键词都要回到第一页，否则会停在上一次翻到的深度上，
+  // 看着像"搜出来的结果莫名其妙很多"
+  useEffect(() => { setLimit(PAGE); }, [src, debouncedQ]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
@@ -174,6 +197,14 @@ export default function SessionRail({
         <span>工作区</span>
         <button className="sb-ws-add" title="新建工作区" onClick={() => setAdding(true)}>+</button>
       </div>
+
+      <input
+        className="sb-ws-input sb-sess-search"
+        placeholder="搜索会话…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Escape") setQ(""); }}
+      />
 
       <div className="sb-src-filter">
         {SOURCE_FILTERS.map((f) => (
@@ -278,6 +309,20 @@ export default function SessionRail({
           </div>
         );
       })}
+
+      {debouncedQ && rows.length === 0 && (
+        <div className="sb-ws-empty">没有匹配「{debouncedQ}」的会话。</div>
+      )}
+
+      {hasMore && (
+        <button
+          className="sb-sess-more"
+          disabled={loadingMore}
+          onClick={() => { setLoadingMore(true); setLimit((n) => n + PAGE); }}
+        >
+          {loadingMore ? "载入中…" : `加载更多（已显示 ${rows.length} / ${total}）`}
+        </button>
+      )}
     </div>
   );
 }

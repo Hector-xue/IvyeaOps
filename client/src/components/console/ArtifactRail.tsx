@@ -22,6 +22,20 @@ const TABS: { key: TabKey; icon: string; label: string }[] = [
   { key: "session", icon: "◷", label: "会话" },
 ];
 
+/**
+ * 审批决定的四种归宿。**超时和未决必须和"拒绝"分开显示** ——
+ * 都画成红叉的话，"没人理它所以没执行"会被读成"有人看过并否决了"，
+ * 这是事后复盘时最要命的一种误读。
+ */
+const DECISIONS: Record<string, { icon: string; label: string; cls: string }> = {
+  approve: { icon: "✓", label: "已批准", cls: "cs-ok" },
+  session: { icon: "✓", label: "本会话内都批准", cls: "cs-ok" },
+  deny: { icon: "✕", label: "已拒绝", cls: "cs-err" },
+  abort: { icon: "✕", label: "已中止", cls: "cs-err" },
+  timeout: { icon: "⏱", label: "超时未处理，已自动拒绝", cls: "cs-warn" },
+  pending: { icon: "◌", label: "未处理", cls: "cs-dim" },
+};
+
 const STATUS_LABEL: Record<string, string> = {
   completed: "已完成",
   in_progress: "进行中",
@@ -157,15 +171,19 @@ export default function ArtifactRail({
               ? <Empty>本轮没有需要确认的写操作。切到「逐项审批」后，Agent 想改动线上数据时会在这里留痕。</Empty>
               : (
                 <ul className="cc-rail-approvals">
-                  {approvals.map((a, i) => (
-                    <li key={i}>
-                      <span className={a.decision === "deny" || a.decision === "abort" ? "cs-err" : "cs-ok"}>
-                        {a.decision === "deny" || a.decision === "abort" ? "✕" : "✓"}
-                      </span>
-                      <span>{a.title}</span>
-                      <em>{new Date(a.at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</em>
-                    </li>
-                  ))}
+                  {approvals.map((a, i) => {
+                    const d = DECISIONS[a.decision] || DECISIONS.pending;
+                    return (
+                      <li key={i}>
+                        <span className={d.cls} title={d.label}>{d.icon}</span>
+                        <span>{a.title}</span>
+                        <em>{a.at
+                          ? new Date(a.at).toLocaleString("zh-CN",
+                              { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
+                          : d.label}</em>
+                      </li>
+                    );
+                  })}
                 </ul>
               )
           )}

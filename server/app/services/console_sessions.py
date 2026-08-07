@@ -82,6 +82,19 @@ _BASELINE_SCHEMA = (
     );
     """,
     """
+    CREATE TABLE IF NOT EXISTS console_approvals (
+        request_id   TEXT PRIMARY KEY NOT NULL,
+        session_id   TEXT NOT NULL DEFAULT '',
+        principal    TEXT NOT NULL DEFAULT '',
+        title        TEXT NOT NULL DEFAULT '',
+        op_type      TEXT NOT NULL DEFAULT '',
+        decision     TEXT NOT NULL DEFAULT '',
+        requested_at REAL NOT NULL DEFAULT 0,
+        decided_at   REAL NOT NULL DEFAULT 0
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_console_approvals_session ON console_approvals(session_id, requested_at);",
+    """
     CREATE TABLE IF NOT EXISTS console_presets (
         name      TEXT NOT NULL,
         principal TEXT NOT NULL DEFAULT '',
@@ -363,3 +376,47 @@ def delete_preset(name: str, principal: str) -> bool:
         cur = conn.execute("DELETE FROM console_presets WHERE name = ? AND principal = ?",
                            ((name or "").strip(), principal or ""))
         return cur.rowcount > 0
+
+
+# ── 审批留痕 ────────────────────────────────────────────────────────────────
+# 「Agent 想改线上数据，我批了还是拒了」是**这套系统最该留下的一条记录**。
+# 之前它只活在前端 state 里，刷新一下就没了 —— 出了事根本查不到是谁点的确认。
+#
+# 请求和决定分两次落：permission_request 到达时先记下"问过什么"，
+# 用户点了之后再补上"答的什么"。中途关掉页面就停在"未决"，这本身也是信息。
+
+def record_approval_request(request_id: str, session_id: str, principal: str,
+                            title: str = "", op_type: str = "") -> None:
+    if not request_id:
+        return
+    with _conn() as conn:
+        conn.execute(
+            "INSERT INTO console_approvals (request_id, session_id, principal, title, op_type,"
+            " decision, requested_at, decided_at) VALUES (?, ?, ?, ?, ?, '', ?, 0)"
+            # 同一个 request_id 不会重来，真撞上说明是重放，保留最早那条
+            " ON CONFLICT(request_id) DO NOTHING",
+            (request_id, session_id or "", principal or "", (title or "")[:300],
+             (op_type or "")[:80], time.time()),
+        )
+
+
+def record_approval_decision(request_id: str, decision: str) -> None:
+    """只补决定，不新建行 —— 没有对应请求的决定是伪造的，不该在这里凭空长出记录。"""
+    if not request_id or not decision:
+        return
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE console_approvals SET decision = ?, decided_at = ?"
+            " WHERE request_id = ? AND decision = ''",
+            (decision[:40], time.time(), request_id),
+        )
+
+
+def session_approvals(session_id: str, limit: int = 100) -> list[dict[str, Any]]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM console_approvals WHERE session_id = ?"
+            " ORDER BY requested_at ASC LIMIT ?",
+            (session_id or "", max(1, min(int(limit or 100), 500))),
+        ).fetchall()
+    return [dict(r) for r in rows]

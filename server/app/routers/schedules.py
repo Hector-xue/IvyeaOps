@@ -53,7 +53,9 @@ def list_schedules(info: dict[str, Any] = Depends(require_user_info)) -> dict[st
     tasks = sc.list_tasks(principal, is_admin)
     for t in tasks:
         t["next_text"] = sc.describe_cron(t["cron"]) if t["enabled"] else "已停用"
-    return {"ok": True, "tasks": tasks}
+    # 时区照实回传，别让前端猜。cron 走的是服务器本地时区，跨时区的人
+    # 按自己的钟理解「每天 09:00」就会踩空。
+    return {"ok": True, "tasks": tasks, "timezone": sc.timezone_label()}
 
 
 @router.post("/schedules")
@@ -117,6 +119,6 @@ def preview_cron(expr: str = Query(..., min_length=1, max_length=120)) -> dict[s
         for _ in range(5):
             cursor = sc.next_fire(expr, cursor)
             out.append(datetime.fromtimestamp(cursor).strftime("%Y-%m-%d %H:%M"))
-        return {"ok": True, "next": out}
+        return {"ok": True, "next": out, "timezone": sc.timezone_label()}
     except sc.CronError as exc:
         return {"ok": False, "error": str(exc)}

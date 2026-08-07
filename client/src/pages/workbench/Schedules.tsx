@@ -95,7 +95,8 @@ function TaskForm({
         skill: initial.skill, enabled: initial.enabled }
     : { ...BLANK });
   const [saving, setSaving] = useState(false);
-  const [preview, setPreview] = useState<{ ok: boolean; next?: string[]; error?: string } | null>(null);
+  const [preview, setPreview] = useState<
+    { ok: boolean; next?: string[]; error?: string; timezone?: string } | null>(null);
 
   // cron 改一次就预览一次：让人在保存前就看清它到底什么时候跑，而不是等第二天。
   useEffect(() => {
@@ -153,7 +154,9 @@ function TaskForm({
 
       <div className={"sch-preview" + (preview && !preview.ok ? " bad" : "")}>
         {preview === null ? "计算中…"
-          : preview.ok ? `接下来会在：${(preview.next || []).slice(0, 3).join(" · ")}`
+          : preview.ok
+            ? `接下来会在：${(preview.next || []).slice(0, 3).join(" · ")}`
+              + (preview.timezone ? `（${preview.timezone}）` : "")
           : `cron 不对：${preview.error}`}
       </div>
 
@@ -180,10 +183,16 @@ function SchedulesInner() {
   const [editing, setEditing] = useState<string>("");     // task id 或 "new"
   const [expanded, setExpanded] = useState("");
   const [running, setRunning] = useState("");
+  // 调度用的是**服务器**本地时区，不是浏览器的。不写出来，跨时区的人会按自己的
+  // 钟去理解「每天 09:00」，然后发现报告在半夜到。
+  const [tz, setTz] = useState("");
 
   const load = useCallback(async () => {
-    try { setTasks(await listSchedules()); }
-    catch (e: any) {
+    try {
+      const d = await listSchedules();
+      setTasks(d.tasks || []);
+      setTz(d.timezone || "");
+    } catch (e: any) {
       setTasks([]);
       notify("error", e?.response?.data?.detail || "读取定时任务失败");
     }
@@ -242,6 +251,7 @@ function SchedulesInner() {
         <span>
           定时任务**始终只读**：Agent 会巡检、分析、把要改的东西列清楚，但不会真的动线上数据。
           没人在屏幕前的时候，自动批准写操作太危险 —— 要落地就看完结果再去对应板块执行。
+          {tz && <> 触发时刻按 <b>服务器时区 {tz}</b> 计算，不是你浏览器所在的时区。</>}
         </span>
       </div>
 

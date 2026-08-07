@@ -31,8 +31,8 @@ export type ScheduleRun = {
 };
 
 export async function listSchedules() {
-  const { data } = await api.get<{ ok: boolean; tasks: ScheduleTask[] }>("/schedules");
-  return data.tasks || [];
+  const { data } = await api.get<{ ok: boolean; tasks: ScheduleTask[]; timezone?: string }>("/schedules");
+  return data;
 }
 
 export async function createSchedule(body: {
@@ -70,7 +70,7 @@ export async function runScheduleNow(id: string) {
 
 /** 保存前预览：这个 cron 接下来几次到底什么时候跑。 */
 export async function previewCron(expr: string) {
-  const { data } = await api.post<{ ok: boolean; next?: string[]; error?: string }>(
+  const { data } = await api.post<{ ok: boolean; next?: string[]; error?: string; timezone?: string }>(
     "/schedules/preview-cron", null, { params: { expr } });
   return data;
 }

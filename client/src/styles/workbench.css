@@ -2888,6 +2888,9 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .cs-mark{font-size:10px;flex-shrink:0}
 .cs-ok{color:var(--acc)}
 .cs-err{color:var(--red)}
+/* 超时/未决必须和"拒绝"在颜色上就分得开 —— 都是红的会被读成"有人否决了" */
+.cs-warn{color:var(--amber)}
+.cs-dim{color:var(--t3)}
 .cs-run{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--acc);border-top-color:transparent;
   display:inline-block;animation:cs-spin .7s linear infinite}
 /* 各类步骤的左侧色条：技能/板块/MCP/普通工具一眼可辨 */
@@ -3093,6 +3096,13 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .sb-sess:hover .sb-sess-del{opacity:1}
 .sb-sess-del:hover{color:var(--red)}
 .sb-sess:hover .sb-sess-time{display:none}
+.sb-sess-search{margin:0 12px 6px;width:calc(100% - 24px)}
+.sb-sess-more{display:block;width:calc(100% - 24px);margin:4px 12px 8px;padding:4px 8px;
+  border:1px dashed var(--b);border-radius:var(--r);background:transparent;color:var(--t3);
+  font-family:var(--font);font-size:10px;cursor:pointer;
+  transition:color var(--dur) var(--ease),border-color var(--dur) var(--ease)}
+.sb-sess-more:hover:not(:disabled){color:var(--t2);border-color:var(--b2)}
+.sb-sess-more:disabled{opacity:.5;cursor:default}
 /* 来源筛选：三个板块共用会话库之后，左栏要能只看某一类。 */
 .sb-src-filter{display:flex;gap:3px;padding:0 12px 6px;flex-wrap:wrap}
 .sb-src-chip{padding:1px 7px;border-radius:99px;border:1px solid var(--b);background:transparent;
@@ -3196,3 +3206,47 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
   margin-top:10px;padding:12px;border:1px solid var(--b);border-radius:8px;background:var(--bg2)}
 /* 按钮那一格永远独占一整行，免得挤在某个 select 旁边看着像它的附属控件 */
 .cap-preset-actions{grid-column:1/-1;display:flex;gap:8px}
+
+/* 跟进建议开关：藏在标题右侧，关掉后留一个极轻的入口重新打开 */
+.cc-followups-head{display:flex;align-items:center;gap:6px}
+.cc-followup-toggle{margin-left:auto;background:none;border:none;padding:0 2px;cursor:pointer;
+  color:var(--t3);font-family:var(--font);font-size:10px;transition:color var(--dur) var(--ease)}
+.cc-followup-toggle:hover{color:var(--t2)}
+.cc-followups.off{padding:2px 0 6px}
+.cc-followups.off .cc-followup-toggle{margin-left:0}
+
+/* ── 触摸设备的点击靶区 ──────────────────────────────────────────────────────
+ * 这套界面在桌面上是**刻意做紧凑**的（按钮 21–24px 高），鼠标点没问题；
+ * 到了手机上，低于 28px 的目标就不是"紧凑"而是点不中了。
+ *
+ * 只在 pointer:coarse 下放大，桌面密度一个像素都不动 —— 直接把全局按钮改高，
+ * 等于为了手机把桌面的信息密度赔进去。
+ *
+ * 用 min-height 而不是加 padding：padding 会把图标挤离视觉中心，
+ * 而这些按钮里不少是单字符图标（▶ ↻ ☰ +）。
+ */
+@media (pointer: coarse) {
+  .tbtn,
+  .sb-toggle,
+  .sb-update-btn,
+  .sb-ws-add,
+  .sb-src-chip,
+  .sb-sess-more,
+  .cs-btn,
+  .cc-chip,
+  .cc-followup-toggle,
+  .xsel-wrap.cc-chip {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* 输入框单行时也要够高，不然光标落点很难对准 */
+  .cc-input { min-height: 32px; }
+  /* AI 问答页的按钮是内联样式写的 —— 内联样式吃不到媒体查询，
+     所以那两个图标按钮单挂了个类名，靶区在这里补。 */
+  .asst-icon-btn { min-width: 32px; min-height: 32px; }
+  .market-btn { min-height: 32px; }
+  /* 芯片行放大后更容易挤爆一行，允许换行而不是把页面撑宽 */
+  .cc-chips { flex-wrap: wrap; }
+}

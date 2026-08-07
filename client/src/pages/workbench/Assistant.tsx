@@ -257,6 +257,7 @@ export default function Assistant() {
           <button className="tbtn" onClick={startNew} disabled={streaming} style={{ marginRight: 8 }}>＋ 新对话</button>
           <button
             onClick={() => setHistoryOpen(false)}
+            className="asst-icon-btn"
             style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", fontSize: 18, padding: "0 2px", lineHeight: 1 }}
           >✕</button>
         </div>
@@ -294,6 +295,7 @@ export default function Assistant() {
                 </div>
                 <button
                   onClick={(e) => deleteSession(s.id, e)}
+                  className="asst-icon-btn"
                   style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", fontSize: 16, padding: "4px 6px", lineHeight: 1, flexShrink: 0, borderRadius: 4 }}
                   title="删除"
                 >✕</button>

@@ -587,7 +587,10 @@ def chat_stream_events(payload: dict[str, Any]) -> Any:
 
 
 def chat_sessions(limit: int = 20) -> dict[str, Any]:
-    safe_limit = max(1, min(int(limit or 20), 100))
+    # 上限 100 曾把左栏的分页顶死：ops 明明传 200，拿回来永远只有 100 条，
+    # 而磁盘上的会话早超过这个数 —— 第 101 条往后的历史等于不存在。
+    # agent 那边是本地文件扫描，实测 162 个会话热态 55ms，放到 500 不成问题。
+    safe_limit = max(1, min(int(limit or 20), 500))
     return request_json("GET", f"/v1/chat/sessions?limit={safe_limit}")
 
 

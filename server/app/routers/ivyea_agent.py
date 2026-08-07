@@ -5,7 +5,7 @@ import base64
 import json as _json
 import threading as _threading
 import time as _time
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
@@ -376,9 +376,11 @@ def _tee_session_events(chunks: Any, principal: str, workspace: str = "",
             buf += chunk
             while b"\n\n" in buf:
                 frame, buf = buf.split(b"\n\n", 1)
-                if b"permission_request" not in frame and b"event: start" not in frame:
-                    continue
                 is_start = b"event: start" in frame
+                is_req = b"permission_request" in frame
+                is_timeout = b"permission_timeout" in frame
+                if not (is_start or is_req or is_timeout):
+                    continue
                 for line in frame.split(b"\n"):
                     if not line.startswith(b"data:"):
                         continue
@@ -387,10 +389,19 @@ def _tee_session_events(chunks: Any, principal: str, workspace: str = "",
                         sid = str(data.get("session_id") or "")
                         if sid:
                             console_sessions.register_session(sid, principal, workspace, source)
-                    else:
-                        rid = str(data.get("request_id") or "")
-                        if rid:
-                            _remember_approval_owner(rid, principal)
+                        continue
+                    rid = str(data.get("request_id") or "")
+                    if not rid:
+                        continue
+                    if is_timeout:
+                        # 超时被自动拒 —— 这也是一条要留下的决定，而且是最容易
+                        # 被忽略的那种（没人点，但那一步确实没执行）。
+                        console_sessions.record_approval_decision(rid, "timeout")
+                        continue
+                    _remember_approval_owner(rid, principal)
+                    console_sessions.record_approval_request(
+                        rid, str(data.get("session_id") or ""), principal,
+                        str(data.get("title") or ""), str(data.get("op_type") or ""))
             # 单帧异常大（final 会带整段会话）时别把内存吃着不放
             if len(buf) > 2_000_000:
                 buf = buf[-4096:]
@@ -459,7 +470,12 @@ def chat_permission(body: ChatPermissionBody,
         raise HTTPException(status_code=404, detail="该审批请求不存在或已失效")
     if owner != user:
         raise HTTPException(status_code=403, detail="无权处理他人会话的审批请求")
-    return _call(svc.chat_permission, {"request_id": body.request_id, "choice": body.choice})
+    out = _call(svc.chat_permission, {"request_id": body.request_id, "choice": body.choice})
+    # agent 确认收下之后才留痕 —— 先记再发的话，agent 那边没收到（超时/断连）
+    # 就会留下一条"已批准"，而那一步其实根本没执行。
+    if out.get("ok"):
+        console_sessions.record_approval_decision(body.request_id, body.choice)
+    return out
 
 
 @router.get("/chat/sessions")
@@ -514,11 +530,22 @@ class ConsoleWorkspaceBody(BaseModel):
     path: str = Field(default="", max_length=1000)
 
 
+# 一次从 agent 捞多少条来做过滤/搜索。**不是页大小** —— 归属、来源、搜索都在
+# ops 这边算，所以要先拿到足够大的一批才谈得上翻页。agent 那边是本地文件扫描，
+# 实测 162 个会话热态 55ms。
+_SESSION_SCAN = 500
+
+
+# 用 Annotated 而不是 `x: str = Query("")`：后者的**默认值是 Query 对象本身**，
+# 直接调用这个函数（测试就是这么调的）会把它原样传下去，然后在 SQL 绑定处炸成
+# "unsupported type"。踩过两次 —— 每加一个查询参数就连坐一批测试。
 @router.get("/console/sessions")
 def console_session_list(
-    workspace: str = Query("", max_length=120),
-    source: str = Query("", max_length=20),
-    limit: int = Query(60, ge=1, le=200),
+    workspace: Annotated[str, Query(max_length=120)] = "",
+    source: Annotated[str, Query(max_length=20)] = "",
+    q: Annotated[str, Query(max_length=120)] = "",
+    offset: Annotated[int, Query(ge=0, le=5000)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 60,
     info: dict[str, Any] = Depends(require_user_info),
 ) -> dict[str, Any]:
     """任务台左栏的会话列表：agent 那边的正文摘要 + ops 这边的归属/工作区/自定义标题。
@@ -526,12 +553,15 @@ def console_session_list(
     **按归属过滤**：agent 的会话库是整机共享的，原样端出来等于把同事的对话摆在
     每个人眼前。管理员看全部（那是他自己的机器），普通用户只看自己开的；
     索引里没有的历史会话对普通用户不可见。
+
+    **搜索和分页都在服务端**：左栏一次只显示一页，纯前端过滤只能过滤"已经拿到的
+    那一页"，搜早期的会话会一无所获 —— 那比没有搜索更糟，因为它看着像是真的没有。
     """
     principal, is_admin = _principal_info(info)
     index = console_sessions.owned_sessions(principal, is_admin, workspace, source)
     agent_ok = True
     try:
-        listing = (_call(svc.chat_sessions, 200) or {}).get("sessions") or []
+        listing = (_call(svc.chat_sessions, _SESSION_SCAN) or {}).get("sessions") or []
     except HTTPException:
         # agent 不在时别让左栏静默变成"0 条" —— 那看着像会话都没了。
         # 明确告诉前端是读不到，不是真的空。
@@ -559,8 +589,20 @@ def console_session_list(
             "source": meta.get("source") or "",
             "indexed": sid in index,
         })
+    needle = q.strip().lower()
+    if needle:
+        # 标题（含用户自己改的名）和首句摘要都能搜到 —— 正文在 agent 那边，
+        # 逐条读进来做全文搜索会把这个接口拖成秒级，先不做，界面上也没暗示能搜正文。
+        rows = [r for r in rows
+                if needle in str(r.get("title") or "").lower()
+                or needle in str(r.get("preview") or "").lower()]
     rows.sort(key=lambda r: r.get("updated") or 0, reverse=True)
-    return {"ok": True, "sessions": rows[:limit], "agent_available": agent_ok,
+    total = len(rows)
+    page = rows[offset:offset + limit]
+    return {"ok": True, "sessions": page, "agent_available": agent_ok,
+            "total": total, "offset": offset,
+            # 让前端不必自己算 —— 算错了就是"加载更多"点了没反应
+            "has_more": offset + len(page) < total,
             "workspaces": console_sessions.list_workspaces(principal, is_admin)}
 
 
@@ -654,6 +696,16 @@ class ConsolePresetBody(BaseModel):
     approval: str = Field(default="none", pattern="^(none|remote)$")
     workspace: str = Field(default="", max_length=120)
     note: str = Field(default="", max_length=500)
+
+
+@router.get("/console/sessions/{session_id}/approvals")
+def console_session_approvals(session_id: str,
+                              info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    """一条会话的审批留痕。刷新页面、隔天回来翻，记录都还在。"""
+    principal, is_admin = _principal_info(info)
+    if not console_sessions.can_access(session_id, principal, is_admin):
+        raise HTTPException(status_code=403, detail="这条会话不属于你")
+    return {"ok": True, "approvals": console_sessions.session_approvals(session_id)}
 
 
 @router.get("/console/presets")

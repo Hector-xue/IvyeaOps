@@ -126,10 +126,10 @@ def test_list_hides_unindexed_sessions_from_regular_users(monkeypatch):
         {"id": "legacy", "preview": "别人的老会话", "turns": 1, "updated": 100},
     ]})
 
-    out = mod.console_session_list(workspace="", source="", limit=60, info=ALICE)
+    out = mod.console_session_list(info=ALICE)
     assert [s["id"] for s in out["sessions"]] == ["mine"]
 
-    out_admin = mod.console_session_list(workspace="", source="", limit=60, info=ADMIN)
+    out_admin = mod.console_session_list(info=ADMIN)
     assert {s["id"] for s in out_admin["sessions"]} == {"mine", "legacy"}
     legacy = next(s for s in out_admin["sessions"] if s["id"] == "legacy")
     assert legacy["indexed"] is False
@@ -143,7 +143,7 @@ def test_list_survives_agent_being_down(monkeypatch):
         raise HTTPException(status_code=503, detail="IvyeaAgent 不可用")
 
     monkeypatch.setattr(mod, "_call", _down)
-    out = mod.console_session_list(workspace="", source="", limit=60, info=ALICE)
+    out = mod.console_session_list(info=ALICE)
     assert out["ok"] is True
     assert out["sessions"] == []            # 没有正文摘要就列不出条目
     assert out["workspaces"][0]["name"] == cs.DEFAULT_WORKSPACE
@@ -155,7 +155,7 @@ def test_custom_title_wins_over_preview(monkeypatch):
     monkeypatch.setattr(mod, "_call", lambda fn, *a, **k: {"sessions": [
         {"id": "s1", "preview": "原始第一句", "turns": 1, "updated": 1},
     ]})
-    out = mod.console_session_list(workspace="", source="", limit=60, info=ALICE)
+    out = mod.console_session_list(info=ALICE)
     assert out["sessions"][0]["title"] == "广告复盘"
     assert out["sessions"][0]["preview"] == "原始第一句"
 
@@ -216,7 +216,7 @@ def test_list_uses_cleaned_preview(monkeypatch):
         {"id": "s1", "preview": "查广告\n\n[Ivyea Skill：本轮相关可复用流程]\nxxx",
          "turns": 1, "updated": 1},
     ]})
-    out = mod.console_session_list(workspace="", source="", limit=60, info=ALICE)
+    out = mod.console_session_list(info=ALICE)
     assert out["sessions"][0]["title"] == "查广告"
     assert "[Ivyea Skill" not in out["sessions"][0]["preview"]
 
@@ -346,3 +346,71 @@ def test_delete_preset_is_idempotent_and_scoped():
     assert cs.delete_preset("x", "bob@x.com") is False      # 删不到别人的
     assert cs.delete_preset("x", "alice@x.com") is True
     assert cs.delete_preset("x", "alice@x.com") is False
+
+
+def test_list_endpoint_is_callable_without_query_args():
+    """守卫：查询参数必须用 Annotated 声明，默认值得是**真的 Python 值**。
+
+    写成 `q: str = Query("")` 的话默认值就是 Query 对象本身，直接调用这个函数
+    会把它一路带到 SQL 绑定处炸成 "unsupported type"。这个坑连着踩过两次
+    （加 source 一次、加 q/offset 一次），所以钉一条线在这。
+    """
+    cs.register_session("s1", "alice@x.com")
+    out = mod.console_session_list(info=ALICE)     # 一个查询参数都不传
+    assert out["ok"] is True
+    assert "total" in out and "has_more" in out
+
+
+def test_search_and_paging(monkeypatch):
+    """搜索和分页都必须在服务端做：左栏一次只显示一页，纯前端过滤只能过滤
+    "已经拿到的那一页"，搜早期会话会一无所获 —— 那比没有搜索更糟。"""
+    for i in range(8):
+        cs.register_session(f"s{i}", "alice@x.com")
+    monkeypatch.setattr(mod, "_call", lambda fn, *a, **k: {"sessions": [
+        {"id": f"s{i}", "preview": ("广告复盘" if i < 3 else "选品调研"), "turns": 1, "updated": 100 - i}
+        for i in range(8)
+    ]})
+
+    page1 = mod.console_session_list(limit=3, info=ALICE)
+    assert len(page1["sessions"]) == 3 and page1["total"] == 8 and page1["has_more"] is True
+    page3 = mod.console_session_list(limit=3, offset=6, info=ALICE)
+    assert len(page3["sessions"]) == 2 and page3["has_more"] is False
+    # 两页不重叠
+    assert not ({s["id"] for s in page1["sessions"]} & {s["id"] for s in page3["sessions"]})
+
+    hit = mod.console_session_list(q="广告", limit=60, info=ALICE)
+    assert hit["total"] == 3 and all("广告" in s["preview"] for s in hit["sessions"])
+    miss = mod.console_session_list(q="绝不存在zzz", limit=60, info=ALICE)
+    assert miss["sessions"] == [] and miss["total"] == 0
+
+
+# ── 审批留痕 ────────────────────────────────────────────────────────────────
+
+def test_approval_trail_records_request_then_decision():
+    cs.record_approval_request("r1", "s1", "alice@x.com", "把出价改成 1.2", "ads_write")
+    cs.record_approval_decision("r1", "approve")
+    row = cs.session_approvals("s1")[0]
+    assert row["title"] == "把出价改成 1.2" and row["decision"] == "approve"
+    assert row["decided_at"] > 0
+
+
+def test_a_decision_without_a_request_creates_nothing():
+    """没有对应请求的决定是伪造的，不该在这里凭空长出一条"已批准"。"""
+    cs.record_approval_decision("never-asked", "approve")
+    assert cs.session_approvals("s1") == []
+
+
+def test_decision_is_not_overwritten():
+    """已决的不能再改 —— 审批记录是用来事后追责的，可改就没意义了。"""
+    cs.record_approval_request("r1", "s1", "alice@x.com", "x")
+    cs.record_approval_decision("r1", "deny")
+    cs.record_approval_decision("r1", "approve")
+    assert cs.session_approvals("s1")[0]["decision"] == "deny"
+
+
+def test_timeout_is_a_distinct_outcome():
+    """超时和"有人点了拒绝"必须分得开：都记成 deny 的话，事后复盘会把
+    "没人理它"读成"有人看过并否决了"。"""
+    cs.record_approval_request("r1", "s1", "alice@x.com", "x")
+    cs.record_approval_decision("r1", "timeout")
+    assert cs.session_approvals("s1")[0]["decision"] == "timeout"

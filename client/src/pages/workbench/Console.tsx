@@ -33,6 +33,7 @@ import FollowUps from "../../components/console/FollowUps";
 import {
   CONSOLE_PRESETS_CHANGED,
   consolePresets,
+  consoleSessionApprovals,
   consoleSessions,
   ivyeaAgentChat,
   ivyeaAgentStatus,
@@ -67,10 +68,14 @@ type Turn = {
   failed?: boolean;
 };
 
-type Prefs = { workspace: string; approval: ApprovalMode; skill: string };
+type Prefs = {
+  workspace: string; approval: ApprovalMode; skill: string;
+  /** 跟进建议每轮额外跑一次模型调用，给个开关。默认开。 */
+  followUps: boolean;
+};
 
 function loadPrefs(): Prefs {
-  const fallback: Prefs = { workspace: "默认工作区", approval: "readonly", skill: "" };
+  const fallback: Prefs = { workspace: "默认工作区", approval: "readonly", skill: "", followUps: true };
   try {
     const raw = localStorage.getItem(PREFS_KEY);
     if (!raw) return fallback;
@@ -104,6 +109,7 @@ function ConsoleInner() {
   const [railApprovals, setRailApprovals] = useState<RailApproval[]>([]);
   const [followUps, setFollowUps] = useState<string[]>([]);
   const [followLoading, setFollowLoading] = useState(false);
+  const [followEnabled, setFollowEnabled] = useState(prefs.current.followUps !== false);
   const [attaching, setAttaching] = useState(false);
 
   const [skills, setSkills] = useState<IvyeaSkillInfo[]>([]);
@@ -120,14 +126,17 @@ function ConsoleInner() {
 
   // ── 偏好持久化 ───────────────────────────────────────────────────────────
   useEffect(() => {
+    // followUps 必须带上。这个 effect 是**整体覆盖**写回，漏一个字段就等于
+    // 每次改工作区/档位都顺手把那个开关重置回默认。
     const next: Prefs = {
       workspace: composer.workspace,
       approval: composer.approval,
       skill: composer.skill,
+      followUps: followEnabled,
     };
     prefs.current = next;
     try { localStorage.setItem(PREFS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
-  }, [composer.workspace, composer.approval, composer.skill]);
+  }, [composer.workspace, composer.approval, composer.skill, followEnabled]);
 
   // ── 能力目录：板块工具的中文 title 是步骤芯片的文案来源 ────────────────────
   useEffect(() => {
@@ -241,7 +250,19 @@ function ConsoleInner() {
         setSessionId(urlSession);
         setFollowUps([]);
         setTodos([]);
+        // 审批留痕落在服务端，刷新/隔天回来都还在 —— 这是这套系统最该
+        // 留下的一条记录，不能只活在内存里。
         setRailApprovals([]);
+        void consoleSessionApprovals(urlSession)
+          .then((list) => {
+            if (!alive) return;
+            setRailApprovals(list.map((a) => ({
+              title: a.title || a.op_type || a.request_id,
+              decision: a.decision || "pending",
+              at: (a.decided_at || a.requested_at || 0) * 1000,
+            })));
+          })
+          .catch(() => void 0);   // 拿不到留痕不影响会话本身
       })
       .catch((e: any) => {
         if (!alive) return;
@@ -279,7 +300,7 @@ function ConsoleInner() {
 
   // ── 跟进建议：一次无工具的廉价文本轮次，失败静默 ─────────────────────────
   const loadFollowUps = useCallback(async (question: string, answer: string) => {
-    if (!answer.trim()) return;
+    if (!answer.trim() || !followEnabled) return;
     setFollowLoading(true);
     try {
       const res = await ivyeaAgentChat({
@@ -467,6 +488,16 @@ function ConsoleInner() {
     // 旧值 —— 贴完图不打字直接发，图就丢了（之前靠"总会先打字"侥幸没暴露）。
   }, [composer, busy, sessionId, images, picked, patchTurn, notify, loadFollowUps]);
 
+  const toggleFollowUps = (next: boolean) => {
+    setFollowEnabled(next);
+    if (!next) setFollowUps([]);
+    try {
+      const raw = localStorage.getItem(PREFS_KEY);
+      const cur = raw ? JSON.parse(raw) : {};
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ ...cur, followUps: next }));
+    } catch { /* 存不下就只影响这一次会话，不值得打扰用户 */ }
+  };
+
   const stop = () => {
     abortRef.current?.abort();
   };
@@ -583,7 +614,13 @@ function ConsoleInner() {
                 ),
               )}
               {!busy && (
-                <FollowUps items={followUps} loading={followLoading} onPick={(q) => void send(q)} />
+                <FollowUps
+                  items={followUps}
+                  loading={followLoading}
+                  enabled={followEnabled}
+                  onToggle={toggleFollowUps}
+                  onPick={(q) => void send(q)}
+                />
               )}
             </div>
             <div className="cc-dock">{composerNode(true)}</div>

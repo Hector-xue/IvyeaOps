@@ -8,11 +8,26 @@ export default function FollowUps({
   items,
   onPick,
   loading,
+  enabled = true,
+  onToggle,
 }: {
   items: string[];
   onPick: (text: string) => void;
   loading?: boolean;
+  /** 关掉之后每轮省一次模型调用。 */
+  enabled?: boolean;
+  onToggle?: (next: boolean) => void;
 }) {
+  // 关掉时留一个极轻的开关入口 —— 整块消失的话，用户就再也找不到怎么打开了。
+  if (!enabled) {
+    return onToggle ? (
+      <div className="cc-followups off">
+        <button type="button" className="cc-followup-toggle" onClick={() => onToggle(true)}>
+          开启「你可能还想了解」
+        </button>
+      </div>
+    ) : null;
+  }
   if (loading) {
     return (
       <div className="cc-followups">
@@ -26,7 +41,17 @@ export default function FollowUps({
 
   return (
     <div className="cc-followups">
-      <div className="cc-followups-head"><span className="cs-icon">⌕</span> 你可能还想了解</div>
+      <div className="cc-followups-head">
+        <span className="cs-icon">⌕</span> 你可能还想了解
+        {onToggle && (
+          <button
+            type="button"
+            className="cc-followup-toggle"
+            title="每轮会额外跑一次不带工具的轻量模型调用来生成这几条建议。关掉可以省下这次开销。"
+            onClick={() => onToggle(false)}
+          >关闭</button>
+        )}
+      </div>
       {items.map((q, i) => (
         <button type="button" key={i} className="cc-followup" onClick={() => onPick(q)}>
           {q}
