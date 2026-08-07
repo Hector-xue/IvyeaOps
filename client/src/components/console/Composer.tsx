@@ -28,7 +28,6 @@ export type ComposerValue = {
   workspace: string;
   approval: ApprovalMode;
   skill: string;
-  model: string;
 };
 
 export default function Composer({
@@ -40,7 +39,8 @@ export default function Composer({
   busy,
   skills,
   workspaces,
-  models,
+  modelLabel,
+  onModelClick,
   placeholder = "描述任务、粘贴材料，或说说你想让 Ivyea 先看什么…",
   autoFocus,
   compact,
@@ -54,7 +54,13 @@ export default function Composer({
   busy?: boolean;
   skills: IvyeaSkillInfo[];
   workspaces: string[];
-  models: { value: string; label: string }[];
+  /**
+   * 当前主脑模型。**只显示，不在这里切**：agent 的模型是全局配置
+   * （/v1/model/configure），不支持按轮次覆盖；做成下拉框会是个点了没反应的假开关。
+   * 点它跳「系统配置」，那里才是真正切换的地方。
+   */
+  modelLabel: string;
+  onModelClick: () => void;
   placeholder?: string;
   autoFocus?: boolean;
   /** 会话态：贴底、少留白。 */
@@ -106,7 +112,6 @@ export default function Composer({
     value: w,
     label: w,
   }));
-  const modelOptions = models.length ? models : [{ value: "", label: "默认模型" }];
 
   return (
     <div className={"cc-composer" + (compact ? " compact" : "")}>
@@ -155,14 +160,14 @@ export default function Composer({
           options={skillOptions}
           ariaLabel="技能"
         />
-        <SheetSelect
-          className="cc-chip xsel-compact cc-chip-model"
-          title="模型"
-          value={value.model}
-          onChange={(v) => onChange({ model: v })}
-          options={modelOptions}
-          ariaLabel="模型"
-        />
+        <button
+          type="button"
+          className="cc-chip cc-chip-model"
+          onClick={onModelClick}
+          title="当前主脑模型 · 点击去「系统配置」切换"
+        >
+          <span className="cc-chip-label">{modelLabel || "模型未配置"}</span>
+        </button>
 
         <div className="cc-bar-spacer" />
         {busy && onStop ? (

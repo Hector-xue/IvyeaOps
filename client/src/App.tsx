@@ -38,6 +38,7 @@ const SkillHub = lazy(() => import("./pages/workbench/SkillHub"));
 const DeepAnalysis = lazy(() => import("./pages/workbench/DeepAnalysis"));
 const LingXing = lazy(() => import("./pages/workbench/LingXing"));
 const Console = lazy(() => import("./pages/workbench/Console"));
+const Capabilities = lazy(() => import("./pages/workbench/Capabilities"));
 import { landingPath } from "./lib/navRegistry";
 import { me } from "./api/client";
 import { getSetupStatus, type SetupChecks } from "./api/setup";
@@ -134,6 +135,7 @@ export default function App() {
                 "/" 也还是会被送到该去的地方。 */}
             <Route index element={<Navigate to={landingPath()} replace />} />
             <Route path="console" element={<Console />} />
+            <Route path="capabilities" element={<Capabilities />} />
             <Route path="dashboard" element={<Home />} />
             <Route path="tools" element={<Tools />} />
             <Route path="skill" element={<SkillStudio />}>

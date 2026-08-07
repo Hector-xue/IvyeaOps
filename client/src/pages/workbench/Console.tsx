@@ -31,11 +31,11 @@ import ArtifactRail, { type RailApproval, type RailTodo } from "../../components
 import FollowUps from "../../components/console/FollowUps";
 import {
   ivyeaAgentChat,
+  ivyeaAgentStatus,
   ivyeaAgentChatStream,
   ivyeaAwaitSessionAnswer,
   ivyeaChatPermission,
   ivyeaKnowledgeUpload,
-  ivyeaModelProviders,
   ivyeaOpsTools,
   ivyeaSkills,
   type IvyeaPermissionRequest,
@@ -57,10 +57,10 @@ type Turn = {
   failed?: boolean;
 };
 
-type Prefs = { workspace: string; approval: ApprovalMode; skill: string; model: string };
+type Prefs = { workspace: string; approval: ApprovalMode; skill: string };
 
 function loadPrefs(): Prefs {
-  const fallback: Prefs = { workspace: "默认工作区", approval: "readonly", skill: "", model: "" };
+  const fallback: Prefs = { workspace: "默认工作区", approval: "readonly", skill: "" };
   try {
     const raw = localStorage.getItem(PREFS_KEY);
     if (!raw) return fallback;
@@ -97,7 +97,6 @@ function ConsoleInner() {
   const [attaching, setAttaching] = useState(false);
 
   const [skills, setSkills] = useState<IvyeaSkillInfo[]>([]);
-  const [models, setModels] = useState<{ value: string; label: string }[]>([]);
 
   const abortRef = useRef<AbortController | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -109,11 +108,10 @@ function ConsoleInner() {
       workspace: composer.workspace,
       approval: composer.approval,
       skill: composer.skill,
-      model: composer.model,
     };
     prefs.current = next;
     try { localStorage.setItem(PREFS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
-  }, [composer.workspace, composer.approval, composer.skill, composer.model]);
+  }, [composer.workspace, composer.approval, composer.skill]);
 
   // ── 能力目录：板块工具的中文 title 是步骤芯片的文案来源 ────────────────────
   useEffect(() => {
@@ -124,18 +122,13 @@ function ConsoleInner() {
     ivyeaSkills()
       .then((d) => { if (alive && Array.isArray(d?.skills)) setSkills(d.skills); })
       .catch(() => void 0);   // /skills 代理是后续阶段的事，这里 404 属正常
-    ivyeaModelProviders()
+    // 当前主脑模型：只用来显示。agent 的模型是全局配置，不支持按轮次覆盖，
+    // 所以 composer 上那枚 chip 是信息位 + 去系统配置的入口，不是选择器。
+    ivyeaAgentStatus()
       .then((d) => {
         if (!alive) return;
-        const opts: { value: string; label: string }[] = [];
-        for (const p of d?.providers || []) {
-          for (const m of p.models || []) {
-            const id = String(m.id || m.name || "");
-            if (!id) continue;
-            opts.push({ value: `${p.id}:${id}`, label: `${p.label || p.id} · ${m.label || m.name || id}` });
-          }
-        }
-        setModels(opts.slice(0, 60));
+        const m = (d?.health as any)?.model || {};
+        setModel(String(m.model || m.label || ""));
       })
       .catch(() => void 0);
     return () => { alive = false; };
@@ -167,13 +160,15 @@ function ConsoleInner() {
     return () => window.removeEventListener(CONSOLE_NEW_EVENT, handler);
   }, [resetSession]);
 
-  // 从别的板块带过来的预填提示词（?q=…），用完即从地址栏抹掉。
+  // 从别的板块带过来的预填：?q= 提示词、?skill= 预选技能（能力市场「用这个技能」
+  // 走的就是它）。用完即从地址栏抹掉，免得刷新时又套一遍。
   useEffect(() => {
-    const q = new URLSearchParams(location.search).get("q");
-    if (q) {
-      setComposer((c) => ({ ...c, text: q }));
-      navigate("/console", { replace: true });
-    }
+    const sp = new URLSearchParams(location.search);
+    const q = sp.get("q");
+    const skill = sp.get("skill");
+    if (!q && !skill) return;
+    setComposer((c) => ({ ...c, ...(q ? { text: q } : {}), ...(skill ? { skill } : {}) }));
+    navigate("/console", { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -380,7 +375,8 @@ function ConsoleInner() {
       attaching={attaching}
       skills={skills}
       workspaces={[composer.workspace || "默认工作区"]}
-      models={models}
+      modelLabel={model}
+      onModelClick={() => navigate("/hub-settings")}
       autoFocus={!compact}
       compact={compact}
     />

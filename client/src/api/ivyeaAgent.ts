@@ -506,12 +506,30 @@ export async function ivyeaOpsTools(params?: { module?: string; query?: string }
   return data;
 }
 
+/**
+ * 主脑 provider。
+ * ⚠️ `models` 是**字符串数组**（["gpt-4.1", "gpt-4o", …]），不是对象数组 ——
+ * 按对象取 m.id/m.name 会全取到 undefined，模型列表会静默变空。
+ */
 export type IvyeaProvider = {
   id: string;
   label?: string;
-  models?: { id?: string; name?: string; label?: string }[];
+  models?: string[];
+  default_model?: string;
+  key_status?: string;
+  model_count?: number;
   [k: string]: any;
 };
+
+/** 兼容字符串/对象两种形状，取出模型 id。 */
+export function providerModelId(m: unknown): string {
+  if (typeof m === "string") return m;
+  if (m && typeof m === "object") {
+    const o = m as Record<string, any>;
+    return String(o.id || o.name || o.model || "");
+  }
+  return "";
+}
 
 export async function ivyeaModelProviders() {
   const { data } = await api.get<{ ok: boolean; providers?: IvyeaProvider[]; active?: any }>(
@@ -536,6 +554,48 @@ export async function ivyeaSkills(query = "") {
     ? `/ivyea-agent/skills/search?q=${encodeURIComponent(query.trim())}`
     : "/ivyea-agent/skills";
   const { data } = await api.get<{ ok: boolean; skills: IvyeaSkillInfo[] }>(path);
+  return data;
+}
+
+/** agent 的 MCP 注册表（~/.ivyea/mcp.json）—— 决定 Agent 能连哪些数据源。 */
+export type AgentMcpServer = {
+  name: string;
+  transport: string;
+  trusted: boolean;
+  /** true = 由「系统配置 → 数据源」的密钥自动同步，删了下次保存设置又会回来。 */
+  managed: boolean;
+  has_data_source: boolean;
+  spec: Record<string, any>;
+};
+
+export async function ivyeaMcpServers() {
+  const { data } = await api.get<{
+    ok: boolean;
+    servers: AgentMcpServer[];
+    claude_servers: { name: string; transport: string; spec: Record<string, any> }[];
+    managed: string[];
+  }>("/ivyea-agent/mcp/servers");
+  return data;
+}
+
+export async function ivyeaMcpUpsert(payload: {
+  name: string;
+  transport: "http" | "sse" | "stdio";
+  url?: string;
+  command?: string;
+  args?: string[];
+  headers?: Record<string, string>;
+  env?: Record<string, string>;
+  trusted?: boolean;
+}) {
+  const { data } = await api.post<{ ok: boolean; name: string }>("/ivyea-agent/mcp/servers", payload);
+  return data;
+}
+
+export async function ivyeaMcpDelete(name: string) {
+  const { data } = await api.delete<{ ok: boolean; removed: string }>(
+    `/ivyea-agent/mcp/servers/${encodeURIComponent(name)}`,
+  );
   return data;
 }
 

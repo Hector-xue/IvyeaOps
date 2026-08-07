@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.security import require_user, require_admin
+from app.services import agent_mcp
 from app.services import ivyea_agent_service as svc
 from app.services import ivyea_ops_tools
 
@@ -447,6 +448,57 @@ def skills_search(
     if not q.strip():
         return _call(svc.skills)
     return _call(svc.skills_search, q, limit)
+
+
+class AgentMCPBody(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    transport: str = Field(..., pattern="^(http|sse|stdio)$")
+    url: str = Field(default="", max_length=2000)
+    command: str = Field(default="", max_length=1000)
+    args: list[str] = Field(default_factory=list, max_length=40)
+    headers: dict[str, str] = Field(default_factory=dict)
+    env: dict[str, str] = Field(default_factory=dict)
+    trusted: bool = False
+
+
+@router.get("/mcp/servers")
+def agent_mcp_servers() -> dict[str, Any]:
+    """agent 的 MCP 注册表 + Claude Code 的（只读）。
+
+    两套注册表长期被混为一谈：ops 原有的 /api/mcp/servers 管的是 Claude 的
+    ~/.claude.json，管不到 agent —— 而真正决定「工作台里的 Agent 能连哪些数据源」
+    的是 ~/.ivyea/mcp.json。这里一次把两边都摆出来，分区展示。
+    """
+    return {
+        "ok": True,
+        "servers": agent_mcp.list_servers(),
+        "claude_servers": agent_mcp.claude_servers(),
+        "managed": sorted(agent_mcp.MANAGED_SERVERS),
+    }
+
+
+@router.post("/mcp/servers")
+def agent_mcp_upsert(body: AgentMCPBody, _admin: str = Depends(require_admin)) -> dict[str, Any]:
+    """新增/更新一台 MCP 服务器。
+
+    仅管理员：stdio 型的 command 会被 agent 拿去起进程，等于赋予执行能力。
+    """
+    try:
+        row = agent_mcp.upsert_server(body.name, _payload(body))
+    except agent_mcp.AgentMCPError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, **row}
+
+
+@router.delete("/mcp/servers/{name}")
+def agent_mcp_delete(name: str, _admin: str = Depends(require_admin)) -> dict[str, Any]:
+    try:
+        removed = agent_mcp.remove_server(name)
+    except agent_mcp.AgentMCPError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not removed:
+        raise HTTPException(status_code=404, detail=f"未配置该 MCP 服务器：{name}")
+    return {"ok": True, "removed": name}
 
 
 @router.get("/model/providers")
