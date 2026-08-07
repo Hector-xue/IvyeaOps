@@ -633,7 +633,9 @@ export default function MainLayout() {
       {tourOn && hasTour(location.pathname) && (
         <Tour steps={TOURS[location.pathname]} onClose={() => setTourOn(false)} />
       )}
-      <IvyeaAgentDock />
+      {/* 任务台本身就是 Agent 的主入口，右下角再挂一个悬浮球等于同一件事摆两遍。
+          其余板块保留 —— 在那儿它是"随手问一句"的快捷方式，仍然有用。 */}
+      {location.pathname !== "/console" && <IvyeaAgentDock />}
     </div>
   );
 }

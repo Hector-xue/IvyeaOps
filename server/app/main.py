@@ -27,7 +27,7 @@ from app.core.skill_paths import (
     ensure_studio_dirs,
     studio_paths_summary,
 )
-from app.routers import ad_audit, agent_hub, amazon, auth, brain, health, ivyea_agent, monitor, news, skill, terminal
+from app.routers import ad_audit, amazon, auth, brain, health, ivyea_agent, monitor, news, skill, terminal
 from app.routers import listing as listing_router
 from app.routers import image_translate as image_translate_router
 from app.routers import market as market_router
@@ -45,7 +45,6 @@ from app.routers import deep_analysis as deep_analysis_router
 from app.routers import skill_tools as skill_tools_router
 from app.routers import autofix as autofix_router
 from app.routers import lingxing as lingxing_router
-from app.routers import mcp as mcp_router
 from app.agents.router import api_router as agents_api_router, ws_router as agents_ws_router
 
 
@@ -444,10 +443,9 @@ app.include_router(listing_router.router, prefix="/api/listing", tags=["listing"
 app.include_router(image_translate_router.router, prefix="/api/image-translate", tags=["image-translate"], dependencies=[Depends(require_module("image-translate"))])
 app.include_router(terminal.router, prefix="/api/terminal", tags=["terminal"], dependencies=[Depends(require_module("terminal"))])
 # /agents (old native Workspace agent hub) retired — superseded by the native
-# Agents backend below. agent_hub/mcp routers are no longer mounted; the
-# /agents route now serves the agents UI. (Service files kept for now.)
-# app.include_router(agent_hub.router, prefix="/api", tags=["agent-hub"], dependencies=[Depends(require_module("agents"))])
-# app.include_router(mcp_router.router, prefix="/api", tags=["mcp"], dependencies=[Depends(require_module("agents"))])
+# Agents backend below. 老的 agent_hub / mcp 路由已随前端 AgentChat/workspace 一起
+# 退役（对应前端文件本次已删）；/agents 路由由 agents UI 承担，
+# agent 的 MCP 走 /api/ivyea-agent/mcp/servers。
 # Agents native backend (replaces the external Node :3002 service). REST is
 # gated by the same "agents" board permission; WS does its own cookie auth.
 app.include_router(agents_api_router, prefix="/api/agents", tags=["agents"], dependencies=[Depends(require_module("agents"))])
