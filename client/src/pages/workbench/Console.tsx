@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../App";
 import { MarkdownReport } from "../../lib/reportFormat";
+import { stripInjected } from "../../lib/stripInjected";
 import { ToastProvider, useToast } from "../../components/toast";
 import { CONSOLE_NEW_EVENT, sceneChips } from "../../lib/navRegistry";
 import {
@@ -30,6 +31,8 @@ import Composer, { approvalPayload, type ApprovalMode, type ComposerRef, type Co
 import ArtifactRail, { type RailApproval, type RailTodo } from "../../components/console/ArtifactRail";
 import FollowUps from "../../components/console/FollowUps";
 import {
+  CONSOLE_PRESETS_CHANGED,
+  consolePresets,
   consoleSessions,
   ivyeaAgentChat,
   ivyeaAgentStatus,
@@ -44,6 +47,7 @@ import {
   ivyeaOpsTools,
   ivyeaSkills,
   visionDescribe,
+  type ConsolePreset,
   type IvyeaPermissionRequest,
   type IvyeaSkillInfo,
 } from "../../api/ivyeaAgent";
@@ -76,30 +80,6 @@ function loadPrefs(): Prefs {
   }
 }
 
-/** 剥掉每轮注入给模型的上下文（与后端 console_sessions.clean_preview 同一组标记）。 */
-const INJECTION_MARKERS = [
-  "\n\n[Ivyea Skill：",
-  "\n\n[Ivyea 本地知识检索",
-  "\n\n[Ivyea 内置亚马逊知识库",
-  "\n\n[任务范围锁定",
-  "\n\n[工程上下文]",
-];
-
-function stripInjected(text: string): string {
-  let out = text;
-  for (const marker of INJECTION_MARKERS) {
-    const i = out.indexOf(marker);
-    if (i >= 0) out = out.slice(0, i);
-  }
-  // 收尾是被截断的半截标记（服务端把消息砍短过）→ 一并切掉
-  for (const marker of INJECTION_MARKERS) {
-    for (let size = marker.length; size > 2; size -= 1) {
-      if (out.endsWith(marker.slice(0, size))) { out = out.slice(0, -size); break; }
-    }
-  }
-  return out.trim();
-}
-
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -127,6 +107,7 @@ function ConsoleInner() {
   const [attaching, setAttaching] = useState(false);
 
   const [skills, setSkills] = useState<IvyeaSkillInfo[]>([]);
+  const [presets, setPresets] = useState<ConsolePreset[]>([]);
   const [workspaces, setWorkspaces] = useState<string[]>(["默认工作区"]);
   const [references, setReferences] = useState<ComposerRef[]>([]);
   const [picked, setPicked] = useState<ComposerRef[]>([]);
@@ -157,6 +138,9 @@ function ConsoleInner() {
     ivyeaSkills()
       .then((d) => { if (alive && Array.isArray(d?.skills)) setSkills(d.skills); })
       .catch(() => void 0);   // /skills 代理是后续阶段的事，这里 404 属正常
+    consolePresets()
+      .then((d) => { if (alive) setPresets(d); })
+      .catch(() => void 0);   // 没有预设不影响开一轮
     // 当前主脑模型：只用来显示。agent 的模型是全局配置，不支持按轮次覆盖，
     // 所以 composer 上那枚 chip 是信息位 + 去系统配置的入口，不是选择器。
     ivyeaAgentStatus()
@@ -520,6 +504,7 @@ function ConsoleInner() {
       picked={picked}
       onPickedChange={setPicked}
       scenes={scenes}
+      presets={presets}
       onNewTask={resetSession}
       images={images}
       onImagesChange={setImages}

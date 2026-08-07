@@ -62,9 +62,17 @@ class ProviderProbeBody(BaseModel):
     timeout: float = Field(default=30.0, ge=1.0, le=120.0)
 
 
+# 会话 id 会在 agent 那边直接拼成文件名。agent 侧已经在 sessions.path_for 堵了，
+# 这里再收一道：越界的 id 根本不该出 ops 的门。
+#
+# 两头的 ^$ 和 (?:) 都是必须的：pydantic 的 pattern 走的是 **search 而不是 fullmatch**，
+# 写成 "^$|[A-Za-z0-9_-]+$" 的话 "../../../tmp/x" 会因为末尾那个 x 被判通过。
+_SESSION_ID = r"^(?:|[A-Za-z0-9_-]{1,120})$"
+
+
 class ChatBody(BaseModel):
     message: str = Field(..., min_length=1, max_length=20000)
-    session_id: str = Field(default="", max_length=200)
+    session_id: str = Field(default="", max_length=120, pattern=_SESSION_ID)
     workspace: str = Field(default="", max_length=1000)
     asin: str = Field(default="", max_length=80)
     ops_context: dict[str, Any] = Field(default_factory=dict)
@@ -86,6 +94,9 @@ class ChatBody(BaseModel):
     defer_citation_text: bool = False
     # "none" = 维持今天的只读语义；"remote" = 写操作弹前端审批卡（agent ≥ v1.9）。
     approval: str = Field(default="none", pattern="^(none|remote)$")
+    # 会话来自哪个板块。**ops 自用**，_chat_payload 会把它剔掉再下发 ——
+    # agent 不认识这个字段，带过去只会当成未知参数。
+    source: str = Field(default="console", pattern="^(console|assistant|brain)$")
 
 
 class ChatSessionCreateBody(BaseModel):
@@ -292,6 +303,9 @@ _CHAT_OPTIONAL_DEFAULTS: dict[str, Any] = {
     "system": "",
     "defer_citation_text": False,
     "approval": "none",
+    # source 是 ops 自己的记账字段（会话来自任务台/AI问答/知识库），agent 不认识它。
+    # 放进 defaults 里只是为了默认值被剔除；非默认值另有 _pop_ops_only 兜底。
+    "source": "console",
 }
 
 
@@ -306,6 +320,8 @@ def _chat_payload(body: ChatBody) -> dict[str, Any]:
     # use_tools 默认 True；只有显式关掉才需要告诉 daemon（它的默认也是带工具）。
     if payload.get("use_tools") is not False:
         payload.pop("use_tools", None)
+    # source 无论取什么值都不该出现在下发给 daemon 的 payload 里。
+    payload.pop("source", None)
     return payload
 
 
@@ -342,7 +358,8 @@ def _approval_owner(request_id: str) -> str | None:
     return principal
 
 
-def _tee_session_events(chunks: Any, principal: str, workspace: str = "") -> Any:
+def _tee_session_events(chunks: Any, principal: str, workspace: str = "",
+                        source: str = "console") -> Any:
     """原样转发 SSE 字节，同时从流里捞两件 ops 需要记账的事：
 
     - ``permission_request`` → 登记审批归属（谁能批这一步）
@@ -369,7 +386,7 @@ def _tee_session_events(chunks: Any, principal: str, workspace: str = "") -> Any
                     if is_start:
                         sid = str(data.get("session_id") or "")
                         if sid:
-                            console_sessions.register_session(sid, principal, workspace)
+                            console_sessions.register_session(sid, principal, workspace, source)
                     else:
                         rid = str(data.get("request_id") or "")
                         if rid:
@@ -415,7 +432,7 @@ def chat_stream(body: ChatBody, request: Request,
     return StreamingResponse(
         _tee_session_events(
             svc.chat_stream(_with_ops_bridge(payload, request)),
-            user, ws_name,
+            user, ws_name, body.source,
         ),
         media_type="text/event-stream",
         headers={
@@ -427,7 +444,7 @@ def chat_stream(body: ChatBody, request: Request,
 
 class ChatPermissionBody(BaseModel):
     request_id: str = Field(..., min_length=1, max_length=120)
-    session_id: str = Field(default="", max_length=200)
+    session_id: str = Field(default="", max_length=120, pattern=_SESSION_ID)
     choice: str = Field(..., pattern="^(approve|session|deny|abort)$")
 
 
@@ -500,6 +517,7 @@ class ConsoleWorkspaceBody(BaseModel):
 @router.get("/console/sessions")
 def console_session_list(
     workspace: str = Query("", max_length=120),
+    source: str = Query("", max_length=20),
     limit: int = Query(60, ge=1, le=200),
     info: dict[str, Any] = Depends(require_user_info),
 ) -> dict[str, Any]:
@@ -510,7 +528,7 @@ def console_session_list(
     索引里没有的历史会话对普通用户不可见。
     """
     principal, is_admin = _principal_info(info)
-    index = console_sessions.owned_sessions(principal, is_admin, workspace)
+    index = console_sessions.owned_sessions(principal, is_admin, workspace, source)
     agent_ok = True
     try:
         listing = (_call(svc.chat_sessions, 200) or {}).get("sessions") or []
@@ -525,9 +543,10 @@ def console_session_list(
         meta = index.get(sid)
         if meta is None:
             # 未登记：管理员能看到（机器上的历史会话），普通用户不给。
-            if not is_admin or workspace:
+            # 按来源筛选时也一并排除：未登记的会话没有来源可判，混进结果里就是噪音。
+            if not is_admin or workspace or source:
                 continue
-            meta = {"workspace": "", "title": "", "principal": ""}
+            meta = {"workspace": "", "title": "", "principal": "", "source": ""}
         preview = console_sessions.clean_preview(item.get("preview") or "")
         rows.append({
             "id": sid,
@@ -537,6 +556,7 @@ def console_session_list(
             "updated": item.get("updated") or 0,
             "workspace": meta.get("workspace") or "",
             "owner": meta.get("principal") or "",
+            "source": meta.get("source") or "",
             "indexed": sid in index,
         })
     rows.sort(key=lambda r: r.get("updated") or 0, reverse=True)
@@ -576,6 +596,92 @@ def console_session_delete(session_id: str,
             ) from exc
     console_sessions.forget_session(session_id)
     return {"ok": True, "deleted": session_id}
+
+
+class ImportedMessage(BaseModel):
+    role: str = Field(..., pattern="^(user|assistant)$")
+    content: str = Field(..., min_length=1, max_length=100000)
+
+
+class ImportedSession(BaseModel):
+    """一条从别处（localStorage / 旧板块）搬过来的会话。"""
+    id: str = Field(..., min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
+    created: float = 0.0
+    messages: list[ImportedMessage] = Field(default_factory=list, max_length=200)
+
+
+class ConsoleImportBody(BaseModel):
+    source: str = Field(default="assistant", pattern="^(assistant|brain)$")
+    sessions: list[ImportedSession] = Field(default_factory=list, max_length=100)
+
+
+@router.post("/console/sessions/import")
+def console_session_import(body: ConsoleImportBody,
+                           info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    """把外部会话搬进 agent 的会话库（不跑模型，只落盘）。
+
+    **幂等**靠 id 前缀做到：同一条来源会话每次都算出同一个 agent id，
+    agent 的 import 是按 id 覆盖写 —— 重复导入是覆盖，不会生出第二条。
+    所以浏览器上重复点、或者两个标签页同时点，结果都一样。
+
+    前缀还顺带把导入来的 id 和 agent 自己生成的（时间戳-毫秒-随机）分开，
+    互相撞不上。
+    """
+    principal, _is_admin = _principal_info(info)
+    imported: list[str] = []
+    skipped = 0
+    for item in body.sessions:
+        msgs = [{"role": m.role, "content": m.content} for m in item.messages if m.content.strip()]
+        if not msgs:
+            skipped += 1
+            continue
+        sid = f"imp-{body.source}-{item.id}"
+        payload: dict[str, Any] = {"id": sid, "messages": msgs}
+        if item.created > 0:
+            payload["created"] = item.created
+        data = _call(svc.chat_import, payload)
+        if not data.get("ok"):
+            skipped += 1
+            continue
+        console_sessions.register_session(sid, principal, "", body.source)
+        imported.append(sid)
+    return {"ok": True, "imported": imported, "count": len(imported), "skipped": skipped}
+
+
+class ConsolePresetBody(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    skill: str = Field(default="", max_length=200)
+    approval: str = Field(default="none", pattern="^(none|remote)$")
+    workspace: str = Field(default="", max_length=120)
+    note: str = Field(default="", max_length=500)
+
+
+@router.get("/console/presets")
+def console_preset_list(info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    principal, _ = _principal_info(info)
+    return {"ok": True, "presets": console_sessions.list_presets(principal)}
+
+
+@router.post("/console/presets")
+def console_preset_save(body: ConsolePresetBody,
+                        info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    principal, _ = _principal_info(info)
+    try:
+        row = console_sessions.save_preset(
+            body.name, principal, skill=body.skill, approval=body.approval,
+            workspace=body.workspace, note=body.note)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "preset": row}
+
+
+@router.delete("/console/presets/{name}")
+def console_preset_delete(name: str,
+                          info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    principal, _ = _principal_info(info)
+    if not console_sessions.delete_preset(name, principal):
+        raise HTTPException(status_code=404, detail="预设不存在")
+    return {"ok": True, "deleted": name}
 
 
 @router.get("/console/workspaces")

@@ -126,10 +126,10 @@ def test_list_hides_unindexed_sessions_from_regular_users(monkeypatch):
         {"id": "legacy", "preview": "别人的老会话", "turns": 1, "updated": 100},
     ]})
 
-    out = mod.console_session_list(workspace="", limit=60, info=ALICE)
+    out = mod.console_session_list(workspace="", source="", limit=60, info=ALICE)
     assert [s["id"] for s in out["sessions"]] == ["mine"]
 
-    out_admin = mod.console_session_list(workspace="", limit=60, info=ADMIN)
+    out_admin = mod.console_session_list(workspace="", source="", limit=60, info=ADMIN)
     assert {s["id"] for s in out_admin["sessions"]} == {"mine", "legacy"}
     legacy = next(s for s in out_admin["sessions"] if s["id"] == "legacy")
     assert legacy["indexed"] is False
@@ -143,7 +143,7 @@ def test_list_survives_agent_being_down(monkeypatch):
         raise HTTPException(status_code=503, detail="IvyeaAgent 不可用")
 
     monkeypatch.setattr(mod, "_call", _down)
-    out = mod.console_session_list(workspace="", limit=60, info=ALICE)
+    out = mod.console_session_list(workspace="", source="", limit=60, info=ALICE)
     assert out["ok"] is True
     assert out["sessions"] == []            # 没有正文摘要就列不出条目
     assert out["workspaces"][0]["name"] == cs.DEFAULT_WORKSPACE
@@ -155,7 +155,7 @@ def test_custom_title_wins_over_preview(monkeypatch):
     monkeypatch.setattr(mod, "_call", lambda fn, *a, **k: {"sessions": [
         {"id": "s1", "preview": "原始第一句", "turns": 1, "updated": 1},
     ]})
-    out = mod.console_session_list(workspace="", limit=60, info=ALICE)
+    out = mod.console_session_list(workspace="", source="", limit=60, info=ALICE)
     assert out["sessions"][0]["title"] == "广告复盘"
     assert out["sessions"][0]["preview"] == "原始第一句"
 
@@ -216,7 +216,7 @@ def test_list_uses_cleaned_preview(monkeypatch):
         {"id": "s1", "preview": "查广告\n\n[Ivyea Skill：本轮相关可复用流程]\nxxx",
          "turns": 1, "updated": 1},
     ]})
-    out = mod.console_session_list(workspace="", limit=60, info=ALICE)
+    out = mod.console_session_list(workspace="", source="", limit=60, info=ALICE)
     assert out["sessions"][0]["title"] == "查广告"
     assert "[Ivyea Skill" not in out["sessions"][0]["preview"]
 
@@ -295,3 +295,54 @@ def test_router_translates_name_to_directory(tmp_path, monkeypatch):
     payload2, name2 = mod._resolve_workspace(
         mod.ChatBody(message="hi", workspace="纯分组"), "alice@x.com")
     assert "workspace" not in payload2 and name2 == "纯分组"
+
+
+# ── 会话来源（三个板块共用一个会话库）────────────────────────────────────────
+
+def test_source_defaults_to_console_and_filters():
+    """来源筛选必须走 SQL，不能只在前端过滤 —— 列表有条数上限，
+    前端过滤会把上限之外的条目静默藏掉，看着像"会话丢了"。"""
+    cs.register_session("s1", "alice@x.com")                      # 不传 = 任务台
+    cs.register_session("s2", "alice@x.com", "", "assistant")
+    cs.register_session("s3", "alice@x.com", "", "brain")
+    rows = cs.owned_sessions("alice@x.com", False)
+    assert rows["s1"]["source"] == "console"
+    assert set(cs.owned_sessions("alice@x.com", False, source="assistant")) == {"s2"}
+    assert set(cs.owned_sessions("alice@x.com", False, source="brain")) == {"s3"}
+    assert set(cs.owned_sessions("alice@x.com", False)) == {"s1", "s2", "s3"}
+
+
+def test_unknown_source_falls_back_to_console():
+    """来源是 ops 自己写的枚举，脏值不该落进库里变成第四种来源。"""
+    cs.register_session("s1", "alice@x.com", "", "../etc/passwd")
+    assert cs.owned_sessions("alice@x.com", False)["s1"]["source"] == "console"
+
+
+# ── 智能体预设 ──────────────────────────────────────────────────────────────
+
+def test_presets_are_per_user():
+    """预设里带着工作区（可能绑到某个目录），共享等于把别人的目录摆进你的下拉框。"""
+    cs.save_preset("广告周检", "alice@x.com", skill="ads", approval="remote")
+    assert [p["name"] for p in cs.list_presets("alice@x.com")] == ["广告周检"]
+    assert cs.list_presets("bob@x.com") == []
+
+
+def test_saving_same_name_updates_instead_of_duplicating():
+    cs.save_preset("广告周检", "alice@x.com", skill="ads", approval="remote")
+    cs.save_preset("广告周检", "alice@x.com", skill="ads-v2", approval="none")
+    rows = cs.list_presets("alice@x.com")
+    assert len(rows) == 1 and rows[0]["skill"] == "ads-v2" and rows[0]["approval"] == "none"
+
+
+def test_preset_rejects_blank_name_and_bad_approval():
+    with pytest.raises(ValueError):
+        cs.save_preset("   ", "alice@x.com")
+    with pytest.raises(ValueError):
+        cs.save_preset("x", "alice@x.com", approval="yolo")
+
+
+def test_delete_preset_is_idempotent_and_scoped():
+    cs.save_preset("x", "alice@x.com")
+    assert cs.delete_preset("x", "bob@x.com") is False      # 删不到别人的
+    assert cs.delete_preset("x", "alice@x.com") is True
+    assert cs.delete_preset("x", "alice@x.com") is False

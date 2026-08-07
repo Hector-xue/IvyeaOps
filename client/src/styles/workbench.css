@@ -1889,6 +1889,9 @@ body::after{
 
 /* Warnings / error */
 .market-warnings{font-size:10px;color:var(--amber);line-height:1.7;flex-shrink:0}
+/* 提示条：不是错误，只是告诉用户这一轮走了别的通道。别用红色吓人。 */
+.market-note{color:var(--t2);font-size:12px;padding:8px 12px;background:var(--bg2);border-radius:6px;
+  border:1px solid var(--b);flex-shrink:0;line-height:1.6}
 .market-error{color:var(--red);font-size:12px;padding:8px 12px;background:rgba(248,113,113,.06);border-radius:6px;border:1px solid rgba(248,113,113,.25);flex-shrink:0;white-space:pre-wrap;line-height:1.6}
 
 /* Report area */
@@ -3090,6 +3093,20 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .sb-sess:hover .sb-sess-del{opacity:1}
 .sb-sess-del:hover{color:var(--red)}
 .sb-sess:hover .sb-sess-time{display:none}
+/* 来源筛选：三个板块共用会话库之后，左栏要能只看某一类。 */
+.sb-src-filter{display:flex;gap:3px;padding:0 12px 6px;flex-wrap:wrap}
+.sb-src-chip{padding:1px 7px;border-radius:99px;border:1px solid var(--b);background:transparent;
+  color:var(--t3);font-family:var(--font);font-size:9.5px;line-height:1.6;cursor:pointer;
+  transition:color var(--dur) var(--ease),border-color var(--dur) var(--ease),
+    background-color var(--dur) var(--ease)}
+.sb-src-chip:hover{color:var(--t2);border-color:var(--t3)}
+.sb-src-chip.active{color:var(--acc);border-color:var(--acc);
+  background:color-mix(in srgb,var(--acc) 8%,transparent)}
+/* 来源小标只给非任务台的会话 —— 任务台是这里的默认语境，标了全是噪音。 */
+.sb-sess-src{flex-shrink:0;font-size:8.5px;padding:0 4px;border-radius:3px;
+  background:color-mix(in srgb,var(--t3) 16%,transparent);color:var(--t3)}
+.sb-sess-src.src-assistant{background:color-mix(in srgb,var(--acc) 14%,transparent);color:var(--acc)}
+.sb-sess-src.src-brain{background:color-mix(in srgb,var(--purple) 14%,transparent)}
 
 /* ── 定时任务（pages/workbench/Schedules.tsx）───────────────────────────── */
 .sch-notice{display:flex;gap:8px;align-items:flex-start;margin:10px 0 12px;padding:9px 12px;
@@ -3171,3 +3188,11 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .cc-img>button{position:absolute;top:0;right:0;width:16px;height:16px;border:none;
   background:rgba(0,0,0,.6);color:#fff;font-size:9px;cursor:pointer;line-height:16px;padding:0}
 .cc-img-note{font-size:9.5px;color:var(--t3)}
+
+/* ── 智能体预设（pages/workbench/Capabilities.tsx · PresetsSection）────────── */
+.cap-dim{color:var(--t3)}
+.cap-empty{padding:14px 0;font-size:12px;color:var(--t3);line-height:1.7}
+.cap-preset-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;
+  margin-top:10px;padding:12px;border:1px solid var(--b);border-radius:8px;background:var(--bg2)}
+/* 按钮那一格永远独占一整行，免得挤在某个 select 旁边看着像它的附属控件 */
+.cap-preset-actions{grid-column:1/-1;display:flex;gap:8px}

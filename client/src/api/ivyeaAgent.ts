@@ -348,6 +348,8 @@ export type IvyeaChatPayload = {
   use_tools?: boolean;
   /** 追加到本轮系统提示的额外上下文（@ 引用的资料就走这里）。 */
   system?: string;
+  /** 会话开在哪个板块。ops 自用（左栏来源标记），不会下发给 agent。 */
+  source?: ConsoleSource;
 };
 
 /**
@@ -568,18 +570,36 @@ export type ConsoleSessionRow = {
   updated: number;
   workspace: string;
   owner: string;
+  /** 会话开在哪个板块：任务台 / AI 问答 / 知识库。空 = 未登记的历史会话。 */
+  source?: ConsoleSource | "";
   /** false = agent 那边有正文但 ops 没登记归属（悬浮球/CLI 开的，仅管理员可见）。 */
   indexed: boolean;
 };
 
+/** 三个板块共用 agent 的会话库，靠这个字段区分来源。 */
+export type ConsoleSource = "console" | "assistant" | "brain";
+
+export const SOURCE_LABEL: Record<ConsoleSource, string> = {
+  console: "任务台",
+  assistant: "AI 问答",
+  brain: "知识库",
+};
+
+/** 各来源的归属页面 —— 左栏点一条会话回到它本来的板块。 */
+export const SOURCE_PATH: Record<ConsoleSource, string> = {
+  console: "/console",
+  assistant: "/assistant",
+  brain: "/brain",
+};
+
 export type ConsoleWorkspace = { name: string; path: string; builtin: boolean };
 
-export async function consoleSessions(workspace = "", limit = 60) {
+export async function consoleSessions(workspace = "", limit = 60, source = "") {
   const { data } = await api.get<{
     ok: boolean; sessions: ConsoleSessionRow[]; workspaces: ConsoleWorkspace[];
     /** false = agent 读不到，列表是空的但不代表会话没了。 */
     agent_available?: boolean;
-  }>("/ivyea-agent/console/sessions", { params: { workspace, limit } });
+  }>("/ivyea-agent/console/sessions", { params: { workspace, limit, source } });
   return data;
 }
 
@@ -598,6 +618,13 @@ export async function consoleSessionDelete(sessionId: string) {
 }
 
 /** path 可选，且**仅管理员**能绑目录 —— 绑了它就是 Agent 文件工具的工作目录。 */
+/** 工作区列表。后端 GET /console/workspaces 一直都在，只是前端此前都从会话列表里顺带取。 */
+export async function consoleWorkspaces() {
+  const { data } = await api.get<{ ok: boolean; workspaces: ConsoleWorkspace[] }>(
+    "/ivyea-agent/console/workspaces");
+  return data.workspaces || [];
+}
+
 export async function consoleWorkspaceCreate(name: string, path = "") {
   const { data } = await api.post<{ ok: boolean; workspace: ConsoleWorkspace }>(
     "/ivyea-agent/console/workspaces", { name, path });
@@ -987,4 +1014,42 @@ export async function ivyeaKnowledgeImportDirectory(params?: {
     { timeout: 180000 },
   );
   return data;
+}
+
+/** 把外部会话（旧 localStorage 历史等）搬进 agent 会话库。按 id 幂等，重复调用是覆盖。 */
+export async function consoleSessionImport(
+  source: "assistant" | "brain",
+  sessions: { id: string; created?: number; messages: { role: "user" | "assistant"; content: string }[] }[],
+) {
+  const { data } = await api.post<{ ok: boolean; imported: string[]; count: number; skipped: number }>(
+    "/ivyea-agent/console/sessions/import", { source, sessions });
+  return data;
+}
+
+/** 智能体预设：一套"这类活按这么跑"的设置（技能 + 审批档位 + 工作区）。按用户隔离。 */
+export type ConsolePreset = {
+  name: string; skill: string; approval: "none" | "remote";
+  workspace: string; note: string; created: number;
+};
+
+export async function consolePresets() {
+  const { data } = await api.get<{ ok: boolean; presets: ConsolePreset[] }>("/ivyea-agent/console/presets");
+  return data.presets || [];
+}
+
+export async function consolePresetSave(p: Omit<ConsolePreset, "created">) {
+  const { data } = await api.post<{ ok: boolean; preset: ConsolePreset }>("/ivyea-agent/console/presets", p);
+  return data.preset;
+}
+
+export async function consolePresetDelete(name: string) {
+  const { data } = await api.delete<{ ok: boolean }>(
+    `/ivyea-agent/console/presets/${encodeURIComponent(name)}`);
+  return data;
+}
+
+/** 预设变了 → 任务台的下拉要跟着变。和会话列表用同一套广播机制。 */
+export const CONSOLE_PRESETS_CHANGED = "ivyea-ops:console-presets-changed";
+export function notifyConsolePresetsChanged() {
+  window.dispatchEvent(new Event(CONSOLE_PRESETS_CHANGED));
 }

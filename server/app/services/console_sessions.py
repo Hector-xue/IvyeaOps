@@ -66,6 +66,7 @@ _BASELINE_SCHEMA = (
         principal  TEXT NOT NULL DEFAULT '',
         workspace  TEXT NOT NULL DEFAULT '',
         title      TEXT NOT NULL DEFAULT '',
+        source     TEXT NOT NULL DEFAULT 'console',
         created    REAL NOT NULL DEFAULT 0,
         updated    REAL NOT NULL DEFAULT 0
     );
@@ -80,10 +81,37 @@ _BASELINE_SCHEMA = (
         PRIMARY KEY (name, principal)
     );
     """,
+    """
+    CREATE TABLE IF NOT EXISTS console_presets (
+        name      TEXT NOT NULL,
+        principal TEXT NOT NULL DEFAULT '',
+        skill     TEXT NOT NULL DEFAULT '',
+        approval  TEXT NOT NULL DEFAULT 'none',
+        workspace TEXT NOT NULL DEFAULT '',
+        note      TEXT NOT NULL DEFAULT '',
+        created   REAL NOT NULL DEFAULT 0,
+        PRIMARY KEY (name, principal)
+    );
+    """,
 )
 
+def _m001_add_source(conn: sqlite3.Connection) -> None:
+    """给老库补 source 列。新装的 baseline 已经带了，这里只补已存在的库。
+
+    存量行一律记为 console —— 这个表在加 source 之前只有任务台会往里写。
+    """
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(console_sessions)")}
+    if "source" not in cols:
+        conn.execute("ALTER TABLE console_sessions ADD COLUMN source TEXT NOT NULL DEFAULT 'console'")
+
+
 # 追加即可，永远不要重排或删除已应用过的迁移。
-_MIGRATIONS: tuple = ()
+_MIGRATIONS: tuple = (_m001_add_source,)
+
+# 会话来源：任务台 / AI 问答 / 知识库对话。三处收编到同一个会话库之后，
+# 左栏靠它区分并筛选。
+SOURCES = ("console", "assistant", "brain")
+SOURCE_LABELS = {"console": "任务台", "assistant": "AI 问答", "brain": "知识库"}
 
 
 def _db_path() -> Path:
@@ -112,7 +140,8 @@ def init_db() -> None:
 
 # ── 会话 ────────────────────────────────────────────────────────────────────
 
-def register_session(session_id: str, principal: str, workspace: str = "") -> None:
+def register_session(session_id: str, principal: str, workspace: str = "",
+                     source: str = "console") -> None:
     """记下一条会话的归属。首次见到就落库，之后只更新时间戳。
 
     从转发 SSE 时捕获的 ``start`` 事件调用 —— session_id 是 agent 现场生成的，
@@ -132,13 +161,15 @@ def register_session(session_id: str, principal: str, workspace: str = "") -> No
                 "UPDATE console_sessions SET updated = ? WHERE session_id = ?", (now, session_id))
         else:
             conn.execute(
-                "INSERT INTO console_sessions (session_id, principal, workspace, title, created, updated)"
-                " VALUES (?, ?, ?, '', ?, ?)",
-                (session_id, principal or "", workspace or "", now, now),
+                "INSERT INTO console_sessions (session_id, principal, workspace, title, source,"
+                " created, updated) VALUES (?, ?, ?, '', ?, ?, ?)",
+                (session_id, principal or "", workspace or "",
+                 source if source in SOURCES else "console", now, now),
             )
 
 
-def owned_sessions(principal: str, is_admin: bool, workspace: str = "") -> dict[str, dict[str, Any]]:
+def owned_sessions(principal: str, is_admin: bool, workspace: str = "",
+                   source: str = "") -> dict[str, dict[str, Any]]:
     """当前用户可见的会话索引，键是 session_id。"""
     sql = "SELECT * FROM console_sessions"
     args: list[Any] = []
@@ -149,6 +180,9 @@ def owned_sessions(principal: str, is_admin: bool, workspace: str = "") -> dict[
     if workspace:
         where.append("workspace = ?")
         args.append(workspace)
+    if source:
+        where.append("source = ?")
+        args.append(source)
     if where:
         sql += " WHERE " + " AND ".join(where)
     with _conn() as conn:
@@ -281,3 +315,51 @@ def workspace_path(name: str, principal: str) -> str:
     if path and not Path(path).is_dir():
         return ""
     return path
+
+
+# ── 智能体预设 ──────────────────────────────────────────────────────────────
+# 一条预设 = 一句"以后这类活按这套跑"：用哪个技能、审批档位、落在哪个工作区。
+# 存的是**设置**不是模型 —— 主脑在系统配置里全局切，预设里再放一份只会两处打架。
+#
+# 按 principal 隔离：预设里带着工作区（可能绑到某个目录），共享等于把别人的
+# 目录选项摆进你的下拉框。要共享另说，先别把口子开在这。
+
+def list_presets(principal: str) -> list[dict[str, Any]]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM console_presets WHERE principal = ? ORDER BY created DESC",
+            (principal or "",),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def save_preset(name: str, principal: str, *, skill: str = "", approval: str = "none",
+                workspace: str = "", note: str = "") -> dict[str, Any]:
+    clean = (name or "").strip()
+    if not clean:
+        raise ValueError("预设名不能为空")
+    if approval not in ("none", "remote"):
+        raise ValueError("审批档位只能是 none 或 remote")
+    row = {
+        "name": clean[:120], "principal": principal or "", "skill": (skill or "")[:200],
+        "approval": approval, "workspace": (workspace or "")[:120], "note": (note or "")[:500],
+        "created": time.time(),
+    }
+    with _conn() as conn:
+        # 同名即覆盖：用户改一个预设时按的是"保存"，不该冒出第二条同名的
+        conn.execute(
+            "INSERT INTO console_presets (name, principal, skill, approval, workspace, note, created)"
+            " VALUES (:name, :principal, :skill, :approval, :workspace, :note, :created)"
+            " ON CONFLICT(name, principal) DO UPDATE SET"
+            " skill=excluded.skill, approval=excluded.approval,"
+            " workspace=excluded.workspace, note=excluded.note",
+            row,
+        )
+    return row
+
+
+def delete_preset(name: str, principal: str) -> bool:
+    with _conn() as conn:
+        cur = conn.execute("DELETE FROM console_presets WHERE name = ? AND principal = ?",
+                           ((name or "").strip(), principal or ""))
+        return cur.rowcount > 0

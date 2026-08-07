@@ -16,6 +16,11 @@ import { useAuth } from "../../App";
 import { ToastProvider, useToast } from "../../components/toast";
 import { useConfirm } from "../../components/ConfirmDialog";
 import {
+  consolePresetDelete,
+  consolePresets,
+  consolePresetSave,
+  consoleWorkspaces,
+  notifyConsolePresetsChanged,
   ivyeaMcpDelete,
   ivyeaMcpServers,
   ivyeaMcpUpsert,
@@ -23,6 +28,7 @@ import {
   ivyeaSkills,
   providerModelId,
   type AgentMcpServer,
+  type ConsolePreset,
   type IvyeaSkillInfo,
 } from "../../api/ivyeaAgent";
 import { listSkills, type SkillMeta } from "../../api/skill";
@@ -33,7 +39,7 @@ type Tab = "skills" | "mcp" | "agents" | "auth";
 const TABS: { key: Tab; icon: string; label: string; hint: string }[] = [
   { key: "skills", icon: "✦", label: "技能", hint: "把好方法固化成可复用的流程" },
   { key: "mcp", icon: "⚑", label: "MCP", hint: "让 Agent 连得上工具和数据" },
-  { key: "agents", icon: "◉", label: "智能体", hint: "主脑模型与可选 provider" },
+  { key: "agents", icon: "◉", label: "智能体", hint: "预设打法与可选 provider" },
   { key: "auth", icon: "🔑", label: "授权", hint: "数据源密钥的接入状态" },
 ];
 
@@ -315,6 +321,111 @@ function McpTab({ isAdmin }: { isAdmin: boolean }) {
 }
 
 // ── 智能体 ───────────────────────────────────────────────────────────────────
+/**
+ * 预设 = 一句"以后这类活按这套跑"：哪个技能、哪个审批档位、落在哪个工作区。
+ *
+ * 这里**故意不放主脑模型**。主脑是在系统配置里全局切的，预设里再存一份，
+ * 两处就会打架 —— 而且 agent 目前也不支持按轮次覆盖模型，存了也是空头支票。
+ */
+function PresetsSection() {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [rows, setRows] = useState<ConsolePreset[]>([]);
+  const [skills, setSkills] = useState<IvyeaSkillInfo[]>([]);
+  const [spaces, setSpaces] = useState<string[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState({ name: "", skill: "", approval: "none" as "none" | "remote", workspace: "", note: "" });
+
+  const load = useCallback(async () => {
+    const [p, sk, ws] = await Promise.all([
+      consolePresets().catch(() => []),
+      ivyeaSkills().then((d) => d.skills || []).catch(() => [] as IvyeaSkillInfo[]),
+      consoleWorkspaces().catch(() => [] as { name: string }[]),
+    ]);
+    setRows(p);
+    setSkills(sk);
+    setSpaces(ws.map((w) => w.name));
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const save = async () => {
+    if (!draft.name.trim()) { toast("error", "预设名不能为空"); return; }
+    try {
+      await consolePresetSave(draft);
+      setAdding(false);
+      setDraft({ name: "", skill: "", approval: "none", workspace: "", note: "" });
+      await load();
+      notifyConsolePresetsChanged();
+      toast("success", "预设已保存");
+    } catch (e: any) {
+      toast("error", e?.response?.data?.detail || "保存失败");
+    }
+  };
+
+  const drop = async (name: string) => {
+    if (!(await confirm({ title: `删除预设「${name}」？`, message: "只删这套设置，已经跑过的会话不受影响。", danger: true }))) return;
+    try {
+      await consolePresetDelete(name);
+      await load();
+      notifyConsolePresetsChanged();
+    } catch { toast("error", "删除失败"); }
+  };
+
+  return (
+    <Section title="预设打法" sub="任务台开一轮时可以一键套用 · 每个人的预设只有自己看得到">
+      {rows.length === 0 && !adding && (
+        <div className="cap-empty">还没有预设。把常跑的活存成一条，下次在任务台点一下就位。</div>
+      )}
+      {rows.length > 0 && (
+        <table className="tbl cap-table">
+          <thead><tr><th>名称</th><th>技能</th><th>审批</th><th>工作区</th><th>备注</th><th /></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.name}>
+                <td><b>{r.name}</b></td>
+                <td>{r.skill ? <code>{r.skill}</code> : <span className="cap-dim">不限定</span>}</td>
+                <td>{r.approval === "remote" ? "逐项审批" : "只读建议"}</td>
+                <td>{r.workspace || <span className="cap-dim">默认</span>}</td>
+                <td className="cap-dim">{r.note || "—"}</td>
+                <td><button className="tbtn danger" onClick={() => void drop(r.name)}>删除</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {adding ? (
+        <div className="cap-preset-form">
+          <input className="inp" placeholder="预设名，例如「广告周检」" value={draft.name}
+                 onChange={(e) => setDraft({ ...draft, name: e.target.value })} autoFocus />
+          <select className="inp" value={draft.skill} onChange={(e) => setDraft({ ...draft, skill: e.target.value })}>
+            <option value="">不限定技能</option>
+            {skills.map((k) => <option key={k.id} value={k.id}>{k.title || k.id}</option>)}
+          </select>
+          <select className="inp" value={draft.approval}
+                  onChange={(e) => setDraft({ ...draft, approval: e.target.value as "none" | "remote" })}>
+            <option value="none">只读建议</option>
+            <option value="remote">逐项审批（可写）</option>
+          </select>
+          <select className="inp" value={draft.workspace} onChange={(e) => setDraft({ ...draft, workspace: e.target.value })}>
+            <option value="">默认工作区</option>
+            {spaces.map((w) => <option key={w} value={w}>{w}</option>)}
+          </select>
+          <input className="inp" placeholder="备注（可选）" value={draft.note}
+                 onChange={(e) => setDraft({ ...draft, note: e.target.value })} />
+          <div className="cap-preset-actions">
+            <button className="tbtn tbtn-acc" onClick={() => void save()}>保存</button>
+            <button className="tbtn" onClick={() => setAdding(false)}>取消</button>
+          </div>
+        </div>
+      ) : (
+        <button className="tbtn" onClick={() => setAdding(true)}>＋ 新建预设</button>
+      )}
+    </Section>
+  );
+}
+
 function AgentsTab() {
   const [providers, setProviders] = useState<any[]>([]);
   const [active, setActive] = useState<any>(null);
@@ -329,10 +440,11 @@ function AgentsTab() {
     return () => { alive = false; };
   }, []);
 
-  if (loading) return <div className="skeleton line lg" />;
-
   return (
-    <Section title="主脑与可选 provider" sub={`${providers.length} 个 provider · 在「系统配置」里切换和填密钥`}>
+    <>
+      <PresetsSection />
+      {loading ? <div className="skeleton line lg" /> : (
+      <Section title="主脑与可选 provider" sub={`${providers.length} 个 provider · 在「系统配置」里切换和填密钥`}>
       {active && (
         <div className="cap-active">
           当前主脑：<b>{active.label || active.provider || "—"}</b>
@@ -365,7 +477,9 @@ function AgentsTab() {
           );
         })}
       </div>
-    </Section>
+      </Section>
+      )}
+    </>
   );
 }
 

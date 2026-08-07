@@ -12,9 +12,10 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.proc import no_window_kwargs
-from app.core.security import require_user
+from app.core.security import require_user, require_user_info
 from app.services import brain_chat_service as bc
 from app.services import gbrain_service as gb
+from app.services import console_sessions
 from app.services import ivyea_agent_service as ia
 
 
@@ -552,6 +553,45 @@ def _save_migration_map(mapping: dict[str, str]) -> None:
     tmp.replace(p)
 
 
+def _mirror_to_agent(session_id: str, principal: str) -> None:
+    """把这条知识库对话的纯文本副本同步进 agent 会话库。
+
+    **是镜像，不是搬家。** agent 的会话只存 {role, content}，而知识库对话的价值
+    有一半在引证、告警、对话模式上 —— 真搬过去这些字段就没了。所以系统记录仍然是
+    brain 自己的 sqlite，这里只同步一份正文，为的是让左栏能把三个板块的对话列在
+    一起、点进来能回到这条（回的是 /brain，引证还在）。
+
+    **不会越镜像越多**：agent 的 import 按 id 覆盖写，而 id 是从 brain 的
+    session_id 算出来的，所以同一条对话每轮都写回同一个文件。
+
+    已经被 /chat/migrate-to-agent 搬过的老会话复用它当初拿到的 id —— 否则同一条
+    对话会在 agent 库里躺两份（一份随机 id 的旧迁移，一份新镜像）。
+
+    整个过程 best-effort：镜像失败绝不能影响这一轮对话本身。
+    """
+    try:
+        detail = bc.get_session(session_id)
+        messages = [
+            {"role": m.get("role"), "content": m.get("content") or ""}
+            for m in (detail.get("messages") or [])
+            if m.get("role") in {"user", "assistant"} and (m.get("content") or "").strip()
+        ]
+        if not messages:
+            return
+        mapping = _load_migration_map()
+        agent_id = mapping.get(session_id) or f"imp-brain-{session_id}"
+        resp = ia.chat_import({"id": agent_id, "messages": messages})
+        if not resp.get("ok"):
+            return
+        agent_id = str(resp.get("id") or agent_id)
+        if mapping.get(session_id) != agent_id:
+            mapping[session_id] = agent_id
+            _save_migration_map(mapping)
+        console_sessions.register_session(agent_id, principal, "", "brain")
+    except Exception:  # noqa: BLE001 — 镜像是附加价值，坏了也不该毁掉这轮对话
+        return
+
+
 @router.post("/chat/migrate-to-agent")
 def chat_migrate_to_agent() -> dict[str, Any]:
     """One-time, idempotent migration of legacy brain_chat transcripts into the
@@ -639,8 +679,11 @@ def chat_session_update(session_id: str, body: ChatSessionUpdateBody) -> dict[st
 
 
 @router.post("/chat/sessions/{session_id}/messages")
-def chat_message_send(session_id: str, body: ChatMessageBody) -> dict[str, Any]:
-    return _handle(bc.send_message, session_id, body.content)
+def chat_message_send(session_id: str, body: ChatMessageBody,
+                      info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    out = _handle(bc.send_message, session_id, body.content)
+    _mirror_to_agent(session_id, str(info.get("id") or ""))
+    return out
 
 
 def _sse(evt: dict[str, Any]) -> str:
@@ -684,7 +727,8 @@ _STREAM_DEADLINE_S = int(__import__("os").environ.get("BRAIN_CHAT_HERMES_TIMEOUT
 
 
 @router.post("/chat/sessions/{session_id}/messages/stream")
-async def chat_message_stream(session_id: str, body: ChatStreamBody):
+async def chat_message_stream(session_id: str, body: ChatStreamBody,
+                              info: dict[str, Any] = Depends(require_user_info)):
     """Stream a hermes answer token-by-token over SSE. Emits:
     start{user_message,citations} → token{text}* → done{assistant_message} | error{detail}."""
 
@@ -827,6 +871,8 @@ async def chat_message_stream(session_id: str, body: ChatStreamBody):
         except (gb.GBrainError, bc.BrainChatError) as e:
             yield _sse({"type": "error", "detail": str(e)})
             return
+        # 落库成功之后才镜像，镜像里就不会出现"问了但还没答"的半截会话
+        _mirror_to_agent(session_id, str(info.get("id") or ""))
         yield _sse({
             "type": "done",
             "assistant_message": assistant,

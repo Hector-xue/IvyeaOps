@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import SheetSelect from "../SheetSelect";
-import type { IvyeaSkillInfo } from "../../api/ivyeaAgent";
+import type { ConsolePreset, IvyeaSkillInfo } from "../../api/ivyeaAgent";
 
 /** `@` 引用的一条：把知识库里的东西真的带进本轮，而不只是在文字里提一嘴。 */
 export type ComposerRef = { id: string; title: string; path: string };
@@ -49,6 +49,7 @@ export default function Composer({
   picked = [],
   onPickedChange,
   scenes = [],
+  presets = [],
   onNewTask,
   images = [],
   onImagesChange,
@@ -74,6 +75,8 @@ export default function Composer({
   onPickedChange?: (next: ComposerRef[]) => void;
   /** / 菜单里的场景（点一下填提示词）。 */
   scenes?: { label: string; prompt: string }[];
+  /** 智能体预设：一下把技能+审批+工作区三样一起设好。 */
+  presets?: ConsolePreset[];
   onNewTask?: () => void;
   /** 待发送的图片（data URI）。粘贴/拖入即入列，发送时由任务台读成文字带下去。 */
   images?: string[];
@@ -114,6 +117,22 @@ export default function Composer({
 
   const slashItems: SlashItem[] = useMemo(() => {
     const items: SlashItem[] = [];
+    // 预设排在最前：它一次把技能、审批档位、工作区三样都设好，
+    // 比逐个挑省事，用户多半是奔着它来的。
+    for (const p of presets) {
+      items.push({
+        key: "preset:" + p.name,
+        label: `预设 · ${p.name}`,
+        hint: [p.skill, p.approval === "remote" ? "逐项审批" : "只读", p.workspace].filter(Boolean).join(" · "),
+        // 预设存的是**线上语义**（none/remote），composer 用的是界面档位
+        // （readonly/ask）。两边别混：存 remote 是因为那才是发给 agent 的值。
+        run: () => onChange({
+          skill: p.skill,
+          approval: p.approval === "remote" ? "ask" : "readonly",
+          ...(p.workspace ? { workspace: p.workspace } : {}),
+        }),
+      });
+    }
     for (const s of skills) {
       items.push({
         key: "skill:" + s.id, label: `技能 · ${s.title || s.id}`, hint: s.domain,
@@ -134,7 +153,7 @@ export default function Composer({
     }
     if (onNewTask) items.push({ key: "new", label: "新建任务", run: onNewTask });
     return items;
-  }, [skills, scenes, onNewTask, onChange]);
+  }, [presets, skills, scenes, onNewTask, onChange]);
 
   const matches = useMemo(() => {
     if (!menu) return [] as { key: string; label: string; hint?: string; run: () => void }[];
@@ -265,7 +284,7 @@ export default function Composer({
       {menu && matches.length > 0 && (
         <div className="cc-menu">
           <div className="cc-menu-head">
-            {menu.kind === "slash" ? "/ 命令 —— 技能 · 场景 · 审批档位" : "@ 引用知识库内容"}
+            {menu.kind === "slash" ? "/ 命令 —— 预设 · 技能 · 场景 · 审批档位" : "@ 引用知识库内容"}
           </div>
           {matches.map((it, i) => (
             <button

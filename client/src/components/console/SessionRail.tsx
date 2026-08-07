@@ -14,12 +14,24 @@ import {
   consoleWorkspaceCreate,
   consoleWorkspaceDelete,
   notifyConsoleSessionsChanged,
+  SOURCE_LABEL,
+  SOURCE_PATH,
   type ConsoleSessionRow,
+  type ConsoleSource,
   type ConsoleWorkspace,
 } from "../../api/ivyeaAgent";
 
 const DEFAULT_WS = "默认工作区";
 const OPEN_KEY = "ivyea-ops.console.ws-open";
+const SRC_KEY = "ivyea-ops.console.src-filter";
+
+/** 来源筛选的可选项。"" = 全部。 */
+const SOURCE_FILTERS: { key: "" | ConsoleSource; label: string }[] = [
+  { key: "", label: "全部" },
+  { key: "console", label: SOURCE_LABEL.console },
+  { key: "assistant", label: SOURCE_LABEL.assistant },
+  { key: "brain", label: SOURCE_LABEL.brain },
+];
 
 function relTime(ts: number): string {
   if (!ts) return "";
@@ -47,6 +59,8 @@ export default function SessionRail({
   const [open, setOpen] = useState<Record<string, boolean>>(() => {
     try { return JSON.parse(localStorage.getItem(OPEN_KEY) || "{}"); } catch { return {}; }
   });
+  const [src, setSrc] = useState<"" | ConsoleSource>(
+    () => (localStorage.getItem(SRC_KEY) as ConsoleSource) || "");
   const [renaming, setRenaming] = useState("");
   const [draft, setDraft] = useState("");
   const [adding, setAdding] = useState(false);
@@ -57,7 +71,7 @@ export default function SessionRail({
 
   const load = useCallback(async () => {
     try {
-      const d = await consoleSessions();
+      const d = await consoleSessions("", 60, src);
       setRows(d.sessions || []);
       setAgentDown(d.agent_available === false);
       setSpaces(d.workspaces?.length ? d.workspaces : [{ name: DEFAULT_WS, path: "", builtin: true }]);
@@ -66,7 +80,7 @@ export default function SessionRail({
     } finally {
       setLoaded(true);
     }
-  }, []);
+  }, [src]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
@@ -85,9 +99,22 @@ export default function SessionRail({
     try { localStorage.setItem(OPEN_KEY, JSON.stringify(next)); } catch { /* ignore */ }
   };
 
-  const openSession = (id: string) => {
-    navigate(`/console?session=${encodeURIComponent(id)}`);
+  // 三个板块共用会话库，但各自的界面并不等价（AI 问答不带工具、知识库带引证），
+  // 所以点一条会话要回到它**本来的**板块，而不是一律拽进任务台。
+  //
+  // 知识库那条是**镜像**：agent 里的正文只是副本，引证还在 brain 自己的库里，
+  // 所以要把 agent id 反解回 brain 的 session_id，让 /brain 去读带引证的那一份。
+  const openSession = (row: ConsoleSessionRow) => {
+    const src = (row.source || "console") as ConsoleSource;
+    const path = SOURCE_PATH[src] || "/console";
+    const id = src === "brain" ? row.id.replace(/^imp-brain-/, "") : row.id;
+    navigate(`${path}?session=${encodeURIComponent(id)}`);
     onNavigate?.();
+  };
+
+  const pickSource = (key: "" | ConsoleSource) => {
+    setSrc(key);
+    try { localStorage.setItem(SRC_KEY, key); } catch { /* ignore */ }
   };
 
   const commitRename = async (id: string) => {
@@ -148,6 +175,17 @@ export default function SessionRail({
         <button className="sb-ws-add" title="新建工作区" onClick={() => setAdding(true)}>+</button>
       </div>
 
+      <div className="sb-src-filter">
+        {SOURCE_FILTERS.map((f) => (
+          <button
+            key={f.key || "all"}
+            type="button"
+            className={"sb-src-chip" + (src === f.key ? " active" : "")}
+            onClick={() => pickSource(f.key)}
+          >{f.label}</button>
+        ))}
+      </div>
+
       {adding && (
         <>
           <input
@@ -202,7 +240,7 @@ export default function SessionRail({
               <div
                 key={r.id}
                 className={"sb-sess" + (r.id === activeSessionId ? " active" : "")}
-                onClick={() => renaming !== r.id && openSession(r.id)}
+                onClick={() => renaming !== r.id && openSession(r)}
                 onDoubleClick={() => { setRenaming(r.id); setDraft(r.title); }}
                 title={r.preview || r.title}
               >
@@ -222,6 +260,11 @@ export default function SessionRail({
                 ) : (
                   <>
                     <span className="sb-sess-title">{r.title}</span>
+                    {r.source && r.source !== "console" && (
+                      <span className={"sb-sess-src src-" + r.source}>
+                        {SOURCE_LABEL[r.source as ConsoleSource]}
+                      </span>
+                    )}
                     <span className="sb-sess-time">{relTime(r.updated)}</span>
                     <span
                       className="sb-sess-del"
