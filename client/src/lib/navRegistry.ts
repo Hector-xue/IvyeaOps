@@ -69,7 +69,7 @@ export const BOARDS: BoardEntry[] = [
   },
   {
     to: "/schedules", icon: "⏱", label: "定时任务", group: "automation",
-    pathLabel: "~/定时任务", ready: false,   // P4
+    pathLabel: "~/定时任务", admin: false, key: "agents", ready: true,
   },
 
   // ── 工具（旧壳「工具」段，顺序不变）───────────────────────────────────────

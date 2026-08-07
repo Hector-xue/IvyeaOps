@@ -3090,3 +3090,46 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .sb-sess:hover .sb-sess-del{opacity:1}
 .sb-sess-del:hover{color:var(--red)}
 .sb-sess:hover .sb-sess-time{display:none}
+
+/* ── 定时任务（pages/workbench/Schedules.tsx）───────────────────────────── */
+.sch-notice{display:flex;gap:8px;align-items:flex-start;margin:10px 0 12px;padding:9px 12px;
+  border:1px solid rgba(245,158,11,.35);border-radius:var(--r);
+  background:rgba(245,158,11,.06);font-size:10.5px;color:var(--t2);line-height:1.7}
+.sch-notice .cs-icon{color:var(--amber);flex-shrink:0}
+.sch-form{max-width:720px}
+.sch-prompt{resize:vertical;min-height:72px;line-height:1.7}
+.sch-presets{display:flex;flex-wrap:wrap;gap:6px}
+.sch-presets .cc-scene{padding:4px 10px;font-size:10.5px}
+.sch-presets .cc-scene.active{border-color:var(--acc);color:var(--acc);
+  background:color-mix(in srgb,var(--acc) 10%,transparent)}
+.sch-preview{font-size:10.5px;color:var(--t3);line-height:1.6}
+.sch-preview.bad{color:var(--red)}
+.sch-card{border:1px solid var(--b);border-radius:var(--r);background:var(--bg2);
+  padding:10px 12px;margin-bottom:9px;transition:border-color var(--dur) var(--ease)}
+.sch-card:hover{border-color:var(--b2)}
+.sch-card.off{opacity:.6}
+.sch-card-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.sch-card-head b{font-size:12.5px;color:var(--t)}
+.sch-card-head code{font-size:10px;color:var(--t3);background:var(--bg3);padding:1px 6px;
+  border-radius:4px}
+.sch-next{font-size:10.5px;color:var(--acc)}
+.sch-actions{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.sch-actions .cs-btn{padding:3px 9px;font-size:10.5px}
+.sch-card-prompt{margin-top:7px;font-size:11px;color:var(--t2);line-height:1.7;
+  white-space:pre-wrap;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;
+  overflow:hidden}
+.sch-card-meta{margin-top:7px;display:flex;align-items:center;gap:9px;font-size:10px;color:var(--t3)}
+.sch-toggle{margin-left:auto;background:transparent;border:none;color:var(--t3);cursor:pointer;
+  font-family:var(--font);font-size:10px}
+.sch-toggle:hover{color:var(--acc)}
+.sch-runs{margin-top:9px;border-top:1px solid var(--b);padding-top:8px;display:flex;
+  flex-direction:column;gap:4px}
+.sch-run-head{display:flex;align-items:center;gap:8px;width:100%;padding:4px 6px;
+  background:transparent;border:none;color:var(--t2);font-family:var(--font);font-size:10.5px;
+  cursor:pointer;text-align:left;border-radius:var(--r)}
+.sch-run-head:hover{background:var(--bg3)}
+.sch-run-time{color:var(--t3);flex-shrink:0}
+.sch-run-sum{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--t3)}
+.sch-run-body{padding:8px 12px;border:1px solid var(--b);border-radius:var(--r);
+  background:var(--bg1);font-size:11px;line-height:1.75;max-height:420px;overflow:auto}
