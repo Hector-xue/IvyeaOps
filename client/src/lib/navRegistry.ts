@@ -201,9 +201,18 @@ const PATH_LABELS: Record<string, string> = (() => {
   return map;
 })();
 
-/** 顶栏面包屑。未登记的路径回落到 "~/"，与改造前一致。 */
+/**
+ * 顶栏面包屑。精确匹配优先；没登记过就按最长前缀回退到父板块 ——
+ * 之前 /skill/browse 这类子路由一律显示成 "~/"，看着像走丢了。
+ */
 export function pathLabel(pathname: string): string {
-  return PATH_LABELS[pathname] || "~/";
+  const exact = PATH_LABELS[pathname];
+  if (exact) return exact;
+  let best = "";
+  for (const key of Object.keys(PATH_LABELS)) {
+    if (key !== "/" && pathname.startsWith(key + "/") && key.length > best.length) best = key;
+  }
+  return best ? PATH_LABELS[best] : "~/";
 }
 
 const READY = BOARDS.filter((b) => b.ready !== false);
