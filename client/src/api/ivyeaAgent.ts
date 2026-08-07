@@ -557,6 +557,63 @@ export async function ivyeaSkills(query = "") {
   return data;
 }
 
+// ── 任务台会话与工作区 ──────────────────────────────────────────────────────
+export type ConsoleSessionRow = {
+  id: string;
+  title: string;
+  preview: string;
+  turns: number;
+  updated: number;
+  workspace: string;
+  owner: string;
+  /** false = agent 那边有正文但 ops 没登记归属（悬浮球/CLI 开的，仅管理员可见）。 */
+  indexed: boolean;
+};
+
+export type ConsoleWorkspace = { name: string; path: string; builtin: boolean };
+
+export async function consoleSessions(workspace = "", limit = 60) {
+  const { data } = await api.get<{
+    ok: boolean; sessions: ConsoleSessionRow[]; workspaces: ConsoleWorkspace[];
+    /** false = agent 读不到，列表是空的但不代表会话没了。 */
+    agent_available?: boolean;
+  }>("/ivyea-agent/console/sessions", { params: { workspace, limit } });
+  return data;
+}
+
+export async function consoleSessionPatch(
+  sessionId: string, patch: { title?: string; workspace?: string },
+) {
+  const { data } = await api.patch<{ ok: boolean }>(
+    `/ivyea-agent/console/sessions/${encodeURIComponent(sessionId)}`, patch);
+  return data;
+}
+
+export async function consoleSessionDelete(sessionId: string) {
+  const { data } = await api.delete<{ ok: boolean }>(
+    `/ivyea-agent/console/sessions/${encodeURIComponent(sessionId)}`);
+  return data;
+}
+
+export async function consoleWorkspaceCreate(name: string, path = "") {
+  const { data } = await api.post<{ ok: boolean; workspace: ConsoleWorkspace }>(
+    "/ivyea-agent/console/workspaces", { name, path });
+  return data;
+}
+
+export async function consoleWorkspaceDelete(name: string) {
+  const { data } = await api.delete<{ ok: boolean; sessions_moved: number }>(
+    `/ivyea-agent/console/workspaces/${encodeURIComponent(name)}`);
+  return data;
+}
+
+/** 左栏需要刷新会话列表时广播它（发完一轮、改名、删除…）。 */
+export const CONSOLE_SESSIONS_CHANGED = "ivyea-ops:console-sessions-changed";
+
+export function notifyConsoleSessionsChanged() {
+  window.dispatchEvent(new CustomEvent(CONSOLE_SESSIONS_CHANGED));
+}
+
 /** agent 的 MCP 注册表（~/.ivyea/mcp.json）—— 决定 Agent 能连哪些数据源。 */
 export type AgentMcpServer = {
   name: string;

@@ -191,6 +191,9 @@ async def lifespan(app: FastAPI):
         from app.services.pty_manager import manager as _pty_mgr
 
         _agent_db.init_db()
+        # 任务台的会话索引（归属 / 工作区 / 自定义标题）；正文仍在 agent 那边。
+        from app.services import console_sessions as _console_sessions
+        _console_sessions.init_db()
         agents = _agent_reg.discover_agents()
         ok = sum(1 for a in agents if a.get("enabled"))
         print(f"[IvyeaOps] agent registry: {ok}/{len(agents)} enabled")

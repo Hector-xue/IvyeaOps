@@ -1,0 +1,232 @@
+"""任务台会话索引与工作区。
+
+重点不在功能，在**归属**：agent 的会话库是整机共享的一个目录，
+`/api/ivyea-agent/chat/sessions` 原样返回机器上所有会话。以前它只在右下角悬浮球
+的历史里露一下，现在会话要常驻左栏 —— 不按归属过滤就等于把同事的对话摆在每个
+人眼前。所以这里把"谁能看到/改到哪条会话"钉死。
+"""
+from __future__ import annotations
+
+import pytest
+from fastapi import HTTPException
+
+from app.services import console_sessions as cs
+from app.routers import ivyea_agent as mod
+
+
+@pytest.fixture(autouse=True)
+def db(tmp_path, monkeypatch):
+    # 只改这个模块的落盘位置，**不动全局 settings.data_dir** —— 那是所有模块共享的
+    # 同一个对象，改它会波及别的测试（实测撞坏了 test_auto_sync 那个起后台线程
+    # 往 data_dir 写标记的用例）。
+    monkeypatch.setattr(cs, "_db_path", lambda: tmp_path / "console_sessions.sqlite3")
+    cs.init_db()
+    yield
+
+
+ALICE = {"email": "alice@x.com", "role": "user", "id": 2}
+BOB = {"email": "bob@x.com", "role": "user", "id": 3}
+ADMIN = {"email": "admin@x.com", "role": "admin", "id": "admin"}
+
+
+def test_register_records_owner_and_workspace():
+    cs.register_session("s1", "alice@x.com", "选品")
+    rows = cs.owned_sessions("alice@x.com", is_admin=False)
+    assert rows["s1"]["principal"] == "alice@x.com"
+    assert rows["s1"]["workspace"] == "选品"
+
+
+def test_owner_is_not_overwritten_by_later_turns():
+    """后续轮次只更新时间戳 —— 一条会话的主人就是开它的那个人。"""
+    cs.register_session("s1", "alice@x.com", "选品")
+    cs.register_session("s1", "bob@x.com", "别的")
+    row = cs.owned_sessions("alice@x.com", is_admin=False)["s1"]
+    assert row["principal"] == "alice@x.com"
+    assert row["workspace"] == "选品"
+
+
+def test_users_only_see_their_own():
+    cs.register_session("s1", "alice@x.com")
+    cs.register_session("s2", "bob@x.com")
+    assert set(cs.owned_sessions("alice@x.com", is_admin=False)) == {"s1"}
+    assert set(cs.owned_sessions("bob@x.com", is_admin=False)) == {"s2"}
+    assert set(cs.owned_sessions("admin@x.com", is_admin=True)) == {"s1", "s2"}
+
+
+def test_can_access_rules():
+    cs.register_session("s1", "alice@x.com")
+    assert cs.can_access("s1", "alice@x.com", False) is True
+    assert cs.can_access("s1", "bob@x.com", False) is False
+    assert cs.can_access("s1", "anyone", True) is True
+    # 索引里没有的（悬浮球/CLI 开的、装这套之前就有的）对普通用户一律不可见
+    assert cs.can_access("unknown", "alice@x.com", False) is False
+    assert cs.can_access("unknown", "admin@x.com", True) is True
+
+
+def test_patch_and_delete_reject_other_peoples_sessions(monkeypatch):
+    cs.register_session("s1", "alice@x.com")
+    with pytest.raises(HTTPException) as exc:
+        mod.console_session_patch("s1", mod.ConsoleSessionPatch(title="改个名"), info=BOB)
+    assert exc.value.status_code == 403
+
+    called: list = []
+    monkeypatch.setattr(mod.svc, "chat_session_delete", lambda sid: called.append(sid))
+    with pytest.raises(HTTPException) as exc:
+        mod.console_session_delete("s1", info=BOB)
+    assert exc.value.status_code == 403
+    assert not called          # 正文没被删
+
+
+def test_owner_can_rename_and_move():
+    cs.register_session("s1", "alice@x.com")
+    mod.console_session_patch("s1", mod.ConsoleSessionPatch(title="广告复盘", workspace="选品"),
+                              info=ALICE)
+    row = cs.owned_sessions("alice@x.com", is_admin=False)["s1"]
+    assert row["title"] == "广告复盘" and row["workspace"] == "选品"
+
+
+def test_delete_reports_failure_when_agent_is_unreachable(monkeypatch):
+    """agent 不可达时**绝不能报成功**。
+
+    实测踩过：agent 短暂不可达 → 删除返回 ok → 左栏条目消失 → 用户以为删干净了，
+    其实正文还原封不动躺在磁盘上，之后还会在管理员列表里再冒出来。
+    索引也不能删 —— 否则那条会话就彻底失去主人了。
+    """
+    cs.register_session("s1", "alice@x.com")
+
+    def _down(sid):
+        raise HTTPException(status_code=503, detail="IvyeaAgent 不可用")
+
+    monkeypatch.setattr(mod.svc, "chat_session_delete", _down)
+    with pytest.raises(HTTPException) as exc:
+        mod.console_session_delete("s1", info=ALICE)
+    assert exc.value.status_code == 503
+    assert "没有被删除" in str(exc.value.detail)
+    assert "s1" in cs.owned_sessions("alice@x.com", is_admin=False)   # 索引保留
+
+
+def test_delete_clears_index_even_when_agent_already_lost_it(monkeypatch):
+    """agent 那边本来就没有（手工删过），索引照样要清干净，别留幽灵条目。"""
+    cs.register_session("s1", "alice@x.com")
+
+    def _boom(sid):
+        raise HTTPException(status_code=404, detail="会话不存在")
+
+    monkeypatch.setattr(mod.svc, "chat_session_delete", _boom)
+    out = mod.console_session_delete("s1", info=ALICE)
+    assert out["ok"] is True
+    assert cs.owned_sessions("alice@x.com", is_admin=False) == {}
+
+
+def test_list_hides_unindexed_sessions_from_regular_users(monkeypatch):
+    """未登记的历史会话：管理员看得到，普通用户看不到。"""
+    cs.register_session("mine", "alice@x.com")
+    monkeypatch.setattr(mod, "_call", lambda fn, *a, **k: {"sessions": [
+        {"id": "mine", "preview": "我的", "turns": 2, "updated": 200},
+        {"id": "legacy", "preview": "别人的老会话", "turns": 1, "updated": 100},
+    ]})
+
+    out = mod.console_session_list(workspace="", limit=60, info=ALICE)
+    assert [s["id"] for s in out["sessions"]] == ["mine"]
+
+    out_admin = mod.console_session_list(workspace="", limit=60, info=ADMIN)
+    assert {s["id"] for s in out_admin["sessions"]} == {"mine", "legacy"}
+    legacy = next(s for s in out_admin["sessions"] if s["id"] == "legacy")
+    assert legacy["indexed"] is False
+
+
+def test_list_survives_agent_being_down(monkeypatch):
+    """agent 不在时左栏不该整个空掉 —— 至少还能列出索引里的会话。"""
+    cs.register_session("s1", "alice@x.com")
+
+    def _down(fn, *a, **k):
+        raise HTTPException(status_code=503, detail="IvyeaAgent 不可用")
+
+    monkeypatch.setattr(mod, "_call", _down)
+    out = mod.console_session_list(workspace="", limit=60, info=ALICE)
+    assert out["ok"] is True
+    assert out["sessions"] == []            # 没有正文摘要就列不出条目
+    assert out["workspaces"][0]["name"] == cs.DEFAULT_WORKSPACE
+
+
+def test_custom_title_wins_over_preview(monkeypatch):
+    cs.register_session("s1", "alice@x.com")
+    cs.update_session("s1", title="广告复盘")
+    monkeypatch.setattr(mod, "_call", lambda fn, *a, **k: {"sessions": [
+        {"id": "s1", "preview": "原始第一句", "turns": 1, "updated": 1},
+    ]})
+    out = mod.console_session_list(workspace="", limit=60, info=ALICE)
+    assert out["sessions"][0]["title"] == "广告复盘"
+    assert out["sessions"][0]["preview"] == "原始第一句"
+
+
+# ── 工作区 ──────────────────────────────────────────────────────────────────
+
+def test_default_workspace_always_present_and_first():
+    ws = cs.list_workspaces("alice@x.com", is_admin=False)
+    assert ws[0]["name"] == cs.DEFAULT_WORKSPACE and ws[0]["builtin"] is True
+
+
+def test_create_and_scope_workspaces():
+    cs.create_workspace("选品", "alice@x.com", path="/tmp/xuanpin")
+    assert [w["name"] for w in cs.list_workspaces("alice@x.com", False)] == [cs.DEFAULT_WORKSPACE, "选品"]
+    assert [w["name"] for w in cs.list_workspaces("bob@x.com", False)] == [cs.DEFAULT_WORKSPACE]
+    assert cs.workspace_path("选品", "alice@x.com") == "/tmp/xuanpin"
+
+
+def test_cannot_create_or_delete_builtin_workspace():
+    with pytest.raises(ValueError):
+        cs.create_workspace(cs.DEFAULT_WORKSPACE, "alice@x.com")
+    with pytest.raises(ValueError):
+        cs.delete_workspace(cs.DEFAULT_WORKSPACE, "alice@x.com", False)
+
+
+def test_deleting_a_workspace_keeps_its_sessions():
+    """解散分组 ≠ 毁掉一堆对话。"""
+    cs.create_workspace("选品", "alice@x.com")
+    cs.register_session("s1", "alice@x.com", "选品")
+    moved = cs.delete_workspace("选品", "alice@x.com", False)
+    assert moved == 1
+    rows = cs.owned_sessions("alice@x.com", False)
+    assert "s1" in rows and rows["s1"]["workspace"] == ""
+
+
+def test_workspace_filter():
+    cs.register_session("s1", "alice@x.com", "选品")
+    cs.register_session("s2", "alice@x.com", "")
+    assert set(cs.owned_sessions("alice@x.com", False, workspace="选品")) == {"s1"}
+
+
+def test_preview_strips_injected_context():
+    """每轮注入给模型的技能/知识块和用户原话存在同一条消息里 ——
+    左栏标题只该显示用户真正打的那句。"""
+    raw = ("SKU001 为什么不转化？\n\n[Ivyea Skill：本轮相关可复用流程]\n"
+           "[skill:amazon.listing_conversion_audit score=9] ...\n\n"
+           "[Ivyea 本地知识检索 / 亚马逊知识证据]\n[K1] ...")
+    assert cs.clean_preview(raw) == "SKU001 为什么不转化？"
+    assert cs.clean_preview("干净的一句话") == "干净的一句话"
+    assert cs.clean_preview("") == ""
+
+
+def test_list_uses_cleaned_preview(monkeypatch):
+    cs.register_session("s1", "alice@x.com")
+    monkeypatch.setattr(mod, "_call", lambda fn, *a, **k: {"sessions": [
+        {"id": "s1", "preview": "查广告\n\n[Ivyea Skill：本轮相关可复用流程]\nxxx",
+         "turns": 1, "updated": 1},
+    ]})
+    out = mod.console_session_list(workspace="", limit=60, info=ALICE)
+    assert out["sessions"][0]["title"] == "查广告"
+    assert "[Ivyea Skill" not in out["sessions"][0]["preview"]
+
+
+def test_preview_strips_truncated_marker():
+    """agent 先把首条消息砍到 50 字才给我们，标记常常是半截的。
+
+    实测左栏出现过 `…一句话总结。\n\n[Iv` —— 完整标记匹配不上，半个标记留在了标题里。
+    """
+    assert cs.clean_preview("一句话总结。\n\n[Iv") == "一句话总结。"
+    assert cs.clean_preview("查广告\n\n[Ivyea Sk") == "查广告"
+    assert cs.clean_preview("查广告\n\n[") == "查广告"
+    # 别误伤正常内容
+    assert cs.clean_preview("看看 [K1] 这条证据") == "看看 [K1] 这条证据"
+    assert cs.clean_preview("第一行\n\n第二行") == "第一行\n\n第二行"

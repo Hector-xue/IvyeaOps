@@ -3056,3 +3056,37 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
   .cap-grid{grid-template-columns:1fr}
   .cap-form-row{flex-direction:column}
 }
+
+/* ── 侧边栏：工作区 + 会话列表（components/console/SessionRail.tsx）──────── */
+.sb-ws-head{display:flex;align-items:center;gap:6px}
+.sb-ws-add{margin-left:auto;background:transparent;border:none;color:var(--t3);cursor:pointer;
+  font-size:13px;line-height:1;padding:0 2px;font-family:var(--font)}
+.sb-ws-add:hover{color:var(--acc)}
+.sb-ws-input{width:calc(100% - 24px);margin:2px 12px 4px;padding:3px 6px;border:1px solid var(--b2);
+  border-radius:var(--r);background:var(--bg2);color:var(--t);font-family:var(--font);font-size:11px;
+  outline:none}
+.sb-ws-input:focus{border-color:var(--acc);box-shadow:0 0 0 2px var(--ring)}
+.sb-ws-group{margin-bottom:2px}
+.sb-ws-title{display:flex;align-items:center;gap:5px;width:100%;padding:3px 12px;background:transparent;
+  border:none;color:var(--t3);font-family:var(--font);font-size:10.5px;cursor:pointer;text-align:left;
+  transition:color var(--dur) var(--ease)}
+.sb-ws-title:hover{color:var(--t2)}
+.sb-ws-caret{font-size:8px;flex-shrink:0}
+.sb-ws-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-ws-count{font-size:9px;color:var(--t3);flex-shrink:0}
+.sb-ws-del{opacity:0;font-size:9px;color:var(--t3);flex-shrink:0;padding:0 2px;transition:opacity var(--dur) var(--ease)}
+.sb-ws-title:hover .sb-ws-del{opacity:1}
+.sb-ws-del:hover{color:var(--red)}
+.sb-sess{display:flex;align-items:center;gap:6px;padding:4px 12px 4px 24px;cursor:pointer;
+  color:var(--t2);font-size:10.5px;border-left:2px solid transparent;
+  transition:color var(--dur) var(--ease),background-color var(--dur) var(--ease)}
+.sb-sess:hover{color:var(--t);background:var(--bg2)}
+.sb-sess.active{color:var(--acc);border-left-color:var(--acc);
+  background:color-mix(in srgb,var(--acc) 5%,transparent)}
+.sb-sess-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-sess-time{font-size:9px;color:var(--t3);flex-shrink:0}
+.sb-sess-del{opacity:0;font-size:9px;color:var(--t3);flex-shrink:0;padding:0 2px;
+  transition:opacity var(--dur) var(--ease)}
+.sb-sess:hover .sb-sess-del{opacity:1}
+.sb-sess-del:hover{color:var(--red)}
+.sb-sess:hover .sb-sess-time{display:none}

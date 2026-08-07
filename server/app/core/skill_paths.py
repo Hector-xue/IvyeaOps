@@ -44,8 +44,13 @@ LEGACY_STUDIO_ROOT: Path = _LEGACY_HOME / "skill-studio"
 _SKILLS_ENV = os.getenv("IVYEA_OPS_SKILLS_ROOT")
 _STUDIO_ENV = os.getenv("IVYEA_OPS_STUDIO_ROOT")
 
-SKILLS_ROOT: Path = Path(_SKILLS_ENV or (settings.data_dir / "skills")).resolve()
-STUDIO_ROOT: Path = Path(_STUDIO_ENV or (settings.data_dir / "skill-studio")).resolve()
+# 直接认 IVYEA_OPS_DATA_DIR（与 config.Settings 同一个开关），这样重载本模块就能
+# 换根，不必去 reload app.core.config —— 那会造出第二个 settings 实例，而别的模块
+# 还握着旧那个，测试之间会互相串。
+_DATA_DIR = Path(os.getenv("IVYEA_OPS_DATA_DIR") or settings.data_dir)
+
+SKILLS_ROOT: Path = Path(_SKILLS_ENV or (_DATA_DIR / "skills")).resolve()
+STUDIO_ROOT: Path = Path(_STUDIO_ENV or (_DATA_DIR / "skill-studio")).resolve()
 
 # 迁移只在用默认路径时做。测试/自定义部署显式指定了根目录，就不该把生产数据
 # 复制进人家的目录。

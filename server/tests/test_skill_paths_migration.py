@@ -18,14 +18,11 @@ def paths(tmp_path, monkeypatch):
     monkeypatch.delenv("IVYEA_OPS_STUDIO_ROOT", raising=False)
     monkeypatch.setenv("IVYEA_OPS_DATA_DIR", str(tmp_path / "data"))
 
-    from app.core import config as config_mod
-    importlib.reload(config_mod)
     from app.core import skill_paths as sp
     importlib.reload(sp)
     yield sp
     # 复原，别把重载后的模块留给后面的测试
     monkeypatch.undo()
-    importlib.reload(config_mod)
     importlib.reload(sp)
 
 

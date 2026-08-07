@@ -30,12 +30,15 @@ import Composer, { approvalPayload, type ApprovalMode, type ComposerValue } from
 import ArtifactRail, { type RailApproval, type RailTodo } from "../../components/console/ArtifactRail";
 import FollowUps from "../../components/console/FollowUps";
 import {
+  consoleSessions,
   ivyeaAgentChat,
   ivyeaAgentStatus,
   ivyeaAgentChatStream,
   ivyeaAwaitSessionAnswer,
   ivyeaChatPermission,
+  ivyeaChatSession,
   ivyeaKnowledgeUpload,
+  notifyConsoleSessionsChanged,
   ivyeaOpsTools,
   ivyeaSkills,
   type IvyeaPermissionRequest,
@@ -70,6 +73,30 @@ function loadPrefs(): Prefs {
   }
 }
 
+/** 剥掉每轮注入给模型的上下文（与后端 console_sessions.clean_preview 同一组标记）。 */
+const INJECTION_MARKERS = [
+  "\n\n[Ivyea Skill：",
+  "\n\n[Ivyea 本地知识检索",
+  "\n\n[Ivyea 内置亚马逊知识库",
+  "\n\n[任务范围锁定",
+  "\n\n[工程上下文]",
+];
+
+function stripInjected(text: string): string {
+  let out = text;
+  for (const marker of INJECTION_MARKERS) {
+    const i = out.indexOf(marker);
+    if (i >= 0) out = out.slice(0, i);
+  }
+  // 收尾是被截断的半截标记（服务端把消息砍短过）→ 一并切掉
+  for (const marker of INJECTION_MARKERS) {
+    for (let size = marker.length; size > 2; size -= 1) {
+      if (out.endsWith(marker.slice(0, size))) { out = out.slice(0, -size); break; }
+    }
+  }
+  return out.trim();
+}
+
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -97,6 +124,8 @@ function ConsoleInner() {
   const [attaching, setAttaching] = useState(false);
 
   const [skills, setSkills] = useState<IvyeaSkillInfo[]>([]);
+  const [workspaces, setWorkspaces] = useState<string[]>(["默认工作区"]);
+  const [loadingSession, setLoadingSession] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -131,6 +160,13 @@ function ConsoleInner() {
         setModel(String(m.model || m.label || ""));
       })
       .catch(() => void 0);
+    consoleSessions()
+      .then((d) => {
+        if (!alive) return;
+        const names = (d.workspaces || []).map((w) => w.name);
+        if (names.length) setWorkspaces(names);
+      })
+      .catch(() => void 0);
     return () => { alive = false; };
   }, []);
 
@@ -155,10 +191,14 @@ function ConsoleInner() {
   }, []);
 
   useEffect(() => {
-    const handler = () => resetSession();
+    const handler = () => {
+      resetSession();
+      // 地址栏还留着 ?session= 的话，下面那个 effect 会立刻把旧会话又拉回来。
+      if (window.location.search) navigate("/console", { replace: true });
+    };
     window.addEventListener(CONSOLE_NEW_EVENT, handler);
     return () => window.removeEventListener(CONSOLE_NEW_EVENT, handler);
-  }, [resetSession]);
+  }, [resetSession, navigate]);
 
   // 从别的板块带过来的预填：?q= 提示词、?skill= 预选技能（能力市场「用这个技能」
   // 走的就是它）。用完即从地址栏抹掉，免得刷新时又套一遍。
@@ -168,9 +208,51 @@ function ConsoleInner() {
     const skill = sp.get("skill");
     if (!q && !skill) return;
     setComposer((c) => ({ ...c, ...(q ? { text: q } : {}), ...(skill ? { skill } : {}) }));
-    navigate("/console", { replace: true });
+    navigate("/console" + (sp.get("session") ? `?session=${encodeURIComponent(sp.get("session")!)}` : ""),
+             { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ?session= 打开左栏点选的历史会话。**不同于 ?q/?skill，它留在地址栏里** ——
+  // 左栏靠它高亮当前会话，刷新/分享链接也要能回到同一条。
+  const urlSession = new URLSearchParams(location.search).get("session") || "";
+  useEffect(() => {
+    if (!urlSession) return;
+    if (urlSession === sessionId) return;      // 已经是当前会话，别重复拉
+    let alive = true;
+    setLoadingSession(true);
+    abortRef.current?.abort();
+    ivyeaChatSession(urlSession)
+      .then((d) => {
+        if (!alive) return;
+        const msgs = d?.session?.messages || [];
+        // system 轮次是每轮现算的运行时上下文，不是对话内容，别摆给用户看。
+        const restored: Turn[] = msgs
+          .filter((m) => m.role === "user" || m.role === "assistant")
+          .map((m) => ({
+            id: uid(),
+            role: m.role as "user" | "assistant",
+            // 注入给模型的技能/知识块存在同一条消息里，气泡里不该出现
+            text: stripInjected(String(m.content || "")),
+          }))
+          .filter((t) => t.text);
+        setTurns(restored);
+        setSessionId(urlSession);
+        setFollowUps([]);
+        setTodos([]);
+        setRailApprovals([]);
+      })
+      .catch((e: any) => {
+        if (!alive) return;
+        notify("error", e?.response?.status === 403
+          ? "这条会话不属于你"
+          : (e?.response?.data?.detail || "打开会话失败"));
+        navigate("/console", { replace: true });
+      })
+      .finally(() => { if (alive) setLoadingSession(false); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlSession]);
 
   // ── 单条 assistant 轮次的原地更新 ────────────────────────────────────────
   const patchTurn = useCallback((id: string, patch: Partial<Turn> | ((t: Turn) => Partial<Turn>)) => {
@@ -339,6 +421,7 @@ function ConsoleInner() {
       abortRef.current = null;
     }
 
+    notifyConsoleSessionsChanged();     // 新会话进左栏 / 已有会话更新时间
     if (finalText.trim()) void loadFollowUps(text, finalText);
   }, [composer, busy, sessionId, patchTurn, notify, loadFollowUps]);
 
@@ -374,7 +457,7 @@ function ConsoleInner() {
       busy={busy}
       attaching={attaching}
       skills={skills}
-      workspaces={[composer.workspace || "默认工作区"]}
+      workspaces={workspaces}
       modelLabel={model}
       onModelClick={() => navigate("/hub-settings")}
       autoFocus={!compact}
@@ -385,7 +468,11 @@ function ConsoleInner() {
   return (
     <div className="cc-page">
       <div className="cc-main">
-        {!started ? (
+        {loadingSession ? (
+          <div className="cc-hero">
+            <div className="cc-thinking"><span className="spin" /> 正在打开会话…</div>
+          </div>
+        ) : !started ? (
           /* ── Hero 态 ───────────────────────────────────────────────── */
           <div className="cc-hero">
             <h1 className="cc-hero-title">今天要做点什么？</h1>

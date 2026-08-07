@@ -473,8 +473,14 @@ def maybe_sync_agent_on_upgrade() -> None:
     def _bg() -> None:
         try:
             res = upgrade_agent()
-            marker.write_text(json.dumps({"ops_version": cur, "agent": res.get("after", "")}),
-                              encoding="utf-8")
+            # 原子落盘：write_text 是"先截断再写"，中间那一瞬文件已经存在但内容是空的。
+            # 并发的读方（另一次启动、或紧接着的一次调用）此时读到空串会当作"没同步过"
+            # 而重跑一遍 pip 安装。先写临时文件再 rename，读方要么看到旧的、要么看到
+            # 完整的新的。（agent 侧 sessions.py 早就是这么写的。）
+            tmp = marker.with_suffix(marker.suffix + ".tmp")
+            tmp.write_text(json.dumps({"ops_version": cur, "agent": res.get("after", "")}),
+                           encoding="utf-8")
+            os.replace(tmp, marker)
             print(f"[IvyeaOps] agent auto-sync on {cur}: "
                   f"{res.get('before')}->{res.get('after')} ok={res.get('ok')}")
         except Exception as e:  # noqa: BLE001

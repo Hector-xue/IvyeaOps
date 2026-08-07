@@ -11,8 +11,9 @@ from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.core.security import require_user, require_admin
+from app.core.security import require_user, require_user_info, require_admin
 from app.services import agent_mcp
+from app.services import console_sessions
 from app.services import ivyea_agent_service as svc
 from app.services import ivyea_ops_tools
 
@@ -341,12 +342,15 @@ def _approval_owner(request_id: str) -> str | None:
     return principal
 
 
-def _tee_approval_owners(chunks: Any, principal: str) -> Any:
-    """原样转发 SSE 字节，同时登记本轮出现的审批请求归属。
+def _tee_session_events(chunks: Any, principal: str, workspace: str = "") -> Any:
+    """原样转发 SSE 字节，同时从流里捞两件 ops 需要记账的事：
 
-    只读不改：先 yield 再解析，任何解析异常都不许影响转发 —— 记归属失败最坏
-    是让用户点确认时被判 404（agent 侧超时自动拒绝，方向是安全的），而弄坏
-    转发会直接毁掉整轮对话。
+    - ``permission_request`` → 登记审批归属（谁能批这一步）
+    - ``start`` → 登记会话归属（session_id 是 agent 现场生成的，只有流里才拿得到）
+
+    只读不改：先 yield 再解析，任何解析异常都不许影响转发 —— 记账失败最坏是让
+    用户点确认时被判 404（agent 侧会超时拒绝，方向安全）、或会话没进左栏列表；
+    而弄坏转发会直接毁掉整轮对话。
     """
     buf = b""
     for chunk in chunks:
@@ -355,15 +359,21 @@ def _tee_approval_owners(chunks: Any, principal: str) -> Any:
             buf += chunk
             while b"\n\n" in buf:
                 frame, buf = buf.split(b"\n\n", 1)
-                if b"permission_request" not in frame:
+                if b"permission_request" not in frame and b"event: start" not in frame:
                     continue
+                is_start = b"event: start" in frame
                 for line in frame.split(b"\n"):
                     if not line.startswith(b"data:"):
                         continue
                     data = _json.loads(line[5:].strip().decode("utf-8", "replace"))
-                    rid = str(data.get("request_id") or "")
-                    if rid:
-                        _remember_approval_owner(rid, principal)
+                    if is_start:
+                        sid = str(data.get("session_id") or "")
+                        if sid:
+                            console_sessions.register_session(sid, principal, workspace)
+                    else:
+                        rid = str(data.get("request_id") or "")
+                        if rid:
+                            _remember_approval_owner(rid, principal)
             # 单帧异常大（final 会带整段会话）时别把内存吃着不放
             if len(buf) > 2_000_000:
                 buf = buf[-4096:]
@@ -383,9 +393,9 @@ def chat_stream(body: ChatBody, request: Request,
     if not status.get("available"):
         raise HTTPException(status_code=503, detail=f"IvyeaAgent 不可用：{status.get('error') or '服务未连接'}")
     return StreamingResponse(
-        _tee_approval_owners(
+        _tee_session_events(
             svc.chat_stream(_with_ops_bridge(_chat_payload(body), request)),
-            user,
+            user, body.workspace,
         ),
         media_type="text/event-stream",
         headers={
@@ -448,6 +458,133 @@ def skills_search(
     if not q.strip():
         return _call(svc.skills)
     return _call(svc.skills_search, q, limit)
+
+
+# ── 任务台会话与工作区 ──────────────────────────────────────────────────────
+
+def _principal_info(info: dict[str, Any]) -> tuple[str, bool]:
+    """(邮箱, 是不是管理员)。用于会话归属过滤。"""
+    return str(info.get("email") or info.get("id") or ""), (info.get("role") == "admin")
+
+
+class ConsoleSessionPatch(BaseModel):
+    title: str | None = Field(default=None, max_length=120)
+    workspace: str | None = Field(default=None, max_length=120)
+
+
+class ConsoleWorkspaceBody(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    path: str = Field(default="", max_length=1000)
+
+
+@router.get("/console/sessions")
+def console_session_list(
+    workspace: str = Query("", max_length=120),
+    limit: int = Query(60, ge=1, le=200),
+    info: dict[str, Any] = Depends(require_user_info),
+) -> dict[str, Any]:
+    """任务台左栏的会话列表：agent 那边的正文摘要 + ops 这边的归属/工作区/自定义标题。
+
+    **按归属过滤**：agent 的会话库是整机共享的，原样端出来等于把同事的对话摆在
+    每个人眼前。管理员看全部（那是他自己的机器），普通用户只看自己开的；
+    索引里没有的历史会话对普通用户不可见。
+    """
+    principal, is_admin = _principal_info(info)
+    index = console_sessions.owned_sessions(principal, is_admin, workspace)
+    agent_ok = True
+    try:
+        listing = (_call(svc.chat_sessions, 200) or {}).get("sessions") or []
+    except HTTPException:
+        # agent 不在时别让左栏静默变成"0 条" —— 那看着像会话都没了。
+        # 明确告诉前端是读不到，不是真的空。
+        listing, agent_ok = [], False
+
+    rows: list[dict[str, Any]] = []
+    for item in listing:
+        sid = str(item.get("id") or "")
+        meta = index.get(sid)
+        if meta is None:
+            # 未登记：管理员能看到（机器上的历史会话），普通用户不给。
+            if not is_admin or workspace:
+                continue
+            meta = {"workspace": "", "title": "", "principal": ""}
+        preview = console_sessions.clean_preview(item.get("preview") or "")
+        rows.append({
+            "id": sid,
+            "title": meta.get("title") or preview or sid,
+            "preview": preview,
+            "turns": item.get("turns") or 0,
+            "updated": item.get("updated") or 0,
+            "workspace": meta.get("workspace") or "",
+            "owner": meta.get("principal") or "",
+            "indexed": sid in index,
+        })
+    rows.sort(key=lambda r: r.get("updated") or 0, reverse=True)
+    return {"ok": True, "sessions": rows[:limit], "agent_available": agent_ok,
+            "workspaces": console_sessions.list_workspaces(principal, is_admin)}
+
+
+@router.patch("/console/sessions/{session_id}")
+def console_session_patch(session_id: str, body: ConsoleSessionPatch,
+                          info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    principal, is_admin = _principal_info(info)
+    if not console_sessions.can_access(session_id, principal, is_admin):
+        raise HTTPException(status_code=403, detail="无权修改他人的会话")
+    console_sessions.update_session(session_id, title=body.title, workspace=body.workspace)
+    return {"ok": True, "session_id": session_id}
+
+
+@router.delete("/console/sessions/{session_id}")
+def console_session_delete(session_id: str,
+                           info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    """删会话：先删 agent 那边的正文，再清掉索引。"""
+    principal, is_admin = _principal_info(info)
+    if not console_sessions.can_access(session_id, principal, is_admin):
+        raise HTTPException(status_code=403, detail="无权删除他人的会话")
+    try:
+        _call(svc.chat_session_delete, session_id)
+    except HTTPException as exc:
+        # 404 = agent 那边本来就没有（手工删过/过期），索引照样要清干净。
+        # 502/503 = agent 不可达 —— 这时**绝不能报成功**：正文还原封不动躺在磁盘上，
+        # 只把索引删掉的话，用户看着条目消失以为删干净了，其实内容还在
+        # （管理员的列表里还会再冒出来）。实测踩过：agent 短暂不可达时删除"成功"，
+        # 文件仍在。
+        if exc.status_code not in (404,):
+            raise HTTPException(
+                status_code=503,
+                detail="IvyeaAgent 暂时不可达，会话内容没有被删除。请稍后重试。",
+            ) from exc
+    console_sessions.forget_session(session_id)
+    return {"ok": True, "deleted": session_id}
+
+
+@router.get("/console/workspaces")
+def console_workspace_list(info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    principal, is_admin = _principal_info(info)
+    return {"ok": True, "workspaces": console_sessions.list_workspaces(principal, is_admin)}
+
+
+@router.post("/console/workspaces")
+def console_workspace_create(body: ConsoleWorkspaceBody,
+                             info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    principal, _ = _principal_info(info)
+    try:
+        row = console_sessions.create_workspace(body.name, principal, body.path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "workspace": row}
+
+
+@router.delete("/console/workspaces/{name}")
+def console_workspace_delete(name: str,
+                             info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    principal, is_admin = _principal_info(info)
+    try:
+        moved = console_sessions.delete_workspace(name, principal, is_admin)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    # 只解散分组，不删里面的会话 —— 删一个工作区不该顺手毁掉一堆对话。
+    return {"ok": True, "deleted": name, "sessions_moved": moved}
 
 
 class AgentMCPBody(BaseModel):

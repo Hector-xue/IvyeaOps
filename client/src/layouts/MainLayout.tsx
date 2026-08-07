@@ -35,6 +35,7 @@ import ManualModal from "../components/ManualModal";
 import UpdateModal from "../components/UpdateModal";
 import Tour from "../components/Tour";
 import IvyeaAgentDock from "../components/IvyeaAgentDock";
+import SessionRail from "../components/console/SessionRail";
 import { TOURS, hasTour } from "../lib/tours";
 
 // Boards with long-running tasks (research / generation / audit). These are kept
@@ -367,6 +368,12 @@ export default function MainLayout() {
     }
   };
 
+  // 左栏高亮当前打开的会话：地址栏 ?session= 是唯一真相（任务台打开一条会话时
+  // 会把它写进 URL），这样刷新/分享链接后高亮也对得上。
+  const activeSessionId = location.pathname === "/console"
+    ? (new URLSearchParams(location.search).get("session") || "")
+    : "";
+
   const path = breadcrumbFor(location.pathname);
   const versionLabel = appVersion.startsWith("v") ? appVersion : `v${appVersion}`;
   const hasUpdate = !!updateInfo?.update_available;
@@ -472,14 +479,13 @@ export default function MainLayout() {
                 </>
               )}
 
-              {/* ── 工作区 / 会话（P3 接真实数据）───────────────────────── */}
+              {/* ── 工作区 / 会话 ────────────────────────────────────────── */}
               {divider}
-              {!collapsed && (
-                <div className="sb-workspace">
-                  <div className="ns">工作区</div>
-                  <div className="sb-ws-empty">会话列表即将在这里展开</div>
-                </div>
-              )}
+              <SessionRail
+                collapsed={collapsed}
+                activeSessionId={activeSessionId}
+                onNavigate={() => isMobile && setMobileMenu(false)}
+              />
 
               {pinnedGroup}
             </>

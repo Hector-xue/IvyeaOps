@@ -34,7 +34,7 @@ def test_tee_records_owner_and_passes_bytes_through_untouched():
         b'event: permission_request\ndata: {"request_id": "r1", "op_type": "write_file"}\n\n',
         b"event: final\ndata: {\"ok\": true}\n\n",
     ]
-    out = list(mod._tee_approval_owners(_sse(*frames), "alice@example.com"))
+    out = list(mod._tee_session_events(_sse(*frames), "alice@example.com"))
     assert out == frames                       # 一个字节都没改
     assert mod._approval_owner("r1") == "alice@example.com"
 
@@ -45,7 +45,7 @@ def test_tee_handles_frame_split_across_chunks():
         b'event: permission_request\ndata: {"request_i',
         b'd": "r2", "op_type": "run_command"}\n\n',
     ]
-    out = list(mod._tee_approval_owners(_sse(*frames), "bob@example.com"))
+    out = list(mod._tee_session_events(_sse(*frames), "bob@example.com"))
     assert b"".join(out) == b"".join(frames)
     assert mod._approval_owner("r2") == "bob@example.com"
 
@@ -56,7 +56,7 @@ def test_tee_survives_garbage_without_breaking_the_stream():
         b"event: permission_request\ndata: {not valid json}\n\n",
         b"event: token\ndata: {\"text\": \"hi\"}\n\n",
     ]
-    out = list(mod._tee_approval_owners(_sse(*frames), "carol@example.com"))
+    out = list(mod._tee_session_events(_sse(*frames), "carol@example.com"))
     assert out == frames
     assert mod._approval_owner("nope") is None
 
