@@ -597,6 +597,22 @@ def chat_import(payload: dict[str, Any]) -> dict[str, Any]:
     return request_json("POST", "/v1/chat/sessions/import", payload)
 
 
+def skills() -> dict[str, Any]:
+    """agent 侧技能库（内置 skills_builtin + ~/.ivyea/skills）。
+
+    与 IvyeaOps 自己的 Skill 中心（~/.hermes/skills，走 services/skill_repo.py）是
+    两个库：这个是 agent 跑一轮时真正能加载进 system prompt 的那套，任务台的
+    「技能」选择器要的就是它。
+    """
+    return request_json("GET", "/v1/skills")
+
+
+def skills_search(query: str, limit: int = 8) -> dict[str, Any]:
+    safe_q = urllib.parse.quote(query.strip(), safe="")
+    safe_limit = max(1, min(int(limit or 8), 50))
+    return request_json("GET", f"/v1/skills/search?q={safe_q}&limit={safe_limit}")
+
+
 def model_providers() -> dict[str, Any]:
     return request_json("GET", "/v1/model/providers")
 

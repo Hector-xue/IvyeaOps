@@ -70,6 +70,18 @@ class ChatBody(BaseModel):
     persist: bool = True
     plan_mode: bool = True
     inject_retrieval: bool = True
+    # ── 以下字段 agent serve 早就支持，只是这个模型没开口子，工作台想按技能跑一轮
+    #    或跑一轮纯文本都做不到。留空/False 时由 _chat_payload 剔除，
+    #    daemon 看到的 payload 与改动前逐字一致 —— 老调用方零影响。
+    skill: str = Field(default="", max_length=200)
+    auto_skill: bool = False
+    use_tools: bool = True
+    turn_id: str = Field(default="", max_length=120)
+    task_id: str = Field(default="", max_length=120)
+    system: str = Field(default="", max_length=20000)
+    defer_citation_text: bool = False
+    # "none" = 维持今天的只读语义；"remote" = 写操作弹前端审批卡（agent ≥ v1.9）。
+    approval: str = Field(default="none", pattern="^(none|remote)$")
 
 
 class ChatSessionCreateBody(BaseModel):
@@ -265,11 +277,31 @@ def manifest() -> dict[str, Any]:
     return _call(svc.manifest)
 
 
+# 新增的可选字段：取这些"等于没传"的值时直接从 payload 剔除，让 daemon 走它自己
+# 的默认分支。这样一次普通对话发出去的 payload 与加字段之前完全一样，不会因为多
+# 塞了几个 ""/False 改变 serve 的行为。
+_CHAT_OPTIONAL_DEFAULTS: dict[str, Any] = {
+    "skill": "",
+    "auto_skill": False,
+    "turn_id": "",
+    "task_id": "",
+    "system": "",
+    "defer_citation_text": False,
+    "approval": "none",
+}
+
+
 def _chat_payload(body: ChatBody) -> dict[str, Any]:
     """max_steps<=0 时从 payload 里剔除，serve 端回落到 config 默认（200）。"""
     payload = _payload(body)
     if int(payload.get("max_steps") or 0) <= 0:
         payload.pop("max_steps", None)
+    for key, blank in _CHAT_OPTIONAL_DEFAULTS.items():
+        if payload.get(key) == blank:
+            payload.pop(key, None)
+    # use_tools 默认 True；只有显式关掉才需要告诉 daemon（它的默认也是带工具）。
+    if payload.get("use_tools") is not False:
+        payload.pop("use_tools", None)
     return payload
 
 
@@ -311,6 +343,21 @@ def chat_session_delete(session_id: str) -> dict[str, Any]:
 @router.post("/chat/sessions")
 def chat_create(body: ChatSessionCreateBody) -> dict[str, Any]:
     return _call(svc.chat_create, _payload(body))
+
+
+@router.get("/skills")
+def skills() -> dict[str, Any]:
+    return _call(svc.skills)
+
+
+@router.get("/skills/search")
+def skills_search(
+    q: str = Query("", max_length=1000),
+    limit: int = Query(8, ge=1, le=50),
+) -> dict[str, Any]:
+    if not q.strip():
+        return _call(svc.skills)
+    return _call(svc.skills_search, q, limit)
 
 
 @router.get("/model/providers")

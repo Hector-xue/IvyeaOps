@@ -288,6 +288,10 @@ export async function ivyeaAgentChat(payload: {
   plan_mode?: boolean;
   persist?: boolean;
   inject_retrieval?: boolean;
+  /** false = 纯文本轮次，不给模型任何工具（跟进建议这类小活用它，便宜且快）。 */
+  use_tools?: boolean;
+  skill?: string;
+  system?: string;
 }) {
   // 复杂任务一轮可跑 10 分钟以上；180s 会掐断仍在健康生成的轮次。
   const { data } = await api.post<IvyeaChatResult>("/ivyea-agent/chat", payload, { timeout: 600000 });
@@ -322,29 +326,85 @@ export async function ivyeaAwaitSessionAnswer(
   return null;
 }
 
+/** 一次 agent 轮次的入参。字段与 agent serve 的 /v1/chat/stream 一一对应。 */
+export type IvyeaChatPayload = {
+  message: string;
+  session_id?: string;
+  ops_context?: Record<string, any>;
+  max_steps?: number;
+  plan_mode?: boolean;
+  persist?: boolean;
+  inject_retrieval?: boolean;
+  /** 显式指定本轮必须遵循的 skill id。 */
+  skill?: string;
+  /** 让 serve 按用户问题自动匹配 skill 并回发 skill_match 事件。 */
+  auto_skill?: boolean;
+  /** "none"=沿用只读语义（默认）；"remote"=写操作走前端审批卡。 */
+  approval?: "none" | "remote";
+  /** 工作区（沙箱目录 / 上下文分组）。 */
+  workspace?: string;
+  turn_id?: string;
+  /** false = 纯文本轮次，不给模型任何工具。 */
+  use_tools?: boolean;
+};
+
+/** 结构化步骤事件（agent serve ≥ v1.9 才会发；旧版本只有自由文本 event）。 */
+export type IvyeaStepEvent = {
+  type: "step";
+  id: string;
+  seq: number;
+  phase: "tool" | "mcp" | "board" | "subagent" | "knowledge";
+  name: string;
+  tool?: string;
+  server?: string;
+  args?: Record<string, any>;
+  status: "running" | "ok" | "error";
+  ms?: number | null;
+  session_id?: string;
+  turn_id?: string;
+};
+
+export type IvyeaSkillMatch = {
+  skills: { id: string; title: string; domain?: string; score?: number }[];
+};
+
+/** 写操作审批请求 —— 对应 agent 侧 permission.request_intent 的那张确认卡。 */
+export type IvyeaPermissionRequest = {
+  request_id: string;
+  session_id?: string;
+  op_type: string;
+  title: string;
+  preview: string;
+  options: { key: string; label: string }[];
+  destructive?: boolean;
+  expires_at?: number;
+};
+
 export async function ivyeaAgentChatStream(
-  payload: {
-    message: string;
-    session_id?: string;
-    ops_context?: Record<string, any>;
-    max_steps?: number;
-    plan_mode?: boolean;
-    persist?: boolean;
-    inject_retrieval?: boolean;
-  },
+  payload: IvyeaChatPayload,
   handlers: {
     onStart?: (data: any) => void;
     onToken?: (text: string) => void;
     onFinal?: (data: any) => void;
     onEvent?: (data: any) => void;
     onError?: (data: any) => void;
+    /** 结构化步骤（工具/MCP/板块能力调用的开始与收尾）。 */
+    onStep?: (data: IvyeaStepEvent) => void;
+    /** 本轮命中的 skill。 */
+    onSkillMatch?: (data: IvyeaSkillMatch) => void;
+    /** 需要人工确认的写操作。 */
+    onPermission?: (data: IvyeaPermissionRequest) => void;
+    /** 审批超时被自动拒绝。 */
+    onPermissionTimeout?: (data: { request_id: string }) => void;
   },
+  opts?: { signal?: AbortSignal },
 ) {
   const res = await fetch("/api/ivyea-agent/chat/stream", {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    signal: opts?.signal,
   });
   if (!res.ok || !res.body) {
     let detail = "";
@@ -373,6 +433,12 @@ export async function ivyeaAgentChatStream(
     else if (event === "token") handlers.onToken?.(typeof data === "string" ? data : data.text || "");
     else if (event === "final") handlers.onFinal?.(data);
     else if (event === "error") handlers.onError?.(data);
+    // 结构化事件（agent serve ≥ v1.9）。老版本不发这些，走下面的自由文本兜底，
+    // 所以升级前后前端都不会白屏。
+    else if (event === "step") handlers.onStep?.(data);
+    else if (event === "skill_match") handlers.onSkillMatch?.(data);
+    else if (event === "permission_request") handlers.onPermission?.(data);
+    else if (event === "permission_timeout") handlers.onPermissionTimeout?.(data);
     else handlers.onEvent?.(data);
   };
   while (true) {
@@ -408,6 +474,81 @@ export async function ivyeaChatSession(sessionId: string) {
 export async function ivyeaChatSessionDelete(sessionId: string) {
   const { data } = await api.delete<{ ok: boolean; deleted: string }>(
     `/ivyea-agent/chat/sessions/${encodeURIComponent(sessionId)}`,
+  );
+  return data;
+}
+
+/**
+ * 板块能力（ops-bridge 工具）目录。每条自带中文 title / module / destructive /
+ * long_running —— 任务台的步骤芯片文案和「需要确认」判定都直接吃这份元数据，
+ * 不再另建映射表。
+ */
+export type OpsToolInfo = {
+  name: string;
+  module: string;
+  title: string;
+  description: string;
+  parameters?: any;
+  destructive?: boolean;
+  long_running?: boolean;
+};
+
+export async function ivyeaOpsTools(params?: { module?: string; query?: string }) {
+  const { data } = await api.get<{ ok: boolean; tools: OpsToolInfo[]; modules: string[] }>(
+    "/ivyea-agent/ops-tools",
+    { params },
+  );
+  return data;
+}
+
+export type IvyeaProvider = {
+  id: string;
+  label?: string;
+  models?: { id?: string; name?: string; label?: string }[];
+  [k: string]: any;
+};
+
+export async function ivyeaModelProviders() {
+  const { data } = await api.get<{ ok: boolean; providers?: IvyeaProvider[]; active?: any }>(
+    "/ivyea-agent/model/providers",
+  );
+  return data;
+}
+
+/** agent 侧技能库（内置 + ~/.ivyea/skills）。 */
+export type IvyeaSkillInfo = {
+  id: string;
+  title: string;
+  domain?: string;
+  version?: string;
+  description?: string;
+  triggers?: string[];
+  score?: number;
+};
+
+export async function ivyeaSkills(query = "") {
+  const path = query.trim()
+    ? `/ivyea-agent/skills/search?q=${encodeURIComponent(query.trim())}`
+    : "/ivyea-agent/skills";
+  const { data } = await api.get<{ ok: boolean; skills: IvyeaSkillInfo[] }>(path);
+  return data;
+}
+
+/**
+ * 回送一次写操作审批决策，解开 agent 侧阻塞的那一步。
+ * choice 与 permission_request 事件里的 options[].key 对应
+ * （approve / session / deny / abort，部分场景还有 edit）。
+ */
+export async function ivyeaChatPermission(params: {
+  request_id: string;
+  session_id?: string;
+  choice: string;
+  edits?: Record<string, any>;
+}) {
+  const { data } = await api.post<{ ok: boolean; error?: string; detail?: string }>(
+    "/ivyea-agent/chat/permission",
+    params,
+    { timeout: 20000 },
   );
   return data;
 }

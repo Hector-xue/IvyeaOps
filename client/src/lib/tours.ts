@@ -13,8 +13,34 @@ import type { TourStep } from "../components/Tour";
  * To add a board: add an entry here (+ tag its key element with `data-tour="…"`
  * if it has no stable class).
  */
+// 运营驾驶舱的引导。地址从 "/" 搬到了 /dashboard（"/" 现在只做落地分流），
+// 两个键都指向同一份步骤，老的 "已看过" 记录也就继续有效。
+const DASHBOARD_TOUR: TourStep[] = [
+  {
+    title: "欢迎使用 IvyeaOps 👋",
+    body: "一台服务器、一次登录，把亚马逊运营全流程收进浏览器。\n这个快速引导带你认识控制台。3 步就能开始用：\n① 配一个 AI 模型  ② 配数据源  ③ 去任意板块开干。",
+  },
+  { sel: '[data-tour="sidebar"]', title: "左侧 = 所有板块入口", body: "「任务台」是一句话把活派给 Agent 的地方；现有板块都收在「更多工具」里，按原来的分组排列。左下角按钮可折叠侧边栏。" },
+  { sel: '.sb a[href="/hub-settings"]', title: "第一步：系统配置", body: "新装后先来这里：配一个「全局兜底大模型」（DeepSeek/OpenAI 等任选）+ 数据源 Key。配好这两样，全站 AI 与数据功能就能用了。" },
+  { sel: ".home-tabs", title: "首页 · 运营驾驶舱", body: "每日盯盘面板：大盘流量 / 关键词 / 竞品监控 / 自有 ASIN / 类目大盘 五个标签页。点标签切换不同维度。" },
+  { sel: '[data-tour="home-source"]', title: "数据源 & 站点", body: "右上角选站点和数据源（Sorftime）。切换数据源会重新加载全部数据。" },
+  { sel: '[data-tour="tour-help"]', title: "随时查手册 / 重看引导", body: "📖 是使用手册（各板块详细文档）。旁边的「?」可随时重看当前板块的这个引导。" },
+];
+
 export const TOURS: Record<string, TourStep[]> = {
-  // ── 控制台总览（首页）─────────────────────────────────────────────────────
+  // ── 任务台 ────────────────────────────────────────────────────────────────
+  "/console": [
+    {
+      title: "任务台 · 一个入口把活派出去",
+      body: "不用再想「这件事该去哪个板块」。直接说需求，Ivyea 会自己挑技能、调板块能力去拿真实数据，再把结论给你。",
+    },
+    { sel: ".cc-scenes", title: "不知道说什么？点场景", body: "这些是常见的开场，点一下就把提示词填进输入框，改改就能发。" },
+    { sel: ".cc-bar", title: "输入框下面这一行是真开关", body: "工作区 / 审批档位 / 技能 / 模型，选了就真的按那个跑。默认是「只读建议」——Agent 只分析、绝不动线上数据。" },
+    { sel: '[data-tour="console-new"]', title: "开新任务", body: "换个话题就点「新建任务」，上一轮的上下文不会串进来。" },
+  ],
+
+  // ── 控制台总览（运营驾驶舱）───────────────────────────────────────────────
+  "/dashboard": DASHBOARD_TOUR,
   "/": [
     {
       title: "欢迎使用 IvyeaOps 👋",
