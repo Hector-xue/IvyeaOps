@@ -13,8 +13,10 @@
  */
 import type { IvyeaStepEvent, OpsToolInfo } from "../api/ivyeaAgent";
 
-export type StepStatus = "running" | "ok" | "error";
-export type StepPhase = "skill" | "board" | "mcp" | "tool" | "subagent" | "knowledge" | "note";
+/** blocked = 被前置护栏拦下（流程纠偏），不是工具出错 —— 别画成红叉。 */
+export type StepStatus = "running" | "ok" | "error" | "blocked";
+export type StepPhase =
+  | "skill" | "board" | "mcp" | "tool" | "subagent" | "knowledge" | "plan" | "note";
 
 /** 时间线上的一行。结构化事件和自由文本兜底都归一到这个形状。 */
 export type ConsoleStep = {
@@ -68,6 +70,7 @@ const PHASE_ICONS: Record<StepPhase, string> = {
   tool: "⊙",
   subagent: "⑂",
   knowledge: "▤",
+  plan: "☰",
   note: "·",
 };
 
@@ -171,7 +174,8 @@ export function stepFromEvent(ev: IvyeaStepEvent): ConsoleStep {
     };
   }
 
-  const phase: StepPhase = ev.phase === "knowledge" ? "knowledge" : "tool";
+  const phase: StepPhase =
+    ev.phase === "knowledge" ? "knowledge" : ev.phase === "plan" ? "plan" : "tool";
   return {
     ...base,
     phase,

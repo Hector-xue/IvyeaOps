@@ -2999,3 +2999,12 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
   .cc-ai,.cc-followups{max-width:100%}
   .cs-detail{max-width:130px}
 }
+
+/* ── 任务台步骤流补充：拦截态 + 规划步折叠（P1 结构化事件）───────────────── */
+.cs-blocked{color:var(--amber)}
+.cs-chip.cs-plan{opacity:.85}
+.cs-chip.cs-plan .cs-icon{color:var(--t3)}
+.cs-fold{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border:1px dashed var(--b);
+  border-radius:7px;background:transparent;color:var(--t3);font-family:var(--font);font-size:10.5px;
+  cursor:pointer;align-self:flex-start;transition:all var(--dur) var(--ease)}
+.cs-fold:hover{color:var(--t2);border-color:var(--b2)}

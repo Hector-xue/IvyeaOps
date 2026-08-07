@@ -178,8 +178,15 @@ def request_stream(
     def _chunks() -> Any:
         try:
             with urllib.request.urlopen(req, timeout=timeout or _timeout()) as resp:
+                # read1 = "把现在已经到的字节给我"，read = "凑够 4096 或等到流结束"。
+                # 必须用 read1：SSE 是低速率长连接，事件一到就得往下游转。
+                # 用 read 时，agent 发完几百字节就停下来等（等人工审批、等一个几分钟
+                # 的慢工具），这几百字节会一直卡在这里凑不满 4096——前端因此收不到
+                # 审批卡，也看不到中途的步骤事件，看起来就像"卡死了"。
+                # 顺带也修掉了正常轮次里 token 按 4KB 一坨才吐出来的顿挫感。
+                reader = getattr(resp, "read1", None)
                 while True:
-                    chunk = resp.read(4096)
+                    chunk = reader(65536) if reader is not None else resp.read(4096)
                     if not chunk:
                         break
                     yield chunk
@@ -595,6 +602,11 @@ def chat_create(payload: dict[str, Any]) -> dict[str, Any]:
 def chat_import(payload: dict[str, Any]) -> dict[str, Any]:
     """Seed an agent session with pre-existing messages (migration, no LLM turn)."""
     return request_json("POST", "/v1/chat/sessions/import", payload)
+
+
+def chat_permission(payload: dict[str, Any]) -> dict[str, Any]:
+    """把一次审批决策回送给 daemon，解开阻塞在该步的轮次。"""
+    return request_json("POST", "/v1/chat/permission", payload, timeout=20.0)
 
 
 def skills() -> dict[str, Any]:

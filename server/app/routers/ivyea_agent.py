@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import base64
+import json as _json
 import threading as _threading
+import time as _time
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile
@@ -305,24 +307,111 @@ def _chat_payload(body: ChatBody) -> dict[str, Any]:
     return payload
 
 
+# ── 写操作审批的归属登记 ────────────────────────────────────────────────────
+# 批准一个 permission_request 就是**授权一次真实写入**，所以必须确认按下确认的人
+# 就是发起这轮对话的人 —— 否则任何登录用户只要猜到（或看到）一个 request_id，
+# 就能替别人批准改广告、开领星可写开关。
+#
+# request_id 由 agent daemon 现场生成，ops 事先不知道。所以在**转发** SSE 时顺
+# 手记一笔：字节原样透传（心跳注释行必须完好，否则慢工具轮次会被中间层掐断），
+# 只额外扫一眼帧里有没有 permission_request，有就登记归属。
+_APPROVAL_OWNERS: dict[str, tuple[str, float]] = {}
+_APPROVAL_OWNERS_LOCK = _threading.Lock()
+_APPROVAL_OWNER_TTL = 45 * 60.0     # 比 agent 侧 10 分钟的审批超时宽裕得多
+
+
+def _remember_approval_owner(request_id: str, principal: str) -> None:
+    now = _time.time()
+    with _APPROVAL_OWNERS_LOCK:
+        stale = [k for k, (_, ts) in _APPROVAL_OWNERS.items() if now - ts > _APPROVAL_OWNER_TTL]
+        for key in stale:
+            _APPROVAL_OWNERS.pop(key, None)
+        _APPROVAL_OWNERS[request_id] = (principal, now)
+
+
+def _approval_owner(request_id: str) -> str | None:
+    with _APPROVAL_OWNERS_LOCK:
+        row = _APPROVAL_OWNERS.get(request_id)
+    if not row:
+        return None
+    principal, ts = row
+    if _time.time() - ts > _APPROVAL_OWNER_TTL:
+        return None
+    return principal
+
+
+def _tee_approval_owners(chunks: Any, principal: str) -> Any:
+    """原样转发 SSE 字节，同时登记本轮出现的审批请求归属。
+
+    只读不改：先 yield 再解析，任何解析异常都不许影响转发 —— 记归属失败最坏
+    是让用户点确认时被判 404（agent 侧超时自动拒绝，方向是安全的），而弄坏
+    转发会直接毁掉整轮对话。
+    """
+    buf = b""
+    for chunk in chunks:
+        yield chunk
+        try:
+            buf += chunk
+            while b"\n\n" in buf:
+                frame, buf = buf.split(b"\n\n", 1)
+                if b"permission_request" not in frame:
+                    continue
+                for line in frame.split(b"\n"):
+                    if not line.startswith(b"data:"):
+                        continue
+                    data = _json.loads(line[5:].strip().decode("utf-8", "replace"))
+                    rid = str(data.get("request_id") or "")
+                    if rid:
+                        _remember_approval_owner(rid, principal)
+            # 单帧异常大（final 会带整段会话）时别把内存吃着不放
+            if len(buf) > 2_000_000:
+                buf = buf[-4096:]
+        except Exception:  # noqa: BLE001 — 记账失败绝不能影响转发
+            buf = b""
+
+
 @router.post("/chat")
 def chat(body: ChatBody, request: Request) -> dict[str, Any]:
     return _call(svc.chat, _with_ops_bridge(_chat_payload(body), request))
 
 
 @router.post("/chat/stream")
-def chat_stream(body: ChatBody, request: Request) -> StreamingResponse:
+def chat_stream(body: ChatBody, request: Request,
+                user: str = Depends(require_user)) -> StreamingResponse:
     status = svc.ensure_available()
     if not status.get("available"):
         raise HTTPException(status_code=503, detail=f"IvyeaAgent 不可用：{status.get('error') or '服务未连接'}")
     return StreamingResponse(
-        svc.chat_stream(_with_ops_bridge(_chat_payload(body), request)),
+        _tee_approval_owners(
+            svc.chat_stream(_with_ops_bridge(_chat_payload(body), request)),
+            user,
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
     )
+
+
+class ChatPermissionBody(BaseModel):
+    request_id: str = Field(..., min_length=1, max_length=120)
+    session_id: str = Field(default="", max_length=200)
+    choice: str = Field(..., pattern="^(approve|session|deny|abort)$")
+
+
+@router.post("/chat/permission")
+def chat_permission(body: ChatPermissionBody,
+                    user: str = Depends(require_user)) -> dict[str, Any]:
+    """回送一次写操作审批决策，解开 agent 侧阻塞的那一步。"""
+    owner = _approval_owner(body.request_id)
+    if owner is None:
+        # 没登记过 = 已超时被拒、轮次已收尾，或 ops 重启丢了记录。一律当失效，
+        # 不放行。agent 侧那一步最终会被超时拒绝，失败方向是安全的。
+        raise HTTPException(status_code=404, detail="该审批请求不存在或已失效")
+    if owner != user:
+        raise HTTPException(status_code=403, detail="无权处理他人会话的审批请求")
+    return _call(svc.chat_permission, {"request_id": body.request_id, "choice": body.choice})
 
 
 @router.get("/chat/sessions")

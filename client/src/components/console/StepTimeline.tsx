@@ -17,6 +17,8 @@ export type MatchedSkill = { id: string; title: string; domain?: string; score?:
 function StatusMark({ status }: { status: ConsoleStep["status"] }) {
   if (status === "running") return <span className="cs-mark cs-run" aria-label="进行中" />;
   if (status === "error") return <span className="cs-mark cs-err" aria-label="失败">✕</span>;
+  // 被护栏拦下是流程纠偏（"先列计划再动手"），不是出错，别用红叉吓人。
+  if (status === "blocked") return <span className="cs-mark cs-blocked" aria-label="已拦截">⊘</span>;
   return <span className="cs-mark cs-ok" aria-label="完成">✓</span>;
 }
 
@@ -71,7 +73,12 @@ export default function StepTimeline({
   running?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(false);
-  const real = steps.filter((s) => s.phase !== "note");
+  const [planOpen, setPlanOpen] = useState(false);
+  // 规划/汇报（todo_write、progress_update）在一轮里能占多数步 —— 实测 19 步里
+  // 12 步是它们。它们讲的是"在组织怎么做"，不是"做了什么"，所以默认折成一行，
+  // 真正干活的那几步才留在时间线上。
+  const real = steps.filter((s) => s.phase !== "note" && s.phase !== "plan");
+  const plans = steps.filter((s) => s.phase === "plan");
   const notes = steps.filter((s) => s.phase === "note");
   if (!steps.length && !skills.length) return null;
 
@@ -116,6 +123,21 @@ export default function StepTimeline({
               <div className="cs-chips">
                 {real.map((s) => <StepChip key={s.key} step={s} />)}
               </div>
+            </div>
+          )}
+
+          {plans.length > 0 && (
+            <div className="cs-phase">
+              <button type="button" className="cs-fold" onClick={() => setPlanOpen((v) => !v)}>
+                <i className="cs-icon">☰</i>
+                <span>规划与汇报 {plans.length} 步</span>
+                <span className="cs-caret">{planOpen ? "▾" : "▸"}</span>
+              </button>
+              {planOpen && (
+                <div className="cs-chips">
+                  {plans.map((s) => <StepChip key={s.key} step={s} />)}
+                </div>
+              )}
             </div>
           )}
 

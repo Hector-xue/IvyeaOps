@@ -348,17 +348,22 @@ export type IvyeaChatPayload = {
   use_tools?: boolean;
 };
 
-/** 结构化步骤事件（agent serve ≥ v1.9 才会发；旧版本只有自由文本 event）。 */
+/**
+ * 结构化步骤事件（agent serve ≥ v1.9 才会发；旧版本只有自由文本 event）。
+ * 契约见 ivyea_agent/stream_json.py:step_event。
+ * - phase "plan" = todo_write/progress_update 这类规划汇报调用，UI 折起来
+ * - status "blocked" = 被前置护栏拦下的流程纠偏，不是工具出错
+ */
 export type IvyeaStepEvent = {
   type: "step";
   id: string;
   seq: number;
-  phase: "tool" | "mcp" | "board" | "subagent" | "knowledge";
+  phase: "tool" | "mcp" | "board" | "subagent" | "knowledge" | "plan";
   name: string;
   tool?: string;
   server?: string;
   args?: Record<string, any>;
-  status: "running" | "ok" | "error";
+  status: "running" | "ok" | "error" | "blocked";
   ms?: number | null;
   session_id?: string;
   turn_id?: string;
