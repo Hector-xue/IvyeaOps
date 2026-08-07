@@ -346,6 +346,8 @@ export type IvyeaChatPayload = {
   turn_id?: string;
   /** false = 纯文本轮次，不给模型任何工具。 */
   use_tools?: boolean;
+  /** 追加到本轮系统提示的额外上下文（@ 引用的资料就走这里）。 */
+  system?: string;
 };
 
 /**
@@ -704,6 +706,19 @@ export async function ivyeaKnowledgeFiles(limit = 500) {
     history: KnowledgeUpload[];
   }>("/ivyea-agent/knowledge/files", { params: { limit } });
   return data;
+}
+
+/**
+ * 读一份知识库文件/卡片的正文 —— composer 的 @ 引用靠它把内容真的带进本轮。
+ * ⚠️ 正文在 `file.content` 里，不是顶层 `content`（照顶层取会静默拿到空字符串，
+ * 结果就是"引用了但什么都没带进去"，实测踩过）。
+ */
+export async function ivyeaKnowledgeFile(path: string) {
+  const { data } = await api.get<{
+    ok: boolean;
+    file?: { path: string; name: string; size: number; mtime: number; content: string };
+  }>("/ivyea-agent/knowledge/file", { params: { path } });
+  return { ok: data.ok, content: String(data.file?.content || ""), name: data.file?.name || "" };
 }
 
 export async function ivyeaKnowledgeSearch(q: string, limit = 8) {

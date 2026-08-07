@@ -3135,3 +3135,26 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
   background:var(--bg1);font-size:11px;line-height:1.75;max-height:420px;overflow:auto}
 .sb-ws-err{padding:1px 12px 3px;font-size:9.5px;color:var(--red);line-height:1.5}
 .sb-ws-hint{padding:1px 12px 5px;font-size:9px;color:var(--t3);line-height:1.5}
+
+/* ── composer 的 / 命令与 @ 引用 ─────────────────────────────────────────── */
+.cc-menu{position:absolute;bottom:calc(100% + 6px);left:0;right:0;max-height:280px;overflow-y:auto;
+  border:1px solid var(--b2);border-radius:var(--r);background:var(--bg1);box-shadow:var(--elev-1);
+  padding:4px;z-index:60}
+.cc-menu-head{font-size:9.5px;color:var(--t3);padding:4px 8px 6px;letter-spacing:.06em}
+.cc-menu-item{display:flex;align-items:center;gap:8px;width:100%;padding:5px 9px;border:none;
+  border-radius:var(--r);background:transparent;color:var(--t2);font-family:var(--font);font-size:11.5px;
+  cursor:pointer;text-align:left}
+.cc-menu-item:hover,.cc-menu-item.active{background:color-mix(in srgb,var(--acc) 10%,transparent);
+  color:var(--t)}
+.cc-menu-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cc-menu-hint{font-size:9.5px;color:var(--t3);flex-shrink:0;max-width:180px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.cc-refs{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
+.cc-ref{display:inline-flex;align-items:center;gap:5px;padding:2px 6px 2px 8px;border-radius:999px;
+  border:1px solid color-mix(in srgb,var(--acc) 35%,var(--b));
+  background:color-mix(in srgb,var(--acc) 8%,transparent);color:var(--t2);font-size:10px;max-width:220px}
+.cc-ref i{font-style:normal;color:var(--acc)}
+.cc-ref>button{background:transparent;border:none;color:var(--t3);cursor:pointer;font-size:9px;padding:0 2px}
+.cc-ref>button:hover{color:var(--red)}
+/* 菜单要相对输入器定位 */
+.cc-composer{position:relative}

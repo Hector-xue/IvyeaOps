@@ -26,7 +26,7 @@ import {
 } from "../../lib/stepLabels";
 import StepTimeline, { type MatchedSkill } from "../../components/console/StepTimeline";
 import ApprovalCard from "../../components/console/ApprovalCard";
-import Composer, { approvalPayload, type ApprovalMode, type ComposerValue } from "../../components/console/Composer";
+import Composer, { approvalPayload, type ApprovalMode, type ComposerRef, type ComposerValue } from "../../components/console/Composer";
 import ArtifactRail, { type RailApproval, type RailTodo } from "../../components/console/ArtifactRail";
 import FollowUps from "../../components/console/FollowUps";
 import {
@@ -37,6 +37,8 @@ import {
   ivyeaAwaitSessionAnswer,
   ivyeaChatPermission,
   ivyeaChatSession,
+  ivyeaKnowledgeFile,
+  ivyeaKnowledgeFiles,
   ivyeaKnowledgeUpload,
   notifyConsoleSessionsChanged,
   ivyeaOpsTools,
@@ -125,6 +127,8 @@ function ConsoleInner() {
 
   const [skills, setSkills] = useState<IvyeaSkillInfo[]>([]);
   const [workspaces, setWorkspaces] = useState<string[]>(["默认工作区"]);
+  const [references, setReferences] = useState<ComposerRef[]>([]);
+  const [picked, setPicked] = useState<ComposerRef[]>([]);
   const [loadingSession, setLoadingSession] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
@@ -158,6 +162,17 @@ function ConsoleInner() {
         if (!alive) return;
         const m = (d?.health as any)?.model || {};
         setModel(String(m.model || m.label || ""));
+      })
+      .catch(() => void 0);
+    // @ 可引用的东西：知识卡 + 上传件。取不到就没有 @ 菜单，不影响别的。
+    ivyeaKnowledgeFiles(200)
+      .then((d) => {
+        if (!alive) return;
+        const cards = (d.cards || []).map((c) => ({
+          id: c.id, title: c.title || c.id, path: c.path || "",
+        })).filter((c) => c.path);
+        const ups = (d.uploads || []).map((u) => ({ id: u.path, title: u.name, path: u.path }));
+        setReferences([...cards, ...ups].slice(0, 300));
       })
       .catch(() => void 0);
     consoleSessions()
@@ -317,6 +332,28 @@ function ConsoleInner() {
     setTurns((prev) => [...prev, userTurn, aiTurn]);
     setBusy(true);
 
+    // @ 引用：把选中条目的正文取出来随本轮带下去。取不到的跳过并说明，
+    // 不要让用户以为引用了、实际什么都没带。
+    let refSystem = "";
+    if (picked.length) {
+      const parts: string[] = [];
+      const failed: string[] = [];
+      for (const r of picked) {
+        try {
+          const d = await ivyeaKnowledgeFile(r.path);
+          const body = String(d?.content || "").slice(0, 12000);
+          if (body.trim()) parts.push(`### ${r.title}\n${body}`);
+          else failed.push(r.title);
+        } catch {
+          failed.push(r.title);
+        }
+      }
+      if (parts.length) {
+        refSystem = "[用户显式引用的资料 —— 优先据此作答]\n" + parts.join("\n\n");
+      }
+      if (failed.length) notify("warn", `这些引用读不到，已跳过：${failed.join("、")}`);
+    }
+
     const startedAt = Date.now();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -341,6 +378,7 @@ function ConsoleInner() {
           auto_skill: !composer.skill,
           plan_mode,
           approval,
+          system: refSystem || undefined,
           persist: true,
           inject_retrieval: true,
           ops_context: { board: "console", pathname: "/console" },
@@ -421,6 +459,7 @@ function ConsoleInner() {
       abortRef.current = null;
     }
 
+    setPicked([]);                      // 引用是"本轮"的，发完就清
     notifyConsoleSessionsChanged();     // 新会话进左栏 / 已有会话更新时间
     if (finalText.trim()) void loadFollowUps(text, finalText);
   }, [composer, busy, sessionId, patchTurn, notify, loadFollowUps]);
@@ -458,6 +497,11 @@ function ConsoleInner() {
       attaching={attaching}
       skills={skills}
       workspaces={workspaces}
+      references={references}
+      picked={picked}
+      onPickedChange={setPicked}
+      scenes={scenes}
+      onNewTask={resetSession}
       modelLabel={model}
       onModelClick={() => navigate("/hub-settings")}
       autoFocus={!compact}
