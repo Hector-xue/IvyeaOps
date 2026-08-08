@@ -662,7 +662,11 @@ class ImportedMessage(BaseModel):
 
 
 class ImportedSession(BaseModel):
-    """一条从别处（localStorage / 旧板块）搬过来的会话。"""
+    """一条从别处（localStorage / 旧板块）搬过来的会话。
+
+    id 这里不必再排除 Windows 保留设备名：它最终会被加上 `imp-<来源>-` 前缀，
+    拼出来的东西不可能等于 CON/NUL 这些。
+    """
     id: str = Field(..., min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
     created: float = 0.0
     messages: list[ImportedMessage] = Field(default_factory=list, max_length=200)
