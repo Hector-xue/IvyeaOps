@@ -101,6 +101,7 @@ _BASELINE_SCHEMA = (
         skill     TEXT NOT NULL DEFAULT '',
         approval  TEXT NOT NULL DEFAULT 'none',
         workspace TEXT NOT NULL DEFAULT '',
+        system    TEXT NOT NULL DEFAULT '',
         note      TEXT NOT NULL DEFAULT '',
         created   REAL NOT NULL DEFAULT 0,
         PRIMARY KEY (name, principal)
@@ -118,8 +119,18 @@ def _m001_add_source(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE console_sessions ADD COLUMN source TEXT NOT NULL DEFAULT 'console'")
 
 
+def _m002_add_preset_system(conn: sqlite3.Connection) -> None:
+    """给预设补 system 列（人设/判断标准）。
+
+    存量预设留空 —— 空的话这一轮就不注入任何人设，行为与加这列之前逐字一致。
+    """
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(console_presets)")}
+    if "system" not in cols:
+        conn.execute("ALTER TABLE console_presets ADD COLUMN system TEXT NOT NULL DEFAULT ''")
+
+
 # 追加即可，永远不要重排或删除已应用过的迁移。
-_MIGRATIONS: tuple = (_m001_add_source,)
+_MIGRATIONS: tuple = (_m001_add_source, _m002_add_preset_system)
 
 # 会话来源：任务台 / AI 问答 / 知识库对话。三处收编到同一个会话库之后，
 # 左栏靠它区分并筛选。
@@ -347,7 +358,7 @@ def list_presets(principal: str) -> list[dict[str, Any]]:
 
 
 def save_preset(name: str, principal: str, *, skill: str = "", approval: str = "none",
-                workspace: str = "", note: str = "") -> dict[str, Any]:
+                workspace: str = "", note: str = "", system: str = "") -> dict[str, Any]:
     clean = (name or "").strip()
     if not clean:
         raise ValueError("预设名不能为空")
@@ -355,17 +366,21 @@ def save_preset(name: str, principal: str, *, skill: str = "", approval: str = "
         raise ValueError("审批档位只能是 none 或 remote")
     row = {
         "name": clean[:120], "principal": principal or "", "skill": (skill or "")[:200],
-        "approval": approval, "workspace": (workspace or "")[:120], "note": (note or "")[:500],
+        "approval": approval, "workspace": (workspace or "")[:120],
+        # 人设会整段进这一轮的系统提示。给个上限，别让一条预设把上下文吃掉一大块。
+        "system": (system or "")[:4000],
+        "note": (note or "")[:500],
         "created": time.time(),
     }
     with _conn() as conn:
         # 同名即覆盖：用户改一个预设时按的是"保存"，不该冒出第二条同名的
         conn.execute(
-            "INSERT INTO console_presets (name, principal, skill, approval, workspace, note, created)"
-            " VALUES (:name, :principal, :skill, :approval, :workspace, :note, :created)"
+            "INSERT INTO console_presets (name, principal, skill, approval, workspace, system,"
+            " note, created)"
+            " VALUES (:name, :principal, :skill, :approval, :workspace, :system, :note, :created)"
             " ON CONFLICT(name, principal) DO UPDATE SET"
             " skill=excluded.skill, approval=excluded.approval,"
-            " workspace=excluded.workspace, note=excluded.note",
+            " workspace=excluded.workspace, system=excluded.system, note=excluded.note",
             row,
         )
     return row

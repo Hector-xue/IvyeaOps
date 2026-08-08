@@ -1036,7 +1036,10 @@ export async function consoleSessionImport(
 /** 智能体预设：一套"这类活按这么跑"的设置（技能 + 审批档位 + 工作区）。按用户隔离。 */
 export type ConsolePreset = {
   name: string; skill: string; approval: "none" | "remote";
-  workspace: string; note: string; created: number;
+  workspace: string;
+  /** 人设/判断标准。套用时整段并进这一轮的系统提示。 */
+  system: string;
+  note: string; created: number;
 };
 
 export async function consolePresets() {

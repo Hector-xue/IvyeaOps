@@ -72,10 +72,16 @@ type Prefs = {
   workspace: string; approval: ApprovalMode; skill: string;
   /** 跟进建议每轮额外跑一次模型调用，给个开关。默认开。 */
   followUps: boolean;
+  /** 套用中的预设名与人设 —— 和工作区/档位一样，刷新后应该还在。 */
+  preset: string;
+  system: string;
 };
 
 function loadPrefs(): Prefs {
-  const fallback: Prefs = { workspace: "默认工作区", approval: "readonly", skill: "", followUps: true };
+  const fallback: Prefs = {
+    workspace: "默认工作区", approval: "readonly", skill: "",
+    followUps: true, preset: "", system: "",
+  };
   try {
     const raw = localStorage.getItem(PREFS_KEY);
     if (!raw) return fallback;
@@ -133,10 +139,12 @@ function ConsoleInner() {
       approval: composer.approval,
       skill: composer.skill,
       followUps: followEnabled,
+      preset: composer.preset || "",
+      system: composer.system || "",
     };
     prefs.current = next;
     try { localStorage.setItem(PREFS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
-  }, [composer.workspace, composer.approval, composer.skill, followEnabled]);
+  }, [composer.workspace, composer.approval, composer.skill, composer.preset, composer.system, followEnabled]);
 
   // ── 能力目录：板块工具的中文 title 是步骤芯片的文案来源 ────────────────────
   useEffect(() => {
@@ -415,7 +423,12 @@ function ConsoleInner() {
           auto_skill: !composer.skill,
           plan_mode,
           approval,
-          system: [visionSystem, refSystem].filter(Boolean).join("\n\n") || undefined,
+          // 人设排最前：它定义"以什么身份、什么判断标准作答"，逻辑上先于本轮材料。
+          system: [
+            composer.system ? "[角色设定 —— 按这个身份和判断标准作答]\n" + composer.system : "",
+            visionSystem,
+            refSystem,
+          ].filter(Boolean).join("\n\n") || undefined,
           persist: true,
           inject_retrieval: true,
           ops_context: { board: "console", pathname: "/console" },

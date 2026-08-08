@@ -34,6 +34,10 @@ export type ComposerValue = {
   workspace: string;
   approval: ApprovalMode;
   skill: string;
+  /** 套用的预设名。只用来显示那枚芯片，让人知道现在带着谁的人设在跑。 */
+  preset?: string;
+  /** 预设携带的人设，会整段并进这一轮的系统提示。 */
+  system?: string;
 };
 
 export default function Composer({
@@ -130,6 +134,9 @@ export default function Composer({
           skill: p.skill,
           approval: p.approval === "remote" ? "ask" : "readonly",
           ...(p.workspace ? { workspace: p.workspace } : {}),
+          // 有人设才挂芯片；没写人设的预设不该凭空多出一枚
+          preset: p.system ? p.name : "",
+          system: p.system || "",
         }),
       });
     }
@@ -374,6 +381,23 @@ export default function Composer({
           options={skillOptions}
           ariaLabel="技能"
         />
+        {value.preset && (
+          /*
+           * 人设**必须可见**。一段看不见的系统提示在悄悄改变回答的口吻和判断标准，
+           * 用户只会觉得"今天的 Agent 怪怪的"却不知道为什么。所以套用预设后摆一枚
+           * 芯片说明现在带着谁，并且能一键摘掉。
+           */
+          <span className="cc-chip cc-chip-preset" title={value.system || value.preset}>
+            <i>◉</i>
+            {value.preset}
+            <button
+              type="button"
+              className="cc-chip-x"
+              title="取消套用这个预设的人设"
+              onClick={() => onChange({ preset: "", system: "" })}
+            >✕</button>
+          </span>
+        )}
         <button
           type="button"
           className="cc-chip cc-chip-model"

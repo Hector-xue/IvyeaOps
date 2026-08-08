@@ -715,6 +715,9 @@ class ConsolePresetBody(BaseModel):
     skill: str = Field(default="", max_length=200)
     approval: str = Field(default="none", pattern="^(none|remote)$")
     workspace: str = Field(default="", max_length=120)
+    # 人设：整段进这一轮的系统提示。上限比 note 大得多，但不能没有 ——
+    # 它每轮都要占上下文。
+    system: str = Field(default="", max_length=4000)
     note: str = Field(default="", max_length=500)
 
 
@@ -741,7 +744,7 @@ def console_preset_save(body: ConsolePresetBody,
     try:
         row = console_sessions.save_preset(
             body.name, principal, skill=body.skill, approval=body.approval,
-            workspace=body.workspace, note=body.note)
+            workspace=body.workspace, note=body.note, system=body.system)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True, "preset": row}
