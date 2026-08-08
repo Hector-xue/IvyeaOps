@@ -4,8 +4,9 @@
  * 对标 beili 的「✓ 匹配技能 → ✓ 调用 MCP」和 MyLevis 的可折叠工具行：
  * 每一步用业务语言说清楚调了什么、成没成、花了多久，参数按需展开。
  *
- * 三类行：
+ * 四类行：
  *   - 技能命中（skill_match 事件）→ 一排技能芯片
+ *   - 子 agent 调研              → 独立分区，每条显示它被派去查什么
  *   - 结构化步骤（step 事件）    → 带状态与耗时的芯片，可展开看原始参数
  *   - 自由文本注记（老 agent）   → 一行灰字叙述，不猜工具名
  */
@@ -77,7 +78,12 @@ export default function StepTimeline({
   // 规划/汇报（todo_write、progress_update）在一轮里能占多数步 —— 实测 19 步里
   // 12 步是它们。它们讲的是"在组织怎么做"，不是"做了什么"，所以默认折成一行，
   // 真正干活的那几步才留在时间线上。
-  const real = steps.filter((s) => s.phase !== "note" && s.phase !== "plan");
+  // 子 agent 单独拎出来。混在普通工具里时它只是一枚写着"子任务"的芯片，
+  // 而"主 agent 把一块活委派出去了"是一件性质不同的事 —— 三家对标产品都把
+  // 多智能体协作摆在明面上，我们有这个能力却一直没让它露过面。
+  const subs = steps.filter((s) => s.phase === "subagent");
+  const real = steps.filter(
+    (s) => s.phase !== "note" && s.phase !== "plan" && s.phase !== "subagent");
   const plans = steps.filter((s) => s.phase === "plan");
   const notes = steps.filter((s) => s.phase === "note");
   if (!steps.length && !skills.length) return null;
@@ -85,6 +91,7 @@ export default function StepTimeline({
   // 摘要行对标 MyLevis 的「已匹配 5 项 · 9.4 秒」
   const bits: string[] = [];
   if (skills.length) bits.push(`已匹配 ${skills.length} 项技能`);
+  if (subs.length) bits.push(`${subs.length} 个子 agent`);
   if (real.length) bits.push(`${real.length} 步`);
   const el = formatMs(elapsedMs);
   if (el) bits.push(el);
@@ -110,6 +117,29 @@ export default function StepTimeline({
                       <span className="cs-title">Ivyea Skill · {s.title}</span>
                     </span>
                   </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {subs.length > 0 && (
+            <div className="cs-phase">
+              <div className="cs-phase-head">
+                <span className="cs-ok">✓</span>{" "}
+                {/* 只有拿到并行凭据才敢写"并行"——见 ConsoleStep.parallel */}
+                {subs.length > 1 && subs.some((s) => s.parallel)
+                  ? `派出 ${subs.length} 个子 agent 并行调研`
+                  : subs.length > 1
+                    ? `派出 ${subs.length} 个子 agent 调研`
+                    : "派出子 agent 调研"}
+              </div>
+              <div className="cs-subs">
+                {subs.map((s) => (
+                  <div className={"cs-sub cs-" + s.status} key={s.key}>
+                    <StatusMark status={s.status} />
+                    <span className="cs-sub-task">{s.title}</span>
+                    {formatMs(s.ms) && <span className="cs-ms">{formatMs(s.ms)}</span>}
+                  </div>
                 ))}
               </div>
             </div>

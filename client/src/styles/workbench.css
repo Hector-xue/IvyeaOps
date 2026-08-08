@@ -3312,3 +3312,16 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .dl-del{background:color-mix(in srgb,var(--red) 10%,transparent);color:var(--t2)}
 .dl-ctx{color:var(--t3)}
 .cr-diff-cut{padding:4px 8px;font-size:9.5px;color:var(--amber);background:var(--bg2)}
+
+/* ── 子 agent 调研 ────────────────────────────────────────────────────────
+ * 不做成芯片：调研任务是一句话，芯片会把它挤成一小截，而那句话恰恰是这里
+ * 唯一有信息量的东西。所以整行铺开，任务文字占主位。
+ */
+.cs-subs{display:flex;flex-direction:column;gap:4px}
+.cs-sub{display:flex;align-items:flex-start;gap:6px;padding:4px 8px;font-size:11px;
+  border:1px solid var(--b);border-left:2px solid var(--purple);border-radius:var(--r);
+  background:var(--bg2);color:var(--t2);line-height:1.55}
+.cs-sub .cs-mark{margin-top:2px;flex-shrink:0}
+.cs-sub-task{flex:1;min-width:0;color:var(--t)}
+.cs-sub .cs-ms{flex-shrink:0;color:var(--t3);font-size:9.5px;margin-top:2px}
+.cs-sub.cs-running{border-left-color:var(--amber)}
