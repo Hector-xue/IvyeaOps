@@ -348,13 +348,17 @@ def test_delete_preset_is_idempotent_and_scoped():
     assert cs.delete_preset("x", "alice@x.com") is False
 
 
-def test_list_endpoint_is_callable_without_query_args():
+def test_list_endpoint_is_callable_without_query_args(monkeypatch):
     """守卫：查询参数必须用 Annotated 声明，默认值得是**真的 Python 值**。
 
     写成 `q: str = Query("")` 的话默认值就是 Query 对象本身，直接调用这个函数
     会把它一路带到 SQL 绑定处炸成 "unsupported type"。这个坑连着踩过两次
     （加 source 一次、加 q/offset 一次），所以钉一条线在这。
+
+    `_call` 必须打桩：不打的话，在 agent 没跑的机器上它会去**真的自动拉起 agent**。
+    本机 agent 一直开着所以一直没暴露，到了 Windows CI 上直接把整个作业挂死。
     """
+    monkeypatch.setattr(mod, "_call", lambda fn, *a, **k: {"sessions": []})
     cs.register_session("s1", "alice@x.com")
     out = mod.console_session_list(info=ALICE)     # 一个查询参数都不传
     assert out["ok"] is True

@@ -8,6 +8,7 @@ import os
 import shutil
 import socket
 import subprocess
+import tempfile
 import sys
 import threading
 import time
@@ -260,24 +261,35 @@ def start_local_service() -> dict[str, Any]:
     if token:
         env["IVYEA_API_TOKEN"] = token
         cmd.extend(["--api-token", token])
+    # 输出**落临时文件而不是管道**。这条命令要起一个守护进程，而在 Windows 上
+    # 守护进程会继承管道的写端 —— 于是 subprocess.run 的 reader 线程永远等不到
+    # EOF，连它自己 18 秒的 timeout 都会越过去，调用方就永久卡死。
+    # （实测：Windows CI 上整个测试作业挂了 25 分钟，堆栈停在 `_readerthread`。）
+    # 文件句柄没有这个问题：守护进程照样可以持有它，但这边不需要等任何人。
     try:
-        proc = subprocess.run(
-            cmd,
-            cwd=str(ops_settings.root_dir),
-            env=env,
-            text=True,
-            capture_output=True,
-            timeout=18,
-            **no_window_kwargs(),
-        )
+        with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+            proc = subprocess.run(
+                cmd,
+                cwd=str(ops_settings.root_dir),
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=out,
+                stderr=err,
+                timeout=18,
+                **no_window_kwargs(),
+            )
+            out.seek(0)
+            err.seek(0)
+            stdout = out.read().decode("utf-8", "replace")
+            stderr = err.read().decode("utf-8", "replace")
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc), "command": " ".join(cmd)}
     return {
         "ok": proc.returncode == 0,
         "returncode": proc.returncode,
         "command": " ".join(cmd[:6]),
-        "stdout": (proc.stdout or "")[-2000:],
-        "stderr": (proc.stderr or "")[-2000:],
+        "stdout": stdout[-2000:],
+        "stderr": stderr[-2000:],
     }
 
 
