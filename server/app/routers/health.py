@@ -92,6 +92,28 @@ def backup_restore(body: RestoreBody, _admin: str = Depends(require_admin)) -> d
     return report
 
 
+@router.get("/admin/jobs")
+def jobs_list(
+    kind: str = Query(""),
+    status: str = Query(""),
+    limit: int = Query(100, ge=1, le=1000),
+    _admin: str = Depends(require_admin),
+) -> dict:
+    """长任务账本（admin only）。
+
+    重点是让 **orphaned** 那些看得见：它们是被服务重启打断的，不是跑挂的。
+    在此之前这类任务会静默消失，用户只看到"任务不见了"，无从查起。
+    """
+    from app.core import jobs
+
+    rows = jobs.list_jobs(kind=kind or None, status=status or None, limit=limit)
+    return {
+        "total": len(rows),
+        "orphaned": sum(1 for r in rows if r["status"] == jobs.ORPHANED),
+        "rows": rows,
+    }
+
+
 @router.get("/audit")
 def audit_list(
     module: str = Query("", description="按板块筛：settings / git / autofix / lingxing …"),

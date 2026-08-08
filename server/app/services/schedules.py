@@ -397,9 +397,48 @@ def reschedule(task_id: str, cron: str) -> float:
     return nxt
 
 
+_LAST_BACKUP_DAY = ""
+
+
+async def _daily_backup_tick() -> None:
+    """每天自动备份一次（本地保留 7 份）。
+
+    走任务账本而不是直接在这儿开个协程：进程被重启打断时，账本里会留下一条
+    orphaned 记录，用户能看到"昨天那次备份没跑完"，而不是什么痕迹都没有。
+
+    刻意**不带口令** —— 自动备份没法向用户要口令，所以包里不含主密钥；它保的是
+    "数据还在"，换机器完整还原仍然要手动做一次带口令的备份。这个取舍写在
+    core/backup 的说明里，UI 上也会以 warning 的形式显示出来。
+    """
+    global _LAST_BACKUP_DAY
+    today = datetime.now().strftime("%Y-%m-%d")
+    if today == _LAST_BACKUP_DAY or datetime.now().hour != 3:
+        return
+    _LAST_BACKUP_DAY = today
+
+    from app.core import backup, jobs
+
+    job_id = jobs.create("backup.daily", {"date": today}, retriable=False)
+
+    def _work(jid: str):
+        jobs.progress(jid, 10, "正在快照数据库")
+        path = backup.create()
+        jobs.progress(jid, 90, "清理旧备份")
+        pruned = backup.prune(keep=7)
+        return {"path": str(path), "bytes": path.stat().st_size, "pruned": pruned}
+
+    await jobs.run(job_id, lambda jid: asyncio.to_thread(_work, jid))
+
+
 async def scheduler_loop() -> None:
     """每 30 秒看一眼有没有到点的任务。单个任务失败只记进它自己的历史。"""
     while True:
+        try:
+            await _daily_backup_tick()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001 — 备份失败不能带走整个调度循环
+            logger.warning("daily backup skipped: %s", e)
         try:
             for task in due_tasks():
                 # 先把下次时间排掉再执行：任务本身可能跑好几分钟，

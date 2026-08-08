@@ -183,6 +183,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("audit log DB init skipped: %s", e)
 
+    # 任务账本 + 开机自愈。被上一次重启打断的任务：可重入的重新排队，不可重入的
+    # 标成 orphaned 留在列表里等人处理 —— **绝不静默改成 failed**，
+    # 那会让用户以为任务是自己跑挂的。
+    try:
+        from app.core import jobs
+        jobs.init_db()
+        healed = jobs.recover_orphans()
+        jobs.purge(older_than_days=30)
+        logger.info("jobs DB ready（重排队 %d、孤儿 %d）",
+                    healed["requeued"], healed["orphaned"])
+    except Exception as e:
+        logger.warning("jobs DB init skipped: %s", e)
+
     # Brain chat/upload metadata DB is local SQLite; initialize eagerly so
     # schema problems are visible at boot, while keeping the service lightweight.
     try:
