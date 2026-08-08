@@ -359,7 +359,7 @@ def _approval_owner(request_id: str) -> str | None:
 
 
 def _tee_session_events(chunks: Any, principal: str, workspace: str = "",
-                        source: str = "console") -> Any:
+                        source: str = "console", persist: bool = True) -> Any:
     """原样转发 SSE 字节，同时从流里捞两件 ops 需要记账的事：
 
     - ``permission_request`` → 登记审批归属（谁能批这一步）
@@ -387,7 +387,11 @@ def _tee_session_events(chunks: Any, principal: str, workspace: str = "",
                     data = _json.loads(line[5:].strip().decode("utf-8", "replace"))
                     if is_start:
                         sid = str(data.get("session_id") or "")
-                        if sid:
+                        # persist=False 的轮次 agent 不落盘（跟进建议、各处的一次性
+                        # 调用都走这条）。照样建索引的话，就会攒下一堆指向不存在会话
+                        # 的孤儿行 —— 界面上看不见（列表要和 agent 实存的对得上），
+                        # 但只增不减。
+                        if sid and persist:
                             console_sessions.register_session(sid, principal, workspace, source)
                         continue
                     rid = str(data.get("request_id") or "")
@@ -443,7 +447,7 @@ def chat_stream(body: ChatBody, request: Request,
     return StreamingResponse(
         _tee_session_events(
             svc.chat_stream(_with_ops_bridge(payload, request)),
-            user, ws_name, body.source,
+            user, ws_name, body.source, body.persist,
         ),
         media_type="text/event-stream",
         headers={
