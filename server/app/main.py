@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 
 # Central logging config lives in app.core.obs: level + format + 落盘 + request_id。
@@ -432,12 +433,30 @@ async def _request_id(request: Request, call_next):
     rid = (request.headers.get("x-request-id") or "").strip()[:64] or obs.new_request_id()
     request.state.request_id = rid
     token = obs.REQUEST_ID.set(rid)
+    started = time.monotonic()
     try:
         response = await call_next(request)
         response.headers["X-Request-Id"] = rid
+        _log_access(request, response.status_code, time.monotonic() - started)
         return response
     finally:
         obs.REQUEST_ID.reset(token)
+
+
+def _log_access(request: Request, status: int, elapsed: float) -> None:
+    """自己记一条访问日志。
+
+    **为什么不靠 uvicorn 自带的那条**：uvicorn 在协议层记录访问日志，那已经在
+    ASGI 应用之外 —— 我们的 contextvar 早被 reset 了，所以它那行永远是 [-]，
+    带不上 request_id。而"让用户贴一个 id 就能查到整条链路"这件事，恰恰要求
+    每个请求至少有一行带 id 的日志。
+
+    分级是为了别把日志刷爆：前端有大量轮询，全 INFO 会让真正有用的那几行淹掉。
+    出错的、慢的走 INFO（这两类正是用户会来报的），其余降到 DEBUG。
+    """
+    level = logging.INFO if (status >= 400 or elapsed >= 1.0) else logging.DEBUG
+    logger.log(level, "%s %s -> %s (%.0fms)",
+               request.method, request.url.path, status, elapsed * 1000)
 
 
 # status → 稳定错误码 + 给用户的下一步动作。code 是给前端做分支的，

@@ -136,6 +136,28 @@ def test_log_file_written_and_tailable(tmp_path, monkeypatch):
         root.handlers, root.level = saved_handlers, saved_level
 
 
+def test_access_line_carries_request_id(client, caplog):
+    """uvicorn 自带的访问日志在 ASGI 应用之外发出，contextvar 已被 reset，
+    那行永远是 [-]。所以必须自己记一条 —— 否则"贴个 id 查全链路"只在报错时成立。"""
+    with caplog.at_level(logging.DEBUG, logger="ivyea.main"):
+        r = client.get("/api/health", headers={"X-Request-Id": "trace-xyz"})
+
+    line = next((rec for rec in caplog.records if "/api/health" in rec.getMessage()), None)
+    assert line is not None, "每个请求至少要有一行自己的访问日志"
+    assert "GET" in line.getMessage() and "200" in line.getMessage()
+    assert r.headers["X-Request-Id"] == "trace-xyz"
+
+
+def test_failed_requests_log_at_info_not_debug(client, caplog):
+    """出错的请求正是用户会来报的那些 —— 它们必须在默认级别（INFO）就能看到，
+    不能因为降噪把它们藏进 DEBUG。"""
+    with caplog.at_level(logging.INFO, logger="ivyea.main"):
+        client.get("/api/skill/list")   # 未登录 → 401
+
+    assert any("/api/skill/list" in rec.getMessage() and rec.levelno >= logging.INFO
+               for rec in caplog.records), "4xx 必须记在 INFO"
+
+
 def test_tail_log_missing_file_is_empty(tmp_path):
     """诊断包在日志还没生成时也必须能导出，不能抛。"""
     assert obs.tail_log(10, tmp_path) == ""
