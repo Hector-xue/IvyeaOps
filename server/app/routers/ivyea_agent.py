@@ -474,7 +474,19 @@ def chat_permission(body: ChatPermissionBody,
         raise HTTPException(status_code=404, detail="该审批请求不存在或已失效")
     if owner != user:
         raise HTTPException(status_code=403, detail="无权处理他人会话的审批请求")
-    out = _call(svc.chat_permission, {"request_id": body.request_id, "choice": body.choice})
+    try:
+        out = _call(svc.chat_permission, {"request_id": body.request_id, "choice": body.choice})
+    except HTTPException as exc:
+        # daemon 对"未知/已过期"回 404，而 _call 把 agent 的一切非 2xx 都翻成 502。
+        # 502 在界面上读作"服务器坏了"，但这里的真相通常是**另一个标签页已经点过了**
+        # ——同一个人开两个页签、或手快点了两下，都会走到这。实测并发点两次确实
+        # 一次 200 一次 502。翻成 409 并说人话。
+        if exc.status_code == 502 and "HTTP 404" in str(exc.detail):
+            raise HTTPException(
+                status_code=409,
+                detail="这条审批已经被处理过了（可能是另一个页签点的），或者已经超时失效。",
+            ) from exc
+        raise
     # agent 确认收下之后才留痕 —— 先记再发的话，agent 那边没收到（超时/断连）
     # 就会留下一条"已批准"，而那一步其实根本没执行。
     if out.get("ok"):

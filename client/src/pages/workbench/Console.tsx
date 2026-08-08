@@ -291,6 +291,22 @@ function ConsoleInner() {
       await ivyeaChatPermission({ request_id: req.request_id, session_id: req.session_id || sessionId, choice });
       setRailApprovals((prev) => [...prev, { title: req.title || req.op_type, decision: choice, at: Date.now() }]);
     } catch (e: any) {
+      const status = e?.response?.status;
+      // 409 = 这条已经被处理过了（多半是另一个页签点的）。**不能退回"未决"** ——
+      // 那一步确实已经执行/拒绝了，把卡片变回可点只会让人再点一次、再撞一次 409。
+      if (status === 409) {
+        setRailApprovals((prev) => [...prev, { title: req.title || req.op_type, decision: choice, at: Date.now() }]);
+        notify("info", e?.response?.data?.detail || "这条审批已经被处理过了");
+        return;
+      }
+      // 404 = 已超时失效或 ops 重启丢了登记。同样不该退回未决 —— 它永远不会成功了。
+      if (status === 404) {
+        patchTurn(turnId, (t) => ({
+          approvals: (t.approvals || []).map((a) => (a.req.request_id === req.request_id ? { ...a, decision: "abort" } : a)),
+        }));
+        notify("error", "这条审批已失效（超时或服务重启），那一步没有执行。");
+        return;
+      }
       patchTurn(turnId, (t) => ({
         approvals: (t.approvals || []).map((a) => (a.req.request_id === req.request_id ? { ...a, decision: undefined } : a)),
       }));

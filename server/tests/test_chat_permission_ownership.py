@@ -131,3 +131,34 @@ def test_opt_in_fields_reach_the_daemon_when_set():
     assert payload["approval"] == "remote"
     assert payload["use_tools"] is False
     assert payload["plan_mode"] is False
+
+
+def test_duplicate_click_reads_as_already_handled_not_a_server_error(monkeypatch):
+    """两个页签同时点同一条审批：一个成功，另一个必须收到**说人话的 409**。
+
+    daemon 对"未知/已过期"回 404，而 `_call` 把 agent 的一切非 2xx 都翻成 502。
+    502 在界面上读作"服务器坏了"，可真相通常只是另一个页签先点了 —— 实测并发点
+    两次确实一次 200 一次 502。
+    """
+    def already_answered(payload):
+        raise HTTPException(status_code=502,
+                            detail="IvyeaAgent HTTP 404: unknown_or_expired_request")
+
+    monkeypatch.setattr(mod, "_call", lambda fn, *a, **k: already_answered(a[0] if a else {}))
+    mod._remember_approval_owner("dup1", "alice@example.com")
+    with pytest.raises(HTTPException) as exc:
+        mod.chat_permission(_body(request_id="dup1"), user="alice@example.com")
+    assert exc.value.status_code == 409
+    assert "已经被处理" in str(exc.value.detail)
+
+
+def test_real_gateway_errors_are_still_502(monkeypatch):
+    """别把所有 502 都当成"已处理" —— agent 真的崩了要照实说。"""
+    def boom(fn, *a, **k):
+        raise HTTPException(status_code=502, detail="IvyeaAgent HTTP 500: boom")
+
+    monkeypatch.setattr(mod, "_call", boom)
+    mod._remember_approval_owner("dup2", "alice@example.com")
+    with pytest.raises(HTTPException) as exc:
+        mod.chat_permission(_body(request_id="dup2"), user="alice@example.com")
+    assert exc.value.status_code == 502
