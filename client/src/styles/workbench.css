@@ -254,6 +254,29 @@ body::after{
 .sb-toggle{background:transparent;border:1px solid var(--b);border-radius:var(--r);color:var(--t3);cursor:pointer;font-size:9px;padding:2px 6px;font-family:var(--font);flex-shrink:0;transition:all .1s}
 .sb-toggle:hover{color:var(--t);border-color:var(--b2)}
 .sb nav{flex:1;overflow-y:auto;padding:6px 0}
+/* ── 新外壳侧边栏：三段式 ────────────────────────────────────────────────
+ * 经典外壳仍走上面那条"整条滚动"的规则，一行不动。
+ *
+ * 这里改成 固定 / 弹性 / 收纳 三段，是因为改造前会话排在一条长滚动的最尾：
+ * 「更多工具」展开后占 774px，而视口才 813px —— 首屏一条会话都看不见，
+ * 可会话恰恰是这个外壳的主角。现在弹性区吃掉剩余高度并自己滚，
+ * 会话不再被板块列表挤下去。
+ */
+.sb-nav-console{display:flex;flex-direction:column;overflow:hidden;padding:6px 0 0}
+.sb-nav-fixed{flex-shrink:0}
+/* min-height:0 是必须的：flex 子项默认 min-height:auto，不写的话它会被内容撑高，
+   overflow 永远不生效，三段式就退化回一条长滚动。 */
+.sb-nav-flex{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column}
+.sb-nav-dock{flex-shrink:0;border-top:1px solid var(--b)}
+/* 展开板块时给它自己的高度上限，别把会话区压没 */
+.sb-tools-open{max-height:46vh;overflow-y:auto}
+/* 收起时的板块数量：说明"东西还在里面" */
+.ni-count{margin-left:auto;font-size:9px;color:var(--t3);background:var(--bg3);
+  border-radius:99px;padding:0 5px;line-height:1.7}
+/* 相邻兄弟选择器：只有**存在数量徽标时**箭头才让出 auto 间距。
+   写成 .ni-group .ni-caret 的话，展开态（没有徽标）箭头会贴到标签旁边。 */
+.ni-count + .ni-caret{margin-left:4px}
+.sb.collapsed .ni-count{display:none}
 .sb nav::-webkit-scrollbar{width:0}
 .ns{padding:10px 12px 3px;font-size:9px;color:var(--t3);letter-spacing:.12em;text-transform:uppercase}
 .ni{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;color:var(--t2);border-left:2px solid transparent;font-size:11px;transition:all .1s;white-space:nowrap;text-decoration:none}
