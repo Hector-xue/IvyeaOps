@@ -151,12 +151,24 @@ def test_workspace_root_in_blocklist_still_allows_subpaths(monkeypatch):
         with pytest.raises(Exception):
             P._validate_workspace_path(bad)
 
-    # /home/other/p **不再被拒**：_validate_workspace_path 后来有意去掉了
-    # "必须在 WORKSPACES_ROOT 之下"这条约束（注释理由：Windows 上要能在别的盘
-    # 打开项目）。原来的断言把它和系统目录混在一起，边界一改就红，而 app/tests
-    # 不在 CI 里所以没人知道。同 test_relative_paths_resolve_under_the_project_root
-    # 里的那条 ⚠️：这个放宽的前提是"板块只有管理员能进"，而现在不是了。
-    assert P._validate_workspace_path("/home/other/p") == "/home/other/p"
+    # /home/other/p 这类"工作区根之外"的位置：**管理员**可以（Windows 上要能在
+    # 别的盘打开项目），普通成员不行。原来的断言把它和系统目录混作一谈，后来
+    # "必须在根之下"这条约束被有意放宽，它就红了 —— 而 app/tests 不在 CI 里，
+    # 所以没人知道。现在这条边界按身份区分，两边都钉一下。
+    # （完整的越权边界护栏在 tests/test_agents_actor_boundary.py，那批进 CI。）
+    from app.agents.routers import _actor
+    token = _actor._actor_is_admin.set(True)
+    try:
+        assert P._validate_workspace_path("/home/other/p") == "/home/other/p"
+    finally:
+        _actor._actor_is_admin.reset(token)
+
+    token = _actor._actor_is_admin.set(False)
+    try:
+        with pytest.raises(Exception):
+            P._validate_workspace_path("/home/other/p")
+    finally:
+        _actor._actor_is_admin.reset(token)
 
 
 def test_normalize_project_path_windows_backslashes():

@@ -274,9 +274,14 @@ def _read_file() -> Dict[str, Any]:
     if not p.is_file():
         return {}
     try:
-        return json.loads(p.read_text("utf-8"))
+        raw = json.loads(p.read_text("utf-8"))
     except Exception:
         return {}
+    # 凭据在盘上是密文（见 core/secrets 的说明）。解密收口在这里，是因为
+    # load() 和 get() 都走它 —— 放到上层去解，漏一条路径就是一处明文泄漏。
+    # 没有 enc:v1: 前缀的值原样返回，老装机的明文配置照常能用。
+    from app.core import secrets as _secrets
+    return _secrets.decrypt_mapping(raw)
 
 
 def load() -> Dict[str, Any]:
@@ -314,6 +319,15 @@ def save(updates: Dict[str, Any]) -> Dict[str, Any]:
             current[k] = v
     p = _path()
     tmp = p.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(current, ensure_ascii=False, indent=2), "utf-8")
+    # 落盘前把凭据字段加密。注意返回给调用方的仍然是**明文** current ——
+    # 保存后前端要回显、runner 配置同步要用真值。
+    from app.core import secrets as _secrets
+    on_disk = _secrets.encrypt_mapping(current)
+    tmp.write_text(json.dumps(on_disk, ensure_ascii=False, indent=2), "utf-8")
     tmp.replace(p)
+    # 只记**改了哪些键**，不记值 —— 值里全是凭据，留痕的目的是"谁改了什么设置"，
+    # 不是把密钥抄一份到审计库里。
+    from app.core import audit as _audit
+    _audit.record("settings", "save", target=",".join(sorted(updates.keys()))[:1000],
+                  detail={"keys": sorted(updates.keys())})
     return current

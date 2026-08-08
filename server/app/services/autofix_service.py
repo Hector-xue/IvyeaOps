@@ -245,6 +245,8 @@ def _cleanup_worktree(job: Job) -> None:
 # ── apply ──────────────────────────────────────────────────────────────────
 async def apply(job_id: str) -> Dict[str, Any]:
     """Apply the reviewed diff to the real working tree and commit it."""
+    from app.core import audit as _audit
+    _audit.record("autofix", "apply", target=job_id)
     global _active
     job = _require(job_id)
     if job.status != "diagnosed":
@@ -318,6 +320,8 @@ def restart(job_id: str) -> Dict[str, Any]:
     The restart kills *this* process, so we spawn a fully detached shell that
     sleeps briefly (letting the HTTP response flush) then restarts the unit.
     """
+    from app.core import audit as _audit
+    _audit.record("autofix", "restart", target=job_id)
     job = _require(job_id)
     if job.status not in ("applied", "failed"):
         raise RuntimeError(f"当前状态 {job.status} 无法重启")
@@ -343,6 +347,8 @@ def restart(job_id: str) -> Dict[str, Any]:
 # ── rollback ───────────────────────────────────────────────────────────────
 async def rollback(job_id: str) -> Dict[str, Any]:
     """Revert an applied fix to the pre-apply SHA, rebuild if needed."""
+    from app.core import audit as _audit
+    _audit.record("autofix", "rollback", target=job_id)
     job = _require(job_id)
     if not job.pre_sha:
         raise RuntimeError("没有可回滚的提交记录")
@@ -359,6 +365,8 @@ async def rollback(job_id: str) -> Dict[str, Any]:
 
 # ── reject / clear ─────────────────────────────────────────────────────────
 def reject(job_id: str) -> Dict[str, Any]:
+    from app.core import audit as _audit
+    _audit.record("autofix", "reject", target=job_id)
     global _active
     job = _require(job_id)
     _cleanup_worktree(job)

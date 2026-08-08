@@ -34,8 +34,9 @@ ignore = [
 ]
 
 [lint.per-file-ignores]
-# 这两个是给人在终端里跑的 CLI 工具，print 就是它们的正确输出方式。
+# 这几个是给人在终端里跑的 CLI 工具，print 就是它们的正确输出方式。
 "app/core/hashpw.py" = ["T201"]
+"app/core/secrets.py" = ["T201"]        # __main__ 里的 --decrypt-all 降级逃生舱
 "app/services/freight_parser.py" = ["T201"]
 # 测试里偶尔 print 调试是可接受的。
 "tests/*" = ["T201"]

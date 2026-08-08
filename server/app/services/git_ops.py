@@ -316,6 +316,9 @@ def commit(project_id: str, message: str, *, allow_empty: bool = False) -> dict[
     if allow_empty:
         args.append("--allow-empty")
     cp = _run_git(cwd, args, check=False)
+    from app.core import audit as _audit
+    _audit.record("git", "commit", target=f"{project_id}: {msg[:120]}",
+                  outcome="ok" if cp.returncode == 0 else "failed")
     if cp.returncode != 0:
         err = (cp.stderr or cp.stdout or "").strip()
         # Most common case: nothing to commit
@@ -381,6 +384,9 @@ def checkout_branch(project_id: str, name: str) -> dict[str, Any]:
         raise GitError("不是 git 仓库")
     name = _validate_branch_name(name)
     cp = _run_git(cwd, ["checkout", name], check=False)
+    from app.core import audit as _audit
+    _audit.record("git", "checkout", target=f"{project_id}: {name}",
+                  outcome="ok" if cp.returncode == 0 else "failed")
     if cp.returncode != 0:
         # Most common: uncommitted changes would be overwritten.
         raise GitError((cp.stderr or cp.stdout or "切换分支失败").strip()[:300])

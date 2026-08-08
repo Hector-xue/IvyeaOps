@@ -175,6 +175,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("users DB init skipped: %s", e)
 
+    # 统一审计流水（谁在哪个板块做了什么）。
+    try:
+        from app.core import audit
+        audit.init_db()
+        logger.info("audit log DB ready")
+    except Exception as e:
+        logger.warning("audit log DB init skipped: %s", e)
+
     # Brain chat/upload metadata DB is local SQLite; initialize eagerly so
     # schema problems are visible at boot, while keeping the service lightweight.
     try:
