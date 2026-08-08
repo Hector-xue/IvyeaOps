@@ -3285,3 +3285,30 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .cc-chip-x{background:none;border:none;padding:0 0 0 2px;cursor:pointer;color:inherit;
   opacity:.6;font-size:9px;line-height:1;font-family:var(--font)}
 .cc-chip-x:hover{opacity:1}
+
+/* ── 产物栏：文件 / 改动 ────────────────────────────────────────────────── */
+.cr-files{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.cr-files li{display:grid;grid-template-columns:auto 1fr auto;gap:6px;align-items:center;
+  font-size:11px;color:var(--t2)}
+.cr-file-act{font-size:9px;padding:1px 5px;border-radius:3px;white-space:nowrap;
+  background:color-mix(in srgb,var(--t3) 16%,transparent);color:var(--t3)}
+.cr-file-act.act-create{background:color-mix(in srgb,var(--acc) 16%,transparent);color:var(--acc)}
+.cr-file-act.act-overwrite{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)}
+.cr-file-act.act-edit{background:color-mix(in srgb,var(--blue) 16%,transparent);color:var(--blue)}
+.cr-file-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t)}
+.cr-files li em{font-size:9px;color:var(--t3);font-style:normal}
+/* 完整路径单独一行、弱化：文件名才是扫读时要看的 */
+.cr-file-path{grid-column:1/-1;font-size:9px;color:var(--t3);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+.cr-diffs{display:flex;flex-direction:column;gap:10px}
+.cr-diff{border:1px solid var(--b);border-radius:6px;overflow:hidden}
+.cr-diff-head{display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg2);
+  font-size:10.5px;border-bottom:1px solid var(--b)}
+.cr-diff-head em{margin-left:auto;font-size:9px;color:var(--t3);font-style:normal}
+.cr-diff-body{margin:0;padding:6px 0;max-height:320px;overflow:auto;
+  font-family:'JetBrains Mono','Fira Code','SF Mono',Consolas,monospace;font-size:10.5px;line-height:1.55}
+.cr-diff-body .dl{padding:0 8px;white-space:pre;min-height:1.55em}
+.dl-add{background:color-mix(in srgb,var(--acc) 10%,transparent);color:var(--t)}
+.dl-del{background:color-mix(in srgb,var(--red) 10%,transparent);color:var(--t2)}
+.dl-ctx{color:var(--t3)}
+.cr-diff-cut{padding:4px 8px;font-size:9.5px;color:var(--amber);background:var(--bg2)}

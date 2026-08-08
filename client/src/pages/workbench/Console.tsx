@@ -49,6 +49,7 @@ import {
   ivyeaSkills,
   visionDescribe,
   type ConsolePreset,
+  type IvyeaFileChange,
   type IvyeaPermissionRequest,
   type IvyeaSkillInfo,
 } from "../../api/ivyeaAgent";
@@ -113,6 +114,9 @@ function ConsoleInner() {
   const [usage, setUsage] = useState<any>(null);
   const [todos, setTodos] = useState<RailTodo[]>([]);
   const [railApprovals, setRailApprovals] = useState<RailApproval[]>([]);
+  // 本会话 Agent 改过的文件。同一路径被改多次时**保留每一次** —— 折叠成一条会让
+  // "先写后改"的过程消失，而那恰恰是用户想复盘的东西。
+  const [fileChanges, setFileChanges] = useState<IvyeaFileChange[]>([]);
   const [followUps, setFollowUps] = useState<string[]>([]);
   const [followLoading, setFollowLoading] = useState(false);
   const [followEnabled, setFollowEnabled] = useState(prefs.current.followUps !== false);
@@ -202,6 +206,7 @@ function ConsoleInner() {
     setSessionId("");
     setTodos([]);
     setRailApprovals([]);
+    setFileChanges([]);
     setFollowUps([]);
     setUsage(null);
     setBusy(false);
@@ -258,6 +263,7 @@ function ConsoleInner() {
         setSessionId(urlSession);
         setFollowUps([]);
         setTodos([]);
+        setFileChanges([]);
         // 审批留痕落在服务端，刷新/隔天回来都还在 —— 这是这套系统最该
         // 留下的一条记录，不能只活在内存里。
         setRailApprovals([]);
@@ -434,6 +440,7 @@ function ConsoleInner() {
           ops_context: { board: "console", pathname: "/console" },
         },
         {
+          onFileChange: (d) => setFileChanges((prev) => [...prev, d]),
           onStart: (d) => {
             if (d?.session_id) { liveSid = d.session_id; setSessionId(d.session_id); }
             if (d?.model) setModel(typeof d.model === "string" ? d.model : d.model?.model || "");
@@ -660,6 +667,7 @@ function ConsoleInner() {
       <ArtifactRail
         answers={turns.filter((t) => t.role === "assistant" && !t.failed).map((t) => t.text)}
         todos={todos}
+        fileChanges={fileChanges}
         approvals={railApprovals}
         sessionId={sessionId}
         model={model}
