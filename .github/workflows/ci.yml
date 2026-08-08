@@ -31,7 +31,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r server/requirements.txt
-          pip install pytest pytest-asyncio anyio
+          pip install pytest pytest-asyncio anyio pytest-timeout
       # IvyeaAgent 必须装上：Windows 免-Python 包是把 agent 打进 exe 的，
       # tests/test_frozen_agent_serve.py 验的就是"exe 能跑内置 agent"这个契约。
       # 不装的话那 3 项直接失败，而它恰恰是 Windows 用户最依赖的一环。
@@ -47,9 +47,12 @@ jobs:
           [ -z "$ref" ] && ref=main
           echo "installing ivyea-agent@$ref"
           pip install "git+https://github.com/Hector-xue/ivyea-agent.git@$ref"
+      # --timeout 而不是任由它挂：挂起在 CI 上表现为"作业转 6 小时然后被杀"，
+      # 日志要等作业结束才可读，等于什么线索都拿不到。有了每测试超时，挂起会变成
+      # 一条指名道姓的失败。thread 方法在 Windows 上也有效（signal 方法只支持 POSIX）。
       - name: Test
         working-directory: server
-        run: python -m pytest tests -q
+        run: python -m pytest tests -q --timeout=120 --timeout-method=thread
         env:
           PYTHONUTF8: "1"   # Windows 中文编码护栏
 
