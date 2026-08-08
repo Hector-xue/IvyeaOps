@@ -75,6 +75,32 @@ jobs:
         env:
           PYTHONUTF8: "1"   # Windows 中文编码护栏
 
+  # server/app/tests 单独成一个作业，原因有二：
+  #   1. 它慢一个数量级（224 项要 7 分钟，上面那批 327 项只要 20 秒），塞进矩阵
+  #      会让每个平台都多等 7 分钟；
+  #   2. 它此前**从来没进过 CI** —— 于是 require_module 绕过 dependency_overrides
+  #      的问题让它 61 项常年红着而无人知晓。单独一个作业既能挡住回归，又不拖慢
+  #      主矩阵的反馈速度。
+  # 只跑 ubuntu：这批是纯业务逻辑，跨平台风险由上面的矩阵覆盖。
+  app-tests:
+    name: server tests · app/tests (ubuntu · py3.12)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r server/requirements.txt
+          pip install pytest pytest-asyncio anyio pytest-timeout
+      - name: Test
+        working-directory: server
+        run: python -m pytest app/tests -q --timeout=180 --timeout-method=thread
+        env:
+          PYTHONUTF8: "1"
+
   client:
     name: client build + typecheck
     runs-on: ubuntu-latest

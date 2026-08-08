@@ -40,6 +40,23 @@ os.environ.setdefault(
     tempfile.mkdtemp(prefix="ivyea-tests-no-bundled-skills-"),
 )
 
+# 第四件：下面那个 fixture 是**改 settings 对象的属性**，而好几个测试 fixture 会
+# `importlib.reload(app.core.config)` —— reload 重新构造 settings，隔离当场失效，
+# 测试又回去读写真实的 data 目录（test_brain 就是这样，日志里赫然是
+# "data dir: /root/ivyea-ops/data"）。环境变量是 config 在类定义时读的，reload
+# 之后照样生效，所以这里两条一起上：环境变量兜底，fixture 负责每次会话换新目录。
+_ENV_DATA_DIR = tempfile.mkdtemp(prefix="ivyea-tests-data-")
+os.environ.setdefault("IVYEA_OPS_DATA_DIR", _ENV_DATA_DIR)
+
+# 第五件：`ensure_studio_dirs()` 还会做一次"从老位置 ~/.hermes 搬迁"。跑测试时
+# 它读的是**开发者真实的 ~/.hermes**，日志里能看到 "migrated 759 skills entrie(s)"
+# ——每个建 app 的测试都把 759 个真实条目 copy2 进自己的 tmp 目录。数据没丢
+# （是拷贝不是移动，已核实），但它既让测试变慢，也让结果取决于这台机器上恰好
+# 攒了什么。指向一个空目录，搬迁自然就是空操作。
+# tests/test_skill_paths_migration.py 自己 monkeypatch.setenv 了 HERMES_HOME，
+# 会盖掉这里的默认值，不受影响。
+os.environ.setdefault("HERMES_HOME", tempfile.mkdtemp(prefix="ivyea-tests-legacy-home-"))
+
 from app.core.config import settings  # noqa: E402
 
 

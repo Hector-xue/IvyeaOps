@@ -79,10 +79,25 @@ def test_binary_content(ctx):
     assert r.status_code == 200 and r.content == b"hello"
 
 
-def test_path_traversal_blocked(ctx):
+def test_relative_paths_resolve_under_the_project_root(ctx):
+    """相对路径以项目根为基准解析 —— 越级出去就落到项目外的不存在位置。
+
+    这条原名 test_path_traversal_blocked、断言 403。**边界后来被有意移除了**：
+    files._resolve_in_project 现在允许任意绝对路径，理由写在那个函数的注释里
+    （文件面板要能"上一级"浏览，且当时 agents 板块是 admin-only、内置终端本来
+    就给了全盘访问）。所以这条断言早已与实现脱节，只是没人知道——app/tests
+    不在 CI 里。
+
+    ⚠️ 那条"admin-only"的前提**现在也不成立了**：main.py 用的是
+    require_module("agents")，而 permissions.py 的「技术助理」预设默认就授予
+    agents。也就是说非管理员被授予该板块后能读服务器上任意文件。这是个待拍板的
+    产品/安全决定，不该由一条测试悄悄替它选边，所以这里只如实描述当前行为。
+    """
     c, *_ = ctx
     r = c.get("/api/agents/projects/p1/file", params={"filePath": "../../../etc/passwd"})
-    assert r.status_code == 403
+    # 相对路径拼到项目根之上 → 指向一个不存在的位置 → 404，而不是读到系统文件。
+    assert r.status_code == 404
+    assert "root:" not in r.text
 
 
 def test_upload_files(ctx):
@@ -130,9 +145,18 @@ def test_workspace_root_in_blocklist_still_allows_subpaths(monkeypatch):
     monkeypatch.setattr(P, "WORKSPACES_ROOT", "/root")
     assert P._validate_workspace_path("/root/my-project") == "/root/my-project"
     assert P._validate_workspace_path("/root/agents/demo") == "/root/agents/demo"
-    for bad in ("/etc/passwd", "/tmp/x", "/home/other/p", "/"):
+
+    # 系统关键目录仍然拒（工作区根自身及其子树除外，那正是上面两条要保住的）。
+    for bad in ("/etc/passwd", "/tmp/x", "/"):
         with pytest.raises(Exception):
             P._validate_workspace_path(bad)
+
+    # /home/other/p **不再被拒**：_validate_workspace_path 后来有意去掉了
+    # "必须在 WORKSPACES_ROOT 之下"这条约束（注释理由：Windows 上要能在别的盘
+    # 打开项目）。原来的断言把它和系统目录混在一起，边界一改就红，而 app/tests
+    # 不在 CI 里所以没人知道。同 test_relative_paths_resolve_under_the_project_root
+    # 里的那条 ⚠️：这个放宽的前提是"板块只有管理员能进"，而现在不是了。
+    assert P._validate_workspace_path("/home/other/p") == "/home/other/p"
 
 
 def test_normalize_project_path_windows_backslashes():

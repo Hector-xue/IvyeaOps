@@ -77,7 +77,12 @@ def test_admin_session_me_keeps_admin_role(client: TestClient):
 
     me = client.get("/api/auth/me")
     assert me.status_code == 200, me.text
-    assert me.json() == {"username": "admin", "role": "admin"}
+    # 只断言这条测试真正关心的两个字段。原来是整个字典全等，于是多用户功能给
+    # /auth/me 加上 permissions / position 之后它就红了 —— 对一个会长字段的
+    # 响应用全等断言，等于把"新增字段"也当成回归。
+    body = me.json()
+    assert body["username"] == "admin"
+    assert body["role"] == "admin"
 
 
 def test_admin_session_can_access_admin_routes(client: TestClient):
