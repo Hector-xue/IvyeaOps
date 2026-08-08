@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 
 import pytest
 
@@ -28,6 +29,16 @@ import pytest
 # 关掉落盘（pytest 先导入 conftest，再导入测试模块），需要验证落盘本身的测试
 # 自己显式 configure 到 tmp_path。
 os.environ.setdefault("IVYEA_OPS_LOG_FILE", "0")
+
+# 第三件同类的事：`ensure_studio_dirs()` 会把**仓库自带的技能**播种进 SKILLS_ROOT。
+# 于是每个把 SKILLS_ROOT 指向 tmp 目录、再自己造几个技能的测试，实际看到的是
+# "自己造的 + 自带的"，断言"应该有 3 个"就永远拿到 7 个。指向一个空目录让播种
+# 变成 no-op；真正验证播种行为的 tests/test_skill_paths_migration.py 自己
+# monkeypatch seed_bundled_skills，不受影响。
+os.environ.setdefault(
+    "IVYEA_OPS_BUNDLED_SKILLS",
+    tempfile.mkdtemp(prefix="ivyea-tests-no-bundled-skills-"),
+)
 
 from app.core.config import settings  # noqa: E402
 

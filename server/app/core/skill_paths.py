@@ -75,6 +75,14 @@ AUDIT_LOG_FILE: Path = STUDIO_ROOT / "audit.log"
 # temp _MEIPASS extraction dir, so parents[3] is wrong — the skills are shipped
 # next to IvyeaOpsServer.exe instead. Resolve relative to the exe when frozen.
 def _bundled_skills_root() -> Path:
+    # 可用 IVYEA_OPS_BUNDLED_SKILLS 指向别处：打包方想换一套自带技能时用得上，
+    # 测试则指向一个空目录，让"播种"变成 no-op —— 否则每个用 tmp 目录当
+    # SKILLS_ROOT 的测试都会被仓库自带技能污染（"期望 3 个，实际 7 个"）。
+    # 必须是环境变量而不是 monkeypatch 模块属性：多个测试 fixture 会
+    # importlib.reload 这个模块，reload 会把模块属性打回原值，环境变量才留得住。
+    override = os.getenv("IVYEA_OPS_BUNDLED_SKILLS")
+    if override:
+        return Path(override)
     if getattr(sys, "frozen", False):
         return (Path(sys.executable).resolve().parent / "skills")
     return (Path(__file__).resolve().parents[3] / "skills")
