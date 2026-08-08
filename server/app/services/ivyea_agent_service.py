@@ -241,7 +241,8 @@ def start_local_service() -> dict[str, Any]:
     # via `<exe> agent-serve …`, spawned detached. No pip/Python/git needed.
     if getattr(sys, "frozen", False):
         cmd = [sys.executable, "agent-serve", "--host", host, "--port", str(port)]
-        env = {**os.environ}
+        from app.core.proc import child_env as _scrubbed_env
+        env = _scrubbed_env()   # agent 只需要下面显式塞的 IVYEA_API_TOKEN
         token = _token()
         if token:
             env["IVYEA_API_TOKEN"] = token   # serve reads the token from env
@@ -260,7 +261,8 @@ def start_local_service() -> dict[str, Any]:
         return {"ok": False, "error": "ivyea_cli_not_found"}
     cmd = [cli, "self", "service-start", "--host", host, "--port", str(port)]
     token = _token()
-    env = {**os.environ}
+    from app.core.proc import child_env as _scrubbed_env
+    env = _scrubbed_env()   # 同上：其余凭据不往下传
     if token:
         env["IVYEA_API_TOKEN"] = token
         cmd.extend(["--api-token", token])

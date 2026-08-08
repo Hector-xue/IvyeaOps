@@ -263,7 +263,10 @@ class PtyManager:
         if _WINDOWS:
             raise RuntimeError("PTY not supported on Windows.")
         master, slave = pty.openpty()
-        env = os.environ.copy()
+        # 终端里跑的是用户/AI 敲进来的任意命令 —— 这里绝不能把 IvyeaOps 的
+        # 会话签名密钥、管理员密码哈希一起递过去（一条 env 命令就全看见了）。
+        from app.core.proc import child_env as _scrubbed_env
+        env = _scrubbed_env()
         env.update(env_extra)
         env["TERM"] = env.get("TERM", "xterm-256color")
         env["LANG"] = env.get("LANG", "en_US.UTF-8")

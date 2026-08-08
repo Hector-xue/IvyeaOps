@@ -338,7 +338,8 @@ class TerminalLiveManager:
         if _WINDOWS:
             return await self._spawn_windows(session_id, shell=shell, workdir=workdir)
         master, slave = pty.openpty()
-        env = os.environ.copy()
+        from app.core.proc import child_env as _scrubbed_env
+        env = _scrubbed_env()
         env["TERM"] = env.get("TERM", "xterm-256color")
         env["LANG"] = env.get("LANG", "en_US.UTF-8")
         env["FORCE_COLOR"] = "1"

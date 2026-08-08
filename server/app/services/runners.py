@@ -239,7 +239,11 @@ def build_child_env(runner_bin: str) -> Dict[str, str]:
     - Sets ``IS_SANDBOX=1`` so claude's --dangerously-skip-permissions check
       doesn't refuse when running as root.
     """
-    child_env = {**os.environ}
+    # 从 os.environ 全量复制改成走 core.proc.child_env：这条路径跑的是 AI 自己
+    # 决定的工具调用（hermes/claude/codex + 它们再拉起的 MCP server），是整个
+    # 系统里最不该看到 IVYEA_OPS_SECRET 的地方 —— 拿到它就能伪造管理员会话。
+    from app.core.proc import child_env as _scrubbed_env
+    child_env = _scrubbed_env()
     bin_dir = str(Path(runner_bin).parent)
     if bin_dir not in child_env.get("PATH", "").split(os.pathsep):
         child_env["PATH"] = bin_dir + os.pathsep + child_env.get("PATH", "")
