@@ -33,7 +33,7 @@ import shutil
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Optional
 
 from app.agents import claude_sessions
 

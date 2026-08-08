@@ -18,7 +18,6 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.core.config import settings
 from app.core.security import require_user
 from app.services import asin_pulse_service, category_service, market_traffic_service, sellersprite_service
 from app.services.asin_pulse_service import SNAPSHOT_METRICS

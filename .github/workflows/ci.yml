@@ -14,14 +14,33 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    name: ruff (后端 lint 门禁)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # 配置在 server/ruff.toml。选的规则是"当前全仓零违规"的那批 ——
+      # 一旦变红，必然是这次改动引入的，不会有"历史债太多所以忽略它"的余地。
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: check
+          src: server
+
   server:
     name: server tests (${{ matrix.os }} · py${{ matrix.python }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # macOS 之前只在 release.yml 里被打包、从来没跑过测试 —— 也就是说
+        # "支持 macOS" 这句话一直没有任何东西在验证它。
+        os: [ubuntu-latest, windows-latest, macos-latest]
         python: ["3.9", "3.12"]
+        exclude:
+          # macos-latest 是 arm64，setup-python 上面没有 3.9 的构建。
+          # macOS 用户装的是发行版包，跟着 3.12 那栏走就够。
+          - os: macos-latest
+            python: "3.9"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

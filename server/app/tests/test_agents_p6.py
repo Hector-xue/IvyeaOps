@@ -39,7 +39,7 @@ def test_claude_auth_status_shape(client):
     assert r.status_code == 200, r.text
     data = r.json()["data"]
     assert data["provider"] == "claude"
-    assert set(["installed", "authenticated", "email", "method"]).issubset(data.keys())
+    assert {"installed", "authenticated", "email", "method"}.issubset(data.keys())
 
 
 def test_other_provider_auth_status(client):

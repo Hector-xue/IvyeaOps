@@ -31,7 +31,6 @@ import json
 import re
 import secrets
 import shutil
-import tempfile
 from dataclasses import dataclass
 from datetime import datetime
 from difflib import unified_diff
@@ -40,7 +39,7 @@ from pathlib import Path
 from fastapi import HTTPException
 from pydantic import BaseModel
 
-from app.core.skill_paths import SNAPSHOTS_DIR, SKILLS_ROOT
+from app.core.skill_paths import SNAPSHOTS_DIR
 from app.services.skill_repo import (
     _is_under,
     _resolved_skills_root,

@@ -8,7 +8,6 @@ import io
 import json
 import os
 import re
-import shutil
 import sqlite3
 import subprocess
 import textwrap

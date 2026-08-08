@@ -20,7 +20,6 @@ from typing import Any
 _WINDOWS = sys.platform == "win32"
 if not _WINDOWS:
     import pty
-    import signal
 
 import pyte
 

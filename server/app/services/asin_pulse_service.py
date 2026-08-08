@@ -119,10 +119,7 @@ async def fetch_asin_pulse(asin: str, marketplace: str) -> Dict[str, Any]:
         var_task = _safe_call(client, "product_variations", {"asin": asin, "amz_site": marketplace}, 2)
         (_, detail, detail_err), (_, variations, _var_err) = await asyncio.gather(detail_task, var_task)
 
-    empty = {k: None for k in
-             ("title", "brand", "image", "price", "bsr", "bsr_category",
-              "sub_rank", "sub_category", "est_sales",
-              "rating", "review_count", "variations", "coupon", "deal", "inventory")}
+    empty = dict.fromkeys(("title", "brand", "image", "price", "bsr", "bsr_category", "sub_rank", "sub_category", "est_sales", "rating", "review_count", "variations", "coupon", "deal", "inventory"))
 
     if detail_err:
         return {"asin": asin, "marketplace": marketplace, "error": detail_err, **empty, "raw_report": detail}

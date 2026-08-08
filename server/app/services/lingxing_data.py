@@ -16,7 +16,6 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from app.core import hub_settings as _hs
 from app.services import lingxing_service as _gw
 
 # Default cache freshness (seconds). Panels can force-refresh.

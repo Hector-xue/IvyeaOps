@@ -344,7 +344,6 @@ def _migrate_gbrain_dims(new_dims: int) -> bool:
     recreate index) via GBrain's own pglite + vector extension. Idempotent.
     """
     import json
-    import subprocess
     cfg_path = _GBRAIN_CONFIG
     if not cfg_path.exists():
         return False
@@ -455,7 +454,6 @@ def sync_gbrain_embedding(provider: str, model: str, api_key: str) -> None:
     # Also push via CLI (harmless; some GBrain read paths use it).
     gbrain = _gbrain_bin()
     if gbrain:
-        import subprocess
         _bun_bin = str(Path.home() / ".bun" / "bin")
         env = {**os.environ, "PATH": os.pathsep.join([_bun_bin, os.environ.get("PATH", "")])}
         try:

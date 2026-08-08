@@ -12,7 +12,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from app.core.proc import no_window_kwargs
 

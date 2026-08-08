@@ -284,7 +284,7 @@ def _empty_pulse(asin: str, marketplace: str, error: str) -> dict[str, Any]:
         "marketplace": marketplace,
         "data_source": "sellersprite",
         "error": error,
-        **{field: None for field in fields},
+        **dict.fromkeys(fields),
     }
 
 

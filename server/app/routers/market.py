@@ -6,14 +6,12 @@ import json
 import sqlite3
 import time
 import uuid
-from pathlib import Path
 from typing import AsyncGenerator, List
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from app.core.config import settings
 from app.core.security import require_user
 from app.services import sorftime_service, ai_synthesis_service
 

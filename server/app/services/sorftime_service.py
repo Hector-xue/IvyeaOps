@@ -291,7 +291,6 @@ async def _safe_call(
 async def _make_client():
     """Async context manager that creates an httpx client and performs the
     MCP initialize handshake required by Sorftime before any tool/call."""
-    import json as _json
     async with httpx.AsyncClient(
         timeout=httpx.Timeout(_TOOL_TIMEOUT, connect=_CONN_TIMEOUT),
         limits=httpx.Limits(max_connections=20),

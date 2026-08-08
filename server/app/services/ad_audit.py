@@ -35,7 +35,6 @@ from app.core.proc import no_window_kwargs
 import asyncio
 import csv
 import hashlib
-import io
 import json
 import logging
 import re
@@ -56,7 +55,6 @@ from app.services.runners import (
     _build_runner_cmd,
     extract_runner_output,
     resolve_with_pref,
-    runner_status,
 )
 
 # 路径沿用 ~/.hermes/ivyea-ops-data 只是历史落盘位置（存的是 IvyeaOps 自己的

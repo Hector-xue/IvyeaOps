@@ -22,7 +22,6 @@ from typing import Any
 
 from fastapi import (
     APIRouter,
-    Cookie,
     Depends,
     HTTPException,
     Query,
@@ -30,7 +29,6 @@ from fastapi import (
     File,
     WebSocket,
     WebSocketDisconnect,
-    status,
 )
 from fastapi.responses import FileResponse
 from fastapi.responses import StreamingResponse
@@ -327,7 +325,6 @@ async def _chat_oneshot(
     # Spawn the subprocess with a captured stdout so we can stream tokens
     # to the SSE client as they arrive.  stderr is folded into stdout via
     # PIPE so error messages also surface.
-    import os as _os
     env = _os.environ.copy()
     env.update(env_extra)
     env.setdefault("TERM", "dumb")  # most agents respect this and skip ANSI

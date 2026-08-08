@@ -6,7 +6,6 @@ import asyncio
 import json
 import os
 import re
-import time
 from pathlib import Path
 from typing import Optional
 
@@ -16,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.core.config import settings
 from app.core.security import require_user
 
-from .common import _db, project_row, update_project
+from .common import project_row, update_project
 from .jobs import JobHandle, start_job
 
 router = APIRouter()

@@ -15,7 +15,6 @@ import json
 import os
 import shutil
 import sqlite3
-import socket
 import sys
 import time
 from pathlib import Path
@@ -199,10 +198,6 @@ async def _probe_sellersprite(key: str) -> Dict[str, Any]:
         return _err(str(e)[:200])
 
 
-async def _probe_sorftime_placeholder() -> None:  # noqa: keep line count consistent
-        return _err(f"调用失败：{e}")
-
-
 async def _probe_openai(key: str) -> Dict[str, Any]:
     if not key:
         return _err("未填写")
@@ -384,7 +379,7 @@ async def _probe_feishu_app() -> Dict[str, Any]:
         if not token:
             return _err("返回中没有 tenant_access_token")
         if not chat_id:
-            return _ok(f"App 凭证有效（tenant_token 已获取）；未填 Chat ID，无法测试消息发送")
+            return _ok("App 凭证有效（tenant_token 已获取）；未填 Chat ID，无法测试消息发送")
         # Try send a test message to chat_id
         async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as c:
             r = await c.post(

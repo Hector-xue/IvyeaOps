@@ -13,12 +13,11 @@ import json
 import mimetypes
 import os
 import re
-import stat as stat_mod
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.agents import repos
@@ -333,7 +332,7 @@ def _windows_drives() -> list[dict]:
     import string
     letters: list[str] = []
     try:
-        letters = [d for d in os.listdrives()]  # Python 3.12+: ['C:\\', 'D:\\', …]
+        letters = list(os.listdrives())  # Python 3.12+: ['C:\\', 'D:\\', …]
     except Exception:
         letters = []
     if not letters:

@@ -68,7 +68,7 @@ def _redact(spec: dict[str, Any]) -> dict[str, Any]:
         elif key == "headers" and isinstance(val, dict):
             out[key] = {k: ("***" if k.lower() == "authorization" else v) for k, v in val.items()}
         elif key == "env" and isinstance(val, dict):
-            out[key] = {k: "***" for k in val}
+            out[key] = dict.fromkeys(val, "***")
         else:
             out[key] = val
     return out

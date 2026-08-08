@@ -37,7 +37,6 @@ from typing import Any
 _WINDOWS = sys.platform == "win32"
 if not _WINDOWS:
     import pty
-    import signal
 
 from app.services import agent_registry as registry
 from app.services import agent_session_service as svc

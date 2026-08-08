@@ -155,7 +155,7 @@ def test_token_usage(ctx):
     r = c.get(f"/api/agents/projects/p1/sessions/{sid}/token-usage", params={"provider": "claude"})
     assert r.status_code == 200, r.text
     body = r.json()
-    assert set(["used", "total", "inputTokens", "outputTokens", "breakdown"]).issubset(body.keys())
+    assert {"used", "total", "inputTokens", "outputTokens", "breakdown"}.issubset(body.keys())
     # non-claude provider is reported unsupported
     r2 = c.get(f"/api/agents/projects/p1/sessions/{sid}/token-usage", params={"provider": "codex"})
     assert r2.json().get("unsupported") is True

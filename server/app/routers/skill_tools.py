@@ -11,7 +11,7 @@ import contextlib
 import json
 import re
 import time
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse

@@ -22,7 +22,6 @@ import sqlite3
 import time
 import uuid
 from io import BytesIO
-from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -334,9 +333,9 @@ def list_folders(_u: str = Depends(require_user)):
     conn = _db()
     folders = conn.execute("SELECT * FROM folders ORDER BY created_at ASC").fetchall()
     # image count per folder (folder_id may be NULL/'' for unfiled)
-    counts = {fid: n for fid, n in conn.execute(
+    counts = dict(conn.execute(
         "SELECT COALESCE(folder_id,''), COUNT(*) FROM workspace_images GROUP BY COALESCE(folder_id,'')"
-    ).fetchall()}
+    ).fetchall())
     conn.close()
     return {
         "folders": [{"id": f["id"], "name": f["name"], "count": counts.get(f["id"], 0)} for f in folders],

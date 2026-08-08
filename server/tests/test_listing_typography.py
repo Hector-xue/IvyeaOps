@@ -81,12 +81,12 @@ def test_cjk_copy_wraps_and_proof_style_renders():
 
 
 def test_internal_review_sentence_is_never_rendered_as_public_proof():
-    kwargs = dict(
-        headline="Big Views",
-        supporting_text="Native 8K video",
-        position="top-left",
-        layout_style="editorial",
-    )
+    kwargs = {
+        "headline": "Big Views",
+        "supporting_text": "Native 8K video",
+        "position": "top-left",
+        "layout_style": "editorial",
+    }
     clean = T.overlay_callout(_blank(color=(35, 38, 42)), proof="", **kwargs)
     internal = T.overlay_callout(
         _blank(color=(35, 38, 42)),

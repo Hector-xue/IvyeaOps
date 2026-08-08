@@ -21,7 +21,6 @@ from fastapi import (
     Form,
     HTTPException,
     UploadFile,
-    status,
 )
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field

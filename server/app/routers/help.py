@@ -2,7 +2,6 @@
 users (not just GitHub readers) can read the board manual without leaving the app."""
 from __future__ import annotations
 
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 

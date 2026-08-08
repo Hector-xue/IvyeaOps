@@ -26,7 +26,6 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from app.agents.claude_sessions import create_normalized_message
 

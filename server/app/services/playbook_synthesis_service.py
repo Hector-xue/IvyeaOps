@@ -16,7 +16,6 @@ Two entry points, mirroring the market module:
 """
 from __future__ import annotations
 
-import json
 from typing import Any, AsyncGenerator, Dict
 
 from app.services.ai_synthesis_service import (
