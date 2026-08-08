@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import hashlib
 import hmac
 import os
@@ -20,6 +21,8 @@ from typing import Any
 
 from app.core.config import settings as ops_settings
 from app.core.proc import no_window_kwargs
+
+logger = logging.getLogger("ivyea.services.ivyea_agent")
 
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8765"
@@ -493,10 +496,10 @@ def maybe_sync_agent_on_upgrade() -> None:
             tmp.write_text(json.dumps({"ops_version": cur, "agent": res.get("after", "")}),
                            encoding="utf-8")
             os.replace(tmp, marker)
-            print(f"[IvyeaOps] agent auto-sync on {cur}: "
-                  f"{res.get('before')}->{res.get('after')} ok={res.get('ok')}")
+            logger.info("agent auto-sync on %s: %s->%s ok=%s",
+                        cur, res.get("before"), res.get("after"), res.get("ok"))
         except Exception as e:  # noqa: BLE001
-            print(f"[IvyeaOps] agent auto-sync failed: {e}")
+            logger.warning("agent auto-sync failed: %s", e)
 
     threading.Thread(target=_bg, daemon=True).start()
 

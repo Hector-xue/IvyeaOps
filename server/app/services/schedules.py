@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
+import logging
 import sqlite3
 import time
 import uuid
@@ -30,6 +30,8 @@ from typing import Any, Iterator
 
 from app.core.config import settings
 from app.core.db_migrations import apply_migrations
+
+logger = logging.getLogger("ivyea.services.schedules")
 
 TICK_SECONDS = 30.0
 MAX_RUNS_KEPT = 50          # 每个任务保留多少条历史
@@ -403,12 +405,12 @@ async def scheduler_loop() -> None:
                 # 先把下次时间排掉再执行：任务本身可能跑好几分钟，
                 # 期间不该因为 next_run 还停在过去而被重复捞起来。
                 reschedule(task["id"], task["cron"])
-                print(f"[IvyeaOps] scheduled task firing: {task['name']}")
+                logger.info("scheduled task firing: %s", task["name"])
                 await asyncio.to_thread(run_task_now, task, "scheduled")
         except asyncio.CancelledError:
             raise
         except Exception as e:  # noqa: BLE001
-            print(f"[IvyeaOps] scheduler error: {e}")
+            logger.warning("scheduler error: %s", e)
         await asyncio.sleep(TICK_SECONDS)
 
 

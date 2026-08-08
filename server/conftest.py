@@ -1,5 +1,12 @@
 """测试的全局隔离。
 
+**为什么在 server/ 而不是 server/tests/**：conftest 的 fixture 只对**它所在目录的
+子树**生效。这个文件原本放在 server/tests/ 下，于是 server/app/tests/ 那 224 个
+测试完全没被隔离 —— 它们跑的时候 `settings.data_dir` 指的是**真实的 data 目录**。
+（CI 里之所以一直没出事，是因为 CI 的 Test 步骤只跑 `tests`，压根没跑 app/tests。）
+放到 server/ 根上，两棵测试树才都盖得住。
+
+
 **为什么要有这个文件**：`console_sessions` 的库路径来自 `settings.data_dir`，也就是
 生产数据。之前只有直接测它的两个文件自己 patch 了路径，别的文件是"我又不碰数据库"
 ——直到给审批加了留痕，`_tee_session_events` 顺手就往生产库里写了两行 r1/r2，
@@ -11,9 +18,18 @@
 """
 from __future__ import annotations
 
+import os
+
 import pytest
 
-from app.core.config import settings
+# 同样的道理，对日志落盘也要堵一次：`app.core.obs.configure_logging()` 是在
+# `app.main` **被 import 的那一刻**执行的，比下面那个 fixture 换 data_dir 要早，
+# 于是测试会在**真实** data/logs 下建出日志文件来。这里在 conftest 模块体里就
+# 关掉落盘（pytest 先导入 conftest，再导入测试模块），需要验证落盘本身的测试
+# 自己显式 configure 到 tmp_path。
+os.environ.setdefault("IVYEA_OPS_LOG_FILE", "0")
+
+from app.core.config import settings  # noqa: E402
 
 
 @pytest.fixture(autouse=True, scope="session")

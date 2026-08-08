@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -26,6 +27,8 @@ from app.core import hub_settings as _hs
 from app.services import ai_synthesis_service as _ai
 from app.services import lingxing_data as _data
 from app.services import lingxing_service as _gw
+
+logger = logging.getLogger("ivyea.services.lingxing_automation")
 
 _run_lock = asyncio.Lock()
 
@@ -307,8 +310,8 @@ async def scheduler_loop() -> None:
                 hr = int(_hs.get("lingxing_auto_hour") or 9)
                 if now.weekday() == wd and now.hour == hr and last_fired_date != today:
                     last_fired_date = today
-                    print(f"[IvyeaOps] lingxing auto run firing ({today})")
+                    logger.info("lingxing auto run firing (%s)", today)
                     await run_once(trigger="scheduled")
         except Exception as e:  # noqa: BLE001
-            print(f"[IvyeaOps] lingxing auto scheduler error: {e}")
+            logger.warning("lingxing auto scheduler error: %s", e)
         await asyncio.sleep(1200)
