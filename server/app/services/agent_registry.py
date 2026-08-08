@@ -39,7 +39,9 @@ from app.services import agent_session_service as svc
 # kiro gateway on :8000 has been retired.
 # ---------------------------------------------------------------------------
 KIRO_GATEWAY_URL = os.environ.get("IVYEA_OPS_KIRO_GATEWAY", "").strip()
-KIRO_GATEWAY_KEY = os.environ.get("IVYEA_OPS_KIRO_GATEWAY_KEY", "hermes2024")
+from app.core import secret_env as _secret_env
+
+KIRO_GATEWAY_KEY = _secret_env.get("IVYEA_OPS_KIRO_GATEWAY_KEY", "hermes2024")
 
 
 def _list_kiro_models() -> list[str]:

@@ -21,6 +21,7 @@ from typing import Any
 
 from app.core.config import settings as ops_settings
 from app.core.proc import no_window_kwargs
+from app.core import secret_env as _secret_env
 
 logger = logging.getLogger("ivyea.services.ivyea_agent")
 
@@ -95,8 +96,8 @@ def _token() -> str:
     from app.core import hub_settings
     return (
         str(hub_settings.get("ivyea_agent_token") or "")
-        or os.getenv("IVYEA_AGENT_TOKEN")
-        or os.getenv("IVYEA_API_TOKEN")
+        or _secret_env.get("IVYEA_AGENT_TOKEN")
+        or _secret_env.get("IVYEA_API_TOKEN")
         or ""
     ).strip()
 

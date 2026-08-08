@@ -90,13 +90,14 @@ _lock = asyncio.Lock()
 def _git(*args: str, cwd: Path | str | None = None, timeout: int = 60) -> subprocess.CompletedProcess:
     # Resolve REPO_ROOT at call time (not as a default arg, which binds once at
     # definition) so tests can repoint REPO_ROOT and never touch the real repo.
-    return subprocess.run(
+    from app.core import proc as _proc
+    return _proc.run(
         ["git", *args],
         cwd=str(cwd if cwd is not None else REPO_ROOT),
         capture_output=True,
         text=True,
         timeout=timeout,
-        **no_window_kwargs(),
+        audit_module="autofix", audit_action="git",
     )
 
 

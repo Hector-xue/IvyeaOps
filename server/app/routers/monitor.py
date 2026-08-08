@@ -232,8 +232,9 @@ def services(_user: str = Depends(require_user)) -> List[ServiceStatus]:
         return out
     for name in _WATCHED_SERVICES:
         try:
-            r = subprocess.run(
-                ["systemctl", "is-active", f"{name}.service"],
+            from app.core import proc as _proc
+            r = _proc.run(   # audit=False：面板每次刷新都会跑，记了只会淹掉真正的操作
+                ["systemctl", "is-active", f"{name}.service"], audit=False,
                 capture_output=True,
                 text=True,
                 timeout=2,
@@ -265,8 +266,9 @@ def logs(_user: str = Depends(require_user), n: int = 20) -> dict:
     if _WINDOWS:
         return {"lines": [], "note": "nginx 访问日志为 Linux 部署专用，Windows 不适用。"}
     try:
-        r = subprocess.run(
-            ["tail", "-n", str(n), "/var/log/nginx/access.log"],
+        from app.core import proc as _proc
+        r = _proc.run(   # audit=False：同上，只读且高频
+            ["tail", "-n", str(n), "/var/log/nginx/access.log"], audit=False,
             capture_output=True,
             text=True,
             timeout=2,
@@ -507,9 +509,11 @@ def stop_process(body: ProcessAction, _user: str = Depends(require_user)) -> dic
     """Stop a process by PID or a systemd service by name."""
     if body.service:
         try:
-            r = subprocess.run(
+            from app.core import proc as _proc
+            r = _proc.run(
                 ["systemctl", "stop", f"{body.service}.service"],
                 capture_output=True, text=True, timeout=10,
+                audit_module="server", audit_action="service.stop",
             )
             if r.returncode != 0:
                 return {"ok": False, "error": r.stderr.strip() or "stop failed"}

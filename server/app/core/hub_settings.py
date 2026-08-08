@@ -6,7 +6,6 @@ Empty stored values fall back to the corresponding env var.
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any, Dict
 
@@ -300,7 +299,8 @@ def get(key: str, default: Any = None) -> Any:
         return val
     env_key = _ENV_MAP.get(key)
     if env_key:
-        env_val = os.getenv(env_key, "")
+        from app.core import secret_env
+        env_val = secret_env.get(env_key, "")
         if env_val:
             if isinstance(_DEFAULTS.get(key), int):
                 try:

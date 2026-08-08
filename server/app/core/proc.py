@@ -105,15 +105,20 @@ def run(
     allow_env: Iterable[str] = (),
     extra_env: Optional[Mapping[str, str]] = None,
     timeout: Optional[float] = 60,
-    audit_module: str = "",
+    audit_module: str = "proc",
     audit_action: str = "exec",
+    audit: bool = True,
     **kwargs,
 ):
-    """``subprocess.run`` 的收口版本：默认脱敏环境 + 必须有超时 + 可留痕。
+    """``subprocess.run`` 的收口版本：默认脱敏环境 + 必须有超时 + 默认留痕。
 
-    超时默认 60 秒而不是"永不超时"：外部工具挂住会把请求线程一起挂住，
+    **超时默认 60 秒**而不是"永不超时"：外部工具挂住会把请求线程一起挂住，
     这个仓库里已经因为这个吃过亏（CI 作业转 6 小时才被杀，日志什么都拿不到）。
     真需要长跑的显式传 ``timeout=None``。
+
+    **留痕默认开**：审计流水的正确姿势是"默认记录，噪音显式豁免并说明理由"，
+    而不是"默认沉默、想起来才记"—— 后者的结果必然是出事那次恰好没记。
+    高频只读轮询（ps/df 之类）用 ``audit=False`` 关掉，关的时候写清为什么。
     """
     if "env" not in kwargs:
         kwargs["env"] = child_env(allow=allow_env, extra=extra_env)
@@ -121,8 +126,8 @@ def run(
     for key, value in no_window_kwargs().items():
         kwargs.setdefault(key, value)
 
-    if audit_module:
-        from app.core import audit
-        audit.record(audit_module, audit_action,
-                     target=" ".join(str(a) for a in args)[:500])
+    if audit:
+        from app.core import audit as _audit
+        _audit.record(audit_module, audit_action,
+                      target=" ".join(str(a) for a in args)[:500])
     return subprocess.run(args, **kwargs)
