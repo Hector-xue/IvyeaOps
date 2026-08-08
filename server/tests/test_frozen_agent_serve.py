@@ -82,3 +82,24 @@ def test_ivyea_entry_mode_runs_the_agent_cli():
     )
     assert r.returncode == 0, r.stderr
     assert "ivyea-agent" in (r.stdout + r.stderr).lower()
+
+
+def test_service_start_does_not_capture_through_pipes():
+    """启动 agent 的那条命令**不能用管道捕获输出**。
+
+    `ivyea self service-start` 会起一个守护进程，而 Windows 上守护进程会继承管道的
+    写端 —— `subprocess.run` 的 reader 线程永远等不到 EOF，连它自己 18 秒的 timeout
+    都会越过去，调用方永久卡死。
+
+    实测代价：Windows CI 上整个测试作业挂了 25 分钟（堆栈停在 `_readerthread`），
+    而 GitHub 的日志要等作业结束才可读，挂着的时候什么线索都拿不到。
+    对真实用户就是"点一下，页面再也不响应"。
+
+    正解是落临时文件：守护进程照样可以持有文件句柄，但这边不必等任何人。
+    """
+    import inspect
+
+    src = inspect.getsource(svc.start_local_service)
+    assert "capture_output=True" not in src, "启动命令不能用 capture_output（Windows 会挂死）"
+    assert "subprocess.PIPE" not in src, "启动命令不能接管道（Windows 会挂死）"
+    assert "tempfile" in src or "TemporaryFile" in src, "输出应落临时文件"

@@ -1,8 +1,23 @@
-import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactElement } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api, logout } from "../api/client";
 import { useAuth } from "../App";
 import { resetBodyScrollLock } from "../lib/scrollLock";
+import {
+  CONSOLE_NEW_EVENT,
+  KEEP_ALIVE_PATHS,
+  PERSISTENT_PATHS,
+  boardPath,
+  classicSections,
+  isFullPage,
+  pathLabel as breadcrumbFor,
+  primaryItems,
+  readShellMode,
+  toolSections,
+  writeShellMode,
+  type BoardEntry,
+  type ShellMode,
+} from "../lib/navRegistry";
 // Lazy-loaded: these boards stay mounted (terminal/agents) or keep-alive
 // (market/playbook/tools/imagegen), but their code is split into its own chunk
 // and only fetched on first visit — keeps the initial bundle small.
@@ -20,6 +35,7 @@ import ManualModal from "../components/ManualModal";
 import UpdateModal from "../components/UpdateModal";
 import Tour from "../components/Tour";
 import IvyeaAgentDock from "../components/IvyeaAgentDock";
+import SessionRail from "../components/console/SessionRail";
 import { TOURS, hasTour } from "../lib/tours";
 
 // Boards with long-running tasks (research / generation / audit). These are kept
@@ -27,30 +43,24 @@ import { TOURS, hasTour } from "../lib/tours";
 // task (its polling timer / streaming fetch + UI state) survives switching boards
 // and is still there (and lands in history) when you come back. Same technique
 // the Terminal/Agents boards already use to preserve their WebSockets.
+//
+// Which paths belong here now comes from lib/navRegistry (`keepAlive` /
+// `persistent` flags) — this map only says *how* to render each one.
 const KEEP_ALIVE_BOARDS: Record<string, () => ReactElement> = {
   "/market": () => <Market />,
   "/playbook": () => <Playbook />,
   "/tools": () => <Tools />,
   "/imagegen": () => <ImageGen />,
 };
-const KEEP_ALIVE_PATHS = Object.keys(KEEP_ALIVE_BOARDS);
+
+// Boards mounted forever after their first visit (WebSocket / session state).
+const PERSISTENT_BOARDS: Record<string, () => ReactElement> = {
+  "/terminal": () => <Terminal />,
+  "/agents": () => <Agents />,
+};
 
 const HIDDEN_STYLE: CSSProperties = {
   position: "absolute", width: 0, height: 0, overflow: "hidden", opacity: 0, pointerEvents: "none",
-};
-
-type NavItem = {
-  to: string;
-  icon: string;
-  label: string;
-  badge?: string;
-  admin?: boolean;        // true = visible to admin only
-  key?: string;           // grantable module key; non-admins see it if granted
-};
-
-type NavSection = {
-  title: string;
-  items: NavItem[];
 };
 
 type UpdateInfo = {
@@ -62,83 +72,23 @@ type UpdateInfo = {
   detail: string;
 };
 
-const NAV: NavSection[] = [
-  {
-    title: "工具",
-    items: [
-      { to: "/", icon: "⌂", label: "首页" },
-      { to: "/market", icon: "◈", label: "市场调研" },
-      { to: "/playbook", icon: "◎", label: "打法推荐" },
-      { to: "/listing", icon: "◧", label: "Listing工作台", admin: true, key: "listing" },
-      { to: "/image-translate", icon: "⇄", label: "一键图片翻译", admin: true, key: "image-translate" },
-      { to: "/tools", icon: "⊕", label: "分析工具", admin: true, key: "tools" },
-      { to: "/lingxing", icon: "◭", label: "领星 ERP", admin: true },
-      { to: "/skill-hub", icon: "✦", label: "Skill 中心", admin: true, key: "skill-hub" },
-    ],
-  },
-  {
-    title: "AI & 系统",
-    items: [
-      { to: "/assistant", icon: "⊡", label: "AI 问答" },
-      { to: "/imagegen", icon: "▦", label: "AI 生图" },
-      { to: "/brain?tab=governance", icon: "▤", label: "知识库工作台", admin: true, key: "brain" },
-      { to: "/agents", icon: "◉", label: "外部智能体", admin: true, key: "agents" },
-      { to: "/terminal", icon: "▶", label: "服务器终端", admin: true, key: "terminal" },
-      { to: "/servmon", icon: "⊙", label: "服务器监控", admin: true, key: "servmon" },
-    ],
-  },
-  {
-    title: "小工具",
-    items: [
-      { to: "/freight", icon: "⊞", label: "头程比价" },
-    ],
-  },
-  {
-    title: "管理",
-    items: [
-      { to: "/users", icon: "⊗", label: "用户管理", admin: true },
-      { to: "/hub-settings", icon: "⚙", label: "系统配置", admin: true },
-      { to: "/news", icon: "≡", label: "资讯", admin: true, key: "news" },
-    ],
-  },
-];
-
-const PATH_LABEL: Record<string, string> = {
-  "/": "~/首页",
-  "/tools": "~/分析工具",
-  "/lingxing": "~/领星ERP",
-  "/listing": "~/Listing工作台",
-  "/image-translate": "~/一键图片翻译",
-  "/freight": "~/头程比价",
-  "/market": "~/市场调研",
-  "/playbook": "~/打法推荐",
-  "/assistant": "~/AI问答",
-  "/imagegen": "~/AI生图",
-  "/idea-skill": "~/想法工坊",
-  "/skill-tools": "~/运营商店",
-  "/skill-hub": "~/Skill中心",
-  "/users": "~/用户管理",
-  "/skill": "~/SkillStudio",
-  "/brain": "~/知识库工作台",
-  "/agents": "~/外部智能体",
-  "/agent": "~/AgentOS",
-  "/terminal": "~/服务器终端",
-  "/servmon": "~/服务器监控",
-  "/news": "~/资讯",
-  "/hub-settings": "~/系统配置",
-};
+const TOOLS_OPEN_KEY = "ivyea-ops.sidebar.tools-open";
 
 export default function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { role, permissions } = useAuth();
   const isAdmin = role === "admin";
-  // Visibility: admin sees all; everyone sees non-admin modules; a non-admin
-  // also sees an admin module if its key is in their granted permissions.
-  const canSee = (it: NavItem) => isAdmin || !it.admin || (!!it.key && permissions.includes(it.key));
-  const navSections = NAV
-    .map((sec) => ({ ...sec, items: sec.items.filter(canSee) }))
-    .filter((sec) => sec.items.length > 0);
+  const visibility = useMemo(() => ({ isAdmin, permissions }), [isAdmin, permissions]);
+
+  const [shell, setShell] = useState<ShellMode>(readShellMode);
+  const isConsoleShell = shell === "console";
+
+  // Sidebar contents — both shells derive from the same registry, so a board can
+  // never appear in one and vanish from the other.
+  const legacySections = useMemo(() => classicSections(visibility), [visibility]);
+  const primary = useMemo(() => primaryItems(visibility), [visibility]);
+  const toolGroups = useMemo(() => toolSections(visibility), [visibility]);
 
   // Pinned skill tools → dynamic sidebar entries. Refreshed on mount and when
   // a tool is pinned/unpinned (SkillTools dispatches 'ivyea-ops:pinned-changed').
@@ -162,8 +112,6 @@ export default function MainLayout() {
     return () => { alive = false; window.removeEventListener("ivyea-ops:pinned-changed", onChange); };
   }, []);
 
-  const [termMounted, setTermMounted] = useState(false);
-  const [agentsMounted, setCcuiMounted] = useState(false);
   const [appVersion, setAppVersion] = useState("dev");
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updating, setUpdating] = useState(false);
@@ -255,9 +203,32 @@ export default function MainLayout() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // Once the user visits /terminal, keep it mounted forever.
+  // "更多工具" group. Defaults to open so an upgrade never looks like boards went
+  // missing; auto-opens whenever the active route lives inside it.
+  const [toolsOpen, setToolsOpen] = useState(() => {
+    try { return localStorage.getItem(TOOLS_OPEN_KEY) !== "0"; } catch { return true; }
+  });
+  const activeIsTool = useMemo(
+    () => toolGroups.some((s) => s.items.some((b) => boardPath(b) === location.pathname)),
+    [toolGroups, location.pathname],
+  );
   useEffect(() => {
-    if (location.pathname === "/terminal") setTermMounted(true);
+    if (activeIsTool && !toolsOpen) setToolsOpen(true);
+    // Only reacts to the route landing inside the group — never fights a manual close.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIsTool]);
+  const toggleTools = () => {
+    const next = !toolsOpen;
+    setToolsOpen(next);
+    try { localStorage.setItem(TOOLS_OPEN_KEY, next ? "1" : "0"); } catch { /* ignore */ }
+  };
+
+  // Persistent boards (terminal / agents): once visited, stay mounted forever.
+  const [persistentVisited, setPersistentVisited] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    if (PERSISTENT_PATHS.includes(location.pathname)) {
+      setPersistentVisited((prev) => (prev.has(location.pathname) ? prev : new Set(prev).add(location.pathname)));
+    }
   }, [location.pathname]);
 
   // Safety net for the "页面偶尔无法滚动、刷新才好" report. Modals/drawers now use
@@ -267,11 +238,6 @@ export default function MainLayout() {
   // A no-op when nothing leaked.
   useEffect(() => {
     resetBodyScrollLock();
-  }, [location.pathname]);
-
-  // 智能体会话(/agents):首次访问后常驻挂载,切板块秒回、WS/会话状态不丢。
-  useEffect(() => {
-    if (location.pathname === "/agents") setCcuiMounted(true);
   }, [location.pathname]);
 
   // 长任务板块(市场调研 / 打法 / 分析工具 / AI 生图):首次访问后常驻挂载,
@@ -378,6 +344,22 @@ export default function MainLayout() {
     localStorage.setItem("ivyea-ops.sidebar.collapsed", next ? "1" : "0");
   };
 
+  const toggleShell = () => {
+    const next: ShellMode = isConsoleShell ? "classic" : "console";
+    setShell(next);
+    writeShellMode(next);
+    // 落地页跟着外壳走：切回经典就把停在任务台的人送回运营驾驶舱，反之亦然，
+    // 免得切完之后站在一个新外壳才有的页面上。
+    if (next === "classic" && location.pathname === "/console") navigate("/dashboard");
+  };
+
+  const startNewTask = () => {
+    if (isMobile) setMobileMenu(false);
+    if (location.pathname !== "/console") navigate("/console");
+    // Console listens for this and opens a fresh turn even when already there.
+    window.dispatchEvent(new CustomEvent(CONSOLE_NEW_EVENT));
+  };
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -386,12 +368,58 @@ export default function MainLayout() {
     }
   };
 
-  const path = PATH_LABEL[location.pathname] || "~/";
+  // 左栏高亮当前打开的会话：地址栏 ?session= 是唯一真相（任务台打开一条会话时
+  // 会把它写进 URL），这样刷新/分享链接后高亮也对得上。
+  const activeSessionId = location.pathname === "/console"
+    ? (new URLSearchParams(location.search).get("session") || "")
+    : "";
+
+  const path = breadcrumbFor(location.pathname);
   const versionLabel = appVersion.startsWith("v") ? appVersion : `v${appVersion}`;
   const hasUpdate = !!updateInfo?.update_available;
   const updateTitle = updateInfo
     ? updateInfo.detail
     : "检测更新";
+
+  const renderNavItem = (b: BoardEntry) => (
+    <NavLink
+      key={b.to}
+      to={b.to}
+      end={b.to === "/"}
+      className={({ isActive }) => "ni" + (isActive ? " active" : "")}
+      title={collapsed ? b.label : undefined}
+      onClick={() => isMobile && setMobileMenu(false)}
+    >
+      <i className="ic">{b.icon}</i>
+      <span className="ni-label">{b.label}</span>
+    </NavLink>
+  );
+
+  const divider = <div style={{ height: 1, background: "var(--b)", margin: "4px 12px" }} />;
+
+  const pinnedGroup = pinnedTools.length > 0 && (
+    <div>
+      {divider}
+      {!collapsed && <div style={{ fontSize: 9, color: "var(--t3)", padding: "4px 16px 2px", letterSpacing: ".08em" }}>我的工具</div>}
+      {pinnedTools.map((pt) => {
+        const to = `/skill-tools?tool=${encodeURIComponent(pt.name)}`;
+        const active = location.pathname === "/skill-tools" &&
+          new URLSearchParams(location.search).get("tool") === pt.name;
+        return (
+          <NavLink
+            key={pt.name}
+            to={to}
+            className={"ni" + (active ? " active" : "")}
+            title={collapsed ? pt.label : undefined}
+            onClick={() => isMobile && setMobileMenu(false)}
+          >
+            <i className="ic">{pt.icon}</i>
+            <span className="ni-label">{pt.label}</span>
+          </NavLink>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="app">
@@ -413,47 +441,65 @@ export default function MainLayout() {
           </button>
         </div>
         <nav data-tour="sidebar">
-          {navSections.map((sec, si) => (
-            <div key={sec.title}>
-              {si > 0 && <div style={{height:1,background:"var(--b)",margin:"4px 12px"}} />}
-              {sec.items.map((it) => (
-                <NavLink
-                  key={it.to}
-                  to={it.to}
-                  end={it.to === "/"}
-                  className={({ isActive }) => "ni" + (isActive ? " active" : "")}
-                  title={collapsed ? it.label : undefined}
-                  onClick={() => isMobile && setMobileMenu(false)}
-                >
-                  <i className="ic">{it.icon}</i>
-                  <span className="ni-label">{it.label}</span>
-                  {it.badge && <span className="nb">{it.badge}</span>}
-                </NavLink>
-              ))}
-            </div>
-          ))}
-          {pinnedTools.length > 0 && (
-            <div>
-              <div style={{ height: 1, background: "var(--b)", margin: "4px 12px" }} />
-              {!collapsed && <div style={{ fontSize: 9, color: "var(--t3)", padding: "4px 16px 2px", letterSpacing: ".08em" }}>我的工具</div>}
-              {pinnedTools.map((pt) => {
-                const to = `/skill-tools?tool=${encodeURIComponent(pt.name)}`;
-                const active = location.pathname === "/skill-tools" &&
-                  new URLSearchParams(location.search).get("tool") === pt.name;
-                return (
-                  <NavLink
-                    key={pt.name}
-                    to={to}
-                    className={"ni" + (active ? " active" : "")}
-                    title={collapsed ? pt.label : undefined}
-                    onClick={() => isMobile && setMobileMenu(false)}
+          {isConsoleShell ? (
+            <>
+              {/* ── 新建任务 + 一级项 ─────────────────────────────────── */}
+              <button
+                className="ni ni-action"
+                onClick={startNewTask}
+                title={collapsed ? "新建任务" : undefined}
+                data-tour="console-new"
+              >
+                <i className="ic">⊕</i>
+                <span className="ni-label">新建任务</span>
+              </button>
+              {primary.map(renderNavItem)}
+
+              {/* ── 更多工具（现有全部板块）────────────────────────────── */}
+              {toolGroups.length > 0 && (
+                <>
+                  {divider}
+                  <button
+                    className={"ni ni-group" + (toolsOpen ? " open" : "")}
+                    onClick={toggleTools}
+                    title={collapsed ? "更多工具" : undefined}
+                    aria-expanded={toolsOpen}
                   >
-                    <i className="ic">{pt.icon}</i>
-                    <span className="ni-label">{pt.label}</span>
-                  </NavLink>
-                );
-              })}
-            </div>
+                    <i className="ic">⋯</i>
+                    <span className="ni-label">更多工具</span>
+                    <span className="ni-caret">{toolsOpen ? "▾" : "▸"}</span>
+                  </button>
+                  {toolsOpen && toolGroups.map((sec, si) => (
+                    <div key={sec.title} className="ni-sub">
+                      {si > 0 && divider}
+                      {!collapsed && <div className="ns">{sec.title}</div>}
+                      {sec.items.map(renderNavItem)}
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {/* ── 工作区 / 会话 ────────────────────────────────────────── */}
+              {divider}
+              <SessionRail
+                collapsed={collapsed}
+                activeSessionId={activeSessionId}
+                onNavigate={() => isMobile && setMobileMenu(false)}
+              />
+
+              {pinnedGroup}
+            </>
+          ) : (
+            <>
+              {/* ── 旧壳：改造前的四段分组，逐条一致 ─────────────────────── */}
+              {legacySections.map((sec, si) => (
+                <div key={sec.title}>
+                  {si > 0 && divider}
+                  {sec.items.map(renderNavItem)}
+                </div>
+              ))}
+              {pinnedGroup}
+            </>
           )}
         </nav>
         <div className="sb-bot">
@@ -487,6 +533,13 @@ export default function MainLayout() {
           </div>
           <div className="tb-r">
             <div className="tb-time">{clock}</div>
+            <button
+              className="tbtn"
+              onClick={toggleShell}
+              title={isConsoleShell ? "切回经典侧边栏布局" : "切换到任务台布局"}
+            >
+              {isConsoleShell ? "▤ 经典" : "◆ 任务台"}
+            </button>
             <button
               className="tbtn"
               data-tour="tour-help"
@@ -547,24 +600,18 @@ export default function MainLayout() {
             </button>
           </div>
         </div>
-        <div className={"content" + (
-          location.pathname === "/agents"
-            ? " content-fullpage" : ""
-        )}>
-          {/* Terminal is always mounted (after first visit) but hidden when
-              not active, so the iframe WebSocket survives tab switches. */}
-          {/* Each lazy board gets its OWN Suspense so first-loading one never
+        <div className={"content" + (isFullPage(location.pathname) ? " content-fullpage" : "")}>
+          {/* Persistent boards (terminal / agents) are always mounted after their
+              first visit but hidden when not active, so their WebSocket and
+              session state survive board switches.
+              Each lazy board gets its OWN Suspense so first-loading one never
               flips another (mounted, hidden) keep-alive board into a fallback. */}
-          {termMounted && (
-            <div style={location.pathname === "/terminal" ? { display: "contents" } : { position: "absolute", width: 0, height: 0, overflow: "hidden", opacity: 0, pointerEvents: "none" }}>
-              <Suspense fallback={<BoardFallback />}><Terminal /></Suspense>
-            </div>
-          )}
-          {/* Agents 原生版常驻挂载(独立 React root),切板块时不卸载,保持 WS/会话状态、秒切。 */}
-          {agentsMounted && (
-            <div style={location.pathname === "/agents" ? { display: "contents" } : { position: "absolute", width: 0, height: 0, overflow: "hidden", opacity: 0, pointerEvents: "none" }}>
-              <Suspense fallback={<BoardFallback />}><Agents /></Suspense>
-            </div>
+          {PERSISTENT_PATHS.map((p) =>
+            persistentVisited.has(p) ? (
+              <div key={p} style={location.pathname === p ? { display: "contents" } : HIDDEN_STYLE}>
+                <Suspense fallback={<BoardFallback />}>{PERSISTENT_BOARDS[p]()}</Suspense>
+              </div>
+            ) : null,
           )}
           {/* Long-task boards: mounted on first visit, hidden when inactive so
               in-progress tasks survive board switches. */}
@@ -575,7 +622,7 @@ export default function MainLayout() {
               </div>
             ) : null,
           )}
-          {location.pathname !== "/terminal" && location.pathname !== "/agents"
+          {!PERSISTENT_PATHS.includes(location.pathname)
             && !KEEP_ALIVE_PATHS.includes(location.pathname) && (
               <Suspense fallback={<BoardFallback />}><Outlet /></Suspense>
             )}
@@ -586,7 +633,9 @@ export default function MainLayout() {
       {tourOn && hasTour(location.pathname) && (
         <Tour steps={TOURS[location.pathname]} onClose={() => setTourOn(false)} />
       )}
-      <IvyeaAgentDock />
+      {/* 任务台本身就是 Agent 的主入口，右下角再挂一个悬浮球等于同一件事摆两遍。
+          其余板块保留 —— 在那儿它是"随手问一句"的快捷方式，仍然有用。 */}
+      {location.pathname !== "/console" && <IvyeaAgentDock />}
     </div>
   );
 }

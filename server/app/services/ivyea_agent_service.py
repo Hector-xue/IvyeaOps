@@ -8,6 +8,7 @@ import os
 import shutil
 import socket
 import subprocess
+import tempfile
 import sys
 import threading
 import time
@@ -178,8 +179,15 @@ def request_stream(
     def _chunks() -> Any:
         try:
             with urllib.request.urlopen(req, timeout=timeout or _timeout()) as resp:
+                # read1 = "把现在已经到的字节给我"，read = "凑够 4096 或等到流结束"。
+                # 必须用 read1：SSE 是低速率长连接，事件一到就得往下游转。
+                # 用 read 时，agent 发完几百字节就停下来等（等人工审批、等一个几分钟
+                # 的慢工具），这几百字节会一直卡在这里凑不满 4096——前端因此收不到
+                # 审批卡，也看不到中途的步骤事件，看起来就像"卡死了"。
+                # 顺带也修掉了正常轮次里 token 按 4KB 一坨才吐出来的顿挫感。
+                reader = getattr(resp, "read1", None)
                 while True:
-                    chunk = resp.read(4096)
+                    chunk = reader(65536) if reader is not None else resp.read(4096)
                     if not chunk:
                         break
                     yield chunk
@@ -253,24 +261,35 @@ def start_local_service() -> dict[str, Any]:
     if token:
         env["IVYEA_API_TOKEN"] = token
         cmd.extend(["--api-token", token])
+    # 输出**落临时文件而不是管道**。这条命令要起一个守护进程，而在 Windows 上
+    # 守护进程会继承管道的写端 —— 于是 subprocess.run 的 reader 线程永远等不到
+    # EOF，连它自己 18 秒的 timeout 都会越过去，调用方就永久卡死。
+    # （实测：Windows CI 上整个测试作业挂了 25 分钟，堆栈停在 `_readerthread`。）
+    # 文件句柄没有这个问题：守护进程照样可以持有它，但这边不需要等任何人。
     try:
-        proc = subprocess.run(
-            cmd,
-            cwd=str(ops_settings.root_dir),
-            env=env,
-            text=True,
-            capture_output=True,
-            timeout=18,
-            **no_window_kwargs(),
-        )
+        with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+            proc = subprocess.run(
+                cmd,
+                cwd=str(ops_settings.root_dir),
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=out,
+                stderr=err,
+                timeout=18,
+                **no_window_kwargs(),
+            )
+            out.seek(0)
+            err.seek(0)
+            stdout = out.read().decode("utf-8", "replace")
+            stderr = err.read().decode("utf-8", "replace")
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc), "command": " ".join(cmd)}
     return {
         "ok": proc.returncode == 0,
         "returncode": proc.returncode,
         "command": " ".join(cmd[:6]),
-        "stdout": (proc.stdout or "")[-2000:],
-        "stderr": (proc.stderr or "")[-2000:],
+        "stdout": stdout[-2000:],
+        "stderr": stderr[-2000:],
     }
 
 
@@ -466,8 +485,14 @@ def maybe_sync_agent_on_upgrade() -> None:
     def _bg() -> None:
         try:
             res = upgrade_agent()
-            marker.write_text(json.dumps({"ops_version": cur, "agent": res.get("after", "")}),
-                              encoding="utf-8")
+            # 原子落盘：write_text 是"先截断再写"，中间那一瞬文件已经存在但内容是空的。
+            # 并发的读方（另一次启动、或紧接着的一次调用）此时读到空串会当作"没同步过"
+            # 而重跑一遍 pip 安装。先写临时文件再 rename，读方要么看到旧的、要么看到
+            # 完整的新的。（agent 侧 sessions.py 早就是这么写的。）
+            tmp = marker.with_suffix(marker.suffix + ".tmp")
+            tmp.write_text(json.dumps({"ops_version": cur, "agent": res.get("after", "")}),
+                           encoding="utf-8")
+            os.replace(tmp, marker)
             print(f"[IvyeaOps] agent auto-sync on {cur}: "
                   f"{res.get('before')}->{res.get('after')} ok={res.get('ok')}")
         except Exception as e:  # noqa: BLE001
@@ -574,7 +599,10 @@ def chat_stream_events(payload: dict[str, Any]) -> Any:
 
 
 def chat_sessions(limit: int = 20) -> dict[str, Any]:
-    safe_limit = max(1, min(int(limit or 20), 100))
+    # 上限 100 曾把左栏的分页顶死：ops 明明传 200，拿回来永远只有 100 条，
+    # 而磁盘上的会话早超过这个数 —— 第 101 条往后的历史等于不存在。
+    # agent 那边是本地文件扫描，实测 162 个会话热态 55ms，放到 500 不成问题。
+    safe_limit = max(1, min(int(limit or 20), 500))
     return request_json("GET", f"/v1/chat/sessions?limit={safe_limit}")
 
 
@@ -595,6 +623,27 @@ def chat_create(payload: dict[str, Any]) -> dict[str, Any]:
 def chat_import(payload: dict[str, Any]) -> dict[str, Any]:
     """Seed an agent session with pre-existing messages (migration, no LLM turn)."""
     return request_json("POST", "/v1/chat/sessions/import", payload)
+
+
+def chat_permission(payload: dict[str, Any]) -> dict[str, Any]:
+    """把一次审批决策回送给 daemon，解开阻塞在该步的轮次。"""
+    return request_json("POST", "/v1/chat/permission", payload, timeout=20.0)
+
+
+def skills() -> dict[str, Any]:
+    """agent 侧技能库（内置 skills_builtin + ~/.ivyea/skills）。
+
+    与 IvyeaOps 自己的 Skill 中心（~/.hermes/skills，走 services/skill_repo.py）是
+    两个库：这个是 agent 跑一轮时真正能加载进 system prompt 的那套，任务台的
+    「技能」选择器要的就是它。
+    """
+    return request_json("GET", "/v1/skills")
+
+
+def skills_search(query: str, limit: int = 8) -> dict[str, Any]:
+    safe_q = urllib.parse.quote(query.strip(), safe="")
+    safe_limit = max(1, min(int(limit or 8), 50))
+    return request_json("GET", f"/v1/skills/search?q={safe_q}&limit={safe_limit}")
 
 
 def model_providers() -> dict[str, Any]:

@@ -37,6 +37,10 @@ const SkillTools = lazy(() => import("./pages/workbench/SkillTools"));
 const SkillHub = lazy(() => import("./pages/workbench/SkillHub"));
 const DeepAnalysis = lazy(() => import("./pages/workbench/DeepAnalysis"));
 const LingXing = lazy(() => import("./pages/workbench/LingXing"));
+const Console = lazy(() => import("./pages/workbench/Console"));
+const Capabilities = lazy(() => import("./pages/workbench/Capabilities"));
+const Schedules = lazy(() => import("./pages/workbench/Schedules"));
+import { landingPath } from "./lib/navRegistry";
 import { me } from "./api/client";
 import { getSetupStatus, type SetupChecks } from "./api/setup";
 
@@ -127,7 +131,14 @@ export default function App() {
               </RequireAuth>
             }
           >
-            <Route index element={<Home />} />
+            {/* "/" 只做落地分流：新外壳去任务台，经典外壳照旧进运营驾驶舱。
+                驾驶舱本身搬到 /dashboard，两套外壳都能稳定链过去，老书签落到
+                "/" 也还是会被送到该去的地方。 */}
+            <Route index element={<Navigate to={landingPath()} replace />} />
+            <Route path="console" element={<Console />} />
+            <Route path="capabilities" element={<Capabilities />} />
+            <Route path="schedules" element={<Schedules />} />
+            <Route path="dashboard" element={<Home />} />
             <Route path="tools" element={<Tools />} />
             <Route path="skill" element={<SkillStudio />}>
               <Route index element={<StatsOverview />} />

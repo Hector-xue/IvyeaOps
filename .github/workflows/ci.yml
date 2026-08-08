@@ -1,0 +1,80 @@
+name: CI
+
+# 为什么要有这个：在此之前 IvyeaOps **没有任何跑测试的 CI**（只有 release.yml），
+# 而同步到 GitHub 之后 Windows 用户占多数 —— 也就是说，主要用户所在的平台恰恰是
+# 唯一没被验证过的平台。release.yml 里那个 windows 作业只打包 exe、只冒烟测
+# bundled agent-serve 的 /health，服务本身和各板块一个都没碰过。
+#
+# 编码那一栏（PYTHONUTF8）不是摆设：中文版 Windows 默认 GBK，任何不带 encoding=
+# 的文本读写都会 UnicodeDecodeError。护栏留在这里，回归了当场就红。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  server:
+    name: server tests (${{ matrix.os }} · py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r server/requirements.txt
+          pip install pytest pytest-asyncio anyio pytest-timeout
+      # IvyeaAgent 必须装上：Windows 免-Python 包是把 agent 打进 exe 的，
+      # tests/test_frozen_agent_serve.py 验的就是"exe 能跑内置 agent"这个契约。
+      # 不装的话那 3 项直接失败，而它恰恰是 Windows 用户最依赖的一环。
+      # 跟 release.yml 一样默认取最新 release tag，取不到回退 main。
+      - name: Install IvyeaAgent (bundled in the Windows exe)
+        shell: bash
+        run: |
+          ref="${IVYEA_AGENT_REF:-}"
+          if [ -z "$ref" ]; then
+            ref=$(curl -fsSL https://api.github.com/repos/Hector-xue/ivyea-agent/releases/latest \
+                  | python -c "import json,sys; print(json.load(sys.stdin).get('tag_name',''))" 2>/dev/null || true)
+          fi
+          [ -z "$ref" ] && ref=main
+          echo "installing ivyea-agent@$ref"
+          pip install "git+https://github.com/Hector-xue/ivyea-agent.git@$ref"
+      # --timeout 而不是任由它挂：挂起在 CI 上表现为"作业转 6 小时然后被杀"，
+      # 日志要等作业结束才可读，等于什么线索都拿不到。有了每测试超时，挂起会变成
+      # 一条指名道姓的失败。thread 方法在 Windows 上也有效（signal 方法只支持 POSIX）。
+      - name: Test
+        working-directory: server
+        run: python -m pytest tests -q --timeout=120 --timeout-method=thread
+        env:
+          PYTHONUTF8: "1"   # Windows 中文编码护栏
+
+  client:
+    name: client build + typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      # npm ci 而不是 npm install：lockfile 必须能在**公共 registry** 上装通。
+      # 本机 ~/.npmrc 指着腾讯云内网镜像，曾把 resolved 全写死成内网地址，
+      # 到了 CI/用户机上直接装崩。这一步顺便当那件事的回归护栏。
+      - name: Install
+        working-directory: client
+        run: npm ci
+      - name: Typecheck
+        working-directory: client
+        run: npx tsc --noEmit -p tsconfig.json
+      - name: Build
+        working-directory: client
+        run: npm run build

@@ -288,6 +288,10 @@ export async function ivyeaAgentChat(payload: {
   plan_mode?: boolean;
   persist?: boolean;
   inject_retrieval?: boolean;
+  /** false = 纯文本轮次，不给模型任何工具（跟进建议这类小活用它，便宜且快）。 */
+  use_tools?: boolean;
+  skill?: string;
+  system?: string;
 }) {
   // 复杂任务一轮可跑 10 分钟以上；180s 会掐断仍在健康生成的轮次。
   const { data } = await api.post<IvyeaChatResult>("/ivyea-agent/chat", payload, { timeout: 600000 });
@@ -322,29 +326,94 @@ export async function ivyeaAwaitSessionAnswer(
   return null;
 }
 
+/** 一次 agent 轮次的入参。字段与 agent serve 的 /v1/chat/stream 一一对应。 */
+export type IvyeaChatPayload = {
+  message: string;
+  session_id?: string;
+  ops_context?: Record<string, any>;
+  max_steps?: number;
+  plan_mode?: boolean;
+  persist?: boolean;
+  inject_retrieval?: boolean;
+  /** 显式指定本轮必须遵循的 skill id。 */
+  skill?: string;
+  /** 让 serve 按用户问题自动匹配 skill 并回发 skill_match 事件。 */
+  auto_skill?: boolean;
+  /** "none"=沿用只读语义（默认）；"remote"=写操作走前端审批卡。 */
+  approval?: "none" | "remote";
+  /** 工作区（沙箱目录 / 上下文分组）。 */
+  workspace?: string;
+  turn_id?: string;
+  /** false = 纯文本轮次，不给模型任何工具。 */
+  use_tools?: boolean;
+  /** 追加到本轮系统提示的额外上下文（@ 引用的资料就走这里）。 */
+  system?: string;
+  /** 会话开在哪个板块。ops 自用（左栏来源标记），不会下发给 agent。 */
+  source?: ConsoleSource;
+};
+
+/**
+ * 结构化步骤事件（agent serve ≥ v1.9 才会发；旧版本只有自由文本 event）。
+ * 契约见 ivyea_agent/stream_json.py:step_event。
+ * - phase "plan" = todo_write/progress_update 这类规划汇报调用，UI 折起来
+ * - status "blocked" = 被前置护栏拦下的流程纠偏，不是工具出错
+ */
+export type IvyeaStepEvent = {
+  type: "step";
+  id: string;
+  seq: number;
+  phase: "tool" | "mcp" | "board" | "subagent" | "knowledge" | "plan";
+  name: string;
+  tool?: string;
+  server?: string;
+  args?: Record<string, any>;
+  status: "running" | "ok" | "error" | "blocked";
+  ms?: number | null;
+  session_id?: string;
+  turn_id?: string;
+};
+
+export type IvyeaSkillMatch = {
+  skills: { id: string; title: string; domain?: string; score?: number }[];
+};
+
+/** 写操作审批请求 —— 对应 agent 侧 permission.request_intent 的那张确认卡。 */
+export type IvyeaPermissionRequest = {
+  request_id: string;
+  session_id?: string;
+  op_type: string;
+  title: string;
+  preview: string;
+  options: { key: string; label: string }[];
+  destructive?: boolean;
+  expires_at?: number;
+};
+
 export async function ivyeaAgentChatStream(
-  payload: {
-    message: string;
-    session_id?: string;
-    ops_context?: Record<string, any>;
-    max_steps?: number;
-    plan_mode?: boolean;
-    persist?: boolean;
-    inject_retrieval?: boolean;
-  },
+  payload: IvyeaChatPayload,
   handlers: {
     onStart?: (data: any) => void;
     onToken?: (text: string) => void;
     onFinal?: (data: any) => void;
     onEvent?: (data: any) => void;
     onError?: (data: any) => void;
+    /** 结构化步骤（工具/MCP/板块能力调用的开始与收尾）。 */
+    onStep?: (data: IvyeaStepEvent) => void;
+    /** 本轮命中的 skill。 */
+    onSkillMatch?: (data: IvyeaSkillMatch) => void;
+    /** 需要人工确认的写操作。 */
+    onPermission?: (data: IvyeaPermissionRequest) => void;
+    /** 审批超时被自动拒绝。 */
+    onPermissionTimeout?: (data: { request_id: string }) => void;
   },
+  opts?: { signal?: AbortSignal },
 ) {
   const res = await fetch("/api/ivyea-agent/chat/stream", {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    signal: opts?.signal,
   });
   if (!res.ok || !res.body) {
     let detail = "";
@@ -373,6 +442,12 @@ export async function ivyeaAgentChatStream(
     else if (event === "token") handlers.onToken?.(typeof data === "string" ? data : data.text || "");
     else if (event === "final") handlers.onFinal?.(data);
     else if (event === "error") handlers.onError?.(data);
+    // 结构化事件（agent serve ≥ v1.9）。老版本不发这些，走下面的自由文本兜底，
+    // 所以升级前后前端都不会白屏。
+    else if (event === "step") handlers.onStep?.(data);
+    else if (event === "skill_match") handlers.onSkillMatch?.(data);
+    else if (event === "permission_request") handlers.onPermission?.(data);
+    else if (event === "permission_timeout") handlers.onPermissionTimeout?.(data);
     else handlers.onEvent?.(data);
   };
   while (true) {
@@ -412,6 +487,242 @@ export async function ivyeaChatSessionDelete(sessionId: string) {
   return data;
 }
 
+/**
+ * 板块能力（ops-bridge 工具）目录。每条自带中文 title / module / destructive /
+ * long_running —— 任务台的步骤芯片文案和「需要确认」判定都直接吃这份元数据，
+ * 不再另建映射表。
+ */
+export type OpsToolInfo = {
+  name: string;
+  module: string;
+  title: string;
+  description: string;
+  parameters?: any;
+  destructive?: boolean;
+  long_running?: boolean;
+};
+
+export async function ivyeaOpsTools(params?: { module?: string; query?: string }) {
+  const { data } = await api.get<{ ok: boolean; tools: OpsToolInfo[]; modules: string[] }>(
+    "/ivyea-agent/ops-tools",
+    { params },
+  );
+  return data;
+}
+
+/**
+ * 主脑 provider。
+ * ⚠️ `models` 是**字符串数组**（["gpt-4.1", "gpt-4o", …]），不是对象数组 ——
+ * 按对象取 m.id/m.name 会全取到 undefined，模型列表会静默变空。
+ */
+export type IvyeaProvider = {
+  id: string;
+  label?: string;
+  models?: string[];
+  default_model?: string;
+  key_status?: string;
+  model_count?: number;
+  [k: string]: any;
+};
+
+/** 兼容字符串/对象两种形状，取出模型 id。 */
+export function providerModelId(m: unknown): string {
+  if (typeof m === "string") return m;
+  if (m && typeof m === "object") {
+    const o = m as Record<string, any>;
+    return String(o.id || o.name || o.model || "");
+  }
+  return "";
+}
+
+export async function ivyeaModelProviders() {
+  const { data } = await api.get<{ ok: boolean; providers?: IvyeaProvider[]; active?: any }>(
+    "/ivyea-agent/model/providers",
+  );
+  return data;
+}
+
+/** agent 侧技能库（内置 + ~/.ivyea/skills）。 */
+export type IvyeaSkillInfo = {
+  id: string;
+  title: string;
+  domain?: string;
+  version?: string;
+  description?: string;
+  triggers?: string[];
+  score?: number;
+};
+
+export async function ivyeaSkills(query = "") {
+  const path = query.trim()
+    ? `/ivyea-agent/skills/search?q=${encodeURIComponent(query.trim())}`
+    : "/ivyea-agent/skills";
+  const { data } = await api.get<{ ok: boolean; skills: IvyeaSkillInfo[] }>(path);
+  return data;
+}
+
+// ── 任务台会话与工作区 ──────────────────────────────────────────────────────
+export type ConsoleSessionRow = {
+  id: string;
+  title: string;
+  preview: string;
+  turns: number;
+  updated: number;
+  workspace: string;
+  owner: string;
+  /** 会话开在哪个板块：任务台 / AI 问答 / 知识库。空 = 未登记的历史会话。 */
+  source?: ConsoleSource | "";
+  /** false = agent 那边有正文但 ops 没登记归属（悬浮球/CLI 开的，仅管理员可见）。 */
+  indexed: boolean;
+};
+
+/** 三个板块共用 agent 的会话库，靠这个字段区分来源。 */
+export type ConsoleSource = "console" | "assistant" | "brain";
+
+export const SOURCE_LABEL: Record<ConsoleSource, string> = {
+  console: "任务台",
+  assistant: "AI 问答",
+  brain: "知识库",
+};
+
+/** 各来源的归属页面 —— 左栏点一条会话回到它本来的板块。 */
+export const SOURCE_PATH: Record<ConsoleSource, string> = {
+  console: "/console",
+  assistant: "/assistant",
+  brain: "/brain",
+};
+
+export type ConsoleWorkspace = { name: string; path: string; builtin: boolean };
+
+export async function consoleSessions(
+  workspace = "", limit = 60, source = "", q = "", offset = 0,
+) {
+  const { data } = await api.get<{
+    ok: boolean; sessions: ConsoleSessionRow[]; workspaces: ConsoleWorkspace[];
+    /** false = agent 读不到，列表是空的但不代表会话没了。 */
+    agent_available?: boolean;
+    /** 过滤后的总条数（不是本页条数）。 */
+    total?: number;
+    offset?: number;
+    /** 服务端算好的，前端别自己推 —— 推错就是"加载更多"点了没反应。 */
+    has_more?: boolean;
+  }>("/ivyea-agent/console/sessions", { params: { workspace, limit, source, q, offset } });
+  return data;
+}
+
+export async function consoleSessionPatch(
+  sessionId: string, patch: { title?: string; workspace?: string },
+) {
+  const { data } = await api.patch<{ ok: boolean }>(
+    `/ivyea-agent/console/sessions/${encodeURIComponent(sessionId)}`, patch);
+  return data;
+}
+
+export async function consoleSessionDelete(sessionId: string) {
+  const { data } = await api.delete<{ ok: boolean }>(
+    `/ivyea-agent/console/sessions/${encodeURIComponent(sessionId)}`);
+  return data;
+}
+
+/** path 可选，且**仅管理员**能绑目录 —— 绑了它就是 Agent 文件工具的工作目录。 */
+/** 工作区列表。后端 GET /console/workspaces 一直都在，只是前端此前都从会话列表里顺带取。 */
+export async function consoleWorkspaces() {
+  const { data } = await api.get<{ ok: boolean; workspaces: ConsoleWorkspace[] }>(
+    "/ivyea-agent/console/workspaces");
+  return data.workspaces || [];
+}
+
+export async function consoleWorkspaceCreate(name: string, path = "") {
+  const { data } = await api.post<{ ok: boolean; workspace: ConsoleWorkspace }>(
+    "/ivyea-agent/console/workspaces", { name, path });
+  return data;
+}
+
+export async function consoleWorkspaceDelete(name: string) {
+  const { data } = await api.delete<{ ok: boolean; sessions_moved: number }>(
+    `/ivyea-agent/console/workspaces/${encodeURIComponent(name)}`);
+  return data;
+}
+
+/** 左栏需要刷新会话列表时广播它（发完一轮、改名、删除…）。 */
+export const CONSOLE_SESSIONS_CHANGED = "ivyea-ops:console-sessions-changed";
+
+export function notifyConsoleSessionsChanged() {
+  window.dispatchEvent(new CustomEvent(CONSOLE_SESSIONS_CHANGED));
+}
+
+/**
+ * 把图片读成文字（ops 侧视觉旁路）。
+ * agent serve 在主脑没有视觉时会直接抛错，而本机主脑就没有视觉 —— 所以图片不能直接
+ * 丢给 agent，得先在 ops 这边用配好的视觉链读成文字，再作为文本带进那一轮。
+ */
+export async function visionDescribe(images: string[], prompt = "") {
+  const { data } = await api.post<{ ok: boolean; provider: string; text: string }>(
+    "/ivyea-agent/vision/describe", { images, prompt }, { timeout: 180000 });
+  return data;
+}
+
+/** agent 的 MCP 注册表（~/.ivyea/mcp.json）—— 决定 Agent 能连哪些数据源。 */
+export type AgentMcpServer = {
+  name: string;
+  transport: string;
+  trusted: boolean;
+  /** true = 由「系统配置 → 数据源」的密钥自动同步，删了下次保存设置又会回来。 */
+  managed: boolean;
+  has_data_source: boolean;
+  spec: Record<string, any>;
+};
+
+export async function ivyeaMcpServers() {
+  const { data } = await api.get<{
+    ok: boolean;
+    servers: AgentMcpServer[];
+    claude_servers: { name: string; transport: string; spec: Record<string, any> }[];
+    managed: string[];
+  }>("/ivyea-agent/mcp/servers");
+  return data;
+}
+
+export async function ivyeaMcpUpsert(payload: {
+  name: string;
+  transport: "http" | "sse" | "stdio";
+  url?: string;
+  command?: string;
+  args?: string[];
+  headers?: Record<string, string>;
+  env?: Record<string, string>;
+  trusted?: boolean;
+}) {
+  const { data } = await api.post<{ ok: boolean; name: string }>("/ivyea-agent/mcp/servers", payload);
+  return data;
+}
+
+export async function ivyeaMcpDelete(name: string) {
+  const { data } = await api.delete<{ ok: boolean; removed: string }>(
+    `/ivyea-agent/mcp/servers/${encodeURIComponent(name)}`,
+  );
+  return data;
+}
+
+/**
+ * 回送一次写操作审批决策，解开 agent 侧阻塞的那一步。
+ * choice 与 permission_request 事件里的 options[].key 对应
+ * （approve / session / deny / abort，部分场景还有 edit）。
+ */
+export async function ivyeaChatPermission(params: {
+  request_id: string;
+  session_id?: string;
+  choice: string;
+  edits?: Record<string, any>;
+}) {
+  const { data } = await api.post<{ ok: boolean; error?: string; detail?: string }>(
+    "/ivyea-agent/chat/permission",
+    params,
+    { timeout: 20000 },
+  );
+  return data;
+}
+
 export async function ivyeaServiceStart() {
   const { data } = await api.post<{ ok: boolean }>("/ivyea-agent/service/start", {}, { timeout: 25000 });
   return data;
@@ -440,6 +751,19 @@ export async function ivyeaKnowledgeFiles(limit = 500) {
     history: KnowledgeUpload[];
   }>("/ivyea-agent/knowledge/files", { params: { limit } });
   return data;
+}
+
+/**
+ * 读一份知识库文件/卡片的正文 —— composer 的 @ 引用靠它把内容真的带进本轮。
+ * ⚠️ 正文在 `file.content` 里，不是顶层 `content`（照顶层取会静默拿到空字符串，
+ * 结果就是"引用了但什么都没带进去"，实测踩过）。
+ */
+export async function ivyeaKnowledgeFile(path: string) {
+  const { data } = await api.get<{
+    ok: boolean;
+    file?: { path: string; name: string; size: number; mtime: number; content: string };
+  }>("/ivyea-agent/knowledge/file", { params: { path } });
+  return { ok: data.ok, content: String(data.file?.content || ""), name: data.file?.name || "" };
 }
 
 export async function ivyeaKnowledgeSearch(q: string, limit = 8) {
@@ -697,4 +1021,57 @@ export async function ivyeaKnowledgeImportDirectory(params?: {
     { timeout: 180000 },
   );
   return data;
+}
+
+/** 把外部会话（旧 localStorage 历史等）搬进 agent 会话库。按 id 幂等，重复调用是覆盖。 */
+export async function consoleSessionImport(
+  source: "assistant" | "brain",
+  sessions: { id: string; created?: number; messages: { role: "user" | "assistant"; content: string }[] }[],
+) {
+  const { data } = await api.post<{ ok: boolean; imported: string[]; count: number; skipped: number }>(
+    "/ivyea-agent/console/sessions/import", { source, sessions });
+  return data;
+}
+
+/** 智能体预设：一套"这类活按这么跑"的设置（技能 + 审批档位 + 工作区）。按用户隔离。 */
+export type ConsolePreset = {
+  name: string; skill: string; approval: "none" | "remote";
+  workspace: string; note: string; created: number;
+};
+
+export async function consolePresets() {
+  const { data } = await api.get<{ ok: boolean; presets: ConsolePreset[] }>("/ivyea-agent/console/presets");
+  return data.presets || [];
+}
+
+export async function consolePresetSave(p: Omit<ConsolePreset, "created">) {
+  const { data } = await api.post<{ ok: boolean; preset: ConsolePreset }>("/ivyea-agent/console/presets", p);
+  return data.preset;
+}
+
+export async function consolePresetDelete(name: string) {
+  const { data } = await api.delete<{ ok: boolean }>(
+    `/ivyea-agent/console/presets/${encodeURIComponent(name)}`);
+  return data;
+}
+
+/** 预设变了 → 任务台的下拉要跟着变。和会话列表用同一套广播机制。 */
+export const CONSOLE_PRESETS_CHANGED = "ivyea-ops:console-presets-changed";
+export function notifyConsolePresetsChanged() {
+  window.dispatchEvent(new Event(CONSOLE_PRESETS_CHANGED));
+}
+
+/** 一条会话的审批留痕（谁在什么时候批了/拒了哪一步写操作）。 */
+export type ConsoleApproval = {
+  request_id: string; session_id: string; principal: string;
+  title: string; op_type: string;
+  /** "" = 还没决定（页面中途关掉）；timeout = 超时自动拒。 */
+  decision: "" | "approve" | "session" | "deny" | "abort" | "timeout" | string;
+  requested_at: number; decided_at: number;
+};
+
+export async function consoleSessionApprovals(sessionId: string) {
+  const { data } = await api.get<{ ok: boolean; approvals: ConsoleApproval[] }>(
+    `/ivyea-agent/console/sessions/${encodeURIComponent(sessionId)}/approvals`);
+  return data.approvals || [];
 }

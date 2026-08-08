@@ -27,12 +27,13 @@ from app.core.skill_paths import (
     ensure_studio_dirs,
     studio_paths_summary,
 )
-from app.routers import ad_audit, agent_hub, amazon, auth, brain, health, ivyea_agent, monitor, news, skill, terminal
+from app.routers import ad_audit, amazon, auth, brain, health, ivyea_agent, monitor, news, skill, terminal
 from app.routers import listing as listing_router
 from app.routers import image_translate as image_translate_router
 from app.routers import market as market_router
 from app.routers import playbook as playbook_router
 from app.routers import home as home_router
+from app.routers import schedules as schedules_router
 from app.routers import assistant as assistant_router
 from app.routers import help as help_router
 from app.routers import hub_settings as hub_settings_router
@@ -44,7 +45,6 @@ from app.routers import deep_analysis as deep_analysis_router
 from app.routers import skill_tools as skill_tools_router
 from app.routers import autofix as autofix_router
 from app.routers import lingxing as lingxing_router
-from app.routers import mcp as mcp_router
 from app.agents.router import api_router as agents_api_router, ws_router as agents_ws_router
 
 
@@ -191,6 +191,11 @@ async def lifespan(app: FastAPI):
         from app.services.pty_manager import manager as _pty_mgr
 
         _agent_db.init_db()
+        # 任务台的会话索引（归属 / 工作区 / 自定义标题）；正文仍在 agent 那边。
+        from app.services import console_sessions as _console_sessions
+        _console_sessions.init_db()
+        from app.services import schedules as _schedules
+        _schedules.init_db()
         agents = _agent_reg.discover_agents()
         ok = sum(1 for a in agents if a.get("enabled"))
         print(f"[IvyeaOps] agent registry: {ok}/{len(agents)} enabled")
@@ -277,7 +282,34 @@ async def lifespan(app: FastAPI):
         _lingxing_auto_task = None
         print(f"[IvyeaOps] lingxing auto scheduler skipped: {e}")
 
+    # IvyeaAgent daemon 是 IvyeaOps 的子进程，没有独立的 systemd 单元 —— 也就是说
+    # **每次 `systemctl restart ivyea-ops` 都会把它一起带走**，之后只有当某个请求
+    # 恰好调到 ensure_available() 才会被重新拉起。结果就是重启后一段时间里
+    # 会话列表是空的、删除会话失败、定时任务到点跑不起来。
+    # 这里在启动时主动拉一次（后台线程，不拖慢 boot），把这一类"重启后短暂不可用"
+    # 一次性解决掉。
+    async def _warm_agent() -> None:
+        try:
+            from app.services.ivyea_agent_service import ensure_available
+            status = await asyncio.to_thread(ensure_available)
+            print(f"[IvyeaOps] ivyea-agent available: {status.get('available')}")
+        except Exception as e:  # noqa: BLE001 — 拉不起来不该挡住 ops 启动
+            print(f"[IvyeaOps] ivyea-agent warmup skipped: {e}")
+
+    _warm_task = asyncio.create_task(_warm_agent(), name="agent-warmup")
+
+    # 定时任务调度器：每 30s 看一眼有没有到点的任务。
+    try:
+        from app.services.schedules import scheduler_loop as _sched_loop
+        _scheduler_task = asyncio.create_task(_sched_loop(), name="agent-scheduler")
+    except Exception as e:
+        _scheduler_task = None
+        print(f"[IvyeaOps] agent scheduler skipped: {e}")
+
     yield
+    _warm_task.cancel()
+    if _scheduler_task:
+        _scheduler_task.cancel()
     _watchdog_task.cancel()
     _market_task.cancel()
     _archive_task.cancel()
@@ -411,10 +443,9 @@ app.include_router(listing_router.router, prefix="/api/listing", tags=["listing"
 app.include_router(image_translate_router.router, prefix="/api/image-translate", tags=["image-translate"], dependencies=[Depends(require_module("image-translate"))])
 app.include_router(terminal.router, prefix="/api/terminal", tags=["terminal"], dependencies=[Depends(require_module("terminal"))])
 # /agents (old native Workspace agent hub) retired — superseded by the native
-# Agents backend below. agent_hub/mcp routers are no longer mounted; the
-# /agents route now serves the agents UI. (Service files kept for now.)
-# app.include_router(agent_hub.router, prefix="/api", tags=["agent-hub"], dependencies=[Depends(require_module("agents"))])
-# app.include_router(mcp_router.router, prefix="/api", tags=["mcp"], dependencies=[Depends(require_module("agents"))])
+# Agents backend below. 老的 agent_hub / mcp 路由已随前端 AgentChat/workspace 一起
+# 退役（对应前端文件本次已删）；/agents 路由由 agents UI 承担，
+# agent 的 MCP 走 /api/ivyea-agent/mcp/servers。
 # Agents native backend (replaces the external Node :3002 service). REST is
 # gated by the same "agents" board permission; WS does its own cookie auth.
 app.include_router(agents_api_router, prefix="/api/agents", tags=["agents"], dependencies=[Depends(require_module("agents"))])
@@ -423,6 +454,8 @@ app.include_router(ivyea_agent.router, prefix="/api/ivyea-agent", tags=["ivyea-a
 app.include_router(ivyea_agent.bridge_router, prefix="/api/ivyea-agent-bridge", tags=["ivyea-agent-bridge"])
 app.include_router(deep_analysis_router.router, prefix="/api/deep-analysis", tags=["deep-analysis"], dependencies=[Depends(require_module("tools"))])
 app.include_router(skill_tools_router.router, prefix="/api/skill-tools", tags=["skill-tools"], dependencies=[Depends(require_module("tools"))])
+# 定时任务：与任务台同属 agents 模块授权（本质是"让 Agent 到点自己跑一轮"）。
+app.include_router(schedules_router.router, prefix="/api", tags=["schedules"], dependencies=[Depends(require_module("agents"))])
 # --- Admin-only: config / other users / infra (never grantable) ---
 app.include_router(hub_settings_router.router, prefix="/api", tags=["settings"], dependencies=_ADMIN)
 app.include_router(projects_router.router, prefix="/api", tags=["projects"], dependencies=_ADMIN)

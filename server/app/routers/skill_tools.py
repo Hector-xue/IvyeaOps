@@ -6,6 +6,8 @@ Endpoints:
 """
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import re
 import time
@@ -270,82 +272,108 @@ def pin_tool(body: PinBody) -> SkillToolMeta:
 _ANSI_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 
 
-async def _run_skill_agent(skill_basename: str, params: dict, skill_body: str):
-    """Execute a skill through a real hermes agent (`hermes -z --skills <name>`).
-
-    Unlike the old path (which fed the SKILL.md as a plain prompt to the
-    market-research synthesizer), this preloads the actual skill so hermes can
-    follow its steps and use its tools. Streams stdout token-by-token.
-    """
-    import asyncio
-    from app.services.runners import _find_bin, build_child_env
-
-    binary = _find_bin("hermes")
-    if not binary:
-        yield ("error", "hermes CLI 不可用")
-        return
-
+def _skill_prompt(skill_name: str, params: dict) -> str:
+    """把「技能 + 用户填的参数」组织成一次任务指令。"""
     # `task` is the universal free-form input the store shows for skills without
     # a declared input schema — surface it as the task itself, not a mere param.
     task = str((params or {}).get("task") or "").strip()
     rest = {k: v for k, v in (params or {}).items() if k != "task" and v}
     params_section = "\n".join(f"- {k}: {v}" for k, v in rest.items())
-    prompt = (
-        f"请执行 skill「{skill_basename}」。\n\n"
+    return (
+        f"请执行 skill「{skill_name}」。\n\n"
         + (f"## 任务要求\n{task}\n\n" if task else "")
         + f"## 用户提供的参数\n{params_section or '（无额外参数）'}\n\n"
         + "按该 skill 定义的步骤执行并输出结果。"
     )
 
-    env = build_child_env(binary)
-    env.setdefault("TERM", "dumb")
-    env.setdefault("NO_COLOR", "1")
-    env["HERMES_ACCEPT_HOOKS"] = "1"
 
-    # -z one-shot, --skills preloads the skill, --yolo auto-approves tool use
-    # so an interactive prompt never blocks the web request.
-    argv = [binary, "-z", prompt, "--skills", skill_basename, "--yolo"]
-    proc = await asyncio.create_subprocess_exec(
-        *argv, stdin=asyncio.subprocess.DEVNULL,
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
-        cwd="/root", env=env,
-    )
+async def _run_skill_agent(skill_name: str, params: dict, skill_body: str):
+    """用 ivyea-agent 执行一个技能，边跑边把正文流出去。
+
+    两处和老实现（`hermes -z --skills <name> --yolo`）不一样，都是有意的：
+
+    1. **说明书用 system 上下文注入，而不是 `--skills <name>`。**
+       Skill 中心的技能库（data_dir/skills，SKILL.md + frontmatter）和 agent 自己的
+       技能库（~/.ivyea/skills，skill.json + SKILL.md）不是一套东西，按 id 去
+       agent 那边查是查不到的。所以直接把 SKILL.md 正文当说明书交给它。
+
+    2. **默认只读，不复刻 `--yolo`。**
+       `--yolo` 等于网页上点一个按钮，就让 agent 在无人值守的情况下随意写文件、
+       执行命令。这条路上线以来没有任何真实运行记录（历史里只有测试产物），
+       没有兼容包袱，所以直接按现在的安全标准来：分析、给方案、产出文本可以，
+       要落地写入时它会把计划摆出来，由人去对应板块执行。
+    """
+    from app.services import ivyea_agent_service as agent_svc
+
+    status = agent_svc.ensure_available()
+    if not status.get("available"):
+        yield ("error", f"IvyeaAgent 不可用：{status.get('error') or '服务未连接'}")
+        return
+
+    payload = {
+        "message": _skill_prompt(skill_name, params),
+        "system": (
+            "[必须遵循的技能说明书]\n" + (skill_body or "").strip()
+            + "\n\n要求：\n"
+            "1. 说明书全文已在上面，**不要去文件系统里找这个 skill 的目录**——它不在你的技能库里，找不到是正常的，白费步数。\n"
+            "2. 严格按上面的步骤执行；需要事实依据时调用工具取真实数据，不要凭空编造。\n"
+            "3. 当前为只读模式：需要写文件或改线上数据时，把要做什么写清楚交给用户，不要尝试直接执行。"
+        ),
+        "plan_mode": True,          # 只读：写操作只出计划，不落地
+        "persist": False,           # 技能执行有自己的历史存储，不占会话库
+        "inject_retrieval": True,
+    }
 
     loop = asyncio.get_running_loop()
-    deadline = loop.time() + 600
-    read_task = asyncio.create_task(proc.stdout.read(4096))
-    got = False
+    queue: "asyncio.Queue[tuple[str, str] | None]" = asyncio.Queue()
+
+    def _pump() -> None:
+        """在线程里消费阻塞式 SSE，把事件搬进 asyncio 队列。"""
+        try:
+            for event, data in agent_svc.chat_stream_events(payload):
+                if event == "token":
+                    text = str((data or {}).get("text") or "")
+                    if text:
+                        loop.call_soon_threadsafe(queue.put_nowait, ("ivyea-agent", text))
+                elif event == "error":
+                    detail = str((data or {}).get("detail") or (data or {}).get("error") or "执行失败")
+                    loop.call_soon_threadsafe(queue.put_nowait, ("error", detail))
+                    break
+                elif event == "final":
+                    # final.text 是规范化后的完整答案。流式已经把正文吐过一遍，
+                    # 这里只在一个字都没吐出来时兜底（例如引证门把正文压到了收尾）。
+                    loop.call_soon_threadsafe(queue.put_nowait, ("__final__", str((data or {}).get("text") or "")))
+        except Exception as exc:  # noqa: BLE001
+            loop.call_soon_threadsafe(queue.put_nowait, ("error", f"IvyeaAgent 执行失败：{exc}"))
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, None)
+
+    task = loop.run_in_executor(None, _pump)
+    streamed = False
+    final_text = ""
     try:
         while True:
-            remaining = deadline - loop.time()
-            if remaining <= 0:
-                yield ("error", "执行超时（>600s）")
+            item = await queue.get()
+            if item is None:
                 break
-            done, _ = await asyncio.wait([read_task], timeout=min(remaining, 30))
-            if not done:
-                if proc.returncode is not None:
-                    read_task.cancel()
-                    break
+            kind, text = item
+            if kind == "__final__":
+                final_text = text
                 continue
-            chunk = read_task.result()
-            if not chunk:
-                break
-            text = _ANSI_RE.sub("", chunk.decode("utf-8", errors="replace"))
-            if text:
-                got = True
-                yield ("hermes", text)
-            read_task = asyncio.create_task(proc.stdout.read(4096))
+            if kind == "error":
+                yield ("error", text)
+                return
+            streamed = True
+            yield (kind, text)
     finally:
-        if not read_task.done():
-            read_task.cancel()
-        if proc.returncode is None:
-            proc.kill()
-            try:
-                await asyncio.wait_for(proc.communicate(), timeout=5)
-            except Exception:
-                pass
-    if not got:
-        yield ("error", "skill 执行无输出（可能 skill 名不匹配或 hermes 配置异常）")
+        with contextlib.suppress(Exception):
+            await task
+
+    if not streamed:
+        if final_text.strip():
+            yield ("ivyea-agent", final_text)
+        else:
+            yield ("error", "技能执行无输出（模型未产出内容，可稍后重试）")
 
 
 def _fill_params(body: str, params: dict) -> str:
@@ -400,8 +428,8 @@ async def run_tool(
     """Execute a skill with user-provided parameters.
 
     Runtime routing (from the Tool Spec `tool.runtime`):
-      · llm-only → stable embedded text chain (IvyeaAgent→全局兜底→DeepSeek), no hermes
-      · mcp / unset → real hermes agent (`hermes --skills`)
+      · llm-only → stable embedded text chain (IvyeaAgent→全局兜底→DeepSeek), 纯文本
+      · mcp / unset → ivyea-agent 带工具执行（说明书注入 system，默认只读）
     Every run is recorded to the lightweight history store.
     """
     from app.services import skill_runs
@@ -413,7 +441,6 @@ async def run_tool(
 
     tool = _tool_block(detail.frontmatter)
     runtime = str(tool.get("runtime") or "").lower()
-    # hermes --skills expects the skill's basename (last path segment).
     skill_basename = detail.name.rsplit("/", 1)[-1]
 
     async def generator():
@@ -445,7 +472,7 @@ async def run_tool(
             try:
                 rec = skill_runs.record_run(
                     skill_name=detail.name, user=user, params=body.params,
-                    output=output, provider=provider_used or (runtime or "hermes"),
+                    output=output, provider=provider_used or (runtime or "ivyea-agent"),
                     runtime=runtime or "mcp", status=status,
                     started_at=start, elapsed_s=elapsed, error=err,
                 )
@@ -454,13 +481,13 @@ async def run_tool(
                 pass
 
             if not err:
-                yield f'data: {json.dumps({"type": "done", "provider": provider_used or "hermes", "elapsed_s": elapsed, "run_id": run_id}, ensure_ascii=False)}\n\n'
+                yield f'data: {json.dumps({"type": "done", "provider": provider_used or "ivyea-agent", "elapsed_s": elapsed, "run_id": run_id}, ensure_ascii=False)}\n\n'
         except Exception as exc:
             yield f'data: {json.dumps({"type": "error", "detail": str(exc)}, ensure_ascii=False)}\n\n'
             try:
                 skill_runs.record_run(
                     skill_name=detail.name, user=user, params=body.params,
-                    output="".join(chunks), provider=provider_used or (runtime or "hermes"),
+                    output="".join(chunks), provider=provider_used or (runtime or "ivyea-agent"),
                     runtime=runtime or "mcp", status="error",
                     started_at=start, elapsed_s=round(time.time() - start, 1),
                     error=str(exc),
