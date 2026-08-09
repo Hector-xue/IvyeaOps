@@ -324,9 +324,10 @@ def ad_download(
     fmt: str = "md",
     _user: str = Depends(require_user),
 ) -> FileResponse:
-    if fmt not in ("md", "json", "xlsx", "html", "deliverable", "brief"):
-        raise HTTPException(status_code=400,
-                            detail="fmt must be md, json, xlsx, html, deliverable or brief")
+    if fmt not in ("md", "json", "xlsx", "html", "deliverable", "brief", "pptx", "pdf"):
+        raise HTTPException(
+            status_code=400,
+            detail="fmt must be md, json, xlsx, html, deliverable, brief, pptx or pdf")
 
     # deliverable / brief 走统一的结论契约（core/findings），跟报表里那份原始
     # xlsx 是两个东西：**这份是给别人看的** —— 结论一页、证据一页（指标/数值/
@@ -350,6 +351,41 @@ def ad_download(
             out,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             filename=f"ad-audit-{job_id}-交付物.xlsx")
+
+    if fmt == "pptx":
+        job = ad_audit.get_job(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="没有这个任务")
+        from app.services import deliverable
+        out = deliverable.build_pptx(ad_audit._job_dir(job_id) / "deliverable.pptx",
+                                     job.get("findings") or {},
+                                     {"job_id": job_id, "kind": "广告审计"})
+        return FileResponse(
+            out,
+            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            filename=f"ad-audit-{job_id}-周报.pptx")
+
+    if fmt == "pdf":
+        # PDF 走 headless chrome，把已有的 HTML 报告打印一份。**没有 chrome 不是
+        # 错误**，是这台机器上没装 —— 要告诉用户能怎么办，而不是回一个 500。
+        html_path = ad_audit.download_path(job_id, "html")
+        if html_path is None:
+            raise HTTPException(status_code=404,
+                                detail="还没有 HTML 报告（请等任务跑完再导出 PDF）")
+        from pathlib import Path
+
+        from app.services import deliverable
+        try:
+            out = deliverable.build_pdf(
+                ad_audit._job_dir(job_id) / "report.pdf",
+                Path(html_path).read_text(encoding="utf-8"))
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=501,
+                detail=f"{exc}。你可以下载 HTML 报告，在浏览器里 Ctrl+P 另存为 PDF —— "
+                       f"效果一样，而且不用为这一个格式在服务器上装 Chrome。") from exc
+        return FileResponse(out, media_type="application/pdf",
+                            filename=f"ad-audit-{job_id}.pdf")
 
     path = ad_audit.download_path(job_id, fmt)
     if path is None:

@@ -953,6 +953,13 @@ function AdResultPanel({ data, onReset }: { data: AdAuditFull; onReset: () => vo
             title="结论 + 证据 + 说明，直接发给老板/客户" style={{ textDecoration: "none" }}>📑 交付物（带证据页）</a>
           <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "brief")} download
             title="同样内容的 Markdown，贴进飞书文档 / Notion" style={{ textDecoration: "none" }}>📝 结论摘要</a>
+          <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "pptx")} download
+            title="经营周报：每条结论一页，证据就在同一页上" style={{ textDecoration: "none" }}>📊 周报 PPT</a>
+          {/* PDF 需要服务器上有 Chrome。没有时后端回 501 并说明可以从 HTML 里
+              Ctrl+P —— 所以这个按钮照常给，点了会得到一句能看懂的话。 */}
+          <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "pdf")} download
+            title="PDF（需服务器已安装 Chrome；没有的话可从 HTML 报告里打印）"
+            style={{ textDecoration: "none" }}>📕 PDF</a>
           <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "html")} download title="单文件网页版" style={{ textDecoration: "none" }}>🌐 HTML</a>
           <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "md")} download style={{ textDecoration: "none" }}>📄 Markdown</a>
           {data.output_mode !== "xlsx_plan" && <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "json")} download style={{ textDecoration: "none" }}>🧾 JSON</a>}

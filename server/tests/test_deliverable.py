@@ -119,3 +119,71 @@ def test_markdown_labels_target_as_object_not_goal():
     md = deliverable.build_markdown(_sample(), {})
     assert "对象 B0ABC" in md
     assert "目标 B0ABC" not in md
+
+
+# ── PPTX：拿去开会的那一份 ──────────────────────────────────────────────
+def test_pptx_puts_evidence_on_the_same_slide_as_the_conclusion(tmp_path):
+    """会上被问到"凭什么"的时候，翻页找附录就已经晚了。"""
+    pptx = pytest.importorskip("pptx")
+    out = deliverable.build_pptx(tmp_path / "d.pptx", _sample(), {"kind": "广告审计"})
+    prs = pptx.Presentation(str(out))
+    # 封面 + 2 条结论 + 数据说明
+    assert len(prs.slides) == 4
+    second = " ".join(sh.text_frame.text for sh in prs.slides[1].shapes if sh.has_text_frame)
+    assert "820" in second and "spend_30d" in second      # 证据就在这一页
+    assert "护栏" in second and "点击≥15" in second
+
+
+def test_pptx_most_severe_first(tmp_path):
+    pytest.importorskip("pptx")
+    import pptx as _p
+    out = deliverable.build_pptx(tmp_path / "d.pptx", _sample(), {})
+    prs = _p.Presentation(str(out))
+    second = " ".join(sh.text_frame.text for sh in prs.slides[1].shapes if sh.has_text_frame)
+    assert "紧急" in second
+
+
+def test_pptx_never_pins_a_latin_font(tmp_path):
+    """一旦写死某个西文字体，中文会在放映的机器上退化成方块。
+    让 PowerPoint/WPS/Keynote 用自己的默认字体，中文一定显示得出来。"""
+    pytest.importorskip("pptx")
+    import pptx as _p
+    out = deliverable.build_pptx(tmp_path / "d.pptx", _sample(), {})
+    prs = _p.Presentation(str(out))
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if not shape.has_text_frame:
+                continue
+            for para in shape.text_frame.paragraphs:
+                for run in para.runs:
+                    assert run.font.name is None, f"钉死了字体：{run.font.name}"
+
+
+def test_pptx_carries_the_data_boundary(tmp_path):
+    pytest.importorskip("pptx")
+    import pptx as _p
+    out = deliverable.build_pptx(tmp_path / "d.pptx", _sample(), {})
+    prs = _p.Presentation(str(out))
+    last = " ".join(sh.text_frame.text for sh in prs.slides[-1].shapes if sh.has_text_frame)
+    assert "仅覆盖 SP" in last
+    assert "建议整体下调竞价" in last     # 无证据的结论要点名
+
+
+# ── PDF：有 chrome 才做，没有要说清楚 ───────────────────────────────────
+def test_pdf_without_chrome_raises_a_translatable_error(tmp_path, monkeypatch):
+    """没装 chrome **不是错误**，是这台机器上没有。要能翻译成"你可以怎么办"，
+    而不是变成一个 500。"""
+    monkeypatch.setattr(deliverable, "chrome_bin", lambda: "")
+    with pytest.raises(RuntimeError, match="没有找到"):
+        deliverable.build_pdf(tmp_path / "x.pdf", "<html>hi</html>")
+
+
+def test_pdf_is_produced_when_chrome_exists(tmp_path):
+    if not deliverable.chrome_bin():
+        pytest.skip("这台机器没有 chrome")
+    out = deliverable.build_pdf(
+        tmp_path / "x.pdf",
+        "<html><meta charset='utf-8'><body><h1>广告优化方案</h1><p>花费 820.50 USD</p></body></html>")
+    blob = out.read_bytes()
+    assert blob.startswith(b"%PDF")
+    assert len(blob) > 1000
