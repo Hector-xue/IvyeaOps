@@ -35,6 +35,7 @@ import ManualModal from "../components/ManualModal";
 import UpdateModal from "../components/UpdateModal";
 import Tour from "../components/Tour";
 import IvyeaAgentDock from "../components/IvyeaAgentDock";
+import CostChip from "../components/CostChip";
 import SessionRail from "../components/console/SessionRail";
 import { TOURS, hasTour } from "../lib/tours";
 
@@ -566,6 +567,8 @@ export default function MainLayout() {
             <b>{path}</b>
           </div>
           <div className="tb-r">
+            {/* AI 花费是唯一会在你不看的时候持续增长的东西，所以它常驻顶栏 */}
+            <CostChip />
             <div className="tb-time">{clock}</div>
             <button
               className="tbtn"

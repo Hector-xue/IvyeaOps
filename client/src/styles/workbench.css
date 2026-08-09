@@ -325,6 +325,10 @@ body::after{
 .tbtn.danger{color:var(--red);border-color:rgba(248,113,113,.35)}
 .tbtn.danger:hover:not(:disabled){color:var(--red);border-color:rgba(248,113,113,.5);background:rgba(248,113,113,.08)}
 .tb-time{font-size:10px;color:var(--t3)}
+/* 顶栏花费。数字用等宽，金额跳动时不会把旁边的按钮挤来挤去。 */
+.cost-chip{display:inline-flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
+.cost-chip-dot{width:6px;height:6px;border-radius:50%;flex:none}
+.cost-chip-ratio{font-size:9px;opacity:.7}
 .theme-picker{position:absolute;right:0;top:calc(100% + 6px);background:var(--bg1);border:1px solid var(--b2);border-radius:var(--r);padding:4px;display:flex;flex-direction:column;gap:2px;min-width:88px;z-index:500;box-shadow:0 4px 24px rgba(0,0,0,.5);overflow:hidden}
 .theme-picker::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:99;opacity:var(--grain-opacity,.50);mix-blend-mode:color-dodge;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='512' height='512' fill='%23eaeaea' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");background-size:512px 512px}
 .theme-picker-card{display:flex;align-items:center;gap:6px;padding:3px 7px;border-radius:var(--r);border:1px solid transparent;background:transparent;color:var(--t2);font-family:var(--font);font-size:11px;cursor:pointer;text-align:left;transition:all .1s;white-space:nowrap;width:100%}

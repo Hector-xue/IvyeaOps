@@ -15,8 +15,14 @@ export interface BudgetStatus {
   limit_usd: number;
   spend_usd: number;
   ratio: number;
+  /** ok | warn（≥80%）| exceeded（≥100%，自动任务已暂停） */
+  level: "ok" | "warn" | "exceeded";
   exceeded: boolean;
   enabled: boolean;
+  /** false = 缓存里还没算出来过，界面显示占位符而不是 $0 */
+  known: boolean;
+  /** 这个数是多久以前算的（秒）。界面要如实标出新鲜度。 */
+  age_seconds: number;
   notified?: boolean;
   already_notified?: boolean;
 }
@@ -29,6 +35,12 @@ export async function testNotify(url = ""): Promise<{ ok: boolean; detail: strin
   return (await api.post("/notify/test", { url })).data;
 }
 
+/** 设置页用：**现算**，可能要几秒。 */
 export async function getBudget(): Promise<BudgetStatus> {
-  return (await api.get("/notify/budget")).data;
+  return (await api.get("/notify/budget", { timeout: 60000 })).data;
+}
+
+/** 顶栏用：只读缓存，永远很快。 */
+export async function getBudgetSummary(): Promise<BudgetStatus> {
+  return (await api.get("/notify/budget/summary")).data;
 }
