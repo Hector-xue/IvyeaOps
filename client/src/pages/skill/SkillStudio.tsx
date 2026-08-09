@@ -14,6 +14,7 @@ const ImportGitHubDialog = lazy(() => import("./ImportGitHubDialog"));
 const TABS = [
   { to: "/skill", label: "总览", end: true },
   { to: "/skill/browse", label: "技能" },
+  { to: "/skill/market", label: "社区市场" },
   { to: "/skill/trash", label: "回收站" },
   { to: "/skill/settings", label: "设置" },
 ];

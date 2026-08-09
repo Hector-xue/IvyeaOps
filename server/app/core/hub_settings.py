@@ -98,6 +98,14 @@ _DEFAULTS: Dict[str, Any] = {
     "password_hash": "",
     # First-run setup wizard completion flag.
     # False/absent = wizard has not been completed; True = skip wizard on next login.
+    # 能力市场（门道社区的 Skill 来源）。**默认关闭**：这是个会往外发请求的功能，
+    # 而这个产品的卖点是"数据不出本机"。默认开会让用户在不知情的情况下产生外联 ——
+    # 哪怕请求完全匿名，这个信任成本也不该由我们替他付。
+    "skill_market_enabled": False,
+    # 可换源：用户能指向自建镜像。签名校验保证换源之后依然安全。
+    "skill_market_url": "",
+    # 客户端内置的市场公钥（校验安装包签名）。留空则只校验 sha256。
+    "skill_market_pubkey": "",
     "setup_done": False,
     # Auto bug-fix: when a feature/tool operation fails, offer to launch an AI
     # repair flow (hermes in an isolated worktree, review-first). Off by default

@@ -45,6 +45,7 @@ from app.routers import deep_analysis as deep_analysis_router
 from app.routers import skill_tools as skill_tools_router
 from app.routers import autofix as autofix_router
 from app.routers import lingxing as lingxing_router
+from app.routers import skill_market as skill_market_router
 from app.agents.router import api_router as agents_api_router, ws_router as agents_ws_router
 
 logger = logging.getLogger("ivyea.main")
@@ -565,6 +566,8 @@ app.include_router(amazon.router, prefix="/api/amazon", tags=["amazon"], depende
 app.include_router(ad_audit.router, prefix="/api/ad-audit", tags=["ad-audit"], dependencies=[Depends(require_module("tools"))])
 app.include_router(monitor.router, prefix="/api/monitor", tags=["monitor"], dependencies=[Depends(require_module("servmon"))])
 app.include_router(skill.router, prefix="/api/skill", tags=["skill"], dependencies=[Depends(require_module("skill-hub"))])
+# 能力市场：与 Skill 中心同属一个板块权限。默认关闭（会外联），见 services/skill_market。
+app.include_router(skill_market_router.router, prefix="/api/skill-market", tags=["skill-market"], dependencies=[Depends(require_module("skill-hub"))])
 app.include_router(news.router, prefix="/api/news", tags=["news"], dependencies=[Depends(require_module("news"))])
 app.include_router(brain.router, prefix="/api/brain", tags=["brain"], dependencies=[Depends(require_module("brain"))])
 app.include_router(listing_router.router, prefix="/api/listing", tags=["listing"], dependencies=[Depends(require_module("listing"))])

@@ -1009,3 +1009,75 @@ export async function monitorTokenUsage() {
   const { data } = await api.get<TokenUsageData>("/monitor/token-usage");
   return data;
 }
+
+/* ── 能力市场（门道社区的 Skill 来源）───────────────────────────────── */
+
+export type MarketItem = {
+  slug: string;
+  title: string;
+  summary?: string;
+  category?: string;
+  class?: string;
+  latest?: string;
+  install_count?: number;
+};
+
+export type MarketCapability = {
+  kind: string;
+  detail: string;
+  severity: "info" | "warn" | "block";
+  where?: string;
+};
+
+export type MarketManifest = {
+  class: string;
+  files: string[];
+  total_bytes: number;
+  installable: boolean;
+  blockers: string[];
+  capabilities: MarketCapability[];
+  /** 说人话的那一段，界面直接渲染它 */
+  human_summary: string;
+};
+
+export type MarketPreview = {
+  slug: string;
+  version: string;
+  integrity: { ok: boolean; problems: string[] };
+  manifest: MarketManifest;
+  sha256: string;
+  /** 用户确认的是这份指纹；install 会核对，防止"看的是 A、装的是 B" */
+  confirm_token: string;
+};
+
+export type MarketStatus = {
+  enabled: boolean;
+  url: string;
+  installed: Record<string, { version: string; sha256: string; class: string }>;
+};
+
+export async function marketStatus() {
+  const { data } = await api.get<MarketStatus>("/skill-market/status");
+  return data;
+}
+
+export async function marketBrowse(params: { q?: string; category?: string; sort?: string }) {
+  const { data } = await api.get<{ total: number; items: MarketItem[] }>(
+    "/skill-market/skills", { params });
+  return data;
+}
+
+export async function marketPreview(slug: string, version: string) {
+  const { data } = await api.post<MarketPreview>("/skill-market/preview", { slug, version });
+  return data;
+}
+
+export async function marketInstall(slug: string, version: string, confirm_token: string) {
+  const { data } = await api.post("/skill-market/install", { slug, version, confirm_token });
+  return data;
+}
+
+export async function marketUninstall(slug: string) {
+  const { data } = await api.post("/skill-market/uninstall", { slug });
+  return data;
+}

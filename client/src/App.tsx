@@ -16,6 +16,7 @@ const Tools = lazy(() => import("./pages/workbench/Tools"));
 const SkillStudio = lazy(() => import("./pages/skill/SkillStudio"));
 const StatsOverview = lazy(() => import("./pages/skill/StatsOverview"));
 const SkillBrowse = lazy(() => import("./pages/skill/SkillBrowse"));
+const SkillMarket = lazy(() => import("./pages/skill/SkillMarket"));
 const TrashList = lazy(() => import("./pages/skill/TrashList"));
 const SettingsPage = lazy(() => import("./pages/skill/SettingsPage"));
 const Terminal = lazy(() => import("./pages/workbench/Terminal"));
@@ -143,6 +144,7 @@ export default function App() {
             <Route path="skill" element={<SkillStudio />}>
               <Route index element={<StatsOverview />} />
               <Route path="browse" element={<SkillBrowse />} />
+              <Route path="market" element={<SkillMarket />} />
               <Route path="trash" element={<TrashList />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
