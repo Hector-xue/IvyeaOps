@@ -3375,6 +3375,9 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .mk-head a{color:var(--acc);text-decoration:none}
 .mk-search{margin-left:auto;min-width:200px;padding:7px 10px;border-radius:8px;
   border:1px solid var(--bd);background:var(--c1);color:var(--t);font-size:12.5px}
+.mk-disclaimer{padding:9px 12px;margin-bottom:11px;border-radius:8px;font-size:11px;
+  line-height:1.75;color:var(--t3);border:1px solid var(--bd);background:var(--c2)}
+.mk-disclaimer b{color:var(--t2)}
 .mk-err{padding:9px 11px;margin-bottom:10px;border-radius:8px;font-size:12px;
   background:color-mix(in srgb,var(--err) 12%,transparent);color:var(--err)}
 .mk-empty{padding:34px 18px;text-align:center;color:var(--t2);font-size:13px;

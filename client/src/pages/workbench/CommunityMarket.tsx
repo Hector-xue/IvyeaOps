@@ -103,6 +103,16 @@ export default function CommunityMarket() {
                onKeyDown={(e) => { if (e.key === "Enter") void load(q); }} />
       </div>
 
+      {/* 免责声明。**社区内容没有经过官方审计**，这件事必须写在用户看得见的地方，
+          而不是埋在某个协议页里 —— 静态检查挡得住直接调用，挡不住足够绕的写法。
+          说清楚边界，比让人以为「上架 = 已审核」安全得多。 */}
+      <div className="mk-disclaimer">
+        <b>免责声明</b>：这里的技能由社区成员上传，<b>未经官方审计</b>。安装前
+        IvyeaOps 会在本地做静态检查（提示词注入、索取凭据、危险模块调用）并把能力清单
+        摆给你看，但<b>这不等于安全保证</b>。请自行评估后使用；因使用市场内容造成的
+        损失，门道与 IvyeaOps 不承担责任。
+      </div>
+
       {err && <div className="mk-err">{err}</div>}
       {busy && items.length === 0 && <div className="mk-empty">加载中…</div>}
 
