@@ -994,7 +994,7 @@ function AdResultPanel({ data, onReset }: { data: AdAuditFull; onReset: () => vo
           )}
           {/* 统一结论卡片：证据可点开核对、无证据的显式标出。
               与下面的老面板并存 —— 老结构还有它自己的表格视图，不替换。 */}
-          <FindingCards data={data.findings} />
+          <FindingCards data={data.findings} traceUrl={`/ad-audit/${data.job_id}/evidence`} />
           {s.cross_campaign_insights && s.cross_campaign_insights.length > 0 && (
             <AdCrossCampaignPanel items={s.cross_campaign_insights} />
           )}

@@ -303,6 +303,21 @@ def ad_get(
     return AdStatusResult(**data)
 
 
+@router.get("/{job_id}/evidence")
+def ad_evidence(job_id: str, target: str = "",
+                _user: str = Depends(require_user)) -> dict:
+    """一条证据背后的原始数据行。
+
+    用户在决定要不要照着改真实投放之前，会想翻到源报表里的那几行自己看一眼。
+    做不到这一点，证据页上的数字和模型编的数字在界面上长得一模一样。
+    """
+    from app.services import evidence_trace
+    out = evidence_trace.trace_ad_audit(job_id, target)
+    if out is None:
+        raise HTTPException(status_code=404, detail="没有这个广告审计任务")
+    return out
+
+
 @router.get("/{job_id}/download")
 def ad_download(
     job_id: str,

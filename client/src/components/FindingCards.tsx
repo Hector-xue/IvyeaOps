@@ -5,15 +5,31 @@
  * 同一条"广告在浪费钱"的结论在不同地方长得都不一样，用户没法一眼判断
  * **这个结论凭什么**。后端统一成 FindingList 之后，这里是唯一的渲染入口。
  *
- * 两个刻意的设计：
+ * 三个刻意的设计：
  * 1. **证据默认折叠、可展开看原始指标**。铺开会把卡片撑得没法扫读，
  *    但"能点开核对"是这套契约存在的全部意义 —— 不能省。
- * 2. **没有证据的结论显式标出来**，而不是悄悄混在里面。一条没有依据的建议
+ * 2. **证据还能再点进一层，看它依据的原始数据行**。用户真正想问的下一句永远是
+ *    "你从哪儿看出来的"。做不到这一层，证据页上的数字和模型编的数字在界面上
+ *    长得一模一样。需要调用方传 traceUrl 才会出现这个入口 —— 拿不到源数据的
+ *    板块不该显示一个点了没反应的按钮。
+ * 3. **没有证据的结论显式标出来**，而不是悄悄混在里面。一条没有依据的建议
  *    和一条有 312 次点击零单撑着的建议，值不一样，用户有权知道。
  */
 import { useState } from "react";
 
+import { api } from "../api/client";
 import type { Finding, FindingList } from "../api/client";
+import { errText } from "../lib/errText";
+
+type TraceResult = {
+  ok: boolean;
+  reason?: string;
+  file?: string;
+  columns?: string[];
+  rows?: (string | number)[][];
+  total?: number;
+  truncated?: boolean;
+};
 
 const SEVERITY: Record<string, { label: string; color: string; bg: string }> = {
   critical: { label: "紧急", color: "#a8382c", bg: "#fdecea" },
@@ -22,7 +38,73 @@ const SEVERITY: Record<string, { label: string; color: string; bg: string }> = {
   low: { label: "低", color: "#5b6560", bg: "#eef1ee" },
 };
 
-function EvidenceRow({ e }: { e: NonNullable<Finding["evidence"]>[number] }) {
+function RawRows({ traceUrl, target }: { traceUrl: string; target: string }) {
+  const [res, setRes] = useState<TraceResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const load = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      const { data } = await api.get<TraceResult>(traceUrl, { params: { target } });
+      setRes(data);
+    } catch (e) {
+      setErr(errText(e, "读不到原始数据"));
+    } finally { setBusy(false); }
+  };
+
+  if (!res && !err) {
+    return (
+      <button type="button" className="tbtn" onClick={load} disabled={busy}
+              style={{ fontSize: 11, padding: "1px 7px" }}>
+        {busy ? "查找中…" : "看原始数据"}
+      </button>
+    );
+  }
+  if (err) return <span style={{ fontSize: 11, color: "var(--err)" }}>{err}</span>;
+
+  // **溯源失败和"没有证据"是两件事**，必须分开说。回一个空表格会让人以为
+  // 这条结论本来就没依据。
+  if (!res!.ok) {
+    return <span style={{ fontSize: 11, color: "#8a5410" }}>{res!.reason}</span>;
+  }
+
+  return (
+    <div style={{ marginTop: 6, overflowX: "auto", border: "1px solid #e3e7e4", borderRadius: 6 }}>
+      <div style={{ fontSize: 11, color: "#78827e", padding: "5px 8px" }}>
+        {res!.file} · 命中 {res!.total} 行
+        {res!.truncated ? `（只显示前 ${res!.rows!.length} 行）` : ""}
+      </div>
+      <table style={{ borderCollapse: "collapse", fontSize: 11.5, minWidth: 520 }}>
+        <thead>
+          <tr>
+            {(res!.columns || []).map((c, i) => (
+              <th key={i} style={{ padding: "3px 8px", textAlign: "left", color: "#5b6560",
+                                   borderTop: "1px solid #e3e7e4", whiteSpace: "nowrap" }}>{c}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {(res!.rows || []).map((r, i) => (
+            <tr key={i}>
+              {r.map((c, j) => (
+                <td key={j} style={{ padding: "3px 8px", borderTop: "1px solid #f0f2f1",
+                                     whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                  {String(c)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function EvidenceRow({ e, traceUrl }: {
+  e: NonNullable<Finding["evidence"]>[number]; traceUrl?: string;
+}) {
   const value = typeof e.value === "object" ? JSON.stringify(e.value) : String(e.value ?? "");
   return (
     <tr>
@@ -36,12 +118,19 @@ function EvidenceRow({ e }: { e: NonNullable<Finding["evidence"]>[number] }) {
       <td style={{ padding: "4px 10px 4px 0", color: "#5b6560" }}>{e.target || "—"}</td>
       <td style={{ padding: "4px 0", color: "#78827e", fontSize: 12 }}>
         {[e.source, e.as_of].filter(Boolean).join(" · ") || "—"}
+        {traceUrl && e.target ? (
+          <div style={{ marginTop: 3 }}>
+            <RawRows traceUrl={traceUrl} target={String(e.target)} />
+          </div>
+        ) : null}
       </td>
     </tr>
   );
 }
 
-function FindingCard({ item, unsupported }: { item: Finding; unsupported: boolean }) {
+function FindingCard({ item, unsupported, traceUrl }: {
+  item: Finding; unsupported: boolean; traceUrl?: string;
+}) {
   const [open, setOpen] = useState(false);
   const sev = SEVERITY[item.severity || "medium"] || SEVERITY.medium;
   const evidence = item.evidence || [];
@@ -129,7 +218,7 @@ function FindingCard({ item, unsupported }: { item: Finding; unsupported: boolea
               <table style={{ borderCollapse: "collapse", fontSize: 13, minWidth: 420 }}>
                 <tbody>
                   {evidence.map((e, i) => (
-                    <EvidenceRow key={i} e={e} />
+                    <EvidenceRow key={i} e={e} traceUrl={traceUrl} />
                   ))}
                 </tbody>
               </table>
@@ -141,7 +230,11 @@ function FindingCard({ item, unsupported }: { item: Finding; unsupported: boolea
   );
 }
 
-export default function FindingCards({ data }: { data?: FindingList | null }) {
+export default function FindingCards({ data, traceUrl }: {
+  data?: FindingList | null;
+  /** 溯源接口，例如 `/ad-audit/{job}/evidence`。不传就不显示"看原始数据"。 */
+  traceUrl?: string;
+}) {
   const findings = data?.findings || [];
   if (findings.length === 0) return null;
   const unsupported = new Set(data?.unsupported || []);
@@ -161,6 +254,7 @@ export default function FindingCards({ data }: { data?: FindingList | null }) {
             key={f.id || i}
             item={f}
             unsupported={unsupported.has(f.id || f.title)}
+            traceUrl={traceUrl}
           />
         ))}
       </div>
