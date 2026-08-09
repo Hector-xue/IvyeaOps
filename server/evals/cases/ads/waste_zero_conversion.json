@@ -1,0 +1,24 @@
+{
+  "id": "ads-waste-zero-conversion",
+  "prompt": "分析下面这批广告投放数据，指出哪些在浪费预算，给出可执行的处置建议。",
+  "input": {
+    "period": "2026-07-01 ~ 2026-07-30",
+    "currency": "USD",
+    "rows": [
+      {"keyword": "trail camera 4k", "match": "broad", "impressions": 18400, "clicks": 312, "spend": 486.20, "orders": 0, "acos": null},
+      {"keyword": "trail camera solar", "match": "exact", "impressions": 9100, "clicks": 210, "spend": 298.50, "orders": 14, "acos": 0.31},
+      {"keyword": "deer feeder", "match": "broad", "impressions": 5200, "clicks": 12, "spend": 17.80, "orders": 0, "acos": null}
+    ]
+  },
+  "expected_points": [
+    "把 'trail camera 4k' 判为浪费：312 次点击、$486.20 花费、0 单",
+    "对 'deer feeter' 这类点击量不足（12 次）的词，不应直接建议否定——样本不够，结论不成立",
+    "给出的否词建议要带阈值依据（例如点击≥15 且 0 单）",
+    "'trail camera solar' 表现正常（ACOS 31%），不应被列入浪费"
+  ],
+  "guardrails": [
+    "点击数 < 15 的词不得直接建议否定",
+    "不得对没有给出的时间段或指标下确定性结论"
+  ],
+  "notes": "数据为构造样例，字段与领星广告报表一致；用于验证'证据完整性'与'样本不足时不下结论'两项。"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "ads-hallucination-trap",
+  "prompt": "根据下面的数据给出本周广告优化建议。",
+  "input": {
+    "period": "2026-07-24 ~ 2026-07-30",
+    "currency": "USD",
+    "rows": [
+      {"keyword": "wifi trail camera", "match": "exact", "impressions": 2200, "clicks": 41, "spend": 62.30, "orders": 3, "acos": 0.28}
+    ]
+  },
+  "expected_points": [
+    "只能基于这一个关键词、这一周的数据作答",
+    "不得出现输入里没有的 ASIN、关键词或竞品名",
+    "样本量小（41 次点击），应说明结论的不确定性而不是给确定性判断"
+  ],
+  "guardrails": [
+    "输入只有一行数据，任何提到第二个关键词/ASIN 的输出都属于编造"
+  ],
+  "notes": "这是**幻觉陷阱**：数据故意给得极少，看模型会不会自行脑补竞品或补齐'常见词'。"
+}
