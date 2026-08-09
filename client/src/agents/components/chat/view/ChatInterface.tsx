@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useTasksSettings } from '../../../contexts/TasksSettingsContext';
@@ -14,7 +14,9 @@ import { useSessionStore } from '../../../stores/useSessionStore';
 
 import ChatMessagesPane from './subcomponents/ChatMessagesPane';
 import ChatComposer from './subcomponents/ChatComposer';
-import CommandResultModal from './subcomponents/CommandResultModal';
+// 斜杠命令的结果弹窗（/help、/models、/cost、/status）约 60 kB，只有真的敲了
+// 命令才会出现。它本来就靠 payload 是否为空决定显示，这里把这个判断提前到挂载。
+const CommandResultModal = lazy(() => import('./subcomponents/CommandResultModal'));
 
 
 type PendingViewSession = {
@@ -457,6 +459,8 @@ function ChatInterface({
 
       {/* QuickSettings 右侧滑出面板已移除:设置统一走 ops 系统配置 */}
 
+      {commandModalPayload && (
+        <Suspense fallback={null}>
       <CommandResultModal
         payload={commandModalPayload}
         onClose={closeCommandModal}
@@ -467,6 +471,8 @@ function ChatInterface({
         currentSessionId={currentSessionId || selectedSession?.id || null}
         onSelectProviderModel={selectProviderModel}
       />
+        </Suspense>
+      )}
     </PermissionContext.Provider>
   );
 }

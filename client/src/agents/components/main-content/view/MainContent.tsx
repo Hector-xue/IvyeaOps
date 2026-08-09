@@ -1,10 +1,13 @@
-import React, { useEffect } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 
 import ChatInterface from '../../chat/view/ChatInterface';
-import FileTree from '../../file-tree/view/FileTree';
+// 文件树也是标签页（连带 jszip 的"打包下载"），切过去才需要。
+const FileTree = lazy(() => import('../../file-tree/view/FileTree'));
 import StandaloneShell from '../../standalone-shell/view/StandaloneShell';
-import GitPanel from '../../git-panel/view/GitPanel';
-import PluginTabContent from '../../plugins/view/PluginTabContent';
+// 这两个是标签页，切过去才渲染。静态引入会把 Git 面板（约 90 kB）和插件页
+// 一起钉在首屏块里，而默认落在「对话」标签的用户永远用不到。
+const GitPanel = lazy(() => import('../../git-panel/view/GitPanel'));
+const PluginTabContent = lazy(() => import('../../plugins/view/PluginTabContent'));
 import type { MainContentProps } from '../types/types';
 import { useTaskMaster } from '../../../contexts/TaskMasterContext';
 import { usePaletteOpsRegister } from '../../../contexts/PaletteOpsContext';
@@ -13,7 +16,9 @@ import { useUiPreferences } from '../../../hooks/useUiPreferences';
 import { useEditorSidebar } from '../../code-editor/hooks/useEditorSidebar';
 import EditorSidebar from '../../code-editor/view/EditorSidebar';
 import type { Project } from '../../../types/app';
-import { TaskMasterPanel } from '../../task-master';
+// 任务面板同样是标签页，且只在项目启用了 TaskMaster 时才出现。
+const TaskMasterPanel = lazy(() =>
+  import('../../task-master').then((m) => ({ default: m.TaskMasterPanel })));
 
 import MainContentHeader from './subcomponents/MainContentHeader';
 import MainContentStateView from './subcomponents/MainContentStateView';
@@ -152,7 +157,9 @@ function MainContent({
 
           {activeTab === 'files' && (
             <div className="h-full overflow-hidden">
-              <FileTree selectedProject={selectedProject} onFileOpen={handleFileOpen} />
+              <Suspense fallback={null}>
+                <FileTree selectedProject={selectedProject} onFileOpen={handleFileOpen} />
+              </Suspense>
             </div>
           )}
 
@@ -169,21 +176,29 @@ function MainContent({
 
           {activeTab === 'git' && (
             <div className="h-full overflow-hidden">
-              <GitPanel selectedProject={selectedProject} isMobile={isMobile} onFileOpen={handleFileOpen} />
+              <Suspense fallback={null}>
+                <GitPanel selectedProject={selectedProject} isMobile={isMobile} onFileOpen={handleFileOpen} />
+              </Suspense>
             </div>
           )}
 
-          {shouldShowTasksTab && <TaskMasterPanel isVisible={activeTab === 'tasks'} />}
+          {shouldShowTasksTab && (
+            <Suspense fallback={null}>
+              <TaskMasterPanel isVisible={activeTab === 'tasks'} />
+            </Suspense>
+          )}
 
           <div className={`h-full overflow-hidden ${activeTab === 'preview' ? 'block' : 'hidden'}`} />
 
           {activeTab.startsWith('plugin:') && (
             <div className="h-full overflow-hidden">
-              <PluginTabContent
-                pluginName={activeTab.replace('plugin:', '')}
-                selectedProject={selectedProject}
-                selectedSession={selectedSession}
-              />
+              <Suspense fallback={null}>
+                <PluginTabContent
+                  pluginName={activeTab.replace('plugin:', '')}
+                  selectedProject={selectedProject}
+                  selectedSession={selectedSession}
+                />
+              </Suspense>
             </div>
           )}
         </div>

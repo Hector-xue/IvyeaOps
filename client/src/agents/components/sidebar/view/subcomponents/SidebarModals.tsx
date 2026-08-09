@@ -1,16 +1,19 @@
-import { useMemo } from 'react';
+import { Suspense, lazy, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { AlertTriangle, EyeOff, Trash2 } from 'lucide-react';
 import type { TFunction } from 'i18next';
 import { Button } from '../../../../shared/view/ui';
-import Settings from '../../../settings/view/Settings';
-import VersionUpgradeModal from '../../../version-upgrade/view';
+// 设置面板（连带插件设置、Agent 设置几个大页）只在点开时才需要 —— 会话开着的
+// 全程可能一次都不打开。下同：新建项目向导。
+const Settings = lazy(() => import('../../../settings/view/Settings'));
+// 升级弹窗只有检测到新版本、且用户点开时才出现。
+const VersionUpgradeModal = lazy(() => import('../../../version-upgrade/view'));
 import type { Project } from '../../../../types/app';
 import type { ReleaseInfo } from '../../../../types/sharedTypes';
 import type { InstallMode } from '../../../../hooks/useVersionCheck';
 import { normalizeProjectForSettings } from '../../utils/utils';
 import type { DeleteProjectConfirmation, SessionDeleteConfirmation, SettingsProject } from '../../types/types';
-import ProjectCreationWizard from '../../../project-creation-wizard';
+const ProjectCreationWizard = lazy(() => import('../../../project-creation-wizard'));
 
 type SidebarModalsProps = {
   projects: Project[];
@@ -84,21 +87,25 @@ export default function SidebarModals({
     <>
       {showNewProject &&
         ReactDOM.createPortal(
-          <ProjectCreationWizard
-            onClose={onCloseNewProject}
-            onProjectCreated={onProjectCreated}
-          />,
+          <Suspense fallback={null}>
+            <ProjectCreationWizard
+              onClose={onCloseNewProject}
+              onProjectCreated={onProjectCreated}
+            />
+          </Suspense>,
           agentsPortalTarget(),
         )}
 
       {showSettings &&
         ReactDOM.createPortal(
-          <TypedSettings
-            isOpen={showSettings}
-            onClose={onCloseSettings}
-            projects={settingsProjects}
-            initialTab={settingsInitialTab}
-          />,
+          <Suspense fallback={null}>
+            <TypedSettings
+              isOpen={showSettings}
+              onClose={onCloseSettings}
+              projects={settingsProjects}
+              initialTab={settingsInitialTab}
+            />
+          </Suspense>,
           agentsPortalTarget(),
         )}
 
@@ -212,14 +219,18 @@ export default function SidebarModals({
           agentsPortalTarget(),
         )}
 
-      <VersionUpgradeModal
-        isOpen={showVersionModal}
-        onClose={onCloseVersionModal}
-        releaseInfo={releaseInfo}
-        currentVersion={currentVersion}
-        latestVersion={latestVersion}
-        installMode={installMode}
-      />
+      {showVersionModal && (
+        <Suspense fallback={null}>
+          <VersionUpgradeModal
+            isOpen={showVersionModal}
+            onClose={onCloseVersionModal}
+            releaseInfo={releaseInfo}
+            currentVersion={currentVersion}
+            latestVersion={latestVersion}
+            installMode={installMode}
+          />
+        </Suspense>
+      )}
     </>
   );
 }

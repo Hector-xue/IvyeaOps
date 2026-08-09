@@ -1,6 +1,9 @@
-import { useCallback, useState } from 'react';
+import { Suspense, lazy, useCallback, useState } from 'react';
 import type { Project, ProjectSession } from '../../../types/app';
-import Shell from '../../shell/view/Shell';
+
+// 终端只有真的开出来才需要 xterm（本体 + WebGL 渲染器约 390 kB）。静态引入会把
+// 它钉在 Agents 的首屏块里，而绝大多数会话从头到尾都不开终端。
+const Shell = lazy(() => import('../../shell/view/Shell'));
 import StandaloneShellEmptyState from './subcomponents/StandaloneShellEmptyState';
 import StandaloneShellHeader from './subcomponents/StandaloneShellHeader';
 
@@ -61,6 +64,7 @@ export default function StandaloneShell({
       )}
 
       <div className="min-h-0 w-full flex-1">
+        <Suspense fallback={<div className="h-full w-full bg-black" />}>
         <Shell
           selectedProject={project}
           selectedSession={session}
@@ -71,6 +75,7 @@ export default function StandaloneShell({
           minimal={minimal}
           autoConnect={minimal ? true : autoConnect}
         />
+        </Suspense>
       </div>
     </div>
   );

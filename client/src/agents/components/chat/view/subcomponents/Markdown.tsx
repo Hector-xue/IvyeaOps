@@ -1,15 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-// PrismLight with a curated language set — the full `Prism` build bundles every
-// Prism language and bloated the Agents chunk by hundreds of KB.
-import SyntaxHighlighter from '../../../../lib/prismLight';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+// 高亮器（Prism 引擎 + 22 种语法约 190 kB）按需加载，加载前先原样显示代码。
+import LazyHighlighter from '../../../../lib/LazyHighlighter';
 import { useTranslation } from 'react-i18next';
 import { normalizeInlineCodeFences } from '../../utils/chatFormatting';
 import { copyTextToClipboard } from '../../../../utils/clipboard';
+import { useMathPlugins } from '../../../../lib/mathPlugins';
 
 type MarkdownProps = {
   children: React.ReactNode;
@@ -96,9 +93,9 @@ const CodeBlock = ({ node, inline, className, children, ...props }: CodeBlockPro
         )}
       </button>
 
-      <SyntaxHighlighter
+      <LazyHighlighter
         language={language}
-        style={oneDark}
+        code={raw}
         customStyle={{
           margin: 0,
           borderRadius: '0.5rem',
@@ -111,9 +108,7 @@ const CodeBlock = ({ node, inline, className, children, ...props }: CodeBlockPro
               'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
           },
         }}
-      >
-        {raw}
-      </SyntaxHighlighter>
+      />
     </div>
   );
 };
@@ -147,8 +142,10 @@ const markdownComponents = {
 
 export function Markdown({ children, className }: MarkdownProps) {
   const content = normalizeInlineCodeFences(String(children ?? ''));
-  const remarkPlugins = useMemo(() => [remarkGfm, remarkMath], []);
-  const rehypePlugins = useMemo(() => [rehypeKatex], []);
+  // KaTeX 只在这条消息真的含公式时才拉进来，见 lib/mathPlugins。
+  const math = useMathPlugins(content);
+  const remarkPlugins = useMemo(() => [remarkGfm, ...math.remark], [math]);
+  const rehypePlugins = useMemo(() => math.rehype, [math]);
 
   return (
     <div className={className}>
