@@ -229,6 +229,38 @@ async def _playbook_history(args: dict[str, Any]) -> Any:
     return playbook.get_history(_user="bridge")
 
 
+async def _image_generate(args: dict[str, Any]) -> Any:
+    """作图。**这是个长任务**：提交后返回 task_id，由 agent 自己轮询状态。
+
+    为什么要把它做成工具：工作台已经有一条配好的作图链路（系统配置 → AI 生图），
+    但它只挂在「AI 作图」那个页面上 —— 用户在任务台说"给我画一张主图"，
+    agent 手里没有任何手段去调它，只能回一句"我做不到"。而这条链路本来就在
+    这台机器上配好了。
+    """
+    from app.routers import assistant
+
+    prompt = str(args.get("prompt") or "").strip()
+    if not prompt:
+        raise ValueError("prompt is required")
+    refs = [u for u in (args.get("image_urls") or []) if isinstance(u, str) and u.strip()]
+    req = assistant.ImageReq(
+        prompt=prompt,
+        size=str(args.get("size") or "1024x1024"),
+        n=max(1, min(int(args.get("n") or 1), 4)),
+        image_urls=refs or None,
+    )
+    out = await assistant.image_submit(req)
+    return {**out, "note": "已提交作图任务。用 image_status 查询进度，通常十几秒到一分钟。"}
+
+
+async def _image_status(args: dict[str, Any]) -> Any:
+    from app.routers import assistant
+    task_id = str(args.get("task_id") or "").strip()
+    if not task_id:
+        raise ValueError("task_id is required")
+    return await assistant.image_status(task_id)
+
+
 async def _playbook_generate_report(args: dict[str, Any]) -> Any:
     from app.routers import playbook
     query = str(args.get("query") or "").strip()
@@ -477,6 +509,19 @@ TOOLS: tuple[OpsTool, ...] = (
         data_source=_str("sorftime 或 sellersprite", default="sorftime"),
     ), _market_collect, long_running=True),
     OpsTool("playbook_history", "playbook", "打法历史", "读取打法/Launch Playbook 历史报告。", _obj(), _playbook_history),
+    OpsTool("image_generate", "tools", "AI 作图",
+            "按提示词生成图片（也可传参考图做图生图）。**用户提出任何作图/出图/"
+            "画一张/生成主图之类的需求时用它** —— 这台机器上已经配好了生图链路。"
+            "返回 task_id，再用 image_status 查结果。", _obj(
+                prompt=_str("画面描述，越具体越好；中文英文都行"),
+                size=_str("尺寸，如 1024x1024 / 1024x1536", default="1024x1024"),
+                n=_int("生成张数，1-4", default=1),
+                image_urls=_arr(_str(), "参考图 URL（给了就是图生图，会保留原图内容）")),
+            _image_generate, long_running=True),
+    OpsTool("image_status", "tools", "作图任务状态",
+            "查询 image_generate 提交的任务，完成后返回图片地址。", _obj(
+                task_id=_str("image_generate 返回的任务 ID")),
+            _image_status),
     OpsTool("playbook_generate_report", "playbook", "生成打法推荐",
             "对关键词或 ASIN 跑完整打法/Launch 推荐：按 data_source 采集 Sorftime 或卖家精灵数据 + AI 合成,"
             "并保存到「打法推荐」板块历史。用户要打法/Launch 方案时用它。", _obj(
