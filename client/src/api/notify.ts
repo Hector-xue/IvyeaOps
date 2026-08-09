@@ -14,6 +14,9 @@ export interface BudgetStatus {
   month: string;
   limit_usd: number;
   spend_usd: number;
+  /** 本月 token 总量。**顶栏显示的是这个，不是金额** —— 金额是按价目表折算的
+   *  估算值，天天挂在眼前容易被当成账单；token 是实打实计出来的量。 */
+  total_tokens: number;
   ratio: number;
   /** ok | warn（≥80%）| exceeded（≥100%，自动任务已暂停） */
   level: "ok" | "warn" | "exceeded";
