@@ -3,6 +3,7 @@ sorftime 单图兜底。采集以后台 job 形式运行，进度实时可见。
 from __future__ import annotations
 
 import asyncio
+import logging
 import json
 import os
 import re
@@ -17,6 +18,8 @@ from app.core.security import require_user
 
 from .common import project_row, update_project
 from .jobs import JobHandle, start_job
+
+logger = logging.getLogger("ivyea.routers.listing.scrape")
 
 router = APIRouter()
 
@@ -290,7 +293,7 @@ async def _scrape_amazon_native(asin: str, marketplace: str, attempts: int = 5,
         try:
             os.remove(jar)
         except OSError:
-            pass
+            logger.debug("os.remove 失败（旁路，已忽略）", exc_info=True)
 
 
 async def run_scrape(project_id: str, handle: Optional[JobHandle] = None) -> dict:
@@ -322,7 +325,7 @@ async def run_scrape(project_id: str, handle: Optional[JobHandle] = None) -> dic
             data = nd
             native_ok = True
     except Exception:
-        pass
+        logger.debug("nd = await _scrape_amazon_native 失败（旁路，已忽略）", exc_info=True)
 
     # 1) Optional: imgflow scrape (amazon-image-workflow on :3001) — fallback for
     #    users who run the Docker service and where curl was blocked by anti-bot.
@@ -336,7 +339,7 @@ async def run_scrape(project_id: str, handle: Optional[JobHandle] = None) -> dic
                     data = resp.json()
                     imgflow_ok = bool(data.get("imageUrls") or data.get("images"))
         except Exception:
-            pass
+            logger.debug("resp = await client.post 失败（旁路，已忽略）", exc_info=True)
 
     # 2) If both returned nothing, fall back to sorftime product_detail.
     #    NOTE: sorftime only carries ONE (white-background) main image, so this
@@ -383,7 +386,7 @@ async def run_scrape(project_id: str, handle: Optional[JobHandle] = None) -> dic
                             data["bullets"] = parts[:5]
                             data["description"] = desc_text
         except Exception:
-            pass
+            logger.debug("_ 失败（旁路，已忽略）", exc_info=True)
 
     image_urls = data.get("imageUrls") or data.get("images") or []
     if image_urls:

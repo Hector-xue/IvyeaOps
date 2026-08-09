@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import json
 import sqlite3
 import time
@@ -14,6 +15,8 @@ from pydantic import BaseModel
 
 from app.core.security import require_user
 from app.services import sorftime_service, ai_synthesis_service
+
+logger = logging.getLogger("ivyea.routers.market")
 
 router = APIRouter()
 
@@ -259,7 +262,7 @@ async def _stream_synthesis(
             try:
                 await task
             except (asyncio.CancelledError, Exception):
-                pass
+                logger.debug("task 失败（旁路，已忽略）", exc_info=True)
 
 
 async def _run_research(req: ResearchReq) -> AsyncGenerator[str, None]:

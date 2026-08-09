@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Optional
 
 import httpx
@@ -17,6 +18,8 @@ from .common import (
 )
 from .jobs import JobHandle, start_job
 from .scrape import _imgflow_base
+
+logger = logging.getLogger("ivyea.routers.listing.analyze")
 
 router = APIRouter()
 
@@ -139,7 +142,7 @@ async def run_analyze(project_id: str, handle: Optional[JobHandle] = None) -> di
                 if resp.status_code == 200:
                     imgflow_analysis = resp.json()
         except Exception:
-            pass
+            logger.debug("resp = await client.post 失败（旁路，已忽略）", exc_info=True)
 
     # 2. Skill-enhanced AI analysis
     progress("analyze", "AI 结构化分析中（走统一降级链）…", 0.65)

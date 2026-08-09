@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import json
 import time
 import uuid
@@ -18,6 +19,8 @@ from fastapi.responses import StreamingResponse
 from app.core.security import require_user
 
 from .common import _db
+
+logger = logging.getLogger("ivyea.routers.listing.jobs")
 
 router = APIRouter()
 
@@ -49,7 +52,7 @@ def _row_to_job(row) -> dict:
             try:
                 job[key] = json.loads(job[key])
             except Exception:
-                pass
+                logger.debug("job 失败（旁路，已忽略）", exc_info=True)
     return job
 
 
@@ -76,7 +79,7 @@ def _publish(job_id: str, payload: dict) -> None:
         try:
             queue.put_nowait(payload)
         except asyncio.QueueFull:
-            pass
+            logger.debug("queue.put_nowait 失败（旁路，已忽略）", exc_info=True)
 
 
 class JobHandle:

@@ -203,7 +203,7 @@ def _enforce_guardrails(proposals: List[Dict[str, Any]], max_pct: int) -> List[D
             if cp > max_pct:
                 p["guardrail_flag"] = f"超出幅度上限 {max_pct}%（建议被标记，执行时会被拦截）"
         except (TypeError, ValueError):
-            pass
+            logger.debug("abs 失败（旁路，已忽略）", exc_info=True)
         out.append(p)
     return out
 
@@ -282,7 +282,7 @@ async def _notify_run(run: Dict[str, Any]) -> None:
                 f"自动化建议完成（{'定时' if run.get('trigger') == 'scheduled' else '手动'}）："
                 f"{n} 条建议。{(run.get('summary') or '')[:150]}")
     except Exception:  # noqa: BLE001
-        pass
+        logger.debug("_op.send_alert 失败（旁路，已忽略）", exc_info=True)
 
 
 def start_background_run(trigger: str = "manual") -> str:

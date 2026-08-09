@@ -11,6 +11,7 @@ self-sufficiency is tracked for before P9 cutover.
 from __future__ import annotations
 
 import os
+import logging
 import posixpath
 from pathlib import Path
 from typing import Optional
@@ -21,6 +22,8 @@ from pydantic import BaseModel
 from app.agents import repos, synchronizer
 from app.agents.db import db_conn
 from app.agents.routers._actor import actor_is_admin, bind_actor
+
+logger = logging.getLogger("ivyea.agents.routers.projects")
 
 router = APIRouter(dependencies=[Depends(bind_actor)])
 
@@ -99,7 +102,7 @@ def _sync() -> None:
     try:
         synchronizer.maybe_synchronize()
     except Exception:
-        pass
+        logger.debug("synchronizer.maybe_synchronize 失败（旁路，已忽略）", exc_info=True)
 
 
 @router.get("")
@@ -377,9 +380,9 @@ async def delete_project(project_id: str, force: bool = Query(False)) -> dict:
                 try:
                     os.unlink(jp if os.path.isabs(jp) else os.path.abspath(jp))
                 except FileNotFoundError:
-                    pass
+                    logger.debug("os.unlink 失败（旁路，已忽略）", exc_info=True)
                 except OSError:
-                    pass
+                    logger.debug("os.unlink 失败（旁路，已忽略）", exc_info=True)
         repos.delete_sessions_by_project_path(conn, row["project_path"])
         repos.delete_project_by_id(conn, project_id)
     return {"success": True}

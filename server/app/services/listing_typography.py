@@ -7,12 +7,15 @@ one-size-fits-all dark rounded sticker.
 from __future__ import annotations
 
 import io
+import logging
 import os
 import re
 from pathlib import Path
 from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageStat
+
+logger = logging.getLogger("ivyea.services.listing_typography")
 
 _POS = {
     "top-left": (0.07, 0.08, "left", "top"),
@@ -61,7 +64,7 @@ def _load_font(size: int, bold: bool = True) -> ImageFont.FreeTypeFont:
         try:
             return ImageFont.truetype(path, size)
         except Exception:
-            pass
+            logger.debug("ImageFont.truetype 失败（旁路，已忽略）", exc_info=True)
     return ImageFont.load_default()
 
 

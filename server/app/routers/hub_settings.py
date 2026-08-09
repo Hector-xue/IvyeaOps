@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -12,6 +13,8 @@ from pydantic import BaseModel
 from app.core import hub_settings as _hs
 from app.core.security import require_user
 from app.core.version import app_version
+
+logger = logging.getLogger("ivyea.routers.hub_settings")
 
 router = APIRouter()
 
@@ -60,14 +63,14 @@ async def patch_settings(body: SettingsPatch, _u: str = Depends(require_user)):
             from app.services.hermes_config_sync import on_settings_saved
             on_settings_saved(updated)
         except Exception:
-            pass  # non-fatal — settings are saved regardless
+            logger.debug("on_settings_saved 失败（旁路，已忽略）", exc_info=True)
     if _IVYEA_AGENT_SYNC_KEYS & body.settings.keys():
         try:
             from app.services import ivyea_agent_service
             ivyea_agent_service.ensure_available()
             ivyea_agent_service.sync_model_settings(updated, force=True)
         except Exception:
-            pass  # non-fatal — settings are saved regardless
+            logger.debug("ivyea_agent_service.ensure_available 失败（旁路，已忽略）", exc_info=True)
     return {"settings": updated, "secret_keys": _SECRET_KEYS}
 
 

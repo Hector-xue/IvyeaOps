@@ -17,6 +17,7 @@ Responsibilities:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import subprocess
@@ -26,6 +27,8 @@ from pathlib import Path
 from typing import Any, Dict
 
 import yaml  # PyYAML — available in the IvyeaOps venv
+
+logger = logging.getLogger("ivyea.services.hermes_config_sync")
 
 
 _HERMES_CFG  = Path.home() / ".hermes" / "config.yaml"
@@ -194,7 +197,7 @@ def sync_agent_mcp(updates: Dict[str, Any]) -> None:
     try:
         path.chmod(0o600)   # it holds API keys
     except OSError:
-        pass
+        logger.debug("path.chmod 失败（旁路，已忽略）", exc_info=True)
 
 
 def _python_bin() -> str:
@@ -428,7 +431,7 @@ def sync_gbrain_embedding(provider: str, model: str, api_key: str) -> None:
             from app.services import gbrain_service as _gb
             _gb.ensure_db_ready()
         except Exception:
-            pass
+            logger.debug("_gb.ensure_db_ready 失败（旁路，已忽略）", exc_info=True)
 
     if _GBRAIN_CONFIG.exists():
         try:
@@ -461,7 +464,7 @@ def sync_gbrain_embedding(provider: str, model: str, api_key: str) -> None:
                            env=env, capture_output=True, timeout=20,
                            **no_window_kwargs())
         except Exception:
-            pass
+            logger.debug("subprocess.run 失败（旁路，已忽略）", exc_info=True)
 
 
 # ── Public entry point ────────────────────────────────────────────────────────

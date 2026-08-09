@@ -7,7 +7,11 @@ text_ai_providers 配置逐级降级），任何看图任务走 stream_vision �
 """
 from __future__ import annotations
 
+import logging
+
 from fastapi import HTTPException
+
+logger = logging.getLogger("ivyea.routers.listing.ai")
 
 
 _PROVIDER_LABELS = {
@@ -83,10 +87,10 @@ def _load_skill_knowledge() -> str:
         creative = get_skill("amazon/amazon-listing-creative")
         parts.append(f"[LISTING CREATIVE STRATEGY]\n{creative.content_body[:3000]}")
     except Exception:
-        pass
+        logger.debug("get_skill 失败（旁路，已忽略）", exc_info=True)
     try:
         audit = get_skill("amazon/amazon-asin-cosmo-rufus-audit")
         parts.append(f"[ASIN AUDIT METHODOLOGY]\n{audit.content_body[:2000]}")
     except Exception:
-        pass
+        logger.debug("get_skill 失败（旁路，已忽略）", exc_info=True)
     return "\n\n".join(parts)

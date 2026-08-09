@@ -14,6 +14,7 @@ concurrently. Shell (``/shell``) remains a P5 stub.
 from __future__ import annotations
 
 import asyncio
+import logging
 import json
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -22,6 +23,8 @@ from app.core.config import settings
 from app.core.security import verify_session
 from app.agents import claude_driver, codex_driver, hermes_driver, ivyea_driver
 from app.agents.claude_sessions import create_normalized_message
+
+logger = logging.getLogger("ivyea.agents.ws")
 
 router = APIRouter()
 
@@ -48,7 +51,7 @@ class ChatWriter:
         except Exception:
             # Client may have disconnected; the session keeps running so a
             # reconnect can swap the socket back in via reconnect_writer.
-            pass
+            logger.debug("self._ws.send_text 失败（旁路，已忽略）", exc_info=True)
 
 
 def _authed(websocket: WebSocket) -> bool:
@@ -191,7 +194,7 @@ async def shell_ws(websocket: WebSocket) -> None:
         try:
             await websocket.send_json({"type": "error", "message": msg})
         except Exception:
-            pass
+            logger.debug("websocket.send_json 失败（旁路，已忽略）", exc_info=True)
         # Stay open and drain input so the client doesn't see a disconnect and
         # reconnect repeatedly. Just idle until the client closes.
         try:

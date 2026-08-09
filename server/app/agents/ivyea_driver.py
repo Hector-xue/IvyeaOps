@@ -16,6 +16,7 @@ from __future__ import annotations
 from app.core.proc import no_window_kwargs
 
 import asyncio
+import logging
 import json
 import os
 import shutil
@@ -23,6 +24,8 @@ import time
 from typing import Optional
 
 from app.agents.claude_sessions import create_normalized_message, generate_message_id
+
+logger = logging.getLogger("ivyea.agents.ivyea_driver")
 
 PROVIDER = "ivyea"
 _active_sessions: dict[str, dict] = {}
@@ -103,7 +106,7 @@ async def abort_session(session_id: str) -> bool:
             except asyncio.TimeoutError:
                 proc.kill()
     except (ProcessLookupError, Exception):
-        pass
+        logger.debug("proc.terminate 失败（旁路，已忽略）", exc_info=True)
     _active_sessions.pop(session_id, None)
     return True
 

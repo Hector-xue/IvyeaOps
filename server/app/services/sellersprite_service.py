@@ -14,12 +14,15 @@ Tools used (verified against the live MCP):
 from __future__ import annotations
 
 import asyncio
+import logging
 import datetime
 import json as _json
 import re
 from typing import Any, Awaitable, Callable
 
 import httpx
+
+logger = logging.getLogger("ivyea.services.sellersprite_service")
 
 _BASE = "https://mcp.sellersprite.com/mcp"
 _HEADERS = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
@@ -53,7 +56,7 @@ def parse_sse(text: str) -> dict:
                 try:
                     return _json.loads(raw)
                 except Exception:
-                    pass
+                    logger.debug("_json.loads 失败（旁路，已忽略）", exc_info=True)
     try:
         return _json.loads(text)
     except Exception:
@@ -68,7 +71,7 @@ async def _initialize(client: httpx.AsyncClient) -> None:
                        "clientInfo": {"name": "IvyeaOps", "version": "1.0"}},
         })
     except Exception:
-        pass  # best-effort; tools/call still works on most servers
+        logger.debug("client.post 失败（旁路，已忽略）", exc_info=True)
 
 
 async def _call_tool(client: httpx.AsyncClient, name: str, args: dict, call_id: int = 1) -> Any:

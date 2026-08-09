@@ -20,6 +20,7 @@ will reuse :func:`is_operate_active`, :func:`classify_tool`, and the audit table
 from __future__ import annotations
 
 import asyncio
+import logging
 import json
 import sqlite3
 import time
@@ -33,6 +34,8 @@ import httpx
 from app.core import hub_settings as _hs
 from app.core.config import settings
 from app.services import lingxing_openapi as _openapi
+
+logger = logging.getLogger("ivyea.services.lingxing_service")
 
 # --- MCP protocol constants -------------------------------------------------
 _PROTOCOL_VERSION = "2025-06-18"
@@ -218,7 +221,7 @@ def _audit(caller: str, tool: str, kind: str, args: Any, ok: bool,
             conn.close()
     except Exception:
         # Audit must never break the call path; swallow.
-        pass
+        logger.debug("json.dumps 失败（旁路，已忽略）", exc_info=True)
 
 
 def recent_audit(limit: int = 100) -> List[Dict[str, Any]]:
@@ -305,7 +308,7 @@ def _ticket_counts() -> Dict[str, int]:
         finally:
             conn.close()
     except Exception:
-        pass
+        logger.debug("_connect 失败（旁路，已忽略）", exc_info=True)
     return out
 
 
@@ -405,7 +408,7 @@ class _McpSession:
             if self._client and self._session_id:
                 await self._client.delete(self._url, headers=self._req_headers())
         except Exception:
-            pass
+            logger.debug("self._client.delete 失败（旁路，已忽略）", exc_info=True)
         if self._client:
             await self._client.aclose()
         self._client = None
@@ -460,7 +463,7 @@ class _McpSession:
         try:
             await self._post({"jsonrpc": "2.0", "method": "notifications/initialized"})
         except LingXingError:
-            pass
+            logger.debug("self._post 失败（旁路，已忽略）", exc_info=True)
 
     async def list_tools(self) -> List[Dict[str, Any]]:
         if self._rate_limited:
@@ -574,7 +577,7 @@ async def call_openapi(route: str, params: Optional[Dict[str, Any]] = None, *,
     try:
         _openapi_limiter._min = max(0.05, float(_hs.get("lingxing_openapi_min_interval_ms")) / 1000.0)
     except (TypeError, ValueError):
-        pass
+        logger.debug("_openapi_limiter._min = max 失败（旁路，已忽略）", exc_info=True)
     await _openapi_limiter.acquire()
     t0 = time.monotonic()
     try:

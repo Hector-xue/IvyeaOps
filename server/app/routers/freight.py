@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -10,6 +11,8 @@ from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.security import require_user
+
+logger = logging.getLogger("ivyea.routers.freight")
 
 router = APIRouter()
 
@@ -236,7 +239,7 @@ def toggle_file(filename: str, _user: str = Depends(require_user)) -> Dict[str, 
     try:
         _rebuild()
     except Exception:
-        pass
+        logger.debug("_rebuild 失败（旁路，已忽略）", exc_info=True)
     return {"filename": filename, "disabled": fm["disabled"]}
 
 
@@ -251,5 +254,5 @@ def delete_file(filename: str, _user: str = Depends(require_user)) -> Dict[str, 
     try:
         _rebuild()
     except Exception:
-        pass
+        logger.debug("_rebuild 失败（旁路，已忽略）", exc_info=True)
     return {"ok": True}

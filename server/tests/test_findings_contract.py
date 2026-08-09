@@ -180,3 +180,61 @@ def test_ad_audit_marks_unsupported_conclusions():
     ]})
     assert out["unsupported"] == ["x-1"]
     assert len(out["findings"]) == 2, "无证据只是标记，不是丢弃"
+
+
+# ── 模型直出的 findings 优先于老结构 ────────────────────────────────────
+
+NATIVE = {
+    "findings": [{
+        "id": "ad-waste-001", "severity": "critical", "title": "高花费零转化",
+        "reasoning": "312 次点击 0 单",
+        "evidence": [{"metric": "spend_30d", "value": 486.2, "unit": "USD",
+                      "target": "trail camera 4k"}],
+        "actions": [{"type": "negate_keyword", "target": "trail camera 4k",
+                     "guardrail": "点击≥15 且 0 单", "confidence": 0.86}],
+        "priority_score": 92,
+    }],
+    "cross_campaign_insights": [LEGACY],
+    "meta": {"analyzed_at": "2026-07-30"},
+}
+
+
+def test_native_findings_win_over_legacy_upgrade():
+    """直出的带着 guardrail / priority_score / confidence —— 这些从老结构里
+    根本推不出来。有直出就不该再走升级路径。"""
+    from app.services.ad_audit import _as_findings
+
+    out = _as_findings(NATIVE)
+    assert len(out["findings"]) == 1
+    f = out["findings"][0]
+    assert f["priority_score"] == 92
+    assert f["actions"][0]["guardrail"] == "点击≥15 且 0 单"
+    assert f["actions"][0]["confidence"] == 0.86
+
+
+def test_native_findings_get_source_and_asof_filled_in():
+    """作者可能漏填来源与时点 —— 补上才谈得上"可核对"。"""
+    from app.services.ad_audit import _as_findings
+
+    e = _as_findings(NATIVE)["findings"][0]["evidence"][0]
+    assert e["source"] == "ad_audit" and e["as_of"] == "2026-07-30"
+
+
+def test_falls_back_when_the_model_ignores_the_contract():
+    """提示词遵循度不是 100%，回退路径不能省。"""
+    from app.services.ad_audit import _as_findings
+
+    out = _as_findings({"cross_campaign_insights": [LEGACY],
+                        "meta": {"analyzed_at": "2026-07-30"}})
+    assert out["findings"][0]["title"] == "SP-Auto 长尾在烧钱"
+
+
+def test_the_prompt_actually_carries_the_contract():
+    """契约写在提示词里才有用 —— 这条防止有人改提示词时把它删掉。"""
+    import inspect
+
+    from app.services import ad_audit
+
+    src = inspect.getsource(ad_audit)
+    assert '"findings": [' in src, "提示词里没有 findings 示例"
+    assert "guardrail" in src and "禁止估算或编造" in src

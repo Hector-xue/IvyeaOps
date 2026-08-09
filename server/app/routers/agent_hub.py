@@ -13,6 +13,7 @@ re-uses the same cookie verification at upgrade time.
 from __future__ import annotations
 
 import asyncio
+import logging
 import base64
 import json
 import os
@@ -258,7 +259,7 @@ def _build_chat_context(sid: str, user_text: str) -> str:
     except Exception:
         # build_resume_prompt may fail on a brand-new session with no
         # summary and no prior messages; that's fine.
-        pass
+        logger.debug("compactor.build_resume_prompt 失败（旁路，已忽略）", exc_info=True)
     parts.append(f"[New user message]\n{user_text}")
     return "\n\n".join(parts)
 
@@ -412,7 +413,7 @@ async def _chat_oneshot(
             if comp:
                 yield _sse("auto_compacted", {"summary_id": comp["id"]})
         except Exception:
-            pass
+            logger.debug("compactor.maybe_auto_compact 失败（旁路，已忽略）", exc_info=True)
         yield _sse("done", {"ok": True})
 
     return StreamingResponse(
@@ -494,7 +495,7 @@ def _build_input_message(user_text: str, attachments: list[str] | None) -> dict[
                     "type": "base64", "media_type": media_type, "data": data}})
                 continue
             except Exception:
-                pass  # fall through to a text mention
+                logger.debug("base64.standard_b64encode 失败（旁路，已忽略）", exc_info=True)
         content.append({"type": "text", "text": f"[附件文件: {path}]"})
     return {"type": "user", "message": {"role": "user", "content": content}}
 
@@ -586,7 +587,7 @@ async def _chat_stream_json(
                         try:
                             svc.update_session(sid, meta_patch={"claude_session_id": csid})
                         except Exception:
-                            pass
+                            logger.debug("svc.update_session 失败（旁路，已忽略）", exc_info=True)
 
                 elif etype == "assistant":
                     for block in ev.get("message", {}).get("content", []) or []:
@@ -657,7 +658,7 @@ async def _chat_stream_json(
             if comp:
                 yield _sse("auto_compacted", {"summary_id": comp["id"]})
         except Exception:
-            pass
+            logger.debug("compactor.maybe_auto_compact 失败（旁路，已忽略）", exc_info=True)
         yield _sse("done", {"ok": True})
 
     return StreamingResponse(
@@ -754,7 +755,7 @@ async def _chat_via_pty(
             if comp:
                 yield _sse("auto_compacted", {"summary_id": comp["id"]})
         except Exception:
-            pass
+            logger.debug("compactor.maybe_auto_compact 失败（旁路，已忽略）", exc_info=True)
         yield _sse("done", {"ok": True})
 
     return StreamingResponse(
@@ -800,7 +801,7 @@ async def cli_ws(websocket: WebSocket, sid: str) -> None:
             try:
                 resume_prompt = compactor.build_resume_prompt(sid)
             except Exception:
-                pass
+                logger.debug("compactor.build_resume_prompt 失败（旁路，已忽略）", exc_info=True)
             await pty_manager.start(
                 sid,
                 agent_id=sess["agent_id"],
@@ -862,7 +863,7 @@ async def cli_ws(websocket: WebSocket, sid: str) -> None:
             else:
                 await websocket.send_json({"type": "error", "detail": f"未知消息类型: {t}"})
     except WebSocketDisconnect:
-        pass
+        logger.debug("msg = await websocket.receive_text 失败（旁路，已忽略）", exc_info=True)
     finally:
         pty_manager.unsubscribe(sid, queue)
         if send_task and not send_task.done():
@@ -874,6 +875,8 @@ async def cli_ws(websocket: WebSocket, sid: str) -> None:
 # ===========================================================================
 import os as _os
 from pathlib import Path as _Path
+
+logger = logging.getLogger("ivyea.routers.agent_hub")
 
 # Paths that must never be written to (or read from) via the agent file API.
 # Includes obvious kernel interfaces plus base OS directories that, even when

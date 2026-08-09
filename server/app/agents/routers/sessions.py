@@ -8,6 +8,7 @@ search stay on the Node service until later phases.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from typing import Optional
@@ -18,6 +19,8 @@ from pydantic import BaseModel
 
 from app.agents import claude_sessions, hermes_driver, repos, search
 from app.agents.db import db_conn
+
+logger = logging.getLogger("ivyea.agents.routers.sessions")
 
 router = APIRouter()
 
@@ -140,7 +143,7 @@ async def delete_session(
                 from app.agents import hermes_driver
                 await hermes_driver.purge_session(sid)
             except Exception:
-                pass
+                logger.debug("hermes_driver.purge_session 失败（旁路，已忽略）", exc_info=True)
         if not repos.delete_session_by_id(conn, sid):
             raise HTTPException(404, f'Session "{sid}" was not found.')
     return {"success": True, "data": {"sessionId": sid, "action": "deleted",

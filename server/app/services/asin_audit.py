@@ -48,6 +48,8 @@ from app.services.runners import (  # noqa: F401 — re-exported for tests
     runner_status as _cli_runner_status,
 )
 
+logger = logging.getLogger("ivyea.services.asin_audit")
+
 # 同 ad_audit：~/.hermes/ivyea-ops-data 是 IvyeaOps 自己的历史落盘位置，
 # 与 hermes 程序无关，改名要搬数据，保持不动。
 AUDIT_ROOT = Path.home() / ".hermes" / "ivyea-ops-data" / "amazon-audits"
@@ -494,7 +496,7 @@ def _agent_sessions_dir() -> Path:
         if data_dir:
             return Path(data_dir) / "sessions"
     except Exception:
-        pass
+        logger.debug("data_dir = 失败（旁路，已忽略）", exc_info=True)
     return Path.home() / ".ivyea" / "sessions"
 
 
@@ -711,7 +713,7 @@ async def _run_claude(job: Job) -> None:
             if proc.returncode is None:
                 proc.kill()
         except Exception:
-            pass
+            logger.debug("proc.kill 失败（旁路，已忽略）", exc_info=True)
 
 
 _JSON_FENCE_RE = re.compile(
@@ -783,7 +785,7 @@ async def start_job(
                     job.finished_at = _now_iso()
                     _write_meta(job)
                 except Exception:
-                    pass
+                    logger.debug("job.status = failed 失败（旁路，已忽略）", exc_info=True)
             finally:
                 _live_jobs.pop(job.job_id, None)
 

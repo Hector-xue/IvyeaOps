@@ -737,9 +737,44 @@ def _build_prompt(job: AdJob, source_paths: List[Tuple[Dict[str, Any], Path]]) -
     "analyzed_at": "",
     "row_count": 0,
     "threshold_posture": ""
-  }}
+  }},
+  "findings": [
+    {{
+      "id": "ad-waste-001",
+      "severity": "critical|high|medium|low",
+      "title": "一句话说清是什么问题",
+      "reasoning": "从证据到结论的推理，一两句",
+      "evidence": [
+        {{"metric": "spend_30d", "value": 486.20, "unit": "USD",
+          "target": "trail camera 4k", "as_of": "2026-07-01~2026-07-30"}},
+        {{"metric": "clicks", "value": 312, "target": "trail camera 4k"}},
+        {{"metric": "orders", "value": 0, "target": "trail camera 4k"}}
+      ],
+      "actions": [
+        {{"type": "negate_keyword", "target": "trail camera 4k",
+          "detail": "在 SP-Auto 加精准否定",
+          "guardrail": "点击≥15 且 0 单", "reversible": true, "confidence": 0.86}}
+      ],
+      "priority_score": 92
+    }}
+  ]
 }}
 ```
+
+### `findings[]` —— 结论的统一格式（**最重要的一段**）
+
+每条结论都必须挂着**可核对的证据**，后面跟着**带阈值的动作**。判据只有一条：
+读的人能不能拿着 `evidence` 回原始数据里核对。
+
+- `evidence[].metric` + `value` 是**硬要求**。"花费很高转化很差"不是证据，是感想 ——
+  必须写成 `{{"metric": "spend_30d", "value": 486.20, "unit": "USD"}}`。
+  数值一律取自上传的报表，**禁止估算或编造**；报表里没有的指标就不要列。
+- `evidence[].target` 写清这条证据说的是哪个对象（关键词 / ASIN / 广告活动）。
+- `actions[].guardrail` 写清**在什么条件下才该做**（如"点击≥15 且 0 单"）。
+  没有前提的建议，执行的人无从判断该不该照做，也就没法交给自动化。
+- `actions[].reversible` 如实填：改竞价可回滚（true），删活动不可逆（false）。
+- `severity` 与 `priority_score`(0-100) 一起决定排序；同一问题不要拆成多条。
+- 一条结论确实没有数据支撑时，**宁可不写**，也不要编一个 evidence 凑数。
 
 字段说明：
 - verdict 写法：具体数字 + 问题性质 + 必要动作（反例："ACOS 偏高需关注"；正例："ACOS 62% 超目标 22pt，SP-Auto 的 'for hunting' 类长尾占 45% 花费 0 单，立即加否定短语"）
@@ -989,7 +1024,7 @@ async def _run_agent(job: AdJob) -> None:
             if proc.returncode is None:
                 proc.kill()
         except Exception:
-            pass
+            logger.debug("proc.kill 失败（旁路，已忽略）", exc_info=True)
 
 
 async def start_job(
@@ -1085,7 +1120,7 @@ async def start_job(
                     job.finished_at = _now_iso()
                     _write_meta(job)
                 except Exception:
-                    pass
+                    logger.debug("job.status = failed 失败（旁路，已忽略）", exc_info=True)
             finally:
                 _live_jobs.pop(job.job_id, None)
 
@@ -1106,8 +1141,23 @@ def _as_findings(structured: Any) -> Dict[str, Any]:
     try:
         from app.core.findings import normalize
         meta = structured.get("meta") or {}
-        fl = normalize(structured.get("cross_campaign_insights") or [],
-                       source="ad_audit", as_of=str(meta.get("analyzed_at") or ""))
+        as_of = str(meta.get("analyzed_at") or "")
+
+        # **优先用模型直出的 findings**（提示词里已经给了契约与示例）；
+        # 它带着 guardrail / priority_score / confidence 这些从老结构里推不出来的
+        # 字段。模型没按契约产出时才回退到 cross_campaign_insights 的升级路径 ——
+        # 提示词遵循度不是 100%，回退不能省。
+        native = structured.get("findings")
+        if isinstance(native, list) and native:
+            fl = normalize({"findings": native}, source="ad_audit", as_of=as_of)
+            # 直出的条目里作者可能漏填来源/时点，这里补上，保证"可核对"成立。
+            for f in fl.findings:
+                for e in f.evidence:
+                    e.source = e.source or "ad_audit"
+                    e.as_of = e.as_of or as_of
+        else:
+            fl = normalize(structured.get("cross_campaign_insights") or [],
+                           source="ad_audit", as_of=as_of)
         payload = fl.model_dump()
         payload["unsupported"] = fl.unsupported()
         return payload

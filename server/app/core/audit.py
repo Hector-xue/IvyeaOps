@@ -92,7 +92,7 @@ def _current_actor() -> tuple[Optional[str], str]:
         if cu:
             return str(cu.get("id") or ""), str(cu.get("email") or "unknown")
     except Exception:  # noqa: BLE001 — 审计取不到身份也不能把业务动作弄挂
-        pass
+        logger.debug("current_user.get 失败（旁路，已忽略）", exc_info=True)
     return None, "system"
 
 

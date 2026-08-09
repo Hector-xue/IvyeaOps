@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 import uuid
 from pathlib import Path
@@ -19,6 +20,8 @@ from .common import (
     _white_background_score, project_row, update_project,
 )
 from .scrape import _imgflow_base
+
+logger = logging.getLogger("ivyea.routers.listing.projects")
 
 router = APIRouter()
 
@@ -112,7 +115,7 @@ def get_project(project_id: str, _user: str = Depends(require_user)):
                     )
             result["creative_sets"] = json.dumps(migrated, ensure_ascii=False)
         except Exception:
-            pass
+            logger.debug("json.loads 失败（旁路，已忽略）", exc_info=True)
     if result.get("copy_result"):
         try:
             copy_payload = json.loads(result["copy_result"])

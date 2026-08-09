@@ -24,6 +24,8 @@ from typing import Any, Callable, Coroutine, Dict, List, Optional, Tuple
 import httpx
 from app.core import secret_env as _secret_env
 
+logger = logging.getLogger("ivyea.services.sorftime_service")
+
 _log = logging.getLogger(__name__)
 
 _SORFTIME_BASE = "https://mcp.sorftime.com"
@@ -91,7 +93,7 @@ async def _call_tool(
                     body = _json.loads(raw)
                     break
                 except Exception:
-                    pass
+                    logger.debug("_json.loads 失败（旁路，已忽略）", exc_info=True)
 
     if body is None:
         raise RuntimeError(f"sorftime/{tool_name}: could not parse SSE response")

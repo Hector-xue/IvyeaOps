@@ -12,6 +12,7 @@ shaping only.
 from __future__ import annotations
 
 import re
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -477,6 +478,8 @@ def audit_tail_route(
 import json
 from app.core.skill_paths import SETTINGS_FILE
 
+logger = logging.getLogger("ivyea.routers.skill")
+
 
 _DEFAULT_SETTINGS: dict[str, Any] = {
     "snapshot_retention": 20,          # keep N per-skill snapshots
@@ -571,7 +574,7 @@ async def generate_from_idea(
             ref = skill_repo.get_skill(body.ref_skill)
             ref_context = f"\n\n参考 Skill（{body.ref_skill}）的结构：\n---\n{ref.content_body[:2000]}\n---"
         except Exception:
-            pass
+            logger.debug("skill_repo.get_skill 失败（旁路，已忽略）", exc_info=True)
 
     prompt = f"""你是一位 Hermes Skill 编写专家。用户描述了一个需求，请帮他**编写**一份完整的 SKILL.md。
 

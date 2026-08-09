@@ -350,7 +350,7 @@ async def lifespan(app: FastAPI):
         try:
             await _task
         except (asyncio.CancelledError, Exception):
-            pass
+            logger.debug("_task 失败（旁路，已忽略）", exc_info=True)
     try:
         await terminal.stop_autocapture()
     except Exception as e:
@@ -407,7 +407,7 @@ async def _user_context(request: Request, call_next):
             from app.core.security import _resolve_session_principal, current_user
             current_user.set(_resolve_session_principal(token))
         except Exception:
-            pass
+            logger.debug("current_user.set 失败（旁路，已忽略）", exc_info=True)
     return await call_next(request)
 
 

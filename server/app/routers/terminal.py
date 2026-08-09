@@ -161,7 +161,7 @@ def _capture_tmux() -> Optional[str]:
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout
     except Exception:
-        pass
+        logger.debug("subprocess.run 失败（旁路，已忽略）", exc_info=True)
     return None
 
 
@@ -520,7 +520,7 @@ async def stop_autocapture() -> None:
         try:
             await _autocapture_task
         except (asyncio.CancelledError, Exception):
-            pass
+            logger.debug("_autocapture_task 失败（旁路，已忽略）", exc_info=True)
     _autocapture_task = None
 
 
@@ -748,7 +748,7 @@ async def terminal_live_ws(websocket: WebSocket, session_id: str) -> None:
             else:
                 await websocket.send_json({"type": "error", "detail": f"未知消息类型: {t}"})
     except WebSocketDisconnect:
-        pass
+        logger.debug("msg = await websocket.receive_text 失败（旁路，已忽略）", exc_info=True)
     finally:
         live_manager.unsubscribe(session_id, queue)
         if send_task and not send_task.done():

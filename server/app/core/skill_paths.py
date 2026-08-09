@@ -25,11 +25,14 @@ the defaults.
 from __future__ import annotations
 
 import os
+import logging
 import shutil
 import sys
 from pathlib import Path
 
 from app.core.config import settings
+
+logger = logging.getLogger("ivyea.core.skill_paths")
 
 
 # --- Roots -----------------------------------------------------------------
@@ -110,7 +113,7 @@ def seed_bundled_skills() -> int:
             shutil.copytree(skill_md.parent, dest)
             seeded += 1
         except Exception:
-            pass
+            logger.debug("shutil.copytree 失败（旁路，已忽略）", exc_info=True)
     return seeded
 
 
@@ -163,7 +166,7 @@ def _migrate_one(legacy: Path, target: Path) -> int:
         try:
             (target / _MIGRATED_MARKER).write_text(str(legacy), encoding="utf-8")
         except OSError:
-            pass
+            logger.debug("(target / _MIGRATED_MARKER).write_text(str(l 失败（旁路，已忽略）", exc_info=True)
     return copied
 
 
@@ -201,7 +204,7 @@ def ensure_studio_dirs() -> None:
         for name, n in moved.items():
             log.info("migrated %d %s entrie(s) from the legacy ~/.hermes layout", n, name)
     except Exception:  # noqa: BLE001
-        pass
+        logger.debug("migrate_legacy_layout 失败（旁路，已忽略）", exc_info=True)
 
     STUDIO_ROOT.mkdir(parents=True, exist_ok=True)
     SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -212,7 +215,7 @@ def ensure_studio_dirs() -> None:
         if n:
             log.info("seeded %d bundled skill(s) into %s", n, SKILLS_ROOT)
     except Exception:
-        pass
+        logger.debug("seed_bundled_skills 失败（旁路，已忽略）", exc_info=True)
 
 
 def studio_paths_summary() -> dict[str, str]:

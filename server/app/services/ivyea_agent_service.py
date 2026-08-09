@@ -380,7 +380,7 @@ def _installed_agent_version(py: str) -> str:
             if out:
                 return out.split()[-1]
     except Exception:  # noqa: BLE001
-        pass
+        logger.debug("_find_ivyea_cli 失败（旁路，已忽略）", exc_info=True)
     try:
         p = subprocess.run([py, "-c", "import ivyea_agent, sys; sys.stdout.write(ivyea_agent.__version__)"],
                            text=True, capture_output=True, timeout=15, **no_window_kwargs())
@@ -410,7 +410,7 @@ def upgrade_agent(progress=None) -> dict[str, Any]:
             try:
                 progress(phase, pct)
             except Exception:  # noqa: BLE001
-                pass
+                logger.debug("progress 失败（旁路，已忽略）", exc_info=True)
 
     _p("preparing", 5)
     # Frozen build: the agent is bundled into this exe, so it updates *with*
@@ -514,7 +514,7 @@ def ensure_available() -> dict[str, Any]:
         try:
             sync_model_settings()
         except IvyeaAgentError:
-            pass
+            logger.debug("sync_model_settings 失败（旁路，已忽略）", exc_info=True)
         current["auto_start"] = {"attempted": False, "reason": "already_available"}
         return current
     from app.core import hub_settings
@@ -534,7 +534,7 @@ def ensure_available() -> dict[str, Any]:
         try:
             sync_model_settings()
         except IvyeaAgentError:
-            pass
+            logger.debug("sync_model_settings 失败（旁路，已忽略）", exc_info=True)
     refreshed["auto_start"] = {"attempted": True, "result": started}
     return refreshed
 

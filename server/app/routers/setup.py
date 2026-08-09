@@ -20,6 +20,7 @@ from __future__ import annotations
 from app.core.proc import no_window_kwargs
 
 import asyncio
+import logging
 import json
 import os
 import shlex
@@ -39,6 +40,8 @@ from fastapi.responses import StreamingResponse
 from app.core import hub_settings as _hs
 from app.core.security import require_user
 from app.core.version import app_version
+
+logger = logging.getLogger("ivyea.routers.setup")
 
 router = APIRouter()
 
@@ -361,7 +364,7 @@ def _update_download_worker(url: str, dest: Path) -> None:
         try:
             dest.unlink(missing_ok=True)
         except OSError:
-            pass
+            logger.debug("dest.unlink 失败（旁路，已忽略）", exc_info=True)
 
 
 @router.post("/setup/update/download")
@@ -381,7 +384,7 @@ def update_download(_u: str = Depends(require_user)):
             with urllib.request.urlopen(req, timeout=6) as resp:
                 target = str(json.loads(resp.read().decode("utf-8", "replace")).get("tag_name") or "")
         except Exception:  # noqa: BLE001 — tag is cosmetic; download still proceeds
-            pass
+            logger.debug("urllib.request.Request 失败（旁路，已忽略）", exc_info=True)
         dest = Path(tempfile.gettempdir()) / "IvyeaOps-update.zip"
         _UPDATE_STATE.update(phase="downloading", percent=0, downloaded=0, total=0,
                              error="", zip_path="", target=target)
@@ -430,7 +433,7 @@ def update_install(_u: str = Depends(require_user)):
             fh.write(f"\n[update_install] triggered; ps={ps}; script={script}; "
                      f"zip={_UPDATE_STATE['zip_path']}\n")
     except Exception:
-        pass
+        logger.debug("log_path.parent.mkdir 失败（旁路，已忽略）", exc_info=True)
 
     # Launch via `cmd /c start` rather than a hidden detached Popen: `start` makes
     # the updater a brand-new independent process (survives this backend being

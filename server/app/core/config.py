@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import logging
 import secrets
 import sys
 from pathlib import Path
@@ -28,6 +29,8 @@ load_dotenv(_ROOT / "server" / ".env")
 # IvyeaOps 自己的凭据摘走存进内部字典；下面这些 os.getenv 在摘走**之前**执行，
 # 读到的仍是正确的值。详见 core/secret_env。
 from app.core import secret_env as _secret_env  # noqa: E402
+
+logger = logging.getLogger("ivyea.core.config")
 
 
 def _inherit_system_proxy() -> None:
@@ -114,7 +117,7 @@ class Settings:
                     import bcrypt
                     self.admin_password_hash = bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
                 except Exception:
-                    pass
+                    logger.debug("self.admin_password_hash = bcrypt.hashpw 失败（旁路，已忽略）", exc_info=True)
 
     session_cookie_name: str = "ivyea_ops_session"
     session_max_age_seconds: int = 60 * 60 * 24 * 7  # 7 days

@@ -21,6 +21,7 @@ from __future__ import annotations
 from app.core.proc import no_window_kwargs
 
 import asyncio
+import logging
 import shutil
 import subprocess
 import sys
@@ -30,6 +31,8 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger("ivyea.services.autofix_service")
 
 # repo root: server/app/services/autofix_service.py -> parents[3] == IvyeaOps/
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -196,7 +199,7 @@ async def _run_diagnose(job: Job) -> None:
             try:
                 await asyncio.wait_for(proc.communicate(), timeout=5)
             except Exception:
-                pass
+                logger.debug("asyncio.wait_for 失败（旁路，已忽略）", exc_info=True)
             raise RuntimeError(f"修复超时（>{_DIAGNOSE_TIMEOUT_S}s），已终止")
 
         raw = (out or b"").decode("utf-8", errors="replace")
@@ -239,7 +242,7 @@ def _cleanup_worktree(job: Job) -> None:
         try:
             _git("branch", "-D", job.branch)
         except Exception:
-            pass
+            logger.debug("_git 失败（旁路，已忽略）", exc_info=True)
         job.branch = ""
 
 

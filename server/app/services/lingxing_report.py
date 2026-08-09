@@ -8,6 +8,8 @@ external deps — opens in any browser and prints to PDF.
 """
 from __future__ import annotations
 
+import logging
+
 import html as _html
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -15,6 +17,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from app.services import lingxing_data as _data
 from app.services import lingxing_operate as _op
 from app.services import lingxing_service as _gw
+
+logger = logging.getLogger("ivyea.services.lingxing_report")
 
 # minimal store-country → currency code (for labelling amounts in the report)
 _CCY = {
@@ -44,7 +48,7 @@ async def _store_ccy(sid: int) -> str:
             if str(r.get("sid")) == str(sid):
                 return _CCY.get(r.get("country") or "", "")
     except Exception:
-        pass
+        logger.debug("s = await _data.fetch_dataset 失败（旁路，已忽略）", exc_info=True)
     return ""
 
 
@@ -71,7 +75,7 @@ async def _resolve_campaign_id(intent: Dict[str, Any]) -> Optional[str]:
             if len(rows) < 300:
                 break
     except Exception:
-        pass
+        logger.debug("res = await _data.fetch_dataset 失败（旁路，已忽略）", exc_info=True)
     return None
 
 

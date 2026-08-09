@@ -4,6 +4,7 @@ from __future__ import annotations
 from app.core.proc import no_window_kwargs
 
 import csv
+import logging
 import io
 import json
 import os
@@ -18,6 +19,8 @@ from typing import Any, AsyncIterator
 
 from app.core.config import settings
 from app.services import gbrain_service as gb
+
+logger = logging.getLogger("ivyea.services.brain_chat_service")
 
 DB_PATH = Path(os.environ.get("IVYEA_OPS_BRAIN_CHAT_DB", str(settings.data_dir / "brain_chat.sqlite3")))
 MAX_UPLOAD_BYTES = int(os.environ.get("BRAIN_UPLOAD_MAX_BYTES", str(10 * 1024 * 1024)))
@@ -290,7 +293,7 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
         parsed = json.loads(cleaned)
         return parsed if isinstance(parsed, dict) else None
     except json.JSONDecodeError:
-        pass
+        logger.debug("json.loads 失败（旁路，已忽略）", exc_info=True)
     start = cleaned.find("{")
     end = cleaned.rfind("}")
     if start >= 0 and end > start:
@@ -829,7 +832,7 @@ def _call_llm(messages: list[dict[str, str]]) -> str:
             if text:
                 return text
         except Exception:  # noqa: BLE001 — degrade to fallbacks below
-            pass
+            logger.debug("_ia.chat 失败（旁路，已忽略）", exc_info=True)
     prompt = _messages_to_hermes_prompt(messages)
     if hermes_available():
         try:
@@ -837,7 +840,7 @@ def _call_llm(messages: list[dict[str, str]]) -> str:
             if out.strip():
                 return out
         except BrainChatError:
-            pass  # fall through to the global chain
+            logger.debug("_runner_chat_text 失败（旁路，已忽略）", exc_info=True)
     answer = _global_answer_sync(prompt)
     if not answer:
         raise BrainChatError("未能生成回答：请确认 IvyeaAgent 服务在运行，或在「系统配置 → 全局兜底大模型」配置一个文本模型。")

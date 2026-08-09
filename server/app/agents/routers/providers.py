@@ -12,6 +12,7 @@ Skills/MCP return empty (stub) so the UI doesn't 404.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import time
@@ -21,6 +22,8 @@ from typing import Optional
 
 from fastapi import APIRouter
 from pydantic import BaseModel
+
+logger = logging.getLogger("ivyea.agents.routers.providers")
 
 router = APIRouter()
 
@@ -71,7 +74,7 @@ def _agent_models(provider: str) -> Optional[dict]:
                     models = [default] + models
                 return {"OPTIONS": [{"value": m, "label": m} for m in models], "DEFAULT": default}
     except Exception:
-        pass
+        logger.debug("models = 失败（旁路，已忽略）", exc_info=True)
     return None
 
 
@@ -143,7 +146,7 @@ def _claude_credentials() -> dict:
         if (env.get("ANTHROPIC_AUTH_TOKEN") or "").strip():
             return {"authenticated": True, "email": "Configured via settings.json", "method": "api_key"}
     except (OSError, ValueError):
-        pass
+        logger.debug("json.loads 失败（旁路，已忽略）", exc_info=True)
     # ~/.claude/.credentials.json -> claudeAiOauth.accessToken
     try:
         creds = json.loads((Path.home() / ".claude" / ".credentials.json").read_text(encoding="utf-8"))
@@ -157,12 +160,12 @@ def _claude_credentials() -> dict:
             return {"authenticated": False, "email": None, "method": None,
                     "error": "Claude login has expired. Run claude /login again."}
     except FileNotFoundError:
-        pass
+        logger.debug("json.loads 失败（旁路，已忽略）", exc_info=True)
     except ValueError:
         return {"authenticated": False, "email": None, "method": None,
                 "error": "Claude credentials are unreadable. Run claude /login again."}
     except OSError:
-        pass
+        logger.debug("json.loads 失败（旁路，已忽略）", exc_info=True)
     return {"authenticated": False, "email": None, "method": None,
             "error": "Claude CLI is not authenticated. Run claude /login or configure ANTHROPIC_API_KEY."}
 

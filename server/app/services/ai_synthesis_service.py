@@ -26,6 +26,8 @@ import httpx
 from app.core.proc import no_window_kwargs
 from app.services.runners import _build_runner_cmd, _find_bin, build_child_env
 
+logger = logging.getLogger("ivyea.services.ai_synthesis_service")
+
 _log = logging.getLogger(__name__)
 
 # In-memory observability: last N text-chain calls, surfaced in 系统配置 →
@@ -75,7 +77,7 @@ def _read_hermes_env() -> Dict[str, str]:
             k, _, v = line.partition("=")
             result[k.strip()] = v.strip()
     except Exception:
-        pass
+        logger.debug("text = 失败（旁路，已忽略）", exc_info=True)
     return result
 
 
@@ -140,7 +142,7 @@ def _text_provider_chain() -> list[str]:
             http = [p for p in chain if p in _HTTP_ONLY_PROVIDERS]
             return _lead_with_agent(http or ["assistant", "deepseek"])
     except Exception:
-        pass
+        logger.debug("current_user.get 失败（旁路，已忽略）", exc_info=True)
     return _lead_with_agent(chain)
 
 _ANSI_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
@@ -1086,7 +1088,7 @@ async def _try_assistant(prompt: str, failures: list[str]) -> AsyncGenerator[tup
         try:
             body = exc.response.text[:200] if exc.response is not None else ""
         except Exception:
-            pass
+            logger.debug("body = exc.response.text 失败（旁路，已忽略）", exc_info=True)
         failures.append(f"全局兜底模型 HTTP {code}：{body or '请求失败'}")
         _log.warning("assistant fallback failed: HTTP %s — %s", code, body)
     except Exception as exc:  # noqa: BLE001
@@ -1700,7 +1702,7 @@ async def _try_deepseek(prompt: str, failures: list[str]) -> AsyncGenerator[tupl
         try:
             body = exc.response.text[:200] if exc.response is not None else ""
         except Exception:
-            pass
+            logger.debug("body = exc.response.text 失败（旁路，已忽略）", exc_info=True)
         failures.append(f"DeepSeek HTTP {code}：{body or '请求失败'}")
         _log.warning("deepseek failed: HTTP %s — %s", code, body)
     except Exception as exc:
@@ -1778,7 +1780,7 @@ async def _stream_cli_runner(runner: str, prompt: str) -> AsyncGenerator[str, No
             await proc.stdin.drain()
             proc.stdin.close()
         except Exception:
-            pass
+            logger.debug("proc.stdin.write 失败（旁路，已忽略）", exc_info=True)
 
     total_chars = 0
     timed_out = False
@@ -1822,7 +1824,7 @@ async def _stream_cli_runner(runner: str, prompt: str) -> AsyncGenerator[str, No
             try:
                 await asyncio.wait_for(proc.communicate(), timeout=5)
             except Exception:
-                pass
+                logger.debug("asyncio.wait_for 失败（旁路，已忽略）", exc_info=True)
 
     if timed_out:
         raise RuntimeError(f"{runner} CLI 超时（{timeout_s}s）")
@@ -1856,7 +1858,7 @@ async def _try_apimart(prompt: str, failures: list[str]) -> AsyncGenerator[tuple
         try:
             body_preview = exc.response.text[:200] if exc.response is not None else ""
         except Exception:
-            pass
+            logger.debug("body_preview = exc.response.text 失败（旁路，已忽略）", exc_info=True)
         if code in (401, 403):
             failures.append(
                 f"Apimart 密钥被拒（HTTP {code}）— 该密钥可能仅有图片权限，没买 Claude 文本。"

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import logging
 import secrets
 import subprocess
 import sys
@@ -10,6 +11,8 @@ import time
 import urllib.request
 import webbrowser
 from pathlib import Path
+
+logger = logging.getLogger("ivyeaops_server")
 
 # Run the bundled IvyeaAgent's serve straight from this exe — checked BEFORE the
 # heavy IvyeaOps imports so the frozen package needs no separate Python/pip/agent
@@ -31,7 +34,7 @@ if len(sys.argv) > 1 and sys.argv[1] == "ivyea":
             import ctypes
             ctypes.windll.kernel32.AttachConsole(-1)  # ATTACH_PARENT_PROCESS
         except Exception:
-            pass
+            logger.debug("ctypes.windll.kernel32.AttachConsole 失败（旁路，已忽略）", exc_info=True)
         for _name, _dev, _mode in (("stdin", "CONIN$", "r"), ("stdout", "CONOUT$", "w"),
                                     ("stderr", "CONOUT$", "w")):
             if getattr(sys, _name, None) is None:
@@ -39,7 +42,7 @@ if len(sys.argv) > 1 and sys.argv[1] == "ivyea":
                     setattr(sys, _name, open(_dev, _mode, encoding="utf-8", errors="replace",
                                              buffering=1))
                 except Exception:
-                    pass
+                    logger.debug("setattr 失败（旁路，已忽略）", exc_info=True)
     from ivyea_agent.cli import main as _agent_main
     raise SystemExit(_agent_main(sys.argv[2:]))
 
@@ -95,7 +98,7 @@ def _write_credentials(root: Path, password: str) -> Path:
         try:
             (desktop / "IvyeaOps 登录信息.txt").write_text(credentials, encoding="utf-8")
         except Exception:
-            pass
+            logger.debug("(desktop / IvyeaOps 登录信息.txt).write_text(c 失败（旁路，已忽略）", exc_info=True)
     return cred_file
 
 
@@ -139,7 +142,7 @@ foreach ($Desktop in $Candidates) {
             **kwargs,
         )
     except Exception:
-        pass
+        logger.debug("kwargs = {} 失败（旁路，已忽略）", exc_info=True)
 
 
 def _open_text_file(path: Path) -> None:
@@ -148,7 +151,7 @@ def _open_text_file(path: Path) -> None:
     try:
         os.startfile(str(path))  # type: ignore[attr-defined]
     except Exception:
-        pass
+        logger.debug("os.startfile 失败（旁路，已忽略）", exc_info=True)
 
 
 def _already_running(host: str, port: int) -> bool:
@@ -188,7 +191,7 @@ def _ensure_ivyea_launcher() -> None:
             if not cmd.exists() or cmd.read_text(encoding="utf-8", errors="replace") != content:
                 cmd.write_text(content, encoding="utf-8")
         except OSError:
-            pass
+            logger.debug("cmd.write_text 失败（旁路，已忽略）", exc_info=True)
         broken = localbin / "ivyea.exe"
         if broken.exists():
             is_broken = True
@@ -205,9 +208,9 @@ def _ensure_ivyea_launcher() -> None:
                         disabled.unlink()
                     broken.rename(disabled)
                 except OSError:
-                    pass
+                    logger.debug("disabled = localbin / ivyea.exe.disabled 失败（旁路，已忽略）", exc_info=True)
     except Exception:
-        pass
+        logger.debug("Path 失败（旁路，已忽略）", exc_info=True)
 
 
 def _bootstrap_frozen_env() -> None:
@@ -227,7 +230,7 @@ def _bootstrap_frozen_env() -> None:
         try:
             stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
         except Exception:
-            pass
+            logger.debug("stream.reconfigure 失败（旁路，已忽略）", exc_info=True)
 
     env_file = root / "server" / ".env"
     if env_file.exists():
@@ -237,7 +240,7 @@ def _bootstrap_frozen_env() -> None:
                     _write_credentials(root, line.split("=", 1)[1])
                     break
         except Exception:
-            pass
+            logger.debug("_write_credentials 失败（旁路，已忽略）", exc_info=True)
         _create_desktop_shortcut(root)
         return
 
@@ -272,6 +275,7 @@ _ensure_ivyea_launcher()
 from app.core.config import settings
 from app.core.version import app_version
 from app.main import app
+
 
 
 def _open_browser_when_ready() -> None:
@@ -338,7 +342,7 @@ def _run_with_control_window() -> None:
         except Exception:
             ctypes.windll.user32.SetProcessDPIAware()
     except Exception:
-        pass
+        logger.debug("try 失败（旁路，已忽略）", exc_info=True)
 
     root = tk.Tk()
     root.title("IvyeaOps")
@@ -372,7 +376,7 @@ def _run_with_control_window() -> None:
     try:
         root.iconbitmap(str(_runtime_root() / "client" / "public" / "favicon.ico"))
     except Exception:
-        pass
+        logger.debug("root.iconbitmap 失败（旁路，已忽略）", exc_info=True)
     root.configure(bg=white)
 
     cv = tk.Canvas(root, width=WS, height=HS, bg=white, highlightthickness=0, bd=0)
@@ -430,7 +434,7 @@ def _run_with_control_window() -> None:
         try:
             root.clipboard_clear(); root.clipboard_append(url)
         except Exception:
-            pass
+            logger.debug("root.clipboard_clear 失败（旁路，已忽略）", exc_info=True)
 
     def stop_server() -> None:
         nonlocal stopping

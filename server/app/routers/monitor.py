@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import logging
 import subprocess
 import sys
 import time
@@ -137,7 +138,7 @@ def _disk(mount: str | None = None) -> DiskInfo:
                                 total_hw = sectors * 512
                     break
     except OSError:
-        pass
+        logger.debug("line.split 失败（旁路，已忽略）", exc_info=True)
     pct_hw = 100.0 * d.used / total_hw if total_hw else d.percent
     return DiskInfo(
         total=d.total,
@@ -560,6 +561,8 @@ import sqlite3 as _sqlite3
 from pathlib import Path as _Path
 from datetime import datetime as _datetime, timedelta as _timedelta, timezone as _timezone
 
+logger = logging.getLogger("ivyea.routers.monitor")
+
 # Token-usage DB / session paths are read from hub_settings (External
 # Integrations). Each helper returns a Path that *might* exist; callers
 # guard with .exists(). Wrapped in functions so a hub_settings change
@@ -678,7 +681,7 @@ def _scan_claude_sessions(since: float) -> list:
                         if not model and msg.get("model"):
                             model = msg["model"]
                 except Exception:
-                    pass
+                    logger.debug("_json.loads 失败（旁路，已忽略）", exc_info=True)
         if session_input > 0 or session_output > 0 or session_cache_read > 0 or session_cache_write > 0:
             results.append({
                 "ts": ts,
@@ -1071,7 +1074,7 @@ def token_usage(_user: str = Depends(require_user)) -> dict:
                              "status": "from-archive", "sessions": 0,
                              "total_tokens": tok, "credits": 0})
     except Exception:
-        pass
+        logger.debug("backfill_sources: dict = {} 失败（旁路，已忽略）", exc_info=True)
 
     # Format output
     def _to_list(m, key_name):

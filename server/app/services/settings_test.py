@@ -11,6 +11,7 @@ click — saves them from typing paths by hand.
 from __future__ import annotations
 
 import asyncio
+import logging
 import json
 import os
 import shutil
@@ -21,6 +22,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import httpx
+
+logger = logging.getLogger("ivyea.services.settings_test")
 
 _WINDOWS = sys.platform == "win32"
 
@@ -117,7 +120,7 @@ async def _probe_sorftime(key: str) -> Dict[str, Any]:
                 try:
                     body = json.loads(line[5:].strip())
                 except Exception:
-                    pass
+                    logger.debug("json.loads 失败（旁路，已忽略）", exc_info=True)
         if body is None:
             return _err("响应解析失败")
         if "error" in body:
@@ -150,7 +153,7 @@ async def _probe_sif(key: str) -> Dict[str, Any]:
                 try:
                     body = json.loads(line[5:].strip())
                 except Exception:
-                    pass
+                    logger.debug("json.loads 失败（旁路，已忽略）", exc_info=True)
         if body is None:
             try:
                 body = r.json()

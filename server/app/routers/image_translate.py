@@ -32,6 +32,8 @@ from app.core.config import settings
 from app.core.security import require_user
 from app.services.ai_synthesis_service import _apimart_base, _apimart_key
 
+logger = logging.getLogger("ivyea.routers.image_translate")
+
 router = APIRouter()
 
 
@@ -108,7 +110,7 @@ try:
     _mig.commit()
     _mig.close()
 except Exception:
-    pass
+    logger.debug("_db 失败（旁路，已忽略）", exc_info=True)
 
 
 def _row_to_item(r: sqlite3.Row) -> dict:
@@ -319,7 +321,7 @@ def delete_workspace_image(image_id: str, _u: str = Depends(require_user)):
     try:
         (WORKSPACE_DIR / row["filename"]).unlink(missing_ok=True)
     except OSError:
-        pass
+        logger.debug("(WORKSPACE_DIR / row[filename]).unlink(mis 失败（旁路，已忽略）", exc_info=True)
     conn.execute("DELETE FROM workspace_images WHERE id=?", (image_id,))
     conn.commit()
     conn.close()
