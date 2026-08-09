@@ -427,6 +427,23 @@ def record_approval_decision(request_id: str, decision: str) -> None:
         )
 
 
+def pending_approvals(principal: str, limit: int = 50) -> list[dict[str, Any]]:
+    """这个人名下**所有还没决定**的审批，跨会话。
+
+    此前审批只能按会话查（``session_approvals``），意味着要处理一条审批，得先
+    知道它在哪个会话、点进去、再在长长的对话里找到那张卡片。在电脑前还能忍，
+    在手机上等于做不到 —— 而"手机上点同意/拒绝"正是这个产品对 WorkBuddy
+    「IM 远程下指令」的回答（只审批、不下达，更安全）。
+    """
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM console_approvals WHERE principal = ? AND decision = ''"
+            " ORDER BY requested_at DESC LIMIT ?",
+            (principal or "", max(1, min(int(limit or 50), 200))),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def session_approvals(session_id: str, limit: int = 100) -> list[dict[str, Any]]:
     with _conn() as conn:
         rows = conn.execute(

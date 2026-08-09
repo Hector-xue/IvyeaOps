@@ -9,6 +9,7 @@ import {
   listNewsDates,
   refreshNews,
 } from "../../api/news";
+import { errText } from "../../lib/errText";
 
 const CATS: { key: NewsCategory | "all"; label: string }[] = [
   { key: "all", label: "全部" },
@@ -255,7 +256,7 @@ export default function News() {
       setDates(r);
       setPicked((prev) => prev ?? r.latest);
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e.message ?? "日期加载失败");
+      setErr(errText(e, "日期加载失败"));
     }
   }, []);
 
@@ -270,7 +271,7 @@ export default function News() {
       const d = await getNewsDay({ date: target ?? undefined });
       setDay(d);
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e.message ?? "加载失败");
+      setErr(errText(e, "加载失败"));
     } finally {
       setLoading(false);
     }
@@ -340,7 +341,7 @@ export default function News() {
         }, 10000);
       }
     } catch (e: any) {
-      setFlash(e?.response?.data?.detail ?? e.message ?? "刷新失败");
+      setFlash(errText(e, "刷新失败"));
     } finally {
       setRefreshing(false);
       setTimeout(() => setFlash(null), 30000);

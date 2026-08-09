@@ -43,6 +43,18 @@ def test(body: TestBody) -> Dict[str, Any]:
 
 @router.get("/budget")
 def budget() -> Dict[str, Any]:
-    """本月估算花费与预算状态。顺带做一次"超了就提醒"的检查 —— 用户打开
-    这个页面本来就是在关心花费，此刻检查最自然，不必再养一个定时任务。"""
+    """本月估算花费与预算状态（**现算**，可能要几秒）。顺带做一次"超了就提醒"
+    的检查 —— 用户打开这个页面本来就是在关心花费，此刻检查最自然，
+    不必再养一个定时任务。"""
     return budget_svc.check_and_notify()
+
+
+@router.get("/budget/summary")
+def budget_summary() -> Dict[str, Any]:
+    """顶栏用的轻量版：**只读缓存，绝不现场开算**。
+
+    完整聚合要扫遍所有用量来源，本机实测 8.8 秒。顶栏是每个页面都常驻的东西，
+    让它去触发一次全盘扫描，等于用户每开一个页面就给自己的机器来一下。
+    缓存没有值时回 known=false，界面显示占位符并等下一次轮询。
+    """
+    return budget_svc.check_and_notify(cached=True)

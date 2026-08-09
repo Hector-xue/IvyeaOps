@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { errText } from "../lib/errText";
 
 export type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
 
@@ -83,7 +84,7 @@ export function useAutoSave<T>({
         baselineRef.current = snapshot;
         setState({ status: "saved", lastSavedAt: new Date(), error: null });
       } catch (e: any) {
-        const msg = e?.response?.data?.detail ?? e?.message ?? "保存失败";
+        const msg = errText(e, "保存失败");
         setState({ status: "error", lastSavedAt: null, error: String(msg) });
         throw e;
       }

@@ -158,7 +158,8 @@ def test_budget_exceeded_notifies_once_per_month(monkeypatch):
     store = {"ai_budget_monthly_usd": 10, "ai_budget_alerted_month": ""}
     monkeypatch.setattr(hub_settings, "get", lambda k, *a: store.get(k, ""))
     monkeypatch.setattr(hub_settings, "save", lambda d: store.update(d) or store)
-    monkeypatch.setattr(budget, "month_spend_usd", lambda: 12.5)
+    # 替身要收 **kw：status() 会带 cached= 调它（顶栏走只读缓存那条路）。
+    monkeypatch.setattr(budget, "month_spend_usd", lambda **kw: 12.5)
 
     sent = []
     monkeypatch.setattr(notify, "send_sync",
@@ -169,7 +170,7 @@ def test_budget_exceeded_notifies_once_per_month(monkeypatch):
 
     second = budget.check_and_notify()
     assert second.get("already_notified") is True
-    assert len(sent) == 1          # 超了之后每次都响，等于逼用户关掉提醒
+    assert len(sent) == 1          # 同一档只响一次，否则等于逼用户关掉提醒
 
 
 def test_failed_notification_is_not_recorded_as_sent(monkeypatch):
@@ -178,7 +179,7 @@ def test_failed_notification_is_not_recorded_as_sent(monkeypatch):
     store = {"ai_budget_monthly_usd": 10, "ai_budget_alerted_month": ""}
     monkeypatch.setattr(hub_settings, "get", lambda k, *a: store.get(k, ""))
     monkeypatch.setattr(hub_settings, "save", lambda d: store.update(d) or store)
-    monkeypatch.setattr(budget, "month_spend_usd", lambda: 99.0)
+    monkeypatch.setattr(budget, "month_spend_usd", lambda **kw: 99.0)
     monkeypatch.setattr(notify, "send_sync", lambda *a, **kw: False)
 
     budget.check_and_notify()

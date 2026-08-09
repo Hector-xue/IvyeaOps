@@ -32,7 +32,9 @@ import {
   type IvyeaSkillInfo,
 } from "../../api/ivyeaAgent";
 import { listSkills, type SkillMeta } from "../../api/skill";
-import { getSettings } from "../../api/settings";
+import { getSettings, patchSettings } from "../../api/settings";
+import { marketBrowse, marketStatus, type MarketItem } from "../../api/client";
+import { errText } from "../../lib/errText";
 
 type Tab = "skills" | "mcp" | "agents" | "auth";
 
@@ -43,12 +45,16 @@ const TABS: { key: Tab; icon: string; label: string; hint: string }[] = [
   { key: "auth", icon: "🔑", label: "授权", hint: "数据源密钥的接入状态" },
 ];
 
-function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+function Section({ title, sub, action, children }: {
+  title: string; sub?: string; action?: React.ReactNode; children: React.ReactNode;
+}) {
   return (
     <div className="cap-section">
       <div className="cap-section-head">
         <b>{title}</b>
         {sub && <span>{sub}</span>}
+        {/* 区块级动作（比如社区市场的开关）靠右，与标题同一行 */}
+        {action && <span style={{ marginLeft: "auto", alignSelf: "center" }}>{action}</span>}
       </div>
       {children}
     </div>
@@ -57,6 +63,122 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <div className="cap-empty">{children}</div>;
+}
+
+// ── 门道社区（能力的第三个来源）─────────────────────────────────────────────
+//
+// 之前这块只做在「Skill 中心」的子页面里，而用户找社区技能是来「能力市场」这一页
+// 的 —— 这一页的定位本来就是"能力都从哪儿来"，少了社区那一路，等于功能做了但
+// 找不到。这里放摘要 + 入口，安装流程（能力清单、确认、校验）仍在 Skill 中心，
+// 那是需要专注看的一步，不该塞进一个概览页。
+function CommunitySection({ q }: { q: string }) {
+  const navigate = useNavigate();
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [items, setItems] = useState<MarketItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async (signal?: { alive: boolean }) => {
+    try {
+      const st = await marketStatus();
+      if (signal && !signal.alive) return;
+      setEnabled(st.enabled);
+      if (!st.enabled) return;
+      // sort 的取值由后端限定（hot | new | rating）。传别的会 422 ——
+      // 这里曾经写了 "installs"，直接把整页打崩了。
+      const res = await marketBrowse({ q, sort: "hot" });
+      if (signal && !signal.alive) return;
+      setItems(res.items || []);
+      setTotal(res.total || 0);
+      setErr("");
+    } catch (e) {
+      if (!signal || signal.alive) setErr(errText(e, "连不上门道社区"));
+    }
+  }, [q]);
+
+  useEffect(() => {
+    const signal = { alive: true };
+    void load(signal);
+    return () => { signal.alive = false; };
+  }, [load]);
+
+  // 开关**就放在这一页**。它此前只在「系统配置」里，藏得太深：用户是在这一页
+  // 发现"什么都没有"的，让他离开这一页去别处找一个开关，是把我们的信息架构
+  // 当成了他的问题。
+  const toggle = async (next: boolean) => {
+    setBusy(true);
+    setErr("");
+    try {
+      await patchSettings({ skill_market_enabled: next });
+      setEnabled(next);
+      if (next) await load();
+      else { setItems([]); setTotal(0); }
+    } catch (e) {
+      // 非管理员改不了配置。说清楚是"没权限"，别让他反复点。
+      setErr(errText(e, "改不了这个开关（需要管理员）"));
+    } finally { setBusy(false); }
+  };
+
+  if (enabled === null) return null;
+
+  if (!enabled) {
+    // **默认关闭是有意的**（它会外联），但一个空板块看起来就是坏了。
+    // 必须当场说清楚：为什么空的、开了会发生什么、以及**就地能开**。
+    return (
+      <Section title="门道社区" sub="别人做好的技能，装过来就能用">
+        <Empty>
+          还没开启。它会向门道社区发起请求，而 IvyeaOps 的默认立场是<b>数据不出你的机器</b>，
+          所以不替你打开。开启后也只在你主动浏览或安装时联网 —— 请求匿名、不带机器标识、
+          不回传任何使用统计；装过的技能落在本地，断网照常用。
+          <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
+            <button className="cs-btn" disabled={busy} onClick={() => toggle(true)}>
+              {busy ? "开启中…" : "开启并浏览"}
+            </button>
+            <button className="cs-btn" onClick={() => navigate("/hub-settings")}>
+              更多设置（市场地址 / 公钥）
+            </button>
+          </div>
+          {err && <div style={{ marginTop: 8, color: "var(--err)" }}>{err}</div>}
+        </Empty>
+      </Section>
+    );
+  }
+
+  return (
+    <Section
+      title="门道社区"
+      sub={`${total} 个 · 别人做好的技能，装过来就能用`}
+      action={
+        <button className="cs-btn" disabled={busy} onClick={() => toggle(false)}>
+          关闭社区市场
+        </button>
+      }
+    >
+      {err ? <Empty>{err}</Empty> : items.length === 0 ? <Empty>没有匹配的技能。</Empty> : (
+        <div className="cap-grid">
+          {items.slice(0, 12).map((s) => (
+            <div className="cap-card" key={s.slug}>
+              <div className="cap-card-head">
+                <i>◈</i>
+                <b>{s.title || s.slug}</b>
+                {/* 「分享」和「原创」要分得出来：装的是谁的东西，用户有权知道 */}
+                {s.origin === "shared" && <span className="cap-tag">社区分享</span>}
+                {s.category && <span className="cap-tag">{s.category}</span>}
+              </div>
+              <div className="cap-card-desc">{s.summary || s.slug}</div>
+              <div className="cap-card-foot">
+                <code>{s.original_author ? `作者：${s.original_author}` : s.slug}</code>
+                <button className="cs-btn" onClick={() => navigate("/skill/market")}>
+                  去安装
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
+  );
 }
 
 // ── 技能 ─────────────────────────────────────────────────────────────────────
@@ -77,7 +199,7 @@ function SkillsTab() {
       // 以为技能库真的空了，而不是"这会儿读不到"。
       else setAgentErr((a.reason as any)?.response?.status === 503
         ? "IvyeaAgent 服务未就绪，稍候刷新即可。"
-        : ((a.reason as any)?.response?.data?.detail || "读取 Agent 技能库失败。"));
+        : errText(a.reason, "读取 Agent 技能库失败。"));
       if (o.status === "fulfilled") setOpsSkills(o.value?.skills || []);
       setLoading(false);
     });
@@ -132,6 +254,8 @@ function SkillsTab() {
         )}
       </Section>
 
+      <CommunitySection q={q} />
+
       <Section
         title="Skill 中心技能"
         sub={`${opsHits.length} 个 · ~/.hermes/skills，在「Skill 中心」里创建和运行`}
@@ -181,7 +305,7 @@ function McpTab({ isAdmin }: { isAdmin: boolean }) {
       setRows(d.servers || []);
       setClaude(d.claude_servers || []);
     } catch (e: any) {
-      notify("error", e?.response?.data?.detail || "读取 MCP 配置失败");
+      notify("error", errText(e, "读取 MCP 配置失败"));
     } finally {
       setLoading(false);
     }
@@ -206,7 +330,7 @@ function McpTab({ isAdmin }: { isAdmin: boolean }) {
       setOpen(false);
       await load();
     } catch (e: any) {
-      notify("error", e?.response?.data?.detail || e?.message || "保存失败");
+      notify("error", errText(e, "保存失败"));
     } finally {
       setSaving(false);
     }
@@ -227,7 +351,7 @@ function McpTab({ isAdmin }: { isAdmin: boolean }) {
       notify("success", `已移除 ${row.name}`);
       await load();
     } catch (e: any) {
-      notify("error", e?.response?.data?.detail || "移除失败");
+      notify("error", errText(e, "移除失败"));
     }
   };
 
@@ -362,7 +486,7 @@ function PresetsSection() {
       notifyConsolePresetsChanged();
       toast("success", "预设已保存");
     } catch (e: any) {
-      toast("error", e?.response?.data?.detail || "保存失败");
+      toast("error", errText(e, "保存失败"));
     }
   };
 

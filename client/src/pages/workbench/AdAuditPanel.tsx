@@ -26,6 +26,7 @@ import {
   type RunnerName,
   type RunnerStatus,
 } from "../../api/client";
+import { errText } from "../../lib/errText";
 
 const MARKETPLACES = ["US", "UK", "DE", "FR", "CA", "JP", "ES", "IT", "MX", "AU", "AE", "BR", "SA"];
 
@@ -105,7 +106,7 @@ export default function AdAuditPanel() {
           kind: "failed",
           jobId,
           data: { job_id: jobId } as AdAuditFull,
-          error: e?.response?.data?.detail || "轮询失败",
+          error: errText(e, "轮询失败"),
         });
       }
     };
@@ -121,7 +122,7 @@ export default function AdAuditPanel() {
       const preview = await adAuditUpload(file, marketplace, existingId);
       setState({ kind: "uploaded", preview });
     } catch (e: any) {
-      alert(e?.response?.data?.detail || "上传失败");
+      alert(errText(e, "上传失败"));
     } finally {
       setUploading(false);
     }
@@ -136,7 +137,7 @@ export default function AdAuditPanel() {
       );
       setState({ kind: "uploaded", preview });
     } catch (e: any) {
-      alert(e?.response?.data?.detail || "删除失败");
+      alert(errText(e, "删除失败"));
     }
   };
 
@@ -153,7 +154,7 @@ export default function AdAuditPanel() {
       );
       setState({ kind: "uploaded", preview });
     } catch (e: any) {
-      alert(e?.response?.data?.detail || "更新失败");
+      alert(errText(e, "更新失败"));
     }
   };
 
@@ -196,7 +197,7 @@ export default function AdAuditPanel() {
       });
       startPolling(state.preview.job_id);
     } catch (e: any) {
-      alert(e?.response?.data?.detail || "启动失败");
+      alert(errText(e, "启动失败"));
       setState({ kind: "idle" });
     }
   };
@@ -388,7 +389,7 @@ export default function AdAuditPanel() {
               await loadHistory();
               alert(`已清除 ${r.removed} 条失败记录`);
             } catch (e: any) {
-              alert(e?.response?.data?.detail || "清除失败");
+              alert(errText(e, "清除失败"));
             }
           }}
         />
@@ -952,6 +953,13 @@ function AdResultPanel({ data, onReset }: { data: AdAuditFull; onReset: () => vo
             title="结论 + 证据 + 说明，直接发给老板/客户" style={{ textDecoration: "none" }}>📑 交付物（带证据页）</a>
           <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "brief")} download
             title="同样内容的 Markdown，贴进飞书文档 / Notion" style={{ textDecoration: "none" }}>📝 结论摘要</a>
+          <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "pptx")} download
+            title="经营周报：每条结论一页，证据就在同一页上" style={{ textDecoration: "none" }}>📊 周报 PPT</a>
+          {/* PDF 需要服务器上有 Chrome。没有时后端回 501 并说明可以从 HTML 里
+              Ctrl+P —— 所以这个按钮照常给，点了会得到一句能看懂的话。 */}
+          <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "pdf")} download
+            title="PDF（需服务器已安装 Chrome；没有的话可从 HTML 报告里打印）"
+            style={{ textDecoration: "none" }}>📕 PDF</a>
           <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "html")} download title="单文件网页版" style={{ textDecoration: "none" }}>🌐 HTML</a>
           <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "md")} download style={{ textDecoration: "none" }}>📄 Markdown</a>
           {data.output_mode !== "xlsx_plan" && <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "json")} download style={{ textDecoration: "none" }}>🧾 JSON</a>}
@@ -993,7 +1001,7 @@ function AdResultPanel({ data, onReset }: { data: AdAuditFull; onReset: () => vo
           )}
           {/* 统一结论卡片：证据可点开核对、无证据的显式标出。
               与下面的老面板并存 —— 老结构还有它自己的表格视图，不替换。 */}
-          <FindingCards data={data.findings} />
+          <FindingCards data={data.findings} traceUrl={`/ad-audit/${data.job_id}/evidence`} />
           {s.cross_campaign_insights && s.cross_campaign_insights.length > 0 && (
             <AdCrossCampaignPanel items={s.cross_campaign_insights} />
           )}

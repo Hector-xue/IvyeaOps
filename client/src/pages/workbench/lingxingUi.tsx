@@ -2,6 +2,7 @@
 // —— 之前 8 个 LingXing*.tsx 各自抄一份，这里收拢成唯一来源。
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { errText } from "../../lib/errText";
 
 export const inputStyle: React.CSSProperties = {
   background: "var(--bg1)", border: "1px solid var(--b)", borderRadius: 3,
@@ -80,7 +81,7 @@ export function fmtDur(s: number) {
   return m >= 60 ? `${Math.floor(m / 60)}h${m % 60}m` : `${m}m`;
 }
 export function humanErr(e: any): string {
-  return e?.response?.data?.detail || e?.message || "请求失败";
+  return errText(e, "请求失败");
 }
 
 /* ── 表格：列头排序 + 关键字筛选 + 客户端分页 ───────────────────────────── */

@@ -21,6 +21,7 @@ import {
   FONT_OPTIONS, ZOOM_OPTIONS, WEIGHT_OPTIONS,
   getFontId, getZoom, getWeight, applyFont, applyZoom, applyWeight,
 } from "../../lib/appearance";
+import { errText } from "../../lib/errText";
 
 type SaveStatus = "idle" | "saving" | "ok" | "error";
 
@@ -86,7 +87,7 @@ function TestButton({ settingKey, value, label = "测试" }: {
   const run = async () => {
     setBusy(true); setResult(null);
     try { setResult(await testSetting(settingKey, value)); }
-    catch (e: any) { setResult({ ok: false, detail: e?.response?.data?.detail || e?.message || "请求失败" }); }
+    catch (e: any) { setResult({ ok: false, detail: errText(e, "请求失败") }); }
     finally { setBusy(false); setTimeout(() => setResult(null), 12000); }
   };
   return (
@@ -119,7 +120,7 @@ function AutodetectPanel({ onApply }: {
       setSuggestions(r.suggestions);
       setSelected(new Set(Object.keys(r.suggestions)));
       setOpen(true);
-    } catch (e: any) { setErr(e?.response?.data?.detail || e?.message || "检测失败"); }
+    } catch (e: any) { setErr(errText(e, "检测失败")); }
     finally { setLoading(false); }
   };
 
@@ -590,7 +591,7 @@ function ChangePassword() {
       setOld(""); setNext(""); setConfirm("");
       setTimeout(() => { setStatus("idle"); setMsg(""); }, 3000);
     } catch (e: any) {
-      setStatus("error"); setMsg(e?.response?.data?.detail || "修改失败");
+      setStatus("error"); setMsg(errText(e, "修改失败"));
       setTimeout(() => setStatus("idle"), 3000);
     }
   };
@@ -657,7 +658,7 @@ function SelfCheckPanel() {
   const run = async () => {
     setBusy(true); setErr(""); setRes(null);
     try { setRes(await selfCheckSettings()); }
-    catch (e: any) { setErr(e?.response?.data?.detail || e?.message || "自检失败"); }
+    catch (e: any) { setErr(errText(e, "自检失败")); }
     finally { setBusy(false); }
   };
   return (
@@ -752,7 +753,7 @@ function AgentUpdateRow() {
       poll();
     } catch (e: any) {
       setBusy(false);
-      setMsg({ ok: false, text: e?.response?.data?.detail || e?.message || "启动更新失败" });
+      setMsg({ ok: false, text: errText(e, "启动更新失败") });
     }
   };
 
@@ -1199,7 +1200,7 @@ export default function HubSettings() {
   useEffect(() => {
     getSettings()
       .then(r => { setVals({ ...EMPTY, ...r.settings }); setLoading(false); })
-      .catch(e => { setLoadErr(String(e?.response?.data?.detail || e?.message || "加载失败")); setLoading(false); });
+      .catch(e => { setLoadErr(String(errText(e, "加载失败"))); setLoading(false); });
   }, []);
 
   const set = useCallback(<K extends keyof HubSettings>(k: K, v: HubSettings[K]) => {

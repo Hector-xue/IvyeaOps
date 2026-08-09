@@ -33,6 +33,7 @@ import TerminalLivePane from "../../components/TerminalLivePane";
 import TerminalToolbar from "../../components/TerminalToolbar";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { getSettings } from "../../api/settings";
+import { errText } from "../../lib/errText";
 
 const LEGACY_SESSION_ID = "__legacy_ttyd__";
 const STORAGE_KEY = "ivyea-ops-terminal-current-session";
@@ -119,7 +120,7 @@ function SnapshotPanel({ visible, adapter, refreshKey }: {
         return stillExists ? prev : (data.items[0]?.id ?? null);
       });
     } catch (e: any) {
-      setMsg(e?.response?.data?.detail || "加载快照列表失败");
+      setMsg(errText(e, "加载快照列表失败"));
       setTimeout(() => setMsg(""), 3000);
     } finally {
       setListLoading(false);
@@ -133,7 +134,7 @@ function SnapshotPanel({ visible, adapter, refreshKey }: {
       setSelectedId(null);
       await refresh();
     } catch (e: any) {
-      setMsg(e?.response?.data?.detail || "清空失败");
+      setMsg(errText(e, "清空失败"));
       setTimeout(() => setMsg(""), 3000);
     }
   };
@@ -184,7 +185,7 @@ function SnapshotPanel({ visible, adapter, refreshKey }: {
       }
       await refresh();
     } catch (e: any) {
-      setMsg(e?.response?.data?.detail || "保存失败");
+      setMsg(errText(e, "保存失败"));
     } finally {
       setCapturing(false);
       setTimeout(() => setMsg(""), 3000);
@@ -545,7 +546,7 @@ export default function Terminal() {
         }
         await loadLegacyStatus();
       } catch (e: any) {
-        if (!cancelled) setError(e?.response?.data?.detail || e?.message || "终端会话加载失败");
+        if (!cancelled) setError(errText(e, "终端会话加载失败"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -597,7 +598,7 @@ export default function Terminal() {
       await syncSessions(created.id);
       await loadHistory(created.id);
     } catch (e: any) {
-      alert(e?.response?.data?.detail || e?.message || "创建终端失败");
+      alert(errText(e, "创建终端失败"));
     } finally {
       setCreating(false);
     }
@@ -611,7 +612,7 @@ export default function Terminal() {
       const updated = await updateTerminalSession(current.id, { title });
       setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
     } catch (e: any) {
-      alert(e?.response?.data?.detail || e?.message || "修改标题失败");
+      alert(errText(e, "修改标题失败"));
     }
   }
 
@@ -630,7 +631,7 @@ export default function Terminal() {
       await syncSessions(current.id);
       await loadHistory(current.id);
     } catch (e: any) {
-      alert(e?.response?.data?.detail || e?.message || "关闭终端失败");
+      alert(errText(e, "关闭终端失败"));
     }
   }
 
@@ -667,7 +668,7 @@ export default function Terminal() {
         await loadHistory(created.id);
       }
     } catch (e: any) {
-      alert(e?.response?.data?.detail || e?.message || "删除终端失败");
+      alert(errText(e, "删除终端失败"));
     }
   }
 
@@ -682,7 +683,7 @@ export default function Terminal() {
         setHistoryTotal(0);
       }
     } catch (e: any) {
-      alert(e?.response?.data?.detail || e?.message || (nextArchived ? "归档失败" : "取消归档失败"));
+      alert(errText(e, nextArchived ? "归档失败" : "取消归档失败"));
     }
   }
 
@@ -693,7 +694,7 @@ export default function Terminal() {
     try {
       await loadHistory(current.id, firstSeq);
     } catch (e: any) {
-      alert(e?.response?.data?.detail || e?.message || "加载更早历史失败");
+      alert(errText(e, "加载更早历史失败"));
     }
   }
 
@@ -703,7 +704,7 @@ export default function Terminal() {
       const data = action === "start" ? await startLegacyTtyd() : await stopLegacyTtyd();
       setTtydStatus(data);
     } catch (e: any) {
-      alert(e?.response?.data?.detail || e?.message || (action === "start" ? "启动主终端失败" : "停止主终端失败"));
+      alert(errText(e, action === "start" ? "启动主终端失败" : "停止主终端失败"));
     } finally {
       setTtydBusy(false);
     }

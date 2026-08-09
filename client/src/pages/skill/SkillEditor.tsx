@@ -11,6 +11,7 @@ import {
 import { useAutoSave, SaveStatus } from "../../hooks/useAutoSave";
 import FileTree from "./FileTree";
 import ConfirmDialog from "./ConfirmDialog";
+import { errText } from "../../lib/errText";
 
 // Code-split the editor: CodeMirror6 + language packs weigh ~240KB gzip,
 // we only pay that on first skill open, not on stats/list pages.
@@ -117,7 +118,7 @@ export default function SkillEditor({ name, onClose, onDeleted }: SkillEditorPro
     setDetail(null);
     getSkill(name)
       .then((d) => { if (alive) setDetail(d); })
-      .catch((e) => { if (alive) setDetailErr(e?.response?.data?.detail ?? e.message ?? "加载失败"); })
+      .catch((e) => { if (alive) setDetailErr(errText(e, "加载失败")); })
       .finally(() => { if (alive) setLoadingDetail(false); });
     return () => { alive = false; };
   }, [name]);
@@ -147,7 +148,7 @@ export default function SkillEditor({ name, onClose, onDeleted }: SkillEditorPro
       })
       .catch((e) => {
         if (!alive) return;
-        setFileErr(e?.response?.data?.detail ?? e.message ?? "文件加载失败");
+        setFileErr(errText(e, "文件加载失败"));
       })
       .finally(() => { if (alive) setLoadingFile(false); });
     return () => { alive = false; };
@@ -312,7 +313,7 @@ export default function SkillEditor({ name, onClose, onDeleted }: SkillEditorPro
               setDetailErr(null);
               getSkill(name)
                 .then((d) => setDetail(d))
-                .catch((e) => setDetailErr(e?.response?.data?.detail ?? e.message ?? "加载失败"))
+                .catch((e) => setDetailErr(errText(e, "加载失败")))
                 .finally(() => setLoadingDetail(false));
               // Reset dirty tracking — buffers are now stale vs disk.
               dirtySet.clear();

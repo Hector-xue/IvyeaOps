@@ -430,6 +430,26 @@ async def _daily_backup_tick() -> None:
     await jobs.run(job_id, lambda jid: asyncio.to_thread(_work, jid))
 
 
+def _budget_paused() -> bool:
+    """预算判断绝不能带走调度循环 —— 读不到就当没超。"""
+    try:
+        from app.services import budget
+        return budget.auto_tasks_paused()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("预算检查失败，按未超处理：%s", exc)
+        return False
+
+
+def _skip_run(task_id: str, reason: str) -> None:
+    """把"这次被跳过"记进任务历史。**不能静默跳过** —— 用户看到定时任务
+    该跑没跑，第一反应是"坏了"，得让他在历史里直接看到原因。"""
+    try:
+        run_id = _start_run(task_id, "scheduled")
+        _finish_run(run_id, task_id, status="skipped", output=reason)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("记录跳过失败：%s", exc)
+
+
 async def scheduler_loop() -> None:
     """每 30 秒看一眼有没有到点的任务。单个任务失败只记进它自己的历史。"""
     while True:
@@ -440,10 +460,20 @@ async def scheduler_loop() -> None:
         except Exception as e:  # noqa: BLE001 — 备份失败不能带走整个调度循环
             logger.warning("daily backup skipped: %s", e)
         try:
+            # 花超预算就不放定时任务出去。**只挡自动的**：用户手点的照跑不误 ——
+            # 他明确要的东西，不该被一个本地估算数按住。挡的是"没人盯着也会
+            # 自己跑"的那些，那才是账单失控的来源。
+            paused = _budget_paused()
             for task in due_tasks():
                 # 先把下次时间排掉再执行：任务本身可能跑好几分钟，
                 # 期间不该因为 next_run 还停在过去而被重复捞起来。
                 reschedule(task["id"], task["cron"])
+                if paused:
+                    # **照常排下一次**，只是这一次不跑 —— 预算是按月重置的，
+                    # 把调度停死会让下个月也起不来。
+                    logger.warning("本月 AI 花费已超预算，跳过定时任务：%s", task["name"])
+                    _skip_run(task["id"], "本月 AI 花费已超预算，自动任务已暂停（手动执行不受影响）")
+                    continue
                 logger.info("scheduled task firing: %s", task["name"])
                 await asyncio.to_thread(run_task_now, task, "scheduled")
         except asyncio.CancelledError:

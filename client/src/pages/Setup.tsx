@@ -2,19 +2,28 @@
  * First-run Setup Wizard
  *
  * Shown once to new users who haven't set a password yet.
- * Five steps:
+ * Six steps:
  *   0. Welcome
  *   1. Agent Detection + install
  *   2. Global fallback model (assistant slot) — makes AI work without a local agent
  *   3. API Keys (apimart + optional sorftime)
- *   4. Done
+ *   4. 试跑一次 —— 让用户在离开向导之前**看到一个真实产出**
+ *   5. Done
+ *
+ * 第 4 步是这个向导存在的理由。配置向导最常见的失败是：用户老老实实填完所有
+ * 表单，然后落在一个空荡荡的首页上，不知道这东西到底能干什么，就走了。所以在
+ * 「完成」之前插一步，用**本地知识库**跑一次真实检索 —— 不依赖任何外部数据源、
+ * 不花一分钱、几百毫秒出结果，而且返回的每条都带官方出处，正好是这个产品和
+ * 「AI 随口说」的区别。
  *
  * On completion calls POST /api/setup/complete, then navigates to /.
  */
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { api } from "../api/client";
 import { completeSetup, installAgentStreamUrl, type SetupChecks } from "../api/setup";
 import { patchSettings } from "../api/settings";
+import { errText } from "../lib/errText";
 
 // ---------------------------------------------------------------------------
 // Tiny style helpers (inline, no extra CSS file needed)
@@ -404,7 +413,7 @@ function StepFallbackModel({ onNext }: { onNext: () => void }) {
       } as any);
       onNext();
     } catch (e: any) {
-      setErr(e?.response?.data?.detail || e?.message || "保存失败");
+      setErr(errText(e, "保存失败"));
     } finally {
       setSaving(false);
     }
@@ -452,6 +461,23 @@ function StepFallbackModel({ onNext }: { onNext: () => void }) {
           placeholder="sk-..."
           autoComplete="off"
         />
+        {/* 「我没有 API key 怎么办」——这是新用户在这一步最常卡住的地方，
+            而卡住的人多半就直接关掉不用了。把出路直接写在这里，不让他去查文档。 */}
+        <details style={{ marginTop: 6 }}>
+          <summary style={{ ...S.hint, cursor: "pointer" }}>我没有 API Key 怎么办？</summary>
+          <div style={{ ...S.hint, marginTop: 6, lineHeight: 1.8 }}>
+            <b>一、先跳过。</b>没有 Key 也能用：本地知识库检索、报表解析、定时任务、
+            终端、备份这些都不需要模型。需要 AI 的板块会明确告诉你缺什么，
+            而不是默默失败。
+            <br />
+            <b>二、用本地模型。</b>装 Ollama 之后，提供商选「自定义」，
+            Base URL 填 <code>http://127.0.0.1:11434/v1</code>，Key 随便填一个非空值。
+            这样一分钱不花，数据也确实一步都没出你的机器。
+            <br />
+            <b>三、买一个。</b>DeepSeek 与硅基流动都支持个人注册、按量付费，
+            一般几十块能用很久。填进来之后随时可以在「系统配置」里换。
+          </div>
+        </details>
       </div>
 
       <div style={{ marginBottom: 16 }}>
@@ -521,7 +547,7 @@ function StepApiKeys({
       }
       onNext();
     } catch (e: any) {
-      setErr(e?.response?.data?.detail || e?.message || "保存失败");
+      setErr(errText(e, "保存失败"));
     } finally {
       setSaving(false);
     }
@@ -619,6 +645,97 @@ function StepApiKeys({
 }
 
 // ---------------------------------------------------------------------------
+// Step 4 — 试跑一次
+// ---------------------------------------------------------------------------
+
+const DEMO_QUERIES = [
+  "变体合并有什么风险",
+  "Listing 被下架怎么申诉",
+  "广告 ACOS 多少算正常",
+];
+
+function StepTryIt({ onNext }: { onNext: () => void }) {
+  const [q, setQ] = useState(DEMO_QUERIES[0]);
+  const [rows, setRows] = useState<any[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const run = async (query: string) => {
+    setQ(query);
+    setBusy(true);
+    setErr("");
+    setRows(null);
+    try {
+      const { data } = await api.get<{ ok: boolean; results: any[] }>(
+        "/ivyea-agent/knowledge/search", { params: { q: query, limit: 3 } });
+      setRows(data.results || []);
+    } catch (e) {
+      setErr(errText(e, "试跑失败"));
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <div style={S.title}>试跑一次</div>
+      <div style={S.sub}>
+        查一个真实问题。这一步<b>不花钱、不联网</b> —— 用的是随程序自带的亚马逊
+        知识库，跑在你自己这台机器上。
+      </div>
+
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "14px 0" }}>
+        {DEMO_QUERIES.map((d) => (
+          <button key={d} style={{ ...S.btnSecondary, fontSize: 12, padding: "5px 10px" }}
+                  disabled={busy} onClick={() => run(d)}>
+            {d}
+          </button>
+        ))}
+      </div>
+
+      {busy && <div style={S.sub}>查询中…</div>}
+      {err && <div style={{ ...S.sub, color: "var(--err)" }}>{err}</div>}
+
+      {rows && rows.length === 0 && (
+        <div style={S.sub}>
+          这次没查到条目。不影响后面使用 —— 知识库可以在「Skill 中心」里补充。
+        </div>
+      )}
+
+      {rows && rows.length > 0 && (
+        <>
+          <div style={{ display: "grid", gap: 8, margin: "10px 0" }}>
+            {rows.map((r) => (
+              <div key={r.id} style={{ padding: 10, background: "var(--bg2)",
+                                       border: "1px solid var(--b)", borderRadius: 6 }}>
+                <div style={{ fontSize: 12, marginBottom: 4 }}>{r.title}</div>
+                <div style={{ fontSize: 10, color: "var(--t3)" }}>
+                  {r.category} · {r.source_type} · {r.retrieved_at}
+                </div>
+                {r.source_url && (
+                  <a href={r.source_url} target="_blank" rel="noreferrer"
+                     style={{ fontSize: 10, color: "var(--acc)" }}>
+                    {String(r.source_url).slice(0, 70)}
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+          <div style={{ ...S.sub, fontSize: 11 }}>
+            注意每条后面都跟着<b>出处和取回日期</b>。这是这个产品和「AI 随口说一句」
+            的区别 —— 结论能被追问到源头。
+          </div>
+        </>
+      )}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+        <button style={S.btnPrimary} onClick={onNext}>
+          {rows ? "下一步 →" : "跳过 →"}
+        </button>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Step 3 — Done
 // ---------------------------------------------------------------------------
 
@@ -679,7 +796,7 @@ function StepDone({ onFinish }: { onFinish: () => void }) {
 export default function Setup({ checks }: { checks: SetupChecks }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
-  const TOTAL = 5;
+  const TOTAL = 6;
 
   const next = () => setStep((s) => Math.min(s + 1, TOTAL - 1));
 
@@ -692,7 +809,7 @@ export default function Setup({ checks }: { checks: SetupChecks }) {
     navigate("/", { replace: true });
   };
 
-  const STEP_LABELS = ["欢迎", "Agent", "兜底模型", "密钥", "完成"];
+  const STEP_LABELS = ["欢迎", "Agent", "兜底模型", "密钥", "试跑", "完成"];
 
   return (
     <div style={S.page}>
@@ -706,7 +823,8 @@ export default function Setup({ checks }: { checks: SetupChecks }) {
         {step === 1 && <StepAgents checks={checks} onNext={next} />}
         {step === 2 && <StepFallbackModel onNext={next} />}
         {step === 3 && <StepApiKeys checks={checks} onNext={next} />}
-        {step === 4 && <StepDone onFinish={finish} />}
+        {step === 4 && <StepTryIt onNext={next} />}
+        {step === 5 && <StepDone onFinish={finish} />}
       </div>
     </div>
   );

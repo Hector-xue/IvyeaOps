@@ -14,6 +14,7 @@ import {
   TokenUsageData,
 } from "../../api/client";
 import { getAiLog, type AiCall } from "../../api/settings";
+import { errText } from "../../lib/errText";
 
 function color(v: number, warn: number, danger: number) {
   return v > danger ? "var(--red)" : v > warn ? "var(--amber)" : "var(--acc)";
@@ -90,7 +91,7 @@ export default function ServerMonitor() {
         setSnap(s);
         setErr(null);
       } catch (e: any) {
-        setErr(e?.response?.data?.detail || e?.message || "获取监控数据失败");
+        setErr(errText(e, "获取监控数据失败"));
       }
       if (snapCount % 3 === 0) {
         monitorServices().then(setServices).catch(() => {});

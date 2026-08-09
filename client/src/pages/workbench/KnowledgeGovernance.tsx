@@ -38,6 +38,7 @@ import {
   type KnowledgeReviewStatus,
 } from "../../api/ivyeaAgent";
 import "../../styles/knowledge-governance.css";
+import { errText } from "../../lib/errText";
 
 type View = "overview" | "changes" | "coverage" | "freshness" | "quality" | "evidence" | "conflicts";
 
@@ -95,7 +96,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function errorMessage(error: any, fallback = "操作失败") {
-  return error?.response?.data?.detail || error?.response?.data?.error || error?.message || fallback;
+  return errText(error, fallback);
 }
 
 function pct(value: number | undefined) {

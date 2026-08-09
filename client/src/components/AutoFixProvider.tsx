@@ -11,6 +11,7 @@ import {
   type AutofixErrorCtx,
   type AutofixJob,
 } from "../api/autofix";
+import { errText } from "../lib/errText";
 
 // Endpoint-prefix → human label, so the popup names the board that failed.
 const FEATURE_MAP: [string, string][] = [
@@ -139,7 +140,7 @@ export default function AutoFixProvider({ children }: { children: React.ReactNod
       setJob(j);
       poll(j.id);
     } catch (e: any) {
-      setErr(e?.response?.data?.detail || e?.message || "无法启动修复");
+      setErr(errText(e, "无法启动修复"));
       setUi("failed");
     }
   }, [ctx, poll]);
@@ -157,7 +158,7 @@ export default function AutoFixProvider({ children }: { children: React.ReactNod
         setUi("rebuild_done"); // frontend-only fix: refresh suffices
       }
     } catch (e: any) {
-      setErr(e?.response?.data?.detail || e?.message || "应用失败");
+      setErr(errText(e, "应用失败"));
       setUi("failed");
     }
   }, [job]);

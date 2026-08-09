@@ -8,6 +8,7 @@ import {
 } from "../../../api/skill";
 import ConfirmDialog from "../ConfirmDialog";
 import DiffViewer from "./DiffViewer";
+import { errText } from "../../../lib/errText";
 
 export type SnapshotPanelProps = {
   name: string;
@@ -54,7 +55,7 @@ export default function SnapshotPanel({ name, onRestored, onBack }: SnapshotPane
     try {
       setItems(await listSnapshots(name));
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e?.message ?? "加载失败");
+      setErr(errText(e, "加载失败"));
     } finally {
       setLoading(false);
     }
@@ -72,7 +73,7 @@ export default function SnapshotPanel({ name, onRestored, onBack }: SnapshotPane
       setToast({ text: `已创建快照 ${snap.id.slice(0, 8)}` });
       window.setTimeout(() => setToast(null), 3000);
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e?.message ?? "创建快照失败");
+      setErr(errText(e, "创建快照失败"));
     } finally {
       setCreating(false);
     }
@@ -106,7 +107,7 @@ export default function SnapshotPanel({ name, onRestored, onBack }: SnapshotPane
       setToast({ text: "已撤销恢复" });
       window.setTimeout(() => setToast(null), 3000);
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e?.message ?? "撤销失败");
+      setErr(errText(e, "撤销失败"));
     }
   };
 

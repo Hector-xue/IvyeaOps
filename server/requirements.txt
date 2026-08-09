@@ -9,6 +9,10 @@ psutil>=5.9.0
 feedparser>=6.0.10
 markdown>=3.6
 openpyxl>=3.1.0
+# 交付物导出的 PPTX（经营周报）。纯 Python、无系统依赖，约 500KB。
+# PDF **刻意不加依赖**：它走 headless chrome，有就用、没有就告诉用户可以从
+# HTML 报告里 Ctrl+P —— 为一个导出格式要求每台机器装 chrome 不划算。
+python-pptx>=1.0.0
 pypdf>=4.0.0
 psd-tools==1.10.2
 Pillow>=11.0.0

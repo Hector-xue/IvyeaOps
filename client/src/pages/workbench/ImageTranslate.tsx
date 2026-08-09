@@ -4,6 +4,7 @@ import {
   listFolders, createFolder, renameFolder, deleteFolder, moveImage,
 } from "../../api/imageTranslate";
 import { lockBodyScroll } from "../../lib/scrollLock";
+import { errText } from "../../lib/errText";
 
 interface Lang { code: string; lang: string; locale: string; label: string; }
 interface Img {
@@ -78,7 +79,7 @@ export default function ImageTranslate() {
       }
       await Promise.all([refreshWorkspace(), refreshFolders()]);
     } catch (e: any) {
-      setMsg("上传失败：" + (e?.response?.data?.detail || e?.message || "未知错误"));
+      setMsg("上传失败：" + (errText(e, "未知错误")));
     }
     setUploading(false);
     if (fileRef.current) fileRef.current.value = "";
@@ -105,7 +106,7 @@ export default function ImageTranslate() {
   async function onNewFolder() {
     const name = prompt("新建文件夹名称：")?.trim();
     if (!name) return;
-    try { const f = await createFolder(name); await refreshFolders(); setActiveFolder(f.id); } catch (e: any) { alert(e?.response?.data?.detail || "创建失败"); }
+    try { const f = await createFolder(name); await refreshFolders(); setActiveFolder(f.id); } catch (e: any) { alert(errText(e, "创建失败")); }
   }
   async function onRenameFolder(f: Folder, e: React.MouseEvent) {
     e.stopPropagation();
@@ -149,7 +150,7 @@ export default function ImageTranslate() {
         const res = await translateImage(sid, langArr);
         acc.push({ sourceId: sid, sourceUrl: src?.url || "", results: res });
       } catch (e: any) {
-        acc.push({ sourceId: sid, sourceUrl: src?.url || "", results: langArr.map((c) => ({ code: c, error: e?.response?.data?.detail || "失败" })) });
+        acc.push({ sourceId: sid, sourceUrl: src?.url || "", results: langArr.map((c) => ({ code: c, error: errText(e, "失败") })) });
       }
       setBatches([...acc]);
       setProgress({ done: i + 1, total: sources.length });

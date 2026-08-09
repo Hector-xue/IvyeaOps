@@ -22,6 +22,7 @@ import {
 import AdAuditPanel from "./AdAuditPanel";
 import DeepAnalysis from "./DeepAnalysis";
 import DeepAnalysisPanel from "../../components/DeepAnalysisPanel";
+import { errText } from "../../lib/errText";
 
 const MARKETPLACES = ["US", "UK", "DE", "FR", "CA", "JP", "ES", "IT", "MX", "AU", "AE", "BR", "SA"];
 
@@ -117,7 +118,7 @@ function AsinAuditPanel() {
           kind: "failed",
           jobId,
           data: { job_id: jobId } as AuditFull,
-          error: e?.response?.data?.detail || "轮询失败",
+          error: errText(e, "轮询失败"),
         });
       }
     };
@@ -140,7 +141,7 @@ function AsinAuditPanel() {
       setViewingJobId(r.job_id);
       startPolling(r.job_id);
     } catch (e: any) {
-      alert(e?.response?.data?.detail || "启动失败");
+      alert(errText(e, "启动失败"));
       setState({ kind: "idle" });
     }
   };
@@ -297,7 +298,7 @@ function AsinAuditPanel() {
                     await loadHistory();
                     alert(`已清除 ${r.removed} 条失败记录`);
                   } catch (e: any) {
-                    alert(e?.response?.data?.detail || "清除失败");
+                    alert(errText(e, "清除失败"));
                   }
                 }}
               >

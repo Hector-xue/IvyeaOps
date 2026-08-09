@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login, register } from "../api/client";
+import { errText } from "../lib/errText";
 
 type Mode = "login" | "register";
 
@@ -29,7 +30,7 @@ export default function Login() {
         setPassword("");
       }
     } catch (err: any) {
-      setError(err?.response?.data?.detail || (mode === "login" ? "登录失败" : "注册失败"));
+      setError(errText(err, mode === "login" ? "登录失败" : "注册失败"));
     } finally {
       setLoading(false);
     }

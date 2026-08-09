@@ -170,6 +170,165 @@ def build_xlsx(out_path: Path, findings: Dict[str, Any], meta: Dict[str, Any]) -
     return out_path
 
 
+# ── PPTX：给"要拿去开会"的那一步 ────────────────────────────────────────
+
+def build_pptx(out_path: Path, findings: Dict[str, Any], meta: Dict[str, Any]) -> Path:
+    """把结论做成一份能直接放的经营周报。
+
+    每条结论一页，**证据写在同一页上**而不是另起附录 —— 会上被问到"凭什么"的
+    时候，翻页找附录就已经晚了。
+
+    字体刻意不指定：一旦写死某个西文字体，中文会在放映的机器上退化成方块。
+    让 PowerPoint / WPS / Keynote 用它自己的默认字体，中文一定显示得出来。
+    """
+    from pptx import Presentation
+    from pptx.dml.color import RGBColor
+    from pptx.util import Inches
+
+    items = _sorted_items(findings)
+    prs = Presentation()
+    prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)   # 16:9
+
+    # 封面
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _tb(slide, Inches(0.9), Inches(2.4), Inches(11.5), Inches(1.2),
+        str(meta.get("kind") or "分析结论"), size=40, bold=True)
+    sub = f"{datetime.now().strftime('%Y-%m-%d')}"
+    if meta.get("job_id"):
+        sub += f" · 任务 {meta['job_id']}"
+    _tb(slide, Inches(0.9), Inches(3.7), Inches(11.5), Inches(0.6), sub, size=16,
+        color=RGBColor(0x66, 0x6E, 0x6A))
+    _tb(slide, Inches(0.9), Inches(6.3), Inches(11.5), Inches(0.6),
+        f"共 {len(items)} 条结论 · 由 IvyeaOps 在本机生成，数据未离开这台机器",
+        size=12, color=RGBColor(0x8A, 0x92, 0x8E))
+
+    for idx, f in enumerate(items, start=1):
+        slide = prs.slides.add_slide(prs.slide_layouts[6])
+        sev = str(f.get("severity") or "medium")
+        _tb(slide, Inches(0.7), Inches(0.5), Inches(1.6), Inches(0.45),
+            _SEVERITY_CN.get(sev, sev), size=14, bold=True,
+            color=RGBColor(0xC0, 0x39, 0x2B) if sev in ("critical", "high")
+            else RGBColor(0x66, 0x6E, 0x6A))
+        _tb(slide, Inches(0.7), Inches(1.0), Inches(11.9), Inches(1.1),
+            f"{idx}. {f.get('title') or ''}", size=26, bold=True)
+        if f.get("reasoning"):
+            _tb(slide, Inches(0.7), Inches(2.1), Inches(11.9), Inches(0.9),
+                str(f["reasoning"]), size=14, color=RGBColor(0x44, 0x4C, 0x48))
+
+        lines = []
+        for e in (f.get("evidence") or []):
+            bits = f"{e.get('metric')} = {e.get('value')}{e.get('unit') or ''}"
+            tail = " · ".join(x for x in [str(e.get('source') or ''), str(e.get('as_of') or '')] if x)
+            lines.append(f"• {bits}" + (f"（{tail}）" if tail else ""))
+        if not lines:
+            lines = ["• 这条没有结构化证据支撑，仅供参考"]
+        _tb(slide, Inches(0.7), Inches(3.1), Inches(7.4), Inches(3.4),
+            "证据\n" + "\n".join(lines), size=13)
+
+        acts = f.get("actions") or []
+        first = acts[0] if acts else {}
+        act_lines = [f"• {first.get('detail') or first.get('type') or '（无）'}"]
+        if first.get("guardrail"):
+            act_lines.append(f"• 护栏：{first['guardrail']}")
+        act_lines.append(f"• 可回滚：{'是' if first.get('reversible', True) else '否'}")
+        _tb(slide, Inches(8.4), Inches(3.1), Inches(4.2), Inches(3.4),
+            "建议动作\n" + "\n".join(act_lines), size=13)
+
+    # 数据边界单独一页：口径不跟着结论走，结论就没法被复核。
+    if findings.get("data_notes") or findings.get("unsupported"):
+        slide = prs.slides.add_slide(prs.slide_layouts[6])
+        _tb(slide, Inches(0.7), Inches(0.8), Inches(11.9), Inches(0.8),
+            "数据说明", size=28, bold=True)
+        body = str(findings.get("data_notes") or "")
+        unsup = findings.get("unsupported") or []
+        if unsup:
+            body += ("\n\n以下结论没有结构化证据支撑：\n"
+                     + "\n".join(f"• {u}" for u in unsup))
+        _tb(slide, Inches(0.7), Inches(1.8), Inches(11.9), Inches(4.5), body, size=14)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    prs.save(str(out_path))
+    return out_path
+
+
+def _tb(slide, left, top, width, height, text: str, *, size=14, bold=False, color=None):
+    from pptx.util import Pt
+    box = slide.shapes.add_textbox(left, top, width, height)
+    tf = box.text_frame
+    tf.word_wrap = True
+    for i, line in enumerate(str(text).split("\n")):
+        para = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        para.text = line
+        for run in para.runs:
+            run.font.size = Pt(size)
+            run.font.bold = bold
+            if color is not None:
+                run.font.color.rgb = color
+    return box
+
+
+def _sorted_items(findings: Dict[str, Any]) -> List[Dict[str, Any]]:
+    items = list(findings.get("findings") or [])
+    order = {s: i for i, s in enumerate(("critical", "high", "medium", "low"))}
+    items.sort(key=lambda f: (order.get(str(f.get("severity")), 9),
+                              -int(f.get("priority_score") or 0)))
+    return items
+
+
+# ── PDF：有 chrome 才做 ──────────────────────────────────────────────────
+
+def chrome_bin() -> str:
+    """找一个能用的 chrome。找不到返回空字符串。
+
+    **刻意不把它写进依赖**：这是个要分发给普通卖家的自托管产品，为了一个导出
+    格式就要求每台机器装 chrome，代价远大于收益。有就用，没有就告诉用户
+    怎么自己拿到 PDF（HTML 报告在浏览器里 Ctrl+P 就是）。
+    """
+    import shutil
+    for name in ("google-chrome", "chromium", "chromium-browser",
+                 "google-chrome-stable", "msedge"):
+        found = shutil.which(name)
+        if found:
+            return found
+    for hard in (r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"):
+        if Path(hard).is_file():
+            return hard
+    return ""
+
+
+def build_pdf(out_path: Path, html: str) -> Path:
+    """用 headless chrome 把一份 HTML 打成 PDF。没有 chrome 时抛 RuntimeError，
+    由调用方翻译成给用户看的说明。"""
+    import subprocess
+    import tempfile
+
+    binary = chrome_bin()
+    if not binary:
+        raise RuntimeError("这台机器上没有找到 Chrome/Chromium")
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "report.html"
+        src.write_text(html, encoding="utf-8")
+        cmd = [binary, "--headless=new", "--disable-gpu", "--no-sandbox",
+               f"--print-to-pdf={out_path}", "--no-pdf-header-footer",
+               f"--user-data-dir={tmp}/profile", src.as_uri()]
+        # **30 秒，不是 90 秒。** 这是一个用户点了按钮在等的动作 —— 让他干等
+        # 一分半再看到失败，比早点告诉他"这台机器上不行、去 HTML 里打印"糟得多。
+        # （macOS 的 CI runner 上实测过这条路会卡死，装了 Chrome 不等于能跑。）
+        try:
+            proc = subprocess.run(cmd, capture_output=True, timeout=30)
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                "Chrome 没能在 30 秒内生成 PDF（这台机器上的无头模式可能不可用）"
+            ) from exc
+    if not out_path.is_file() or out_path.stat().st_size == 0:
+        tail = (proc.stderr or b"").decode("utf-8", "replace")[-300:]
+        raise RuntimeError(f"Chrome 没有生成 PDF：{tail}")
+    return out_path
+
+
 def build_markdown(findings: Dict[str, Any], meta: Dict[str, Any]) -> str:
     """同一份内容的 Markdown 版本 —— 贴进飞书文档、Notion 或 issue 里用。"""
     items = list(findings.get("findings") or [])

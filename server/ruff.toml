@@ -41,6 +41,7 @@ ignore = [
 "app/core/hashpw.py" = ["T201"]
 "app/core/secrets.py" = ["T201"]        # __main__ 里的 --decrypt-all 降级逃生舱
 "app/services/freight_parser.py" = ["T201"]
+"app/evals/make_case.py" = ["T201"]        # 攒评测案例的终端工具
 # 测试里偶尔 print 调试是可接受的。
 "tests/*" = ["T201"]
 "app/tests/*" = ["T201"]

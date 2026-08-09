@@ -20,6 +20,7 @@ import {
   type ConsoleSource,
   type ConsoleWorkspace,
 } from "../../api/ivyeaAgent";
+import { errText } from "../../lib/errText";
 
 const DEFAULT_WS = "默认工作区";
 const OPEN_KEY = "ivyea-ops.console.ws-open";
@@ -174,7 +175,7 @@ export default function SessionRail({
       await load();
     } catch (e: any) {
       // 目录非法/越权要说清楚，不能静默吞掉让人以为建成了
-      setWsErr(e?.response?.data?.detail || "创建失败");
+      setWsErr(errText(e, "创建失败"));
     }
   };
 
