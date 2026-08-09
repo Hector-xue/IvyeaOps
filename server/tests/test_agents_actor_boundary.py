@@ -15,6 +15,7 @@ main.py 用的是 ``require_module("agents")``，而 permissions.py 的「技术
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 from fastapi import Depends, FastAPI
@@ -101,7 +102,11 @@ def test_admin_keeps_browsing_outside_the_project(project):
     """管理员的"上一级"导航是真实需求，不能被这次收紧误伤。"""
     token = _with_actor(True)
     try:
-        assert files_mod._resolve_in_project(str(project), "/etc/hostname") == "/etc/hostname"
+        # 用一个**当前平台上真实存在的**项目外绝对路径。原先这里硬写
+        # "/etc/hostname" 并断言原样返回 —— 在 Windows 上 abspath 会把它补成
+        # "D:\etc\hostname"，断言必挂，但代码行为是对的。
+        outside_abs = os.path.abspath(os.path.join(os.sep, "etc", "hostname"))
+        assert files_mod._resolve_in_project(str(project), outside_abs) == outside_abs
         assert files_mod._resolve_in_project(str(project), "../outside.txt") == \
             os.path.abspath(str(project.parent / "outside.txt"))
     finally:
@@ -114,13 +119,16 @@ def test_member_cannot_create_projects_outside_the_workspace_root(monkeypatch, t
     monkeypatch.setattr(projects_mod, "WORKSPACES_ROOT", str(tmp_path))
     token = _with_actor(False)
     try:
-        # 根之内可以
+        # 根之内可以。**比的是"指向同一个位置"而不是字符串相等** —— 这个函数
+        # 会把路径分隔符统一成正斜杠（Windows 上必须这么做，否则包含检查里的
+        # startswith(root + "/") 永远不成立），所以回来的串和传进去的不一样。
         inside = str(tmp_path / "my-project")
-        assert projects_mod._validate_workspace_path(inside) == inside
+        assert Path(projects_mod._validate_workspace_path(inside)) == Path(inside)
         # 根之外不行——否则他可以把项目建到任意目录，再借文件接口读写那整棵树，
         # 等于绕开 _resolve_in_project 的项目内包含检查。
+        outside = str(Path(os.path.abspath(os.sep)) / "home" / "someone-else" / "p")
         with pytest.raises(Exception):
-            projects_mod._validate_workspace_path("/home/other/p")
+            projects_mod._validate_workspace_path(outside)
     finally:
         _actor._actor_is_admin.reset(token)
 
@@ -129,10 +137,16 @@ def test_admin_can_still_create_projects_anywhere_but_system_dirs(monkeypatch, t
     monkeypatch.setattr(projects_mod, "WORKSPACES_ROOT", str(tmp_path))
     token = _with_actor(True)
     try:
-        assert projects_mod._validate_workspace_path("/home/other/p") == "/home/other/p"
-        for bad in ("/etc/passwd", "/"):
-            with pytest.raises(Exception):
-                projects_mod._validate_workspace_path(bad)
+        # /home/... 既在工作区根之外，又不在 _FORBIDDEN 系统目录词表里 ——
+        # 这里要验的是管理员可以在根之外建，别顺手选个会被系统目录规则挡掉的路径。
+        outside = str(Path(os.path.abspath(os.sep)) / "home" / "someone-else" / "p")
+        assert Path(projects_mod._validate_workspace_path(outside)) == Path(outside)
+        # /etc 与根目录属于系统关键目录，管理员也不许在这儿建项目。
+        # （Windows 上没有 /etc 这层语义，_FORBIDDEN 是 POSIX 词表，跳过。）
+        if os.name != "nt":
+            for bad in ("/etc/passwd", "/"):
+                with pytest.raises(Exception):
+                    projects_mod._validate_workspace_path(bad)
     finally:
         _actor._actor_is_admin.reset(token)
 
