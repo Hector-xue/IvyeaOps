@@ -104,3 +104,49 @@ def test_generated_skeleton_is_refused_until_a_human_labels_it(tmp_path):
 
     with pytest.raises(ValueError, match="expected_points"):
         load_cases("ads", root=tmp_path)
+
+
+# ── 案例集本身的完整性 ───────────────────────────────────────────────────
+def test_duplicate_case_ids_are_refused(tmp_path):
+    """报告是按 id 列行的。两个案例同名，看报告的人就分不清哪一行对应哪个 ——
+    而评测报告的全部价值就是"哪里退步了"。"""
+    import json
+
+    import pytest
+
+    from app.evals.runner import load_cases
+
+    folder = tmp_path / "ads"
+    folder.mkdir(parents=True)
+    for name in ("a.json", "b.json"):
+        (folder / name).write_text(json.dumps({
+            "id": "same-id", "prompt": "x", "input": {}, "expected_points": ["y"],
+        }, ensure_ascii=False), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="重复"):
+        load_cases("ads", root=tmp_path)
+
+
+def test_shipped_ads_cases_all_load():
+    """仓库里自带的案例集必须始终可加载 —— 它是被测系统的基准线。"""
+    from app.evals.runner import load_cases
+    cases = load_cases("ads")
+    assert len(cases) >= 6
+    assert all(c["expected_points"] for c in cases)
+    assert len({c["id"] for c in cases}) == len(cases)
+
+
+def test_expected_points_state_both_must_and_must_not():
+    """只写"必须指出 X 在浪费"的话，一个把所有词都判成浪费的模型也能满分 ——
+    而那正是最危险的输出。"""
+    from app.evals.runner import load_cases
+    joined = " ".join(p for c in load_cases("ads") for p in c["expected_points"])
+    assert "必须" in joined
+    assert "不得" in joined
+
+
+def test_thresholds_match_the_production_rules():
+    """评测标准和生产规则必须是同一套阈值，否则测出来的"合格"跟线上行为无关。"""
+    from app.evals import build_ads_cases as b
+    assert b.MIN_CLICKS_TO_NEGATE == 15
+    assert b.MAX_BID_STEP == 0.15
