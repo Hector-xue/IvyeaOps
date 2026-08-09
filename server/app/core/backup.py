@@ -45,7 +45,12 @@ FORMAT_VERSION = 1
 _SKIP_SUFFIXES = (".sqlite3-wal", ".sqlite3-shm", ".db-wal", ".db-shm", ".log", ".tmp")
 # 体量大且可再生 —— 只有 include_media 才带。
 _MEDIA_DIRS = {"imagegen-jobs", "image_workspace", "listing_images",
-               "listing_copy_images", "logs", "backups"}
+               "listing_copy_images", "logs"}
+# **任何情况下都不收**，include_media 也不行。备份包默认就落在 data/backups，
+# 把它算进 media 的后果是：开了 include_media 之后，每个新备份都会把此前所有
+# 备份装进去（体积指数级滚雪球），还会把**正在写的那个包自己**的半成品读进去
+# —— 压缩流已经开着，文件就在磁盘上长。
+_NEVER_BACKED_UP_DIRS = {"backups"}
 
 _PBKDF2_ROUNDS = 240_000
 
@@ -85,8 +90,14 @@ def _snapshot_db(src: Path, dest: Path) -> None:
         source.close()
 
 
-def _iter_payload(data_dir: Path, include_media: bool):
-    """产出 (归档内路径, 磁盘路径, 类型)。"""
+def _iter_payload(data_dir: Path, include_media: bool, exclude_dir: Optional[Path] = None):
+    """产出 (归档内路径, 磁盘路径, 类型)。
+
+    ``exclude_dir`` 是本次备份的输出目录 —— 用户可以把它指到 data_dir 里的任意
+    位置，那样同样会出现"备份包含自己"，所以除了固定跳过 backups，还要按实际
+    输出位置再挡一道。
+    """
+    excluded = exclude_dir.resolve() if exclude_dir else None
     for path in sorted(data_dir.iterdir()):
         name = path.name
         if name.startswith(".") and name != ".master.key":
@@ -94,6 +105,10 @@ def _iter_payload(data_dir: Path, include_media: bool):
         if name.endswith(_SKIP_SUFFIXES):
             continue
         if path.is_dir():
+            if name in _NEVER_BACKED_UP_DIRS:
+                continue
+            if excluded is not None and path.resolve() == excluded:
+                continue
             if name in _MEDIA_DIRS and not include_media:
                 continue
             for sub in sorted(path.rglob("*")):
@@ -129,7 +144,7 @@ def create(
     with tempfile.TemporaryDirectory() as tmp:
         tmpdir = Path(tmp)
         with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
-            for arcname, path, kind in _iter_payload(src, include_media):
+            for arcname, path, kind in _iter_payload(src, include_media, out_dir):
                 if kind == "db":
                     staged = tmpdir / path.name
                     try:

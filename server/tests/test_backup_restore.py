@@ -68,6 +68,27 @@ def test_media_is_excluded_by_default(data_dir):
                for n in _names(backup.create(data_dir=data_dir, include_media=True)))
 
 
+def test_backup_never_swallows_other_backups_or_itself(data_dir):
+    """备份包默认就落在 data/backups。如果那个目录被当成普通媒体目录收进去，
+    开了 include_media 之后每个新包都会装进此前所有的包（体积滚雪球），还会把
+    **正在写的这个包自己**的半成品读进去 —— 压缩流已经开着，文件就在磁盘上长。
+    """
+    old = data_dir / "backups"
+    old.mkdir(exist_ok=True)
+    (old / "ivyea-ops-backup-20200101-000000.zip").write_bytes(b"P" * 5000)
+
+    names = _names(backup.create(data_dir=data_dir, include_media=True))
+    assert any(n.startswith("files/imagegen-jobs/") for n in names)   # 媒体确实收了
+    assert not [n for n in names if "backups/" in n], f"备份把备份收进去了：{names}"
+
+
+def test_backup_excludes_its_own_output_dir_even_when_relocated(data_dir):
+    """用户可以把输出目录指到 data_dir 里的别处，同样不能收自己。"""
+    out = data_dir / "exports"
+    names = _names(backup.create(out, data_dir=data_dir, include_media=True))
+    assert not [n for n in names if "files/exports/" in n]
+
+
 def test_backup_never_carries_plaintext_credentials(data_dir):
     """老装机盘上可能还是明文；直接塞进备份等于把密钥随备份一起发出去。"""
     path = backup.create(data_dir=data_dir)
