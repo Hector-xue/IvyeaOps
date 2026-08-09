@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import json as _json
+import logging
 import threading as _threading
 import time as _time
 from typing import Annotated, Any
@@ -16,6 +17,8 @@ from app.services import agent_mcp
 from app.services import console_sessions
 from app.services import ivyea_agent_service as svc
 from app.services import ivyea_ops_tools
+
+logger = logging.getLogger("ivyea.routers.ivyea_agent")
 
 
 router = APIRouter(dependencies=[Depends(require_user)])
@@ -338,6 +341,27 @@ _APPROVAL_OWNERS_LOCK = _threading.Lock()
 _APPROVAL_OWNER_TTL = 45 * 60.0     # 比 agent 侧 10 分钟的审批超时宽裕得多
 
 
+def _notify_approval(title: str, op_type: str) -> None:
+    """发送放后台线程，且任何失败都吞掉 —— 这里在转发 agent 的流式帧，
+    绝不能因为一个 webhook 慢把对话卡住。"""
+    try:
+        from app.services import notify
+        if not notify.webhook_url():
+            return
+
+        def _fire() -> None:
+            try:
+                notify.send_sync("approval.needed", "有操作在等你确认",
+                                 f"{op_type}：{title}".strip("：") or "Agent 请求执行一个操作",
+                                 level="warn")
+            except Exception:  # noqa: BLE001
+                logger.debug("审批通知失败（旁路，已忽略）", exc_info=True)
+
+        _threading.Thread(target=_fire, name="notify-approval", daemon=True).start()
+    except Exception:  # noqa: BLE001
+        logger.debug("审批通知调度失败（旁路，已忽略）", exc_info=True)
+
+
 def _remember_approval_owner(request_id: str, principal: str) -> None:
     now = _time.time()
     with _APPROVAL_OWNERS_LOCK:
@@ -403,9 +427,14 @@ def _tee_session_events(chunks: Any, principal: str, workspace: str = "",
                         console_sessions.record_approval_decision(rid, "timeout")
                         continue
                     _remember_approval_owner(rid, principal)
+                    title = str(data.get("title") or "")
                     console_sessions.record_approval_request(
                         rid, str(data.get("session_id") or ""), principal,
-                        str(data.get("title") or ""), str(data.get("op_type") or ""))
+                        title, str(data.get("op_type") or ""))
+                    # 推一条到用户配的渠道。**这是"手机上审批"能成立的前提** ——
+                    # 人不在电脑前时，没有这条推送他根本不知道有东西在等他，
+                    # agent 就会一直卡到超时被自动拒。
+                    _notify_approval(title, str(data.get("op_type") or ""))
             # 单帧异常大（final 会带整段会话）时别把内存吃着不放
             if len(buf) > 2_000_000:
                 buf = buf[-4096:]
@@ -719,6 +748,19 @@ class ConsolePresetBody(BaseModel):
     # 它每轮都要占上下文。
     system: str = Field(default="", max_length=4000)
     note: str = Field(default="", max_length=500)
+
+
+@router.get("/console/approvals/pending")
+def console_pending_approvals(info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    """我名下所有还没决定的审批，跨会话。
+
+    这是"手机上点同意/拒绝"的入口。按会话查的那个接口在手机上用不了 ——
+    要先知道是哪个会话、点进去、再在长对话里找到那张卡片。
+
+    **只返回自己的**：principal 直接取自会话身份，不接受查询参数指定别人。
+    """
+    principal, _ = _principal_info(info)
+    return {"ok": True, "approvals": console_sessions.pending_approvals(principal)}
 
 
 @router.get("/console/sessions/{session_id}/approvals")

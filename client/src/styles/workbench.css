@@ -3329,3 +3329,37 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .cs-sub-task{flex:1;min-width:0;color:var(--t)}
 .cs-sub .cs-ms{flex-shrink:0;color:var(--t3);font-size:9.5px;margin-top:2px}
 .cs-sub.cs-running{border-left-color:var(--amber)}
+
+
+/* ── 待审批（手机优先）────────────────────────────────────────────────────
+   这一页是单手在手机上点的，所以：按钮 44px 起（iOS 的可点区下限），
+   拒绝在左、同意在右，卡片之间留足间距 —— 误触的代价是放行一个本该被拦的操作。 */
+.ap-wrap{padding:14px;max-width:720px;margin:0 auto}
+.ap-head{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+.ap-head b{font-size:15px;color:var(--t)}
+.ap-head span{font-size:11px;color:var(--t3)}
+.ap-err{padding:9px 11px;margin-bottom:10px;border-radius:8px;font-size:12px;
+  background:color-mix(in srgb,var(--err) 12%,transparent);color:var(--err)}
+.ap-empty{padding:26px 16px;text-align:center;color:var(--t2);font-size:13px;
+  border:1px dashed var(--bd);border-radius:10px}
+.ap-empty-sub{margin-top:8px;font-size:11px;color:var(--t3);line-height:1.7}
+.ap-card{border:1px solid var(--bd);border-radius:10px;padding:13px;margin-bottom:12px;
+  background:var(--c1)}
+.ap-card-done{opacity:.55}
+.ap-card-top{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.ap-op{font-size:10px;padding:2px 7px;border-radius:5px;background:var(--c2);color:var(--t2)}
+.ap-time{font-size:10px;color:var(--t3);margin-left:auto}
+.ap-title{font-size:13.5px;color:var(--t);line-height:1.6;word-break:break-word}
+.ap-actions{display:flex;gap:10px;margin-top:13px}
+.ap-btn{flex:1;min-height:44px;border-radius:9px;font-size:14px;cursor:pointer;
+  border:1px solid var(--bd);background:var(--c2);color:var(--t)}
+.ap-btn:disabled{opacity:.5;cursor:default}
+.ap-deny{color:var(--err);border-color:color-mix(in srgb,var(--err) 40%,var(--bd))}
+.ap-approve{color:#fff;background:var(--acc);border-color:var(--acc)}
+.ap-state{margin-top:11px;font-size:13px;color:var(--t2)}
+.ap-link{margin-top:10px;background:none;border:0;padding:0;cursor:pointer;
+  font-size:11px;color:var(--t3)}
+@media (min-width:760px){
+  .ap-actions{justify-content:flex-end}
+  .ap-btn{flex:none;min-width:110px}
+}

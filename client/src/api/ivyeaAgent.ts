@@ -746,6 +746,22 @@ export async function ivyeaChatPermission(params: {
   return data;
 }
 
+/** 一条待审批（跨会话列表用，字段来自 console_approvals 表）。 */
+export type PendingApproval = {
+  request_id: string;
+  session_id: string;
+  title: string;
+  op_type: string;
+  requested_at: number;
+};
+
+/** 我名下所有还没决定的审批，跨会话 —— 手机上审批的入口。 */
+export async function ivyeaPendingApprovals() {
+  const { data } = await api.get<{ ok: boolean; approvals: PendingApproval[] }>(
+    "/ivyea-agent/console/approvals/pending");
+  return data.approvals || [];
+}
+
 export async function ivyeaServiceStart() {
   const { data } = await api.post<{ ok: boolean }>("/ivyea-agent/service/start", {}, { timeout: 25000 });
   return data;

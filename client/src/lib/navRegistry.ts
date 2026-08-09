@@ -68,6 +68,10 @@ export const BOARDS: BoardEntry[] = [
     pathLabel: "~/能力市场", ready: true,
   },
   {
+    to: "/approvals", icon: "✓", label: "待审批", group: "automation",
+    pathLabel: "~/待审批", admin: false, key: "agents", ready: true,
+  },
+  {
     to: "/schedules", icon: "⏱", label: "定时任务", group: "automation",
     pathLabel: "~/定时任务", admin: false, key: "agents", ready: true,
   },
