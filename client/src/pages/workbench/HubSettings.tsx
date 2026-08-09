@@ -810,6 +810,9 @@ const EMPTY: HubSettings = {
   kiro_gateway_db: "", kiro_cli_db: "", kiro_cli_sessions_dir: "",
   claude_projects_dir: "", hermes_node_bin: "", bun_bin: "",
   autofix_enabled: false,
+  skill_market_enabled: false,
+  skill_market_url: "",
+  skill_market_pubkey: "",
 };
 
 // ── 外观 / 显示：字体族 + 全局字号（即时生效 + localStorage，无后端）───────────────
@@ -1140,6 +1143,7 @@ export default function HubSettings() {
         title="可选 AI 能力"
         desc="低频或增强项：AI 降级链、图片分析、知识库语义检索和自动修复。默认值已可覆盖大多数场景。"
         keys={["text_ai_providers", "autofix_enabled",
+          "skill_market_enabled", "skill_market_url", "skill_market_pubkey",
           "vision_ai_providers", "openai_api_key", "deepseek_api_key",
           "gbrain_embed_provider", "gbrain_embed_model", "gbrain_embed_api_key"]}
         vals={vals} onSave={save}
@@ -1205,6 +1209,33 @@ export default function HubSettings() {
             <SecretInput value={vals.gbrain_embed_api_key} onChange={v => set("gbrain_embed_api_key", v)} placeholder="对应服务商的 API Key" />
           </Field>
         )}
+
+        <div className="hs-agent-card hs-agent-card-wide">
+          <div className="hs-agent-card-title"><Tag kind="opt">功能</Tag>能力市场（门道社区）</div>
+          <div className="hs-agent-card-desc">
+            从门道社区浏览并安装 Skill。<b>默认关闭</b>：它会向社区发起请求，而 IvyeaOps 的默认立场是数据不出你的机器。
+            开启后也只在你主动浏览或安装时联网 —— 请求匿名、不带机器标识、不回传任何使用统计；装过的 Skill 落在本地，断网照常用。
+            安装前会先给你看这个 Skill 的能力清单，确认后才落盘。
+          </div>
+          <label className="hs-toggle-line">
+            <input type="checkbox" checked={vals.skill_market_enabled}
+              onChange={e => set("skill_market_enabled", e.target.checked)} />
+            <span>{vals.skill_market_enabled ? "能力市场已开启（Skill 中心 → 社区市场）" : "能力市场已关闭"}</span>
+          </label>
+          {vals.skill_market_enabled && (
+            <>
+              <Field label="市场地址" hint={<>留空用默认的门道社区。可换成自建镜像 —— 换源之后仍会校验安装包的校验和与签名。</>}>
+                <TxtInput value={vals.skill_market_url} onChange={v => set("skill_market_url", v)}
+                  placeholder="https://mendao.ivyea.com/api/market" />
+              </Field>
+              <Field label={<><Tag kind="opt">可选</Tag>市场公钥</>}
+                hint={<>用于校验安装包签名。留空则只校验 sha256（能证明"没传坏"，但证明不了"是那边发布的那份"）。</>}>
+                <TxtInput value={vals.skill_market_pubkey} onChange={v => set("skill_market_pubkey", v)}
+                  placeholder="base64 编码的 Ed25519 公钥" />
+              </Field>
+            </>
+          )}
+        </div>
 
         <div className="hs-agent-card hs-agent-card-wide">
           <div className="hs-agent-card-title"><Tag kind="opt">功能</Tag>自动修复 Bug</div>
