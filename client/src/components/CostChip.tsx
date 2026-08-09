@@ -52,7 +52,7 @@ export default function CostChip() {
     : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n);
   const shown = st.known ? fmtTokens(st.total_tokens) : "—";
   const color =
-    st.level === "exceeded" ? "var(--err)" :
+    st.level === "exceeded" ? "var(--red)" :
     st.level === "warn" ? "var(--amber)" : "var(--t3)";
 
   const title = [

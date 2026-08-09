@@ -68,12 +68,6 @@ export const BOARDS: BoardEntry[] = [
     pathLabel: "~/能力市场", ready: true,
   },
   {
-    // 社区是唯一的外部供给来源，值得一个一级入口 —— 压在「能力市场」的一个区块里
-    // 既不显眼，也承载不了详情和下载量。
-    to: "/community-market", icon: "⬢", label: "社区市场", group: "capability",
-    pathLabel: "~/社区市场", ready: true,
-  },
-  {
     to: "/approvals", icon: "✓", label: "待审批", group: "automation",
     pathLabel: "~/待审批", admin: false, key: "agents", ready: true,
   },

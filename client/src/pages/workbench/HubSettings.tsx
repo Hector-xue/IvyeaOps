@@ -911,7 +911,7 @@ function NotifySection({
           </button>
         </div>
         {result && (
-          <div className="ms" style={{ marginTop: 6, color: result.ok ? "var(--ok)" : "var(--err)" }}>
+          <div className="ms" style={{ marginTop: 6, color: result.ok ? "var(--acc)" : "var(--red)" }}>
             {result.ok ? "✓ " : "× "}{result.detail}
           </div>
         )}
@@ -944,7 +944,7 @@ function NotifySection({
           <div className="ms" style={{ marginTop: 6 }}>
             {budget.month} 已用 <b>${budget.spend_usd.toFixed(2)}</b> / ${budget.limit_usd.toFixed(2)}
             （{Math.round(budget.ratio * 100)}%）
-            {budget.exceeded && <span style={{ color: "var(--err)" }}> · 已超</span>}
+            {budget.exceeded && <span style={{ color: "var(--red)" }}> · 已超</span>}
           </div>
         )}
       </Field>

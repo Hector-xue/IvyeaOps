@@ -1,9 +1,12 @@
 /**
- * 门道社区市场 —— 独立一页。
+ * 门道社区市场 —— 「能力市场」的第一个子页，也是默认打开的那个。
  *
- * 此前它只是「能力市场」页里的一个区块，夹在本地技能库和 MCP 中间。社区是这个
- * 产品唯一的外部供给来源，被压成一个区块既不显眼，也没法承载详情、下载量这些
- * 真正帮人做决定的信息。**给它一整页**，顺带把去门道社区的入口做出来。
+ * 为什么排第一：打开「能力市场」看到的第一屏，应该是"我能拿到什么新东西"，
+ * 而不是"我本地已经有什么" —— 后者用户本来就知道。社区是这个产品唯一的外部
+ * 供给来源，把它排在最前面，顺带也给门道社区带流量。
+ *
+ * ``embedded`` 为真时不画自己的大标题（外层 tab 已经有了），只留一行统计与
+ * 去社区的入口。
  *
  * 三个刻意的取舍
  * --------------
@@ -21,6 +24,7 @@ import {
   marketUninstall, type MarketDetail, type MarketItem, type MarketStatus,
 } from "../../api/client";
 import { errText } from "../../lib/errText";
+import { lockBodyScroll } from "../../lib/scrollLock";
 
 const MENDAO_URL = "https://mendao.ivyea.com";
 
@@ -28,7 +32,7 @@ function Badge({ children, tone = "" }: { children: React.ReactNode; tone?: stri
   return <span className={"mk-badge" + (tone ? " mk-badge-" + tone : "")}>{children}</span>;
 }
 
-export default function CommunityMarket() {
+export default function CommunityMarket({ embedded = false }: { embedded?: boolean }) {
   const [status, setStatus] = useState<MarketStatus | null>(null);
   const [items, setItems] = useState<MarketItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -55,6 +59,16 @@ export default function CommunityMarket() {
 
   useEffect(() => { void load(); }, [load]);
 
+  // 弹层开着的时候：锁掉背景滚动（否则滚轮会穿透到底下那一长列卡片），
+  // 并让 Esc 能关 —— 一个只能靠点空白关闭的弹层，在键盘上是死的。
+  useEffect(() => {
+    if (!open) return;
+    const unlock = lockBodyScroll();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(null); };
+    document.addEventListener("keydown", onKey);
+    return () => { unlock(); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+
   const install = async (item: MarketItem) => {
     setInstalling(item.slug);
     setErr("");
@@ -74,7 +88,7 @@ export default function CommunityMarket() {
 
   if (status && !status.enabled) {
     return (
-      <div className="mk-wrap">
+      <div className={embedded ? "mk-wrap mk-wrap-embed" : "mk-wrap"}>
         <div className="mk-empty">
           <b>门道社区市场还没开启</b>
           <p>
@@ -89,10 +103,10 @@ export default function CommunityMarket() {
   }
 
   return (
-    <div className="mk-wrap">
+    <div className={embedded ? "mk-wrap mk-wrap-embed" : "mk-wrap"}>
       <div className="mk-head">
         <div>
-          <h2>门道社区市场</h2>
+          {!embedded && <h2>门道社区市场</h2>}
           <p>
             {total} 个技能 · 别人做好的方法，装过来就能用。
             <a href={MENDAO_URL} target="_blank" rel="noreferrer"> 去门道社区看看 →</a>
@@ -166,12 +180,15 @@ export default function CommunityMarket() {
       </div>
 
       {open && (
-        <div className="mk-modal" onClick={() => setOpen(null)}>
+        <div className="mk-modal" role="dialog" aria-modal="true"
+             onClick={() => setOpen(null)}>
           <div className="mk-modal-body" onClick={(e) => e.stopPropagation()}>
+            {/* 头部钉住不滚：正文可能很长，滚下去之后还要能一眼找到关闭 */}
             <div className="mk-modal-head">
               <b>{open.title || open.slug}</b>
               <button className="mk-btn" onClick={() => setOpen(null)}>关闭</button>
             </div>
+            <div className="mk-modal-scroll">
             <div className="mk-modal-meta">
               <span>↓ {open.install_count ?? 0} 次安装</span>
               <span>{open.class === "B" ? "含可执行代码" : "纯提示词"}</span>
@@ -185,6 +202,7 @@ export default function CommunityMarket() {
             {/* 正文原样显示。**不把可执行脚本铺出来** —— 详情页只回答"这东西是
                 干什么的"；把代码贴上去会给人一种"我已经审过了"的错觉。 */}
             <pre className="mk-modal-md">{open.body_md || "（这个技能没有提供说明正文）"}</pre>
+            </div>
           </div>
         </div>
       )}

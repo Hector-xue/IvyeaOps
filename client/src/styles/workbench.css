@@ -3340,22 +3340,22 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .ap-head b{font-size:15px;color:var(--t)}
 .ap-head span{font-size:11px;color:var(--t3)}
 .ap-err{padding:9px 11px;margin-bottom:10px;border-radius:8px;font-size:12px;
-  background:color-mix(in srgb,var(--err) 12%,transparent);color:var(--err)}
+  background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red)}
 .ap-empty{padding:26px 16px;text-align:center;color:var(--t2);font-size:13px;
-  border:1px dashed var(--bd);border-radius:10px}
+  border:1px dashed var(--b);border-radius:10px}
 .ap-empty-sub{margin-top:8px;font-size:11px;color:var(--t3);line-height:1.7}
-.ap-card{border:1px solid var(--bd);border-radius:10px;padding:13px;margin-bottom:12px;
-  background:var(--c1)}
+.ap-card{border:1px solid var(--b);border-radius:10px;padding:13px;margin-bottom:12px;
+  background:var(--bg1)}
 .ap-card-done{opacity:.55}
 .ap-card-top{display:flex;align-items:center;gap:8px;margin-bottom:7px}
-.ap-op{font-size:10px;padding:2px 7px;border-radius:5px;background:var(--c2);color:var(--t2)}
+.ap-op{font-size:10px;padding:2px 7px;border-radius:5px;background:var(--bg2);color:var(--t2)}
 .ap-time{font-size:10px;color:var(--t3);margin-left:auto}
 .ap-title{font-size:13.5px;color:var(--t);line-height:1.6;word-break:break-word}
 .ap-actions{display:flex;gap:10px;margin-top:13px}
 .ap-btn{flex:1;min-height:44px;border-radius:9px;font-size:14px;cursor:pointer;
-  border:1px solid var(--bd);background:var(--c2);color:var(--t)}
+  border:1px solid var(--b);background:var(--bg2);color:var(--t)}
 .ap-btn:disabled{opacity:.5;cursor:default}
-.ap-deny{color:var(--err);border-color:color-mix(in srgb,var(--err) 40%,var(--bd))}
+.ap-deny{color:var(--red);border-color:color-mix(in srgb,var(--red) 40%,var(--b))}
 .ap-approve{color:#fff;background:var(--acc);border-color:var(--acc)}
 .ap-state{margin-top:11px;font-size:13px;color:var(--t2)}
 .ap-link{margin-top:10px;background:none;border:0;padding:0;cursor:pointer;
@@ -3369,23 +3369,26 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
    卡片式，手机上单列。B 类卡片左侧留一道警示条 —— 「含可执行代码」这件事
    必须在扫读时就看得见，而不是等用户点进详情才发现。 */
 .mk-wrap{padding:16px;max-width:1180px;margin:0 auto}
+/* 作为「能力市场」的 tab 内嵌时，外层已经有页边距和标题，这里就不再叠一层 */
+.mk-wrap-embed{padding:0;max-width:none}
+.mk-wrap-embed .mk-head{margin-bottom:11px}
 .mk-head{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:14px}
 .mk-head h2{margin:0;font-size:16px;color:var(--t)}
 .mk-head p{margin:4px 0 0;font-size:11.5px;color:var(--t3)}
 .mk-head a{color:var(--acc);text-decoration:none}
 .mk-search{margin-left:auto;min-width:200px;padding:7px 10px;border-radius:8px;
-  border:1px solid var(--bd);background:var(--c1);color:var(--t);font-size:12.5px}
+  border:1px solid var(--b);background:var(--bg1);color:var(--t);font-size:12.5px}
 .mk-disclaimer{padding:9px 12px;margin-bottom:11px;border-radius:8px;font-size:11px;
-  line-height:1.75;color:var(--t3);border:1px solid var(--bd);background:var(--c2)}
+  line-height:1.75;color:var(--t3);border:1px solid var(--b);background:var(--bg2)}
 .mk-disclaimer b{color:var(--t2)}
 .mk-err{padding:9px 11px;margin-bottom:10px;border-radius:8px;font-size:12px;
-  background:color-mix(in srgb,var(--err) 12%,transparent);color:var(--err)}
+  background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red)}
 .mk-empty{padding:34px 18px;text-align:center;color:var(--t2);font-size:13px;
-  border:1px dashed var(--bd);border-radius:10px;line-height:1.8}
+  border:1px dashed var(--b);border-radius:10px;line-height:1.8}
 .mk-empty b{display:block;margin-bottom:8px;font-size:14px;color:var(--t)}
 .mk-empty p{max-width:560px;margin:0 auto 14px;font-size:12px;color:var(--t3)}
 .mk-grid{display:grid;gap:11px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
-.mk-card{border:1px solid var(--bd);border-radius:10px;padding:12px;background:var(--c1);
+.mk-card{border:1px solid var(--b);border-radius:10px;padding:12px;background:var(--bg1);
   display:flex;flex-direction:column;gap:7px}
 .mk-card-b{border-left:3px solid var(--amber)}
 .mk-card-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
@@ -3394,26 +3397,41 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .mk-card-meta{display:flex;gap:10px;font-size:10px;color:var(--t3);flex-wrap:wrap;
   font-variant-numeric:tabular-nums}
 .mk-card-actions{display:flex;gap:7px;align-items:center;margin-top:2px}
-.mk-badge{font-size:9.5px;padding:1px 6px;border-radius:4px;background:var(--c2);color:var(--t3)}
+.mk-badge{font-size:9.5px;padding:1px 6px;border-radius:4px;background:var(--bg2);color:var(--t3)}
 .mk-badge-warn{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)}
-.mk-badge-ok{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
-.mk-btn{padding:5px 11px;border-radius:7px;border:1px solid var(--bd);background:var(--c2);
+.mk-badge-ok{background:color-mix(in srgb,var(--acc) 18%,transparent);color:var(--acc)}
+.mk-btn{padding:5px 11px;border-radius:7px;border:1px solid var(--b);background:var(--bg2);
   color:var(--t);font-size:11.5px;cursor:pointer;text-decoration:none}
 .mk-btn:disabled{opacity:.5;cursor:default}
 .mk-btn-primary{background:var(--acc);border-color:var(--acc);color:#fff}
 .mk-note{font-size:10.5px;color:var(--t3);cursor:help}
-.mk-modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;
-  display:flex;align-items:center;justify-content:center;padding:18px}
-.mk-modal-body{background:var(--c1);border:1px solid var(--bd);border-radius:12px;
-  max-width:760px;width:100%;max-height:82vh;overflow:auto;padding:16px}
-.mk-modal-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-.mk-modal-head b{font-size:15px;flex:1}
+/* 遮罩：**必须带 blur**。主题里的 --bg1/--bg2 本身是半透明的（毛玻璃设计），
+   遮罩不模糊背景的话，弹层里就能看见后面的卡片文字，读起来很脏。
+   这跟 .modal-bd / .cmdk-backdrop 是同一套做法，别再另发明一种。 */
+.mk-modal{position:fixed;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(4px);
+  z-index:1000;display:flex;align-items:center;justify-content:center;padding:18px}
+.mk-modal-body{background:var(--bg1);border:1px solid var(--b);border-radius:12px;
+  box-shadow:0 24px 64px rgba(0,0,0,.5);
+  /* 主题的 --bg1 本身是 76% 不透明的毛玻璃底。对一个要读长文的弹层来说，
+     那 24% 的透出足以让后面的卡片文字干扰阅读。**弹层本体再糊一层** ——
+     透过去的东西被彻底模糊掉，观感等同不透明，又不必另发明一个不透明色标。 */
+  backdrop-filter:blur(20px) saturate(1.15);
+  max-width:780px;width:100%;max-height:84vh;
+  display:flex;flex-direction:column;overflow:hidden}
+/* 头部钉住：正文可能很长，滚下去之后还要能一眼找到关闭 */
+.mk-modal-head{display:flex;align-items:center;gap:10px;padding:14px 16px 10px;
+  border-bottom:1px solid var(--b);flex:none}
+.mk-modal-head b{font-size:15px;flex:1;color:var(--t)}
+.mk-modal-scroll{overflow:auto;padding:12px 16px 16px}
 .mk-modal-meta{display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px;color:var(--t3);
   margin-bottom:10px}
 .mk-modal-meta a{color:var(--acc)}
-.mk-modal-sum{font-size:12.5px;color:var(--t2);line-height:1.7;margin:0 0 10px}
-.mk-modal-md{font-size:11.5px;line-height:1.7;color:var(--t2);white-space:pre-wrap;
-  word-break:break-word;background:var(--c2);border-radius:8px;padding:12px;margin:0}
+.mk-modal-sum{font-size:13px;color:var(--t2);line-height:1.8;margin:0 0 12px}
+/* 说明正文按可读性排版：字大一点、行距松一点、宽度收窄到 72 字左右。
+   长 URL 与代码块不会把弹层撑出横向滚动条。 */
+.mk-modal-md{font-size:12.5px;line-height:1.85;color:var(--t2);white-space:pre-wrap;
+  overflow-wrap:anywhere;background:var(--bg2);border:1px solid var(--b);
+  border-radius:8px;padding:14px 16px;margin:0;max-width:72ch}
 @media (max-width:760px){
   .mk-grid{grid-template-columns:1fr}
   .mk-search{margin-left:0;width:100%}

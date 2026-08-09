@@ -62,7 +62,7 @@ function RawRows({ traceUrl, target }: { traceUrl: string; target: string }) {
       </button>
     );
   }
-  if (err) return <span style={{ fontSize: 11, color: "var(--err)" }}>{err}</span>;
+  if (err) return <span style={{ fontSize: 11, color: "var(--red)" }}>{err}</span>;
 
   // **溯源失败和"没有证据"是两件事**，必须分开说。回一个空表格会让人以为
   // 这条结论本来就没依据。

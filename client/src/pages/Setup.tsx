@@ -692,7 +692,7 @@ function StepTryIt({ onNext }: { onNext: () => void }) {
       </div>
 
       {busy && <div style={S.sub}>查询中…</div>}
-      {err && <div style={{ ...S.sub, color: "var(--err)" }}>{err}</div>}
+      {err && <div style={{ ...S.sub, color: "var(--red)" }}>{err}</div>}
 
       {rows && rows.length === 0 && (
         <div style={S.sub}>
