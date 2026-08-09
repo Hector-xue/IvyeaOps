@@ -20,8 +20,9 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import {
-  marketBrowse, marketDetail, marketInstall, marketPreview, marketStatus,
-  marketUninstall, type MarketDetail, type MarketItem, type MarketStatus,
+  marketBrowse, marketDetail, marketDownloadUrl, marketInstall, marketPreview,
+  marketStatus, marketUninstall,
+  type MarketDetail, type MarketItem, type MarketStatus,
 } from "../../api/client";
 import { errText } from "../../lib/errText";
 import { lockBodyScroll } from "../../lib/scrollLock";
@@ -156,12 +157,16 @@ export default function CommunityMarket({ embedded = false }: { embedded?: boole
                   try { setOpen(await marketDetail(s.slug)); }
                   catch (e) { setErr(errText(e, "读不到详情")); }
                 }}>看详情</button>
-                {isB ? (
-                  // **不给安装按钮，并说明原因。** 给一个点了必然失败的按钮，
-                  // 比不给更糟。
+                {/* 安装包直链对所有技能都给。**"不一键装"不等于"不能用"** ——
+                    下下来自己看一眼脚本、自己放进技能库，这条路必须留着，
+                    否则"出于安全考虑不支持"就成了纯粹的功能缺失。 */}
+                <a className="mk-btn" download
+                   href={marketDownloadUrl(s.slug, s.latest || "1.0.0")}
+                   title="下载安装包，可自行审阅后手动放入技能库">下载</a>
+                {isB && !status?.allow_class_b ? (
                   <span className="mk-note"
-                        title="沙箱执行做好之前不开放，以免陌生代码直接在你机器上运行">
-                    暂不支持安装
+                        title="含可执行脚本。默认不给一键安装；在「系统配置 → 能力市场」里可以打开，打开后每次安装仍会逐条列出脚本让你确认">
+                    需手动安装
                   </span>
                 ) : installed ? (
                   <button className="mk-btn" onClick={async () => {

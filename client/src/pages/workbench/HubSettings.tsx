@@ -822,6 +822,7 @@ const EMPTY: HubSettings = {
   skill_market_enabled: false,
   skill_market_url: "",
   skill_market_pubkey: "",
+  skill_market_allow_class_b: false,
   notify_webhook: "",
   notify_events: "",
   ai_budget_monthly_usd: 0,
@@ -1530,6 +1531,20 @@ export default function HubSettings() {
                 <TxtInput value={vals.skill_market_url} onChange={v => set("skill_market_url", v)}
                   placeholder="https://mendao.ivyea.com/api/market" />
               </Field>
+              <label className="hs-toggle-line">
+                <input type="checkbox" checked={!!vals.skill_market_allow_class_b}
+                  onChange={e => set("skill_market_allow_class_b", e.target.checked)} />
+                <span>
+                  允许一键安装<b>含可执行脚本</b>的技能（B 类）——
+                  {vals.skill_market_allow_class_b ? "已开启" : "默认关闭"}
+                </span>
+              </label>
+              <div className="hs-hint" style={{ marginTop: -4, marginBottom: 10 }}>
+                关着的时候<b>不是不能用</b>：安装包随时可以下载下来自己审、自己放进技能库。
+                打开只是省掉手动那步 —— 每次安装仍会把脚本清单逐条列出来让你确认。
+                这类技能里的代码会在 Agent 用到它时在你机器上运行，
+                而社区内容<b>未经官方审计</b>。
+              </div>
               <Field label={<><Tag kind="opt">可选</Tag>市场公钥</>}
                 hint={<>用于校验安装包签名。留空则只校验 sha256（能证明"没传坏"，但证明不了"是那边发布的那份"）。</>}>
                 <TxtInput value={vals.skill_market_pubkey} onChange={v => set("skill_market_pubkey", v)}

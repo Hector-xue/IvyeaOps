@@ -1069,6 +1069,8 @@ export type MarketPreview = {
 
 export type MarketStatus = {
   enabled: boolean;
+  /** 是否允许一键安装含可执行脚本的 B 类技能。默认 false；关着时仍可下载自装。 */
+  allow_class_b?: boolean;
   url: string;
   installed: Record<string, { version: string; sha256: string; class: string }>;
 };
@@ -1103,6 +1105,12 @@ export async function marketDetail(slug: string) {
   const { data } = await api.get<MarketDetail>(
     `/skill-market/skills/${slug}/detail`);
   return data;
+}
+
+/** 安装包的直链。**A/B 类都给** —— 这是"不一键装"和"完全不能用"之间的那条路：
+ *  下下来自己看一眼脚本，自己决定要不要放进技能库。 */
+export function marketDownloadUrl(slug: string, version: string) {
+  return `/api/skill-market/skills/${slug}/${version || "1.0.0"}/download`;
 }
 
 export async function marketUninstall(slug: string) {

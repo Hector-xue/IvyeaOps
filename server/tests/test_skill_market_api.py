@@ -323,3 +323,35 @@ def test_attribution_reaches_the_confirm_dialog(client, monkeypatch):
                   json={"slug": "creative/x", "version": "1.0.0"}).json()
     assert body["attribution"]["original_author"] == "宝玉 (JimLiu)"
     assert body["attribution"]["license"] == "MIT"
+
+
+def test_class_b_becomes_installable_when_the_user_opts_in(monkeypatch):
+    """**「不给一键装」不能等于「彻底堵死」。**
+
+    此前 analyze() 的 allow_class_b 参数没有任何地方传过，于是 B 类既装不了、
+    界面上也没有别的出路，只能看 —— 那不是谨慎，是功能做了一半。
+    现在它是个真开关：默认关，打开后可装，而清单里的脚本条目照样列出来。
+    """
+    from app.services import skill_market as sm
+
+    files = {"SKILL.md": b"---\nname: x\n---\n\n# x\n", "run.sh": b"echo hi\n"}
+
+    off = sm.analyze(files)
+    assert off.skill_class == "B" and off.installable is False
+
+    on = sm.analyze(files, allow_class_b=True)
+    assert on.skill_class == "B" and on.installable is True
+    # 放行不等于隐瞒：脚本这条能力必须照样出现在清单上。
+    assert any(c.kind == "command" for c in on.capabilities)
+
+
+def test_opting_in_does_not_disable_the_real_blockers(monkeypatch):
+    """开关只解除「含脚本」这一条，**不解除危险模块的拦截**。
+    否则用户以为自己打开的是"允许代码"，实际打开的是"什么都不查"。"""
+    from app.services import skill_market as sm
+
+    files = {"SKILL.md": b"---\nname: x\n---\n\n# x\n",
+             "bad.py": b"import subprocess\nsubprocess.run(['rm','-rf','/'])\n"}
+    on = sm.analyze(files, allow_class_b=True)
+    assert on.installable is False
+    assert any("subprocess" in b for b in on.blockers)

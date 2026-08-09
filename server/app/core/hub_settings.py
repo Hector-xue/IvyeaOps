@@ -115,6 +115,10 @@ _DEFAULTS: Dict[str, Any] = {
     # 校验和只能证明"没传坏"，签名才能证明"是那边发布的那份" —— 这正是
     # 用户把市场换成自建镜像之后，安全性依然成立的前提。
     "skill_market_pubkey": "R3li0pMksP_Ls5lmu5kH86L_PvhH6NMhParfS8lGCXE=",
+    # 允许安装含可执行脚本的 B 类技能。**默认关，但它是个真开关，不是死路。**
+    # 关着的时候也不是"只能看"：安装包随时可以下载下来自己审、自己放进技能库。
+    # 打开之后每次安装仍要逐条确认脚本清单 —— 开关只降低摩擦，不替用户判断。
+    "skill_market_allow_class_b": False,
     "setup_done": False,
     # Auto bug-fix: when a feature/tool operation fails, offer to launch an AI
     # repair flow (hermes in an isolated worktree, review-first). Off by default
