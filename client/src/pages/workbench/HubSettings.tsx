@@ -8,6 +8,10 @@ import {
   type HubSettings, type HealthResp, type TestResult, type SelfCheckResp,
 } from "../../api/settings";
 import { installAgentStreamUrl } from "../../api/setup";
+import {
+  listMcpTokens, issueMcpToken, revokeMcpToken, getMcpClientConfig,
+  type McpToken, type IssuedToken,
+} from "../../api/mcp";
 import { lockBodyScroll } from "../../lib/scrollLock";
 import {
   FONT_OPTIONS, ZOOM_OPTIONS, WEIGHT_OPTIONS,
@@ -816,6 +820,172 @@ const EMPTY: HubSettings = {
 };
 
 // ── 外观 / 显示：字体族 + 全局字号（即时生效 + localStorage，无后端）───────────────
+/** 对外 MCP：把这台机器的亚马逊能力开放给 Claude Desktop / Cursor 等客户端。
+ *
+ *  管理员专属。非管理员拿到 403，这一整块就不渲染 —— 与其给他一个点了报错的
+ *  面板，不如干脆不出现。 */
+function McpSection() {
+  const [tokens, setTokens] = useState<McpToken[] | null>(null);
+  const [denied, setDenied] = useState(false);
+  const [endpoint, setEndpoint] = useState("");
+  const [name, setName] = useState("");
+  const [allowWrite, setAllowWrite] = useState(false);
+  const [ttl, setTtl] = useState(0);
+  const [fresh, setFresh] = useState<IssuedToken | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState("");
+
+  const reload = useCallback(async () => {
+    try {
+      const [list, cfg] = await Promise.all([listMcpTokens(), getMcpClientConfig()]);
+      setTokens(list.tokens);
+      setEndpoint(cfg.endpoint);
+    } catch {
+      setDenied(true);
+    }
+  }, []);
+  useEffect(() => { void reload(); }, [reload]);
+
+  if (denied) return null;
+
+  const issue = async () => {
+    setBusy(true);
+    try {
+      setFresh(await issueMcpToken(name || "未命名", allowWrite ? ["read", "write"] : ["read"], ttl));
+      setName("");
+      await reload();
+    } finally { setBusy(false); }
+  };
+
+  const revoke = async (t: McpToken) => {
+    if (!window.confirm(`撤销「${t.name}」？用它连着的客户端会立刻断开，且无法恢复。`)) return;
+    await revokeMcpToken(t.id);
+    if (fresh?.id === t.id) setFresh(null);
+    await reload();
+  };
+
+  const snippet = JSON.stringify({
+    mcpServers: {
+      "ivyea-ops": {
+        type: "http",
+        url: endpoint || "http://<你的 IvyeaOps 地址>/api/mcp",
+        headers: { Authorization: `Bearer ${fresh?.token || "<粘贴你的令牌>"}` },
+      },
+    },
+  }, null, 2);
+
+  const copy = async (text: string, what: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(what);
+      setTimeout(() => setCopied(""), 2000);
+    } catch { /* 剪贴板在非 HTTPS 下不可用，用户可以手动选中复制 */ }
+  };
+
+  const when = (ts: number | null) =>
+    ts ? new Date(ts * 1000).toLocaleString("zh-CN", { hour12: false }) : "—";
+
+  return (
+    <div className="hs-section">
+      <div className="hs-section-hd">
+        <div>
+          <div className="hs-section-title">对外 MCP（让别的 AI 用上你的数据）</div>
+          <div className="hs-section-desc">
+            生成一个令牌，Claude Desktop、Cursor 或任何支持 MCP 的客户端就能调用这台机器上的广告结论、
+            知识库和关键词调研。<b>令牌指向的是你自己的服务器</b> —— 数据不经过我们，也不经过任何第三方云。
+          </div>
+        </div>
+      </div>
+      <div className="hs-fields">
+        <div className="hs-agent-card hs-agent-card-wide">
+          <div className="hs-agent-card-title">新建令牌</div>
+          <div className="hs-agent-card-desc">
+            明文<b>只显示这一次</b>，关掉就再也拿不到（服务端只存哈希）。丢了就撤销重发。
+          </div>
+          <div className="hs-test-row" style={{ marginTop: 8, gap: 8, flexWrap: "wrap" }}>
+            <TxtInput value={name} onChange={setName} placeholder="用途备注，如「我的 MacBook 上的 Claude」" />
+            <SheetSelect className="hs-input" value={String(ttl)} onChange={(v) => setTtl(Number(v))}
+              title="有效期" options={[
+                { value: "0", label: "永久有效" },
+                { value: "30", label: "30 天后过期" },
+                { value: "90", label: "90 天后过期" },
+                { value: "365", label: "一年后过期" },
+              ]} />
+            <button className="hs-save-btn" onClick={issue} disabled={busy}>
+              {busy ? "生成中…" : "生成令牌"}
+            </button>
+          </div>
+          <label className="hs-toggle-line">
+            <input type="checkbox" checked={allowWrite} onChange={(e) => setAllowWrite(e.target.checked)} />
+            <span>
+              允许写操作（改广告投放）——
+              <b>默认不给</b>。做分析的令牌不该顺带具备改你真实投放的能力。
+            </span>
+          </label>
+          {fresh && (
+            <div className="hs-agent-card" style={{ marginTop: 10, borderColor: "var(--acc)" }}>
+              <div className="hs-agent-card-title">令牌已生成 —— 现在复制，之后看不到了</div>
+              <code style={{ display: "block", wordBreak: "break-all", padding: "8px 0" }}>{fresh.token}</code>
+              <button className="hs-test-btn" onClick={() => copy(fresh.token, "token")}>
+                {copied === "token" ? "✓ 已复制" : "复制令牌"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="hs-agent-card hs-agent-card-wide">
+          <div className="hs-agent-card-title">客户端配置</div>
+          <div className="hs-agent-card-desc">
+            粘进 Claude Desktop 的 <code>claude_desktop_config.json</code> 或 Cursor 的 <code>mcp.json</code>，重启客户端即可。
+            对方机器要能访问到这个地址；<b>暴露到公网时务必套 HTTPS</b> —— 令牌是明文放在请求头里的。
+          </div>
+          <pre style={{ overflowX: "auto", fontSize: 12, margin: "8px 0" }}>{snippet}</pre>
+          <button className="hs-test-btn" onClick={() => copy(snippet, "cfg")}>
+            {copied === "cfg" ? "✓ 已复制" : "复制配置"}
+          </button>
+        </div>
+
+        <div className="hs-agent-card hs-agent-card-wide">
+          <div className="hs-agent-card-title">已发出的令牌</div>
+          {tokens === null ? (
+            <div className="hs-agent-card-desc">加载中…</div>
+          ) : tokens.length === 0 ? (
+            <div className="hs-agent-card-desc">还没有发过令牌。</div>
+          ) : (
+            <table className="hs-table" style={{ width: "100%", fontSize: 13 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left" }}>备注</th>
+                  <th style={{ textAlign: "left" }}>权限</th>
+                  <th style={{ textAlign: "left" }}>最后使用</th>
+                  <th style={{ textAlign: "left" }}>过期</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {tokens.map((t) => (
+                  <tr key={t.id} style={t.revoked ? { opacity: 0.45 } : undefined}>
+                    <td>{t.name}</td>
+                    <td>{t.scopes.includes("write") ? "读 + 写" : "只读"}</td>
+                    {/* 显示最后使用时间，用户才判断得出哪个令牌早就该撤销了 */}
+                    <td>{t.revoked ? "已撤销" : when(t.last_used_at)}</td>
+                    <td>{t.expires_at ? when(t.expires_at) : "永久"}</td>
+                    <td>
+                      {!t.revoked && (
+                        <button className="hs-test-btn" onClick={() => revoke(t)}>撤销</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AppearanceSection() {
   const [fontId, setFontId] = useState(getFontId());
   const [zoom, setZoom] = useState(getZoom());
@@ -1434,6 +1604,9 @@ export default function HubSettings() {
         </Section>
 
       </AdvancedBlock>
+
+      {/* ── 对外 MCP（管理员专属，非管理员自动不渲染）── */}
+      <McpSection />
 
       {/* ── 外观 / 显示（低频显示项，放页面下方）── */}
       <AppearanceSection />

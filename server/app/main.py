@@ -46,6 +46,8 @@ from app.routers import skill_tools as skill_tools_router
 from app.routers import autofix as autofix_router
 from app.routers import lingxing as lingxing_router
 from app.routers import skill_market as skill_market_router
+from app.routers import mcp_server as mcp_server_router
+from app.routers import mcp_tokens as mcp_tokens_router
 from app.agents.router import api_router as agents_api_router, ws_router as agents_ws_router
 
 logger = logging.getLogger("ivyea.main")
@@ -190,6 +192,14 @@ async def lifespan(app: FastAPI):
         logger.info("audit log DB ready")
     except Exception as e:
         logger.warning("audit log DB init skipped: %s", e)
+
+    # 对外 MCP 的令牌表。
+    try:
+        from app.services import mcp_tokens as _mcp_tokens
+        _mcp_tokens.init_db()
+        logger.info("MCP tokens DB ready")
+    except Exception as e:
+        logger.warning("MCP tokens DB init skipped: %s", e)
 
     # 任务账本 + 开机自愈。被上一次重启打断的任务：可重入的重新排队，不可重入的
     # 标成 orphaned 留在列表里等人处理 —— **绝不静默改成 failed**，
@@ -422,6 +432,13 @@ async def _origin_guard(request: Request, call_next):
         if request.url.path.startswith("/api/ivyea-agent-bridge/"):
             return await call_next(request)
 
+        # 对外 MCP 同理：连过来的是 Claude Desktop / Cursor，不是浏览器，
+        # 不带 Origin/Referer。它认的是 Authorization 头里的 Bearer 令牌而不是
+        # Cookie 会话 —— 浏览器没法在跨站请求上凭空加一个 Bearer 头，
+        # 所以这条路径本来就不在 CSRF 的攻击面里。不豁免的话整个功能直接 403。
+        if request.url.path == "/api/mcp" or request.url.path.startswith("/api/mcp/"):
+            return await call_next(request)
+
         # Native app requests (no browser CSRF risk) — skip origin check.
         ua = request.headers.get("user-agent", "")
         if "IvyeaOpsAndroid" in ua:
@@ -507,6 +524,11 @@ def _error_body(request: Request, status_code: int, message: str) -> dict:
     提示同时变哑。所以这里是**增量**的 —— 老字段原样留着，新增 error 对象。
     """
     code, hint = _ERROR_CODES.get(status_code, ("ERROR", ""))
+    # 对外 MCP 认的是 Bearer 令牌，不是浏览器会话。给对面的 Agent 一句
+    # "请重新登录"，它既没有登录这个动作可做，也会把这句话原样转述给用户。
+    path = request.url.path
+    if status_code in (401, 403) and (path == "/api/mcp" or path.startswith("/api/mcp/")):
+        hint = "MCP 令牌无效、已过期、已撤销，或缺少该工具需要的权限。请在 IvyeaOps「系统配置 → 对外 MCP」重新生成。"
     return {
         "detail": message,
         "error": {
@@ -568,6 +590,11 @@ app.include_router(monitor.router, prefix="/api/monitor", tags=["monitor"], depe
 app.include_router(skill.router, prefix="/api/skill", tags=["skill"], dependencies=[Depends(require_module("skill-hub"))])
 # 能力市场：与 Skill 中心同属一个板块权限。默认关闭（会外联），见 services/skill_market。
 app.include_router(skill_market_router.router, prefix="/api/skill-market", tags=["skill-market"], dependencies=[Depends(require_module("skill-hub"))])
+# 对外 MCP：**故意不挂 require_user** —— 它认的是 Bearer 令牌（见 services/mcp_tokens），
+# 因为连过来的是 Claude Desktop / Cursor，不是浏览器，没有会话 Cookie 可用。
+# 令牌的签发与撤销走下面这组管理接口，只有管理员能动。
+app.include_router(mcp_server_router.router, prefix="/api/mcp", tags=["mcp"])
+app.include_router(mcp_tokens_router.router, prefix="/api/mcp-admin", tags=["mcp"])
 app.include_router(news.router, prefix="/api/news", tags=["news"], dependencies=[Depends(require_module("news"))])
 app.include_router(brain.router, prefix="/api/brain", tags=["brain"], dependencies=[Depends(require_module("brain"))])
 app.include_router(listing_router.router, prefix="/api/listing", tags=["listing"], dependencies=[Depends(require_module("listing"))])

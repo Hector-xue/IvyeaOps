@@ -52,3 +52,27 @@ async def test_bridge_exempt_but_normal_api_guarded(monkeypatch):
     assert r2.status_code == 403
     assert "origin" in json.loads(r2.body).get("detail", "").lower()
     assert downstream == ["/api/ivyea-agent-bridge/tools"]
+
+
+@pytest.mark.asyncio
+async def test_mcp_exempt_but_its_admin_api_is_not(monkeypatch):
+    """对外 MCP 也必须豁免：Claude Desktop / Cursor 不是浏览器，POST 不带
+    Origin，不豁免整个功能直接 403 —— 而它认的是 Bearer 令牌不是 Cookie，
+    本来就不在 CSRF 攻击面里。
+
+    但 **/api/mcp-admin/ 绝不能跟着一起豁免** —— 那组接口是签发令牌用的，
+    走的正是 Cookie 会话。前缀匹配写松一点（比如 startswith("/api/mcp")）
+    就会把签令牌的入口一起敞开。
+    """
+    monkeypatch.setattr(main, "_ALLOWED", {"https://ivyea.com"})
+    downstream: list[str] = []
+
+    async def call_next(request: Request):
+        downstream.append(request.url.path)
+        return Response(status_code=204)
+
+    assert (await main._origin_guard(_post_request("/api/mcp"), call_next)).status_code == 204
+
+    r = await main._origin_guard(_post_request("/api/mcp-admin/tokens"), call_next)
+    assert r.status_code == 403
+    assert downstream == ["/api/mcp"]
