@@ -49,6 +49,7 @@ export default function Composer({
   busy,
   skills,
   workspaces,
+  onNewWorkspace,
   references = [],
   picked = [],
   onPickedChange,
@@ -72,6 +73,8 @@ export default function Composer({
   busy?: boolean;
   skills: IvyeaSkillInfo[];
   workspaces: string[];
+  /** 点了下拉里的「新建工作区…」。由 Console 弹出创建流程。 */
+  onNewWorkspace?: () => void;
   /** @ 可引用的知识库条目（卡片/上传件）。 */
   references?: ComposerRef[];
   /** 已选中的引用；提交时由任务台取正文带进本轮。 */
@@ -281,10 +284,17 @@ export default function Composer({
     { value: "", label: "自动选技能" },
     ...skills.map((s) => ({ value: s.id, label: s.title || s.id, sub: s.domain })),
   ];
-  const workspaceOptions = (workspaces.length ? workspaces : ["默认工作区"]).map((w) => ({
-    value: w,
-    label: w,
-  }));
+  // **新建入口放进这个下拉里**。此前它只在左栏的「工作区 +」上 —— 而用户想切
+  // 工作区时点的是这里，点开却只有"默认工作区"一个选项、也没有别的出口，
+  // 看起来就是个坏掉的控件。要在用户产生意图的地方给出路，而不是让他去别处找。
+  const NEW_WS = "__new__";
+  const workspaceOptions = [
+    ...(workspaces.length ? workspaces : ["默认工作区"]).map((w) => ({
+      value: w, label: w,
+      sub: w === "默认工作区" ? "不绑目录，Agent 只在会话里工作" : undefined,
+    })),
+    { value: NEW_WS, label: "＋ 新建工作区…", sub: "绑一个目录，Agent 的文件操作就在那里面" },
+  ];
 
   return (
     <div className={"cc-composer" + (compact ? " compact" : "")}>
@@ -359,9 +369,9 @@ export default function Composer({
 
         <SheetSelect
           className="cc-chip xsel-compact"
-          title="选择工作区"
+          title="工作区 —— 决定 Agent 在哪个目录里读写文件"
           value={value.workspace}
-          onChange={(v) => onChange({ workspace: v })}
+          onChange={(v) => { if (v === NEW_WS) onNewWorkspace?.(); else onChange({ workspace: v }); }}
           options={workspaceOptions}
           ariaLabel="工作区"
         />

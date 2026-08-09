@@ -33,6 +33,7 @@ import FollowUps from "../../components/console/FollowUps";
 import {
   CONSOLE_PRESETS_CHANGED,
   consolePresets,
+  consoleWorkspaceCreate,
   consoleSessionApprovals,
   consoleSessions,
   ivyeaAgentChat,
@@ -233,6 +234,30 @@ function ConsoleInner() {
     el.scrollTop = node.offsetTop - el.offsetTop - 8;
     stickRef.current = true;      // 之后照常跟随，直到用户自己往上翻
   }, [turns]);
+
+  // ── 新建工作区（从输入框那个下拉里进来）──────────────────────────────────
+  //
+  // 放在这里而不是只留在左栏：用户想换工作区时点的是输入框那个 chip，
+  // 在那儿给出路，比让他去左栏找一个「+」自然得多。
+  const newWorkspace = useCallback(async () => {
+    const name = window.prompt("工作区名称（例如：我的店铺资料）");
+    if (!name || !name.trim()) return;
+    const path = window.prompt(
+      "绑定目录的绝对路径（Agent 的文件读写就发生在这个目录里）。\n" +
+      "留空则不绑目录 —— 那样它只能在会话里工作，碰不到你的文件。", "") || "";
+    try {
+      await consoleWorkspaceCreate(name.trim(), path.trim());
+      const d = await consoleSessions();
+      const names = (d.workspaces || []).map((w) => w.name);
+      if (names.length) setWorkspaces(names);
+      patch({ workspace: name.trim() });
+      notifyConsoleSessionsChanged();
+      notify("success", path.trim() ? `已创建并切到「${name.trim()}」，目录：${path.trim()}`
+                               : `已创建并切到「${name.trim()}」（未绑目录）`);
+    } catch (e) {
+      notify("error", errText(e, "工作区创建失败"));
+    }
+  }, [notify]);
 
   // ── 侧边栏「新建任务」────────────────────────────────────────────────────
   const resetSession = useCallback(() => {
@@ -618,6 +643,7 @@ function ConsoleInner() {
       attaching={attaching}
       skills={skills}
       workspaces={workspaces}
+      onNewWorkspace={newWorkspace}
       references={references}
       picked={picked}
       onPickedChange={setPicked}
