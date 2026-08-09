@@ -150,3 +150,9 @@ def test_diagnostic_bundle_still_redacts_after_encryption(_isolated_data_dir):
     hub_settings.save({"deepseek_api_key": SECRET})
     payload = diagnostics.build_bundle(data_dir=_isolated_data_dir)
     assert SECRET.encode() not in payload
+
+
+def test_public_keys_are_not_treated_as_secrets():
+    """名字里带 key 不等于是秘密。公钥本来就是公开的 —— 加密它没有意义，
+    还让排障时配置文件读不出来。"""
+    assert not secrets.is_secret_key("skill_market_pubkey")

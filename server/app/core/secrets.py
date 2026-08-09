@@ -45,6 +45,8 @@ _SECRET_HINT = re.compile(
 _NOT_SECRET = {
     "password_hash",      # 已经是 bcrypt 哈希，再加一层没有意义
     "hermes_api_key_env",  # 存的是环境变量**名**，不是值
+    "skill_market_pubkey", # 公钥本来就是公开的 —— 加密它没有意义，
+                           # 还让排障时配置文件读不出来
 }
 
 

@@ -104,8 +104,10 @@ _DEFAULTS: Dict[str, Any] = {
     "skill_market_enabled": False,
     # 可换源：用户能指向自建镜像。签名校验保证换源之后依然安全。
     "skill_market_url": "",
-    # 客户端内置的市场公钥（校验安装包签名）。留空则只校验 sha256。
-    "skill_market_pubkey": "",
+    # 门道社区的市场公钥（校验安装包签名）。
+    # 校验和只能证明"没传坏"，签名才能证明"是那边发布的那份" —— 这正是
+    # 用户把市场换成自建镜像之后，安全性依然成立的前提。
+    "skill_market_pubkey": "R3li0pMksP_Ls5lmu5kH86L_PvhH6NMhParfS8lGCXE=",
     "setup_done": False,
     # Auto bug-fix: when a feature/tool operation fails, offer to launch an AI
     # repair flow (hermes in an isolated worktree, review-first). Off by default
