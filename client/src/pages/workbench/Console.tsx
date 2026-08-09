@@ -196,11 +196,43 @@ function ConsoleInner() {
     return () => { alive = false; };
   }, []);
 
-  // ── 滚动到底 ─────────────────────────────────────────────────────────────
+  // ── 跟随滚动 ─────────────────────────────────────────────────────────────
+  //
+  // **只在用户本来就贴着底的时候才跟。** 原先是无条件 scrollTop = scrollHeight，
+  // 于是流式输出期间每来一个 token 就把滚动位置拽回底部 —— 用户想往上翻看前面
+  // 的问题或推理，手一松就被扯下来，根本读不了。
+  //
+  // 判据是"离底部还有多远"：用户一旦主动往上滚超过一屏的 20%，就认为他在读，
+  // 不再打断；他自己滚回底部，跟随自动恢复。
+  const stickRef = useRef(true);
   useEffect(() => {
     const el = bodyRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const onScroll = () => {
+      const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+      stickRef.current = gap <= Math.max(40, el.clientHeight * 0.2);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (el && stickRef.current) el.scrollTop = el.scrollHeight;
   }, [turns, followUps]);
+
+  // 新一轮发出后，把那条问题滚到视野顶端（只做一次）。
+  const pendingTopRef = useRef<string>("");
+  useEffect(() => {
+    const id = pendingTopRef.current;
+    if (!id) return;
+    const el = bodyRef.current;
+    const node = el?.querySelector(`[data-turn="${id}"]`) as HTMLElement | null;
+    if (!el || !node) return;
+    pendingTopRef.current = "";
+    el.scrollTop = node.offsetTop - el.offsetTop - 8;
+    stickRef.current = true;      // 之后照常跟随，直到用户自己往上翻
+  }, [turns]);
 
   // ── 侧边栏「新建任务」────────────────────────────────────────────────────
   const resetSession = useCallback(() => {
@@ -372,6 +404,10 @@ function ConsoleInner() {
     const aiTurn: Turn = { id: aiId, role: "assistant", text: "", steps: [], skills: [], approvals: [], running: true };
     setTurns((prev) => [...prev, userTurn, aiTurn]);
     setBusy(true);
+    // **把刚发出的问题顶到视野上方**，答案在它下面生长 —— 这是主流对话产品的
+    // 做法，也是"我发的问题看不到了"的正解：原先直接钉在最底部，长回答一出来
+    // 就把问题和执行过程顶出屏幕，而那时候滚动又被强制拽回底部，翻都翻不上去。
+    pendingTopRef.current = userTurn.id;
 
     // @ 引用：把选中条目的正文取出来随本轮带下去。取不到的跳过并说明，
     // 不要让用户以为引用了、实际什么都没带。
@@ -634,7 +670,9 @@ function ConsoleInner() {
             <div className="cc-thread scroll-thin" ref={bodyRef}>
               {turns.map((t) =>
                 t.role === "user" ? (
-                  <div className="cc-user" key={t.id}><div className="cc-bubble">{t.text}</div></div>
+                  <div className="cc-user" key={t.id} data-turn={t.id}>
+                    <div className="cc-bubble">{t.text}</div>
+                  </div>
                 ) : (
                   <div className="cc-ai wb-enter" key={t.id}>
                     <StepTimeline
