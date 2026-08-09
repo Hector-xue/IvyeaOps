@@ -33,6 +33,7 @@ import {
 } from "../../api/ivyeaAgent";
 import { listSkills, type SkillMeta } from "../../api/skill";
 import { getSettings } from "../../api/settings";
+import { marketBrowse, marketStatus, type MarketItem } from "../../api/client";
 
 type Tab = "skills" | "mcp" | "agents" | "auth";
 
@@ -57,6 +58,91 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <div className="cap-empty">{children}</div>;
+}
+
+// ── 门道社区（能力的第三个来源）─────────────────────────────────────────────
+//
+// 之前这块只做在「Skill 中心」的子页面里，而用户找社区技能是来「能力市场」这一页
+// 的 —— 这一页的定位本来就是"能力都从哪儿来"，少了社区那一路，等于功能做了但
+// 找不到。这里放摘要 + 入口，安装流程（能力清单、确认、校验）仍在 Skill 中心，
+// 那是需要专注看的一步，不该塞进一个概览页。
+function CommunitySection({ q }: { q: string }) {
+  const navigate = useNavigate();
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [items, setItems] = useState<MarketItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const st = await marketStatus();
+        if (!alive) return;
+        setEnabled(st.enabled);
+        if (!st.enabled) return;
+        const res = await marketBrowse({ q, sort: "installs" });
+        if (!alive) return;
+        setItems(res.items.slice(0, 12));
+        setTotal(res.total);
+      } catch (e: any) {
+        if (alive) setErr(e?.response?.data?.detail || "连不上门道社区");
+      }
+    })();
+    return () => { alive = false; };
+  }, [q]);
+
+  if (enabled === null) return null;
+
+  if (!enabled) {
+    // **默认关闭是有意的**（它会外联），但一个空板块看起来就是坏了。
+    // 必须当场说清楚：为什么空的、开关在哪。
+    return (
+      <Section title="门道社区" sub="别人做好的技能，装过来就能用">
+        <Empty>
+          还没开启。它会向门道社区发起请求，而 IvyeaOps 的默认立场是<b>数据不出你的机器</b>，
+          所以不替你打开。开启后也只在你主动浏览或安装时联网 —— 请求匿名、不带机器标识。
+          <div style={{ marginTop: 10 }}>
+            <button className="cs-btn" onClick={() => navigate("/hub-settings")}>
+              去「系统配置 → 能力市场」开启
+            </button>
+          </div>
+        </Empty>
+      </Section>
+    );
+  }
+
+  if (err) return <Section title="门道社区"><Empty>{err}</Empty></Section>;
+
+  return (
+    <Section
+      title="门道社区"
+      sub={`${total} 个 · 别人做好的技能，装过来就能用`}
+    >
+      {items.length === 0 ? <Empty>没有匹配的技能。</Empty> : (
+        <div className="cap-grid">
+          {items.map((s) => (
+            <div className="cap-card" key={s.slug}>
+              <div className="cap-card-head">
+                <i>◈</i>
+                <b>{s.title || s.slug}</b>
+                {/* 「分享」和「原创」要分得出来：装的是谁的东西，用户有权知道 */}
+                {s.origin === "shared" && <span className="cap-tag">社区分享</span>}
+                {s.category && <span className="cap-tag">{s.category}</span>}
+              </div>
+              <div className="cap-card-desc">{s.summary || s.slug}</div>
+              <div className="cap-card-foot">
+                <code>{s.original_author ? `作者：${s.original_author}` : s.slug}</code>
+                <button className="cs-btn" onClick={() => navigate("/skill/market")}>
+                  去安装
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
+  );
 }
 
 // ── 技能 ─────────────────────────────────────────────────────────────────────
@@ -131,6 +217,8 @@ function SkillsTab() {
           </div>
         )}
       </Section>
+
+      <CommunitySection q={q} />
 
       <Section
         title="Skill 中心技能"
