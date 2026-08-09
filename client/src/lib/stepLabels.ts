@@ -194,20 +194,31 @@ export function stepFromEvent(ev: IvyeaStepEvent): ConsoleStep {
   };
 }
 
+/** 终端色码。agent 的叙述是照着终端输出写的，里面夹着 ANSI 转义序列
+ *  （\x1b[36m⏺\x1b[0m 这种）。直接渲染到网页上就是一串乱码。 */
+const ANSI = /\u001b\[[0-9;]*m/g;
+
+/** 一行注记最多显示多少字。叙述里偶尔会带整段计划（实测最长 3685 字），
+ *  一行铺开就把时间线撑没了。 */
+const NOTE_MAX = 120;
+
 /**
  * 自由文本兜底 —— agent serve < v1.9 只发人话叙述，没有结构化步骤。
  * 这时不做正则猜工具名（叙述文案一改就全错），老老实实渲染成一行注记，
  * 用户至少能看到「它正在做什么」，而不是一个不动的转圈。
+ *
+ * **新版 agent 两种都发**，那时候这条兜底就不该再渲染 —— 否则同一个动作
+ * 会以「结构化步骤」和「终端叙述」两种形态各出现一次。判断在调用方。
  */
 export function noteStep(text: string, seq: number): ConsoleStep {
-  const line = text.trim();
+  const line = text.replace(ANSI, "").trim().replace(/\s+/g, " ");
   return {
     key: `note-${seq}`,
     seq,
     phase: "note",
     name: "",
     icon: PHASE_ICONS.note,
-    title: line.length > 160 ? line.slice(0, 160) + "…" : line,
+    title: line.length > NOTE_MAX ? line.slice(0, NOTE_MAX) + "…" : line,
     status: "ok",
   };
 }

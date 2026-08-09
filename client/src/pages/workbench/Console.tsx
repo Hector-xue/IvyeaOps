@@ -55,6 +55,9 @@ import {
 } from "../../api/ivyeaAgent";
 import { errText } from "../../lib/errText";
 
+/** 老版本 agent 的自由文本叙述最多保留最近几行 —— 长任务的叙述能有几十条。 */
+const MAX_NOTES = 12;
+
 const PREFS_KEY = "ivyea-ops.console.prefs";
 
 type Turn = {
@@ -463,10 +466,22 @@ function ConsoleInner() {
             notify("warn", "审批等待超时，这一步已自动取消。");
           },
           onEvent: (d) => {
-            // 老版本 agent 只有自由文本叙述 —— 不猜工具名，原样留一行注记。
+            // 自由文本叙述是**老版本 agent 的兜底**（< v1.9 只发人话、没有结构化
+            // 步骤）。新版两种都发，而它们说的是同一批动作 —— 实测一次带工具的
+            // 提问会来 44 条 step + 46 条 event，两个都渲染就等于每个动作出现两
+            // 次，且文本那份没有上限，几十行糊满整页把回答挤没了。
+            //
+            // 所以：**这一轮只要收到过结构化步骤，就不再渲染叙述。**
             const line = String(d?.text || "").trim().split("\n").filter(Boolean).pop() || "";
             if (!line) return;
-            patchTurn(aiId, (t) => ({ steps: [...(t.steps || []), noteStep(line, noteSeq++)] }));
+            patchTurn(aiId, (t) => {
+              const steps = t.steps || [];
+              if (steps.some((x) => x.phase !== "note")) return {};   // 有结构化的，叙述丢掉
+              // 真·老版本路径：注记也要有上限，否则长任务照样能刷满屏。
+              const notes = steps.filter((x) => x.phase === "note");
+              const next = [...steps, noteStep(line, noteSeq++)];
+              return { steps: notes.length >= MAX_NOTES ? next.slice(next.length - MAX_NOTES) : next };
+            });
           },
           onToken: (chunk) => {
             finalText += chunk;

@@ -283,7 +283,22 @@ export default function SessionRail({
 
             {isOpen && (items.length === 0 ? (
               <div className="sb-ws-empty">
-                {agentDown ? "IvyeaAgent 未就绪，会话列表暂时读不到。" : "暂无会话"}
+                {agentDown ? "IvyeaAgent 未就绪，会话列表暂时读不到。"
+                  : (src || debouncedQ) ? (
+                  /* **空列表要说清楚是被筛掉的。** 来源筛选存在 localStorage 里，
+                     跨会话一直生效 —— 用户上次点过一次「智能体」，之后新开的
+                     任务台会话就再也不出现，而界面上什么都不说，看起来就是
+                     "我的对话丢了"。 */
+                  <>
+                    没有匹配的会话
+                    <button className="sb-clear-filter" onClick={() => {
+                      pickSource("");
+                      setQ("");
+                    }}>
+                      清除筛选{src ? `（当前只看「${SOURCE_FILTERS.find((f) => f.key === src)?.label || src}」）` : ""}
+                    </button>
+                  </>
+                ) : "暂无会话"}
               </div>
             ) : items.map((r) => (
               <div

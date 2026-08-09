@@ -3436,3 +3436,8 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
   .mk-grid{grid-template-columns:1fr}
   .mk-search{margin-left:0;width:100%}
 }
+
+/* 被筛空时的"清除筛选"。做成显眼的可点项 —— 用户看到的是"我的会话不见了"，
+   得让他一眼知道是筛选造成的、并且一键就能撤销。 */
+.sb-clear-filter{display:block;margin-top:6px;padding:0;background:none;border:0;
+  color:var(--acc);font-size:10.5px;cursor:pointer;text-align:left}
