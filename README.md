@@ -433,7 +433,20 @@ IvyeaOps/
 
 - `server/.env`、`data/`（含 `hub_settings.json`、领星凭证、SQLite）、`saved-images/` 均已 gitignore，**切勿**提交。
 - 迁移 / 改前缀时务必原样保留 `IVYEA_OPS_SECRET` 与 `IVYEA_OPS_PASSWORD_HASH`，否则会登录 401。
+- `IVYEA_OPS_SECRET` 是**会话签名密钥**：泄漏等于别人可以伪造管理员会话。它在启动时就会从进程环境里摘走，子进程读不到。
+- 配置里的 API 密钥在磁盘上是加密的（AES-256-GCM），解密要用隐藏文件 `data/.master.key` —— 备份时别漏，或者直接用带口令的备份包。
 - 领星等真实店铺写操作受双开关 + 三重复核 + 人工确认保护，请勿绕过。
+- 管理员账号 ≈ 机器权限（内置终端本来就有全盘访问），请据此分配。
+
+威胁模型、漏洞报告方式见 [SECURITY.md](SECURITY.md)。
+
+---
+
+## 参与贡献
+
+见 [CONTRIBUTING.md](CONTRIBUTING.md)。报 bug 时**请附上诊断包**（系统配置页可一键导出，不含密钥和店铺数据）——它把我们要来回问你的东西一次给齐。
+
+版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
 

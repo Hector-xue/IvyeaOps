@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 安全漏洞
+    url: https://github.com/Hector-xue/IvyeaOps/blob/main/SECURITY.md
+    about: 请不要开公开 issue —— 按 SECURITY.md 里的方式私下报告
+  - name: Skill 相关
+    url: https://github.com/Hector-xue/IvyeaOps/blob/main/CONTRIBUTING.md
+    about: Skill 不需要改仓库代码，走 Skill 中心即可

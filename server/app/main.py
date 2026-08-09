@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 
@@ -57,6 +58,12 @@ _UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings.data_dir.mkdir(parents=True, exist_ok=True)
+
+    # 测试里把后台任务关掉。它们（探活各 agent 二进制、起终端采集、拉起几个
+    # 调度循环）跟被测逻辑无关，却占掉每个测试 setup 的大半时间 —— app/tests 有
+    # 224 个测试，每个都完整跑一遍 lifespan。**建表仍然照做**，否则测试会撞
+    # "no such table"。
+    skip_bg = os.environ.get("IVYEA_OPS_SKIP_STARTUP_TASKS", "").lower() in {"1", "true", "yes"}
 
     # Rebuild runner-side config from the authoritative IvyeaOps settings on
     # every boot. This is required on a fresh Windows installation where the
@@ -218,10 +225,11 @@ async def lifespan(app: FastAPI):
         _console_sessions.init_db()
         from app.services import schedules as _schedules
         _schedules.init_db()
-        agents = _agent_reg.discover_agents()
-        ok = sum(1 for a in agents if a.get("enabled"))
-        logger.info("agent registry: %s/%s enabled", ok, len(agents))
-        _pty_mgr.start_background_tasks()
+        if not skip_bg:
+            agents = _agent_reg.discover_agents()
+            ok = sum(1 for a in agents if a.get("enabled"))
+            logger.info("agent registry: %s/%s enabled", ok, len(agents))
+            _pty_mgr.start_background_tasks()
     except Exception as e:
         logger.warning("agent hub init skipped: %s", e)
 
@@ -248,7 +256,7 @@ async def lifespan(app: FastAPI):
     from app.services.watchdog import notify_ready, notify_status, watchdog_loop
     notify_ready()
     notify_status("ready")
-    _watchdog_task = asyncio.create_task(watchdog_loop(), name="sd-watchdog")
+    _watchdog_task = None if skip_bg else asyncio.create_task(watchdog_loop(), name="sd-watchdog")
 
     # Home market-traffic daily recorder: wakes every 30 min and records a
     # daily point for each tracked baseline / watched ASIN that lacks one.
@@ -264,7 +272,7 @@ async def lifespan(app: FastAPI):
                 logger.warning("market recorder error: %s", e)
             await asyncio.sleep(1800)
 
-    _market_task = asyncio.create_task(_market_daily_loop(), name="market-recorder")
+    _market_task = None if skip_bg else asyncio.create_task(_market_daily_loop(), name="market-recorder")
 
     # Token-usage archiver: snapshot each tool's token data into IvyeaOps's own
     # DB once a day so history survives even after a tool is uninstalled.
@@ -294,12 +302,12 @@ async def lifespan(app: FastAPI):
                 logger.warning("token archive error: %s", e)
             await asyncio.sleep(86400)  # daily
 
-    _archive_task = asyncio.create_task(_token_archive_loop(), name="token-archiver")
+    _archive_task = None if skip_bg else asyncio.create_task(_token_archive_loop(), name="token-archiver")
 
     # 领星 weekly advisory automation scheduler (gated by lingxing_auto_enabled).
     try:
         from app.services.lingxing_automation import scheduler_loop as _lx_auto_loop
-        _lingxing_auto_task = asyncio.create_task(_lx_auto_loop(), name="lingxing-auto")
+        _lingxing_auto_task = None if skip_bg else asyncio.create_task(_lx_auto_loop(), name="lingxing-auto")
     except Exception as e:
         _lingxing_auto_task = None
         logger.warning("lingxing auto scheduler skipped: %s", e)
@@ -318,7 +326,7 @@ async def lifespan(app: FastAPI):
         except Exception as e:  # noqa: BLE001 — 拉不起来不该挡住 ops 启动
             logger.warning("ivyea-agent warmup skipped: %s", e)
 
-    _warm_task = asyncio.create_task(_warm_agent(), name="agent-warmup")
+    _warm_task = None if skip_bg else asyncio.create_task(_warm_agent(), name="agent-warmup")
 
     # 定时任务调度器：每 30s 看一眼有没有到点的任务。
     try:
@@ -329,26 +337,19 @@ async def lifespan(app: FastAPI):
         logger.warning("agent scheduler skipped: %s", e)
 
     yield
-    _warm_task.cancel()
-    if _scheduler_task:
-        _scheduler_task.cancel()
-    _watchdog_task.cancel()
-    _market_task.cancel()
-    _archive_task.cancel()
-    if _lingxing_auto_task:
-        _lingxing_auto_task.cancel()
-    try:
-        await _watchdog_task
-    except (asyncio.CancelledError, Exception):
-        pass
-    try:
-        await _market_task
-    except (asyncio.CancelledError, Exception):
-        pass
-    try:
-        await _archive_task
-    except (asyncio.CancelledError, Exception):
-        pass
+    # skip_bg 时这些任务压根没起，值是 None —— 统一按"有才取消/等待"处理，
+    # 免得关停路径上冒 AttributeError（那会让每个测试的 teardown 都吐一堆噪音）。
+    for _task in (_warm_task, _scheduler_task, _watchdog_task, _market_task,
+                  _archive_task, _lingxing_auto_task):
+        if _task is not None:
+            _task.cancel()
+    for _task in (_watchdog_task, _market_task, _archive_task):
+        if _task is None:
+            continue
+        try:
+            await _task
+        except (asyncio.CancelledError, Exception):
+            pass
     try:
         await terminal.stop_autocapture()
     except Exception as e:

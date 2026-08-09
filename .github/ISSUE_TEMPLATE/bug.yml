@@ -1,0 +1,50 @@
+name: 报告 Bug
+description: 功能不对、报错、界面异常
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **最省事的做法**：在「系统配置」页点「导出诊断包」，把 zip 拖进下面的描述框。
+        里面有版本、平台、日志尾部、脱敏后的配置和各库表行数 —— 正是我们要来回问你的东西。
+        **包里不含密钥、不含店铺数据**，贴之前你可以自己打开扫一眼。
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 设置页右上角，或 `git describe --tags`
+      placeholder: v1.2.0
+    validations: { required: true }
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 平台
+      options: [Linux, Windows, macOS, Docker]
+    validations: { required: true }
+  - type: input
+    id: request_id
+    attributes:
+      label: request_id（如果界面上报了错）
+      description: 错误提示里那串 8 位十六进制。有了它我们能在日志里 grep 到整条链路。
+      placeholder: 70c1d031
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 你做了什么、期望看到什么、实际看到什么
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开 …
+        2. 点击 …
+        3. 出现 …
+    validations: { required: true }
+  - type: checkboxes
+    id: bundle
+    attributes:
+      label: 诊断包
+      options:
+        - label: 我附上了诊断包（强烈建议 —— 没有它排查会慢很多）

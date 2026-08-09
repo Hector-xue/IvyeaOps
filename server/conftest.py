@@ -57,6 +57,13 @@ os.environ.setdefault("IVYEA_OPS_DATA_DIR", _ENV_DATA_DIR)
 # 会盖掉这里的默认值，不受影响。
 os.environ.setdefault("HERMES_HOME", tempfile.mkdtemp(prefix="ivyea-tests-legacy-home-"))
 
+# 第六件：app/tests 里的 fixture 是 function-scoped 的 reload(app.main) +
+# TestClient(app)，也就是**每个测试函数**都完整跑一遍 lifespan。lifespan 里那些
+# 后台活儿（逐个跑 agent 二进制探版本、起终端采集、拉起 watchdog / 行情记录 /
+# token 归档 / 领星自动化几个循环）跟被测逻辑一点关系没有，却占掉 setup 的大半。
+# 224 个测试 × 每次一遍 = 分钟级的浪费。建表照做，只跳过后台任务。
+os.environ.setdefault("IVYEA_OPS_SKIP_STARTUP_TASKS", "1")
+
 from app.core.config import settings  # noqa: E402
 
 

@@ -1,0 +1,20 @@
+name: 功能建议
+description: 希望增加或改进某个能力
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你实际遇到的问题
+      description: |
+        请描述**问题**而不是方案。"我每天要手工导 3 次广告报表"比"希望加个导出按钮"
+        有用得多 —— 前者能让我们想到更好的解法。
+    validations: { required: true }
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你设想的做法（可选）
+  - type: textarea
+    id: workaround
+    attributes:
+      label: 你现在是怎么绕过去的（可选）
