@@ -39,6 +39,13 @@ def load_cases(suite: str, *, root: Optional[Path] = None, limit: int = 0) -> li
         missing = [k for k in ("prompt", "expected_points") if k not in case]
         if missing:
             raise ValueError(f"案例 {path.name} 缺字段：{', '.join(missing)}")
+        # **要点为空要当场报错**，不能当成"没有要求所以都算过"。空要点会让判官
+        # 在没有评判标准的情况下打分，结果必然虚高 —— 一个半成品案例悄悄计入
+        # 通过率，比直接失败糟得多。make_case 生成的骨架正是这个状态。
+        if not case["expected_points"]:
+            raise ValueError(
+                f"案例 {path.name} 的 expected_points 是空的 —— 还没人工标注合格要点。"
+                f"填完再跑；要点要写「必须命中什么」，不要写「应该讲得好」。")
         out.append(case)
     return out[:limit] if limit else out
 
