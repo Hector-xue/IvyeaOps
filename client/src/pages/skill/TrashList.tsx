@@ -6,6 +6,7 @@ import {
   TrashEntry,
 } from "../../api/skill";
 import ConfirmDialog from "./ConfirmDialog";
+import { errText } from "../../lib/errText";
 
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -66,7 +67,7 @@ export default function TrashList() {
       const data = await listTrash();
       setEntries(data);
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e?.message ?? "加载失败");
+      setErr(errText(e, "加载失败"));
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,6 @@
 import { ReactNode, useState } from "react";
 import Modal from "./Modal";
+import { errText } from "../../lib/errText";
 
 export type ConfirmDialogProps = {
   title: string;
@@ -34,8 +35,7 @@ export default function ConfirmDialog({
       await onConfirm();
       onClose();
     } catch (e: any) {
-      const detail = e?.response?.data?.detail;
-      setErr(typeof detail === "string" ? detail : (e?.message ?? "操作失败"));
+      setErr(errText(e, "操作失败"));
     } finally {
       setBusy(false);
     }

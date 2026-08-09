@@ -46,6 +46,7 @@ import {
   type RetrievalStatus,
 } from "../api/ivyeaAgent";
 import "../styles/ivyea-agent-dock.css";
+import { errText } from "../lib/errText";
 
 type Tab = "chat" | "knowledge" | "status";
 type HistoryView = "chat" | "list" | "detail";
@@ -68,7 +69,7 @@ function apiErrorMessage(e: any, fallback: string) {
   if (e?.code === "ECONNABORTED" || String(e?.message || "").toLowerCase().includes("timeout")) {
     return "请求等待超时，模型可能仍在生成或网络已中断，请稍后重试。";
   }
-  return e?.response?.data?.detail || e?.message || fallback;
+  return errText(e, fallback);
 }
 
 function formatDuration(seconds: number) {

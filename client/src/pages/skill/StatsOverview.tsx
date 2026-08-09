@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getStats, SkillStats } from "../../api/skill";
+import { errText } from "../../lib/errText";
 
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -25,7 +26,7 @@ export default function StatsOverview() {
     let alive = true;
     getStats()
       .then((d) => alive && setData(d))
-      .catch((e) => alive && setErr(e?.response?.data?.detail ?? e.message ?? "加载失败"));
+      .catch((e) => alive && setErr(errText(e, "加载失败")));
     return () => {
       alive = false;
     };

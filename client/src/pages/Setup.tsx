@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { completeSetup, installAgentStreamUrl, type SetupChecks } from "../api/setup";
 import { patchSettings } from "../api/settings";
+import { errText } from "../lib/errText";
 
 // ---------------------------------------------------------------------------
 // Tiny style helpers (inline, no extra CSS file needed)
@@ -404,7 +405,7 @@ function StepFallbackModel({ onNext }: { onNext: () => void }) {
       } as any);
       onNext();
     } catch (e: any) {
-      setErr(e?.response?.data?.detail || e?.message || "保存失败");
+      setErr(errText(e, "保存失败"));
     } finally {
       setSaving(false);
     }
@@ -521,7 +522,7 @@ function StepApiKeys({
       }
       onNext();
     } catch (e: any) {
-      setErr(e?.response?.data?.detail || e?.message || "保存失败");
+      setErr(errText(e, "保存失败"));
     } finally {
       setSaving(false);
     }

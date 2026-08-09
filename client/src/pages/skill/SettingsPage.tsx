@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSettings, updateSettings, StudioSettings } from "../../api/skill";
 import SheetSelect from "../../components/SheetSelect";
+import { errText } from "../../lib/errText";
 
 /**
  * Settings are stored on the server (used by the snapshot prune job and trash
@@ -24,7 +25,7 @@ export default function SettingsPage() {
       setSaved(s);
       setDraft(s);
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e?.message ?? "加载失败");
+      setErr(errText(e, "加载失败"));
     } finally {
       setLoading(false);
     }
@@ -57,7 +58,7 @@ export default function SettingsPage() {
       setToast("设置已保存");
       window.setTimeout(() => setToast(null), 3000);
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e?.message ?? "保存失败");
+      setErr(errText(e, "保存失败"));
     } finally {
       setSaving(false);
     }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Modal from "./Modal";
 import { importFromGitHub } from "../../api/skill";
+import { errText } from "../../lib/errText";
 
 // Accept either "https://github.com/owner/repo" or "owner/repo".
 function normalizeRepo(input: string): string | null {
@@ -53,8 +54,7 @@ export default function ImportGitHubDialog({ onClose }: ImportGitHubDialogProps)
       onClose();
       navigate(`/skill/browse?name=${encodeURIComponent(res.imported_name)}`);
     } catch (e: any) {
-      const detail = e?.response?.data?.detail;
-      setErr(typeof detail === "string" ? detail : (e?.message ?? "导入失败"));
+      setErr(errText(e, "导入失败"));
     } finally {
       setSubmitting(false);
     }

@@ -8,6 +8,7 @@ import SheetSelect from "../../components/SheetSelect";
 // 管理 tab rendered completely unstyled ("没 UI"). CSS imports dedupe, so this is
 // safe even when SkillStudio also imports the same file.
 import "../../styles/skill-studio.css";
+import { errText } from "../../lib/errText";
 
 // SkillEditor brings in CodeMirror (~240KB gzip) — keep it off the list page.
 const SkillEditor = lazy(() => import("./SkillEditor"));
@@ -54,7 +55,7 @@ export default function SkillBrowse() {
     setErr(null);
     listSkills({ q: q || undefined, category: category || undefined })
       .then((r) => { if (alive) setSkills(r.skills); })
-      .catch((e) => { if (alive) setErr(e?.response?.data?.detail ?? e.message ?? "加载失败"); })
+      .catch((e) => { if (alive) setErr(errText(e, "加载失败")); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [q, category, refreshKey]);

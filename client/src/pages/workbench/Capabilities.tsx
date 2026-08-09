@@ -199,7 +199,7 @@ function SkillsTab() {
       // 以为技能库真的空了，而不是"这会儿读不到"。
       else setAgentErr((a.reason as any)?.response?.status === 503
         ? "IvyeaAgent 服务未就绪，稍候刷新即可。"
-        : ((a.reason as any)?.response?.data?.detail || "读取 Agent 技能库失败。"));
+        : errText(a.reason, "读取 Agent 技能库失败。"));
       if (o.status === "fulfilled") setOpsSkills(o.value?.skills || []);
       setLoading(false);
     });
@@ -305,7 +305,7 @@ function McpTab({ isAdmin }: { isAdmin: boolean }) {
       setRows(d.servers || []);
       setClaude(d.claude_servers || []);
     } catch (e: any) {
-      notify("error", e?.response?.data?.detail || "读取 MCP 配置失败");
+      notify("error", errText(e, "读取 MCP 配置失败"));
     } finally {
       setLoading(false);
     }
@@ -330,7 +330,7 @@ function McpTab({ isAdmin }: { isAdmin: boolean }) {
       setOpen(false);
       await load();
     } catch (e: any) {
-      notify("error", e?.response?.data?.detail || e?.message || "保存失败");
+      notify("error", errText(e, "保存失败"));
     } finally {
       setSaving(false);
     }
@@ -351,7 +351,7 @@ function McpTab({ isAdmin }: { isAdmin: boolean }) {
       notify("success", `已移除 ${row.name}`);
       await load();
     } catch (e: any) {
-      notify("error", e?.response?.data?.detail || "移除失败");
+      notify("error", errText(e, "移除失败"));
     }
   };
 
@@ -486,7 +486,7 @@ function PresetsSection() {
       notifyConsolePresetsChanged();
       toast("success", "预设已保存");
     } catch (e: any) {
-      toast("error", e?.response?.data?.detail || "保存失败");
+      toast("error", errText(e, "保存失败"));
     }
   };
 

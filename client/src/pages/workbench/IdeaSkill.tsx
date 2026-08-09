@@ -11,6 +11,7 @@ import {
   type ArchitectValidation,
 } from "../../api/skill";
 import SheetSelect from "../../components/SheetSelect";
+import { errText } from "../../lib/errText";
 
 interface GeneratedSkill {
   name: string;
@@ -128,7 +129,7 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
         }
       }
     } catch (e: any) {
-      setError(e?.response?.data?.detail || e?.message || "生成失败");
+      setError(errText(e, "生成失败"));
       setPhase("idle");
     }
   }, [idea, category, mode, busy]);
@@ -152,7 +153,7 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
         setPhase("clarify");
       }
     } catch (e: any) {
-      setError(e?.response?.data?.detail || e?.message || "生成失败");
+      setError(errText(e, "生成失败"));
       setPhase("clarify");
     }
   }, [idea, category, clarAnswers]);
@@ -168,7 +169,7 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
       setGenerated(res);
       setPhase("preview");
     } catch (e: any) {
-      setError(e?.response?.data?.detail || e?.message || "生成失败");
+      setError(errText(e, "生成失败"));
       setPhase("plan");
     }
   }, [plan]);
@@ -191,7 +192,7 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
       setSaved(true);
       return true;
     } catch (e: any) {
-      setError(e?.response?.data?.detail || e?.message || "保存失败");
+      setError(errText(e, "保存失败"));
       return false;
     } finally {
       setSaving(false);

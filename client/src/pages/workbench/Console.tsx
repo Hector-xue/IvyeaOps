@@ -53,6 +53,7 @@ import {
   type IvyeaPermissionRequest,
   type IvyeaSkillInfo,
 } from "../../api/ivyeaAgent";
+import { errText } from "../../lib/errText";
 
 const PREFS_KEY = "ivyea-ops.console.prefs";
 
@@ -282,7 +283,7 @@ function ConsoleInner() {
         if (!alive) return;
         notify("error", e?.response?.status === 403
           ? "这条会话不属于你"
-          : (e?.response?.data?.detail || "打开会话失败"));
+          : (errText(e, "打开会话失败")));
         navigate("/console", { replace: true });
       })
       .finally(() => { if (alive) setLoadingSession(false); });
@@ -310,7 +311,7 @@ function ConsoleInner() {
       // 那一步确实已经执行/拒绝了，把卡片变回可点只会让人再点一次、再撞一次 409。
       if (status === 409) {
         setRailApprovals((prev) => [...prev, { title: req.title || req.op_type, decision: choice, at: Date.now() }]);
-        notify("info", e?.response?.data?.detail || "这条审批已经被处理过了");
+        notify("info", errText(e, "这条审批已经被处理过了"));
         return;
       }
       // 404 = 已超时失效或 ops 重启丢了登记。同样不该退回未决 —— 它永远不会成功了。
@@ -324,7 +325,7 @@ function ConsoleInner() {
       patchTurn(turnId, (t) => ({
         approvals: (t.approvals || []).map((a) => (a.req.request_id === req.request_id ? { ...a, decision: undefined } : a)),
       }));
-      notify("error", e?.response?.data?.detail || e?.message || "提交审批失败，请重试");
+      notify("error", errText(e, "提交审批失败，请重试"));
     }
   }, [patchTurn, sessionId, notify]);
 
@@ -400,8 +401,7 @@ function ConsoleInner() {
           visionSystem = `[用户附图 —— 由视觉模型（${d.provider || "vision"}）读出的内容]\n${d.text.trim()}`;
         }
       } catch (e: any) {
-        notify("error", e?.response?.data?.detail
-          || "图片没能读出来，这一轮按纯文字继续。可在「系统配置 → AI 服务」配一个视觉模型。");
+        notify("error", errText(e, "图片没能读出来，这一轮按纯文字继续。可在「系统配置 → AI 服务」配一个视觉模型。"));
       }
     }
 
@@ -548,7 +548,7 @@ function ConsoleInner() {
       }));
       notify("success", `已添加「${file.name}」`);
     } catch (e: any) {
-      notify("error", e?.response?.data?.detail || e?.message || "添加文件失败");
+      notify("error", errText(e, "添加文件失败"));
     } finally {
       setAttaching(false);
     }

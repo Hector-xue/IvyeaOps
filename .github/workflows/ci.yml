@@ -164,6 +164,11 @@ jobs:
       - name: Typecheck
         working-directory: client
         run: npx tsc --noEmit -p tsconfig.json
+      - name: 门禁：不许直接读后端 detail
+        working-directory: client
+        # 见 scripts/check-errtext.mjs：422 的 detail 是对象数组，直接渲染会把
+        # 整页崩成「渲染失败」。清零之后靠这条挡回潮。
+        run: node scripts/check-errtext.mjs
       - name: Build
         working-directory: client
         run: npm run build

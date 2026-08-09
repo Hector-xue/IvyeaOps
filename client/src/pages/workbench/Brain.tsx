@@ -34,6 +34,7 @@ import {
   ivyeaChatSessionDelete,
   ivyeaChatSessions,
 } from "../../api/ivyeaAgent";
+import { errText } from "../../lib/errText";
 
 // Unified chat store = the agent's native session library (shared with the
 // floating dock). These lightweight shapes normalize the agent responses for
@@ -207,7 +208,7 @@ export default function Brain() {
       setOverview(o);
       setChatStatus(status);
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e.message ?? "概览加载失败");
+      setErr(errText(e, "概览加载失败"));
     }
   }, []);
 
@@ -217,7 +218,7 @@ export default function Brain() {
       setFiles(r.files);
       setSelectedPath((prev) => prev || r.files[0]?.path || "");
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e.message ?? "文件列表加载失败");
+      setErr(errText(e, "文件列表加载失败"));
     }
   }, []);
 
@@ -264,7 +265,7 @@ export default function Brain() {
         setMessages([]);
       }
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e.message ?? "会话加载失败");
+      setErr(errText(e, "会话加载失败"));
     }
   }, [loadSession, refreshSessions]);
 
@@ -299,7 +300,7 @@ export default function Brain() {
       setContent(r.content);
       setTab("pages");
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e.message ?? "读取失败");
+      setErr(errText(e, "读取失败"));
     } finally {
       setLoading(false);
     }
@@ -320,7 +321,7 @@ export default function Brain() {
       setRawResult(r.raw);
       if (r.items.length === 0 && r.raw) setFlash("没有解析到标准结果，已显示原始输出。");
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e.message ?? "搜索失败");
+      setErr(errText(e, "搜索失败"));
     } finally {
       setLoading(false);
     }
@@ -336,7 +337,7 @@ export default function Brain() {
       setContent(r.content);
       setTab("pages");
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e.message ?? "页面打开失败");
+      setErr(errText(e, "页面打开失败"));
     } finally {
       setLoading(false);
     }
@@ -361,7 +362,7 @@ export default function Brain() {
       }
       await loadFiles();
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e.message ?? "保存失败");
+      setErr(errText(e, "保存失败"));
     } finally {
       setSaving(false);
     }
@@ -381,7 +382,7 @@ export default function Brain() {
       const d = await brainDoctor();
       setFlash(JSON.stringify(d, null, 2));
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e.message ?? "Doctor 失败");
+      setErr(errText(e, "Doctor 失败"));
     } finally {
       setLoading(false);
     }
@@ -409,7 +410,7 @@ export default function Brain() {
       }
       await refreshSessions();
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e.message ?? "删除失败");
+      setErr(errText(e, "删除失败"));
     }
   };
 
@@ -520,7 +521,7 @@ export default function Brain() {
       setFlash(`已存入知识库：${r.saved_path || "已保存"}`);
       await Promise.all([loadFiles(), loadOverview()]);
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e.message ?? "存入知识库失败");
+      setErr(errText(e, "存入知识库失败"));
     } finally {
       setSavingKb(null);
     }
@@ -540,7 +541,7 @@ export default function Brain() {
       setFlash(`已保存知识：${r.saved_path}`);
       await Promise.all([loadFiles(), loadOverview(), loadUploads()]);
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e.message ?? "上传失败");
+      setErr(errText(e, "上传失败"));
     } finally {
       setSaving(false);
     }
@@ -562,7 +563,7 @@ export default function Brain() {
       setPasteText("");
       await Promise.all([loadFiles(), loadOverview(), loadUploads()]);
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e.message ?? "粘贴入库失败");
+      setErr(errText(e, "粘贴入库失败"));
     } finally {
       setSaving(false);
     }
@@ -581,7 +582,7 @@ export default function Brain() {
       setUrlInput("");
       await Promise.all([loadFiles(), loadOverview(), loadUploads()]);
     } catch (e: any) {
-      setErr(e?.response?.data?.detail ?? e.message ?? "URL抓取失败");
+      setErr(errText(e, "URL抓取失败"));
     } finally {
       setSaving(false);
     }
@@ -902,7 +903,7 @@ export default function Brain() {
                           <div style={{ fontSize: 10, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.name}</div>
                           {f.summary && <div style={{ fontSize: 9, color: "var(--t3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.summary}</div>}
                         </button>
-                        <button className="tbtn" onClick={async () => { if (!await confirm({ title: "删除文件", message: `确定删除 ${f.path}？\n此操作不可恢复。`, confirmText: "删除", danger: true })) return; try { await brainFileDelete(f.path); await loadFiles(); setFlash("已删除"); if (selectedFile?.path === f.path) { setContent(""); setSelectedPath(""); } } catch (e: any) { setErr(e?.response?.data?.detail ?? "删除失败"); } }} style={{ color: "var(--red)", padding: "4px 6px", fontSize: 9, flexShrink: 0 }}>✕</button>
+                        <button className="tbtn" onClick={async () => { if (!await confirm({ title: "删除文件", message: `确定删除 ${f.path}？\n此操作不可恢复。`, confirmText: "删除", danger: true })) return; try { await brainFileDelete(f.path); await loadFiles(); setFlash("已删除"); if (selectedFile?.path === f.path) { setContent(""); setSelectedPath(""); } } catch (e: any) { setErr(errText(e, "删除失败")); } }} style={{ color: "var(--red)", padding: "4px 6px", fontSize: 9, flexShrink: 0 }}>✕</button>
                       </div>
                     ))}
                   </div>

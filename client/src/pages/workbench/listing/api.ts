@@ -1,12 +1,13 @@
 // Listing 工作台 API 层：普通请求 + 后台 job（SSE 进度、轮询兜底）。
 import axios from "axios";
 import type { Job, ProjectDetail, ProjectSummary, RefImages } from "./types";
+import { errText } from "../../../lib/errText";
 
 const api = axios.create({ baseURL: "/api/listing", withCredentials: true });
 
 export function messageOf(error: unknown): string {
   const err = error as { response?: { data?: { detail?: string } }; message?: string };
-  return err?.response?.data?.detail || err?.message || String(error);
+  return errText(err, String(error));
 }
 
 // ─── 项目 ─────────────────────────────────────────────────────────────────────

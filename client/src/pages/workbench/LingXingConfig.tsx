@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import SheetSelect from "../../components/SheetSelect";
 import LingXingHelp from "./LingXingHelp";
+import { errText } from "../../lib/errText";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--bg1)", border: "1px solid var(--b)", borderRadius: 3,
@@ -188,4 +189,4 @@ export default function LingXingConfig() {
     </div>
   );
 }
-function humanErr(e: any): string { return e?.response?.data?.detail || e?.message || "请求失败"; }
+function humanErr(e: any): string { return errText(e, "请求失败"); }

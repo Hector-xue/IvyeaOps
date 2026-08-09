@@ -6,6 +6,7 @@ import {
   type ManagedUser, type PermissionsCatalog,
 } from "../../api/client";
 import { useAuth } from "../../App";
+import { errText } from "../../lib/errText";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "待审批", active: "已启用", suspended: "已停用",
@@ -30,7 +31,7 @@ export default function Users() {
   const load = async () => {
     setLoading(true);
     try { setUsers(await adminListUsers()); setErr(""); }
-    catch (e: any) { setErr(e?.response?.data?.detail || "加载失败"); }
+    catch (e: any) { setErr(errText(e, "加载失败")); }
     finally { setLoading(false); }
   };
 
@@ -52,7 +53,7 @@ export default function Users() {
     const pw = window.prompt(`为 ${u.email} 设置新密码（至少 8 位）`);
     if (!pw) return;
     try { await adminResetUserPassword(u.id, pw); alert("已重置"); }
-    catch (e: any) { alert(e?.response?.data?.detail || "重置失败"); }
+    catch (e: any) { alert(errText(e, "重置失败")); }
   };
   const del = async (u: ManagedUser) => {
     if (!window.confirm(`删除用户 ${u.email}？其数据也将无法访问。`)) return;
@@ -80,7 +81,7 @@ export default function Users() {
       setEditing(null);
       load();
     } catch (e: any) {
-      alert(e?.response?.data?.detail || "保存失败");
+      alert(errText(e, "保存失败"));
     } finally {
       setSaving(false);
     }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { Btn, LxTable, LxTableSkeleton, fmtTs, type LxCol } from "./lingxingUi";
+import { errText } from "../../lib/errText";
 
 const STATUS_COLOR: Record<string, string> = {
   ok: "var(--acc)", denied: "var(--t3)", blocked: "var(--red)", error: "var(--red)",
@@ -15,7 +16,7 @@ export default function LingXingAudit() {
   useEffect(() => { void load(); const t = setInterval(load, 8000); return () => clearInterval(t); }, []);
   async function load() {
     try { setRows((await api.get("/lingxing/audit?limit=300")).data.rows || []); setMsg(""); }
-    catch (e: any) { setMsg(e?.response?.data?.detail || e?.message || "加载失败"); }
+    catch (e: any) { setMsg(errText(e, "加载失败")); }
     finally { setLoaded(true); }
   }
 

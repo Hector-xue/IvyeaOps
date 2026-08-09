@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Modal from "./Modal";
 import { createSkill } from "../../api/skill";
+import { errText } from "../../lib/errText";
 
 // Mirror the server-side rule: lowercase start, 2-64 chars per segment,
 // segments joined with '/'.
@@ -39,8 +40,7 @@ export default function NewSkillDialog({ onClose }: NewSkillDialogProps) {
       onClose();
       navigate(`/skill/browse?name=${encodeURIComponent(name)}`);
     } catch (e: any) {
-      const detail = e?.response?.data?.detail;
-      setErr(typeof detail === "string" ? detail : (e?.message ?? "创建失败"));
+      setErr(errText(e, "创建失败"));
     } finally {
       setSubmitting(false);
     }

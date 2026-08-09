@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
+import { errText } from "../lib/errText";
 
 /**
  * In-app update flow with real progress, styled like the workbench:
@@ -91,8 +92,11 @@ export default function UpdateModal({
         try {
           await api.post("/setup/update/install");
         } catch (e: any) {
-          if (e?.response?.data?.detail) {
-            setError(e.response.data.detail);
+          // 这里的判断是**服务端有没有明确报错** —— 有 detail 说明后端还活着
+          // 并拒绝了这次更新；没有则多半是后端被更新器杀掉了（下面继续轮询健康）。
+          // 所以存在性判断要留，只把取文案那一步换成 errText。
+          if (e?.response?.data) {
+            setError(errText(e, "更新失败"));
             setPhase("error");
             return;
           }
@@ -100,7 +104,7 @@ export default function UpdateModal({
         }
         void pollRestart();
       } catch (e: any) {
-        setError(e?.response?.data?.detail || e?.message || "更新失败");
+        setError(errText(e, "更新失败"));
         setPhase("error");
       }
     })();

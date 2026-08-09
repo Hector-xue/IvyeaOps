@@ -26,6 +26,7 @@ import {
   type RunnerName,
   type RunnerStatus,
 } from "../../api/client";
+import { errText } from "../../lib/errText";
 
 const MARKETPLACES = ["US", "UK", "DE", "FR", "CA", "JP", "ES", "IT", "MX", "AU", "AE", "BR", "SA"];
 
@@ -105,7 +106,7 @@ export default function AdAuditPanel() {
           kind: "failed",
           jobId,
           data: { job_id: jobId } as AdAuditFull,
-          error: e?.response?.data?.detail || "轮询失败",
+          error: errText(e, "轮询失败"),
         });
       }
     };
@@ -121,7 +122,7 @@ export default function AdAuditPanel() {
       const preview = await adAuditUpload(file, marketplace, existingId);
       setState({ kind: "uploaded", preview });
     } catch (e: any) {
-      alert(e?.response?.data?.detail || "上传失败");
+      alert(errText(e, "上传失败"));
     } finally {
       setUploading(false);
     }
@@ -136,7 +137,7 @@ export default function AdAuditPanel() {
       );
       setState({ kind: "uploaded", preview });
     } catch (e: any) {
-      alert(e?.response?.data?.detail || "删除失败");
+      alert(errText(e, "删除失败"));
     }
   };
 
@@ -153,7 +154,7 @@ export default function AdAuditPanel() {
       );
       setState({ kind: "uploaded", preview });
     } catch (e: any) {
-      alert(e?.response?.data?.detail || "更新失败");
+      alert(errText(e, "更新失败"));
     }
   };
 
@@ -196,7 +197,7 @@ export default function AdAuditPanel() {
       });
       startPolling(state.preview.job_id);
     } catch (e: any) {
-      alert(e?.response?.data?.detail || "启动失败");
+      alert(errText(e, "启动失败"));
       setState({ kind: "idle" });
     }
   };
@@ -388,7 +389,7 @@ export default function AdAuditPanel() {
               await loadHistory();
               alert(`已清除 ${r.removed} 条失败记录`);
             } catch (e: any) {
-              alert(e?.response?.data?.detail || "清除失败");
+              alert(errText(e, "清除失败"));
             }
           }}
         />

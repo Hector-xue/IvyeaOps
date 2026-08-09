@@ -24,6 +24,7 @@ import {
   type ScheduleTask,
 } from "../../api/schedules";
 import { ivyeaSkills, type IvyeaSkillInfo } from "../../api/ivyeaAgent";
+import { errText } from "../../lib/errText";
 
 const BLANK = { name: "", cron: "0 9 * * *", prompt: "", skill: "", enabled: true };
 
@@ -119,7 +120,7 @@ function TaskForm({
       notify("success", initial ? "已保存" : "定时任务已创建");
       onSaved();
     } catch (e: any) {
-      notify("error", e?.response?.data?.detail || e?.message || "保存失败");
+      notify("error", errText(e, "保存失败"));
     } finally {
       setSaving(false);
     }
@@ -194,7 +195,7 @@ function SchedulesInner() {
       setTz(d.timezone || "");
     } catch (e: any) {
       setTasks([]);
-      notify("error", e?.response?.data?.detail || "读取定时任务失败");
+      notify("error", errText(e, "读取定时任务失败"));
     }
   }, [notify]);
 
@@ -208,7 +209,7 @@ function SchedulesInner() {
       await patchSchedule(t.id, { enabled: !t.enabled });
       await load();
     } catch (e: any) {
-      notify("error", e?.response?.data?.detail || "操作失败");
+      notify("error", errText(e, "操作失败"));
     }
   };
 
@@ -220,7 +221,7 @@ function SchedulesInner() {
     });
     if (!ok) return;
     try { await deleteSchedule(t.id); await load(); notify("success", "已删除"); }
-    catch (e: any) { notify("error", e?.response?.data?.detail || "删除失败"); }
+    catch (e: any) { notify("error", errText(e, "删除失败")); }
   };
 
   const runNow = async (t: ScheduleTask) => {
@@ -233,7 +234,7 @@ function SchedulesInner() {
       setExpanded(t.id);
       await load();
     } catch (e: any) {
-      notify("error", e?.response?.data?.detail || e?.message || "触发失败");
+      notify("error", errText(e, "触发失败"));
     } finally {
       setRunning("");
     }

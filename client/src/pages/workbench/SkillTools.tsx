@@ -7,6 +7,7 @@ import {
 import SheetSelect from "../../components/SheetSelect";
 import { deleteSkill, updateSkill } from "../../api/skill";
 import { useConfirm } from "../../components/ConfirmDialog";
+import { errText } from "../../lib/errText";
 
 // ── Design tokens re-used below ──────────────────────────────────────────────
 const S = {
@@ -475,7 +476,7 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
     setEnriching(true);
     setError("");
     try { setEnrich(await enrichTool(tool.name)); }
-    catch (e: any) { setError(e?.response?.data?.detail || e?.message || "AI 工具化失败"); }
+    catch (e: any) { setError(errText(e, "AI 工具化失败")); }
     finally { setEnriching(false); }
   }, [tool.name]);
 
@@ -487,14 +488,14 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
       setEnrich(null);
       await onToolChanged?.();   // parent remounts the panel with the new form
     } catch (e: any) {
-      setError(e?.response?.data?.detail || e?.message || "应用失败");
+      setError(errText(e, "应用失败"));
     } finally { setApplyingEnrich(false); }
   }, [enrich, tool.name, onToolChanged]);
 
   const doRepair = useCallback(async () => {
     setRepairing(true);
     try { setRepair(await repairTool(tool.name, error)); }
-    catch (e: any) { setError(e?.response?.data?.detail || e?.message || "AI 修复失败"); }
+    catch (e: any) { setError(errText(e, "AI 修复失败")); }
     finally { setRepairing(false); }
   }, [tool.name, error]);
 
@@ -502,7 +503,7 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
     if (!repair) return;
     setApplying(true);
     try { await updateSkill(tool.name, repair.frontmatter, repair.body); setRepair(null); await run(); }
-    catch (e: any) { setError(e?.response?.data?.detail || e?.message || "应用修复失败"); }
+    catch (e: any) { setError(errText(e, "应用修复失败")); }
     finally { setApplying(false); }
   }, [repair, tool.name, run]);
 
