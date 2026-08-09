@@ -1029,6 +1029,8 @@ export type MarketItem = MarketAttribution & {
   slug: string;
   title: string;
   summary?: string;
+  /** 中文简介。技能库里绝大多数 SKILL.md 本来就写了，界面优先用它。 */
+  summary_zh?: string;
   category?: string;
   class?: string;
   latest?: string;
@@ -1089,6 +1091,17 @@ export async function marketPreview(slug: string, version: string) {
 
 export async function marketInstall(slug: string, version: string, confirm_token: string) {
   const { data } = await api.post("/skill-market/install", { slug, version, confirm_token });
+  return data;
+}
+
+export type MarketDetail = MarketItem & {
+  body_md?: string;
+  versions?: { version: string; sha256: string; size_bytes: number; published_at: string }[];
+};
+
+export async function marketDetail(slug: string) {
+  const { data } = await api.get<MarketDetail>(
+    `/skill-market/skills/${slug}/detail`);
   return data;
 }
 

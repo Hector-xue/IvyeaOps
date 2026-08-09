@@ -129,8 +129,14 @@ def test_endpoints_require_admin():
 
 # ── 浏览 → 预览 ─────────────────────────────────────────────────────────
 
-def test_browse_only_asks_for_class_a(client, monkeypatch):
-    """客户端只装 A 类；把 B 类列出来只会让用户点进去才发现装不了。"""
+def test_browse_lists_every_class_including_b(client, monkeypatch):
+    """**B 类也要列出来。**
+
+    此前这里硬过滤成 class=A，理由是「免得用户点进去才发现装不了」。但那等于让
+    用户以为社区里根本没有代码类技能 —— 而它们恰恰是最有价值的一批。现在照常
+    列出、在卡片上写清楚为什么还装不了；**不给安装按钮**的那道门在前端和
+    analyze() 里，不在这里。
+    """
     from app.routers import skill_market as mod
 
     c, _, _ = client
@@ -142,7 +148,20 @@ def test_browse_only_asks_for_class_a(client, monkeypatch):
 
     monkeypatch.setattr(mod, "_get", fake_get)
     c.get("/api/skill-market/skills")
-    assert seen.get("class") == "A"
+    assert "class" not in seen, "不该再按 class 过滤"
+
+
+def test_class_b_is_still_not_installable(client, monkeypatch):
+    """列出来 ≠ 装得了。安装这条路上的门必须还在 —— 沙箱做好之前，
+    陌生代码不能直接落到用户机器上。"""
+    from app.services import skill_market as sm
+
+    files = {"SKILL.md": b"---\nname: x\n---\n\n# x\n",
+             "run.py": b"print('hi')\n"}
+    manifest = sm.analyze(files)
+    assert manifest.skill_class == "B"
+    assert manifest.installable is False
+    assert any("可执行" in b for b in manifest.blockers)
 
 
 def test_preview_returns_a_human_readable_capability_list(client, monkeypatch):

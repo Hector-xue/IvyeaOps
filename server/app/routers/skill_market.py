@@ -61,15 +61,25 @@ def market_status(_admin: str = Depends(require_admin)) -> dict:
     }
 
 
+@router.get("/skills/{slug:path}/detail")
+def detail(slug: str, _admin: str = Depends(require_admin)) -> dict:
+    """转发门道的详情。**只转发不缓存** —— 缓存一份别人的目录，
+    迟早会显示已经下架或已修订的内容。"""
+    _require_enabled()
+    return _get(f"/skills/{slug}/detail").json()
+
+
 @router.get("/skills")
 def browse(q: str = Query("", max_length=80), category: str = Query("", max_length=40),
            sort: str = Query("hot", pattern="^(hot|new|rating)$"),
            page: int = Query(1, ge=1, le=200),
            _admin: str = Depends(require_admin)) -> dict:
     _require_enabled()
-    # 只要 A 类：客户端当前只装纯提示词的 Skill，把 B 类列出来只会让用户
-    # 点进去才发现装不了。
-    return _get("/skills", q=q, category=category, sort=sort, page=page, **{"class": "A"}).json()
+    # **B 类也列出来，但在卡片上标清楚装不了。** 之前的做法是干脆过滤掉，理由是
+    # "免得用户点进去才发现装不了" —— 但那等于让用户以为社区里根本没有代码类
+    # 技能，而它们恰恰是最有价值的一批。现在照常展示、直接写明原因，
+    # 用户既知道有这个东西，也知道为什么还装不了。
+    return _get("/skills", q=q, category=category, sort=sort, page=page).json()
 
 
 def _fetch_package(slug: str, version: str) -> tuple:

@@ -3364,3 +3364,54 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
   .ap-actions{justify-content:flex-end}
   .ap-btn{flex:none;min-width:110px}
 }
+
+/* ── 社区市场（独立页）──────────────────────────────────────────────────
+   卡片式，手机上单列。B 类卡片左侧留一道警示条 —— 「含可执行代码」这件事
+   必须在扫读时就看得见，而不是等用户点进详情才发现。 */
+.mk-wrap{padding:16px;max-width:1180px;margin:0 auto}
+.mk-head{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.mk-head h2{margin:0;font-size:16px;color:var(--t)}
+.mk-head p{margin:4px 0 0;font-size:11.5px;color:var(--t3)}
+.mk-head a{color:var(--acc);text-decoration:none}
+.mk-search{margin-left:auto;min-width:200px;padding:7px 10px;border-radius:8px;
+  border:1px solid var(--bd);background:var(--c1);color:var(--t);font-size:12.5px}
+.mk-err{padding:9px 11px;margin-bottom:10px;border-radius:8px;font-size:12px;
+  background:color-mix(in srgb,var(--err) 12%,transparent);color:var(--err)}
+.mk-empty{padding:34px 18px;text-align:center;color:var(--t2);font-size:13px;
+  border:1px dashed var(--bd);border-radius:10px;line-height:1.8}
+.mk-empty b{display:block;margin-bottom:8px;font-size:14px;color:var(--t)}
+.mk-empty p{max-width:560px;margin:0 auto 14px;font-size:12px;color:var(--t3)}
+.mk-grid{display:grid;gap:11px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.mk-card{border:1px solid var(--bd);border-radius:10px;padding:12px;background:var(--c1);
+  display:flex;flex-direction:column;gap:7px}
+.mk-card-b{border-left:3px solid var(--amber)}
+.mk-card-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.mk-card-top b{font-size:13px;color:var(--t)}
+.mk-card-desc{font-size:11.5px;color:var(--t2);line-height:1.65;flex:1}
+.mk-card-meta{display:flex;gap:10px;font-size:10px;color:var(--t3);flex-wrap:wrap;
+  font-variant-numeric:tabular-nums}
+.mk-card-actions{display:flex;gap:7px;align-items:center;margin-top:2px}
+.mk-badge{font-size:9.5px;padding:1px 6px;border-radius:4px;background:var(--c2);color:var(--t3)}
+.mk-badge-warn{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)}
+.mk-badge-ok{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.mk-btn{padding:5px 11px;border-radius:7px;border:1px solid var(--bd);background:var(--c2);
+  color:var(--t);font-size:11.5px;cursor:pointer;text-decoration:none}
+.mk-btn:disabled{opacity:.5;cursor:default}
+.mk-btn-primary{background:var(--acc);border-color:var(--acc);color:#fff}
+.mk-note{font-size:10.5px;color:var(--t3);cursor:help}
+.mk-modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;
+  display:flex;align-items:center;justify-content:center;padding:18px}
+.mk-modal-body{background:var(--c1);border:1px solid var(--bd);border-radius:12px;
+  max-width:760px;width:100%;max-height:82vh;overflow:auto;padding:16px}
+.mk-modal-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.mk-modal-head b{font-size:15px;flex:1}
+.mk-modal-meta{display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px;color:var(--t3);
+  margin-bottom:10px}
+.mk-modal-meta a{color:var(--acc)}
+.mk-modal-sum{font-size:12.5px;color:var(--t2);line-height:1.7;margin:0 0 10px}
+.mk-modal-md{font-size:11.5px;line-height:1.7;color:var(--t2);white-space:pre-wrap;
+  word-break:break-word;background:var(--c2);border-radius:8px;padding:12px;margin:0}
+@media (max-width:760px){
+  .mk-grid{grid-template-columns:1fr}
+  .mk-search{margin-left:0;width:100%}
+}
