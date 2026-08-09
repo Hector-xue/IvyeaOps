@@ -1097,6 +1097,24 @@ async def start_job(
 # Read-side helpers
 # --------------------------------------------------------------------------- #
 
+
+def _as_findings(structured: Any) -> Dict[str, Any]:
+    """把报告里的跨活动洞察归一成 FindingList。取不到就给空列表 ——
+    这条路径绝不能因为格式问题让整个报告接口失败。"""
+    if not isinstance(structured, dict):
+        return {"findings": [], "data_notes": ""}
+    try:
+        from app.core.findings import normalize
+        meta = structured.get("meta") or {}
+        fl = normalize(structured.get("cross_campaign_insights") or [],
+                       source="ad_audit", as_of=str(meta.get("analyzed_at") or ""))
+        payload = fl.model_dump()
+        payload["unsupported"] = fl.unsupported()
+        return payload
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("结论归一化失败，返回空列表：%s", exc)
+        return {"findings": [], "data_notes": ""}
+
 def get_job(job_id: str) -> Optional[Dict[str, Any]]:
     meta = _read_meta(job_id)
     if meta is None:
@@ -1112,6 +1130,13 @@ def get_job(job_id: str) -> Optional[Dict[str, Any]]:
             result["structured"] = None
     else:
         result["structured"] = None
+
+    # 同时给出统一契约下的结论（见 core/findings）。**增量而非替换** ——
+    # structured 里的老字段原样保留，现有前端与导出逻辑一个都不动；新的消费方
+    # （统一的结论卡片、评测的"证据完整性"维度）读 findings 这一份。
+    # 老结构里 evidence 是自由文本，normalize 会尽量抠出「指标=数值」，
+    # 抠不出就整段留着并标明未结构化 —— 绝不硬解析出假证据。
+    result["findings"] = _as_findings(result.get("structured"))
     if rm.is_file():
         text = rm.read_text(encoding="utf-8", errors="replace")
         if len(text) > 200_000:

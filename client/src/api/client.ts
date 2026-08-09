@@ -420,9 +420,49 @@ export type AdAuditStructured = {
   meta?: Record<string, any>;
 };
 
+/** 统一结论契约（后端 app/core/findings.py）。证据是结构化的，能核对。 */
+export type FindingEvidence = {
+  metric: string;
+  value: unknown;
+  unit?: string;
+  target?: string;
+  source?: string;
+  as_of?: string;
+  note?: string;
+};
+
+export type FindingAction = {
+  type: string;
+  target?: string;
+  detail?: string;
+  /** 执行前提/阈值，如「点击≥15 且 0 单」。没有它就无法判断该不该照做。 */
+  guardrail?: string;
+  reversible?: boolean;
+  confidence?: number;
+};
+
+export type Finding = {
+  id?: string;
+  severity?: "critical" | "high" | "medium" | "low";
+  title: string;
+  reasoning?: string;
+  evidence?: FindingEvidence[];
+  actions?: FindingAction[];
+  priority_score?: number;
+};
+
+export type FindingList = {
+  findings: Finding[];
+  data_notes?: string;
+  /** 完全没给证据的结论 id —— 用户最该能一眼看出的就是"这条凭什么"。 */
+  unsupported?: string[];
+};
+
 export type AdAuditFull = AdAuditJobMeta & {
   raw_md?: string | null;
   structured?: AdAuditStructured | null;
+  /** 与 structured 并存：老字段原样保留，新消费方读这份。 */
+  findings?: FindingList | null;
   preview_columns?: string[] | null;
 };
 

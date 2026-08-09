@@ -139,3 +139,44 @@ def test_one_malformed_item_does_not_sink_the_whole_report():
         {"severity": "high"},                              # 缺 title
     ]})
     assert [f.title for f in fl.findings] == ["好的那条"]
+
+
+# ── 接到真实产出上 ──────────────────────────────────────────────────────
+
+def test_ad_audit_exposes_findings_alongside_the_legacy_shape():
+    """**增量而非替换**：structured 里的老字段原样保留，新消费方读 findings。
+    直接替换会让现有前端与导出逻辑一起变哑，而且不会有任何测试报错。"""
+    from app.services.ad_audit import _as_findings
+
+    structured = {
+        "cross_campaign_insights": [LEGACY],
+        "meta": {"analyzed_at": "2026-07-30"},
+        "verdict": "老字段",
+    }
+    out = _as_findings(structured)
+    assert out["findings"][0]["title"] == "SP-Auto 长尾在烧钱"
+    assert out["findings"][0]["evidence"][0]["source"] == "ad_audit"
+    assert out["findings"][0]["evidence"][0]["as_of"] == "2026-07-30"
+    assert structured["verdict"] == "老字段", "不该动老结构"
+
+
+def test_ad_audit_findings_never_break_the_report_endpoint():
+    """报告接口不能因为结论格式问题整个失败 —— 那是拿一个展示层的问题
+    去毁掉用户真正要看的报告。"""
+    from app.services.ad_audit import _as_findings
+
+    for junk in (None, "字符串", 42, {"cross_campaign_insights": "不是列表"}):
+        assert _as_findings(junk)["findings"] == []
+
+
+def test_ad_audit_marks_unsupported_conclusions():
+    """一条完全没给证据的结论要被点名，而不是混在里面看不出来 ——
+    "这个结论凭什么"正是用户最该能一眼判断的事。"""
+    from app.services.ad_audit import _as_findings
+
+    out = _as_findings({"cross_campaign_insights": [
+        {"insight_type": "x", "summary": "没证据的结论", "action": "做点什么"},
+        {"insight_type": "y", "summary": "有证据的", "evidence": "clicks=312", "action": "做"},
+    ]})
+    assert out["unsupported"] == ["x-1"]
+    assert len(out["findings"]) == 2, "无证据只是标记，不是丢弃"

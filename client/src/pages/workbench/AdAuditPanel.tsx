@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useConfirm } from "../../components/ConfirmDialog";
 import SheetSelect from "../../components/SheetSelect";
 import DeepAnalysisPanel from "../../components/DeepAnalysisPanel";
+import FindingCards from "../../components/FindingCards";
 import { marketplaceOptions } from "../../lib/marketplaces";
 import {
   adAuditClearFailed,
@@ -984,6 +985,9 @@ function AdResultPanel({ data, onReset }: { data: AdAuditFull; onReset: () => vo
           {s.action_summary && s.action_summary.length > 0 && (
             <AdActionTable items={s.action_summary} />
           )}
+          {/* 统一结论卡片：证据可点开核对、无证据的显式标出。
+              与下面的老面板并存 —— 老结构还有它自己的表格视图，不替换。 */}
+          <FindingCards data={data.findings} />
           {s.cross_campaign_insights && s.cross_campaign_insights.length > 0 && (
             <AdCrossCampaignPanel items={s.cross_campaign_insights} />
           )}
