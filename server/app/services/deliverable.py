@@ -314,7 +314,15 @@ def build_pdf(out_path: Path, html: str) -> Path:
         cmd = [binary, "--headless=new", "--disable-gpu", "--no-sandbox",
                f"--print-to-pdf={out_path}", "--no-pdf-header-footer",
                f"--user-data-dir={tmp}/profile", src.as_uri()]
-        proc = subprocess.run(cmd, capture_output=True, timeout=90)
+        # **30 秒，不是 90 秒。** 这是一个用户点了按钮在等的动作 —— 让他干等
+        # 一分半再看到失败，比早点告诉他"这台机器上不行、去 HTML 里打印"糟得多。
+        # （macOS 的 CI runner 上实测过这条路会卡死，装了 Chrome 不等于能跑。）
+        try:
+            proc = subprocess.run(cmd, capture_output=True, timeout=30)
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                "Chrome 没能在 30 秒内生成 PDF（这台机器上的无头模式可能不可用）"
+            ) from exc
     if not out_path.is_file() or out_path.stat().st_size == 0:
         tail = (proc.stderr or b"").decode("utf-8", "replace")[-300:]
         raise RuntimeError(f"Chrome 没有生成 PDF：{tail}")
