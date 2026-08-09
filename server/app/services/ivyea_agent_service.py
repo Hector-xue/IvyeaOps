@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import hashlib
 import hmac
 import os
@@ -20,6 +21,9 @@ from typing import Any
 
 from app.core.config import settings as ops_settings
 from app.core.proc import no_window_kwargs
+from app.core import secret_env as _secret_env
+
+logger = logging.getLogger("ivyea.services.ivyea_agent")
 
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8765"
@@ -92,8 +96,8 @@ def _token() -> str:
     from app.core import hub_settings
     return (
         str(hub_settings.get("ivyea_agent_token") or "")
-        or os.getenv("IVYEA_AGENT_TOKEN")
-        or os.getenv("IVYEA_API_TOKEN")
+        or _secret_env.get("IVYEA_AGENT_TOKEN")
+        or _secret_env.get("IVYEA_API_TOKEN")
         or ""
     ).strip()
 
@@ -238,7 +242,8 @@ def start_local_service() -> dict[str, Any]:
     # via `<exe> agent-serve …`, spawned detached. No pip/Python/git needed.
     if getattr(sys, "frozen", False):
         cmd = [sys.executable, "agent-serve", "--host", host, "--port", str(port)]
-        env = {**os.environ}
+        from app.core.proc import child_env as _scrubbed_env
+        env = _scrubbed_env()   # agent 只需要下面显式塞的 IVYEA_API_TOKEN
         token = _token()
         if token:
             env["IVYEA_API_TOKEN"] = token   # serve reads the token from env
@@ -257,7 +262,8 @@ def start_local_service() -> dict[str, Any]:
         return {"ok": False, "error": "ivyea_cli_not_found"}
     cmd = [cli, "self", "service-start", "--host", host, "--port", str(port)]
     token = _token()
-    env = {**os.environ}
+    from app.core.proc import child_env as _scrubbed_env
+    env = _scrubbed_env()   # 同上：其余凭据不往下传
     if token:
         env["IVYEA_API_TOKEN"] = token
         cmd.extend(["--api-token", token])
@@ -374,7 +380,7 @@ def _installed_agent_version(py: str) -> str:
             if out:
                 return out.split()[-1]
     except Exception:  # noqa: BLE001
-        pass
+        logger.debug("_find_ivyea_cli 失败（旁路，已忽略）", exc_info=True)
     try:
         p = subprocess.run([py, "-c", "import ivyea_agent, sys; sys.stdout.write(ivyea_agent.__version__)"],
                            text=True, capture_output=True, timeout=15, **no_window_kwargs())
@@ -404,7 +410,7 @@ def upgrade_agent(progress=None) -> dict[str, Any]:
             try:
                 progress(phase, pct)
             except Exception:  # noqa: BLE001
-                pass
+                logger.debug("progress 失败（旁路，已忽略）", exc_info=True)
 
     _p("preparing", 5)
     # Frozen build: the agent is bundled into this exe, so it updates *with*
@@ -493,10 +499,10 @@ def maybe_sync_agent_on_upgrade() -> None:
             tmp.write_text(json.dumps({"ops_version": cur, "agent": res.get("after", "")}),
                            encoding="utf-8")
             os.replace(tmp, marker)
-            print(f"[IvyeaOps] agent auto-sync on {cur}: "
-                  f"{res.get('before')}->{res.get('after')} ok={res.get('ok')}")
+            logger.info("agent auto-sync on %s: %s->%s ok=%s",
+                        cur, res.get("before"), res.get("after"), res.get("ok"))
         except Exception as e:  # noqa: BLE001
-            print(f"[IvyeaOps] agent auto-sync failed: {e}")
+            logger.warning("agent auto-sync failed: %s", e)
 
     threading.Thread(target=_bg, daemon=True).start()
 
@@ -508,7 +514,7 @@ def ensure_available() -> dict[str, Any]:
         try:
             sync_model_settings()
         except IvyeaAgentError:
-            pass
+            logger.debug("sync_model_settings 失败（旁路，已忽略）", exc_info=True)
         current["auto_start"] = {"attempted": False, "reason": "already_available"}
         return current
     from app.core import hub_settings
@@ -528,7 +534,7 @@ def ensure_available() -> dict[str, Any]:
         try:
             sync_model_settings()
         except IvyeaAgentError:
-            pass
+            logger.debug("sync_model_settings 失败（旁路，已忽略）", exc_info=True)
     refreshed["auto_start"] = {"attempted": True, "result": started}
     return refreshed
 

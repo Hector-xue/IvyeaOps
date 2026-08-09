@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import base64
 import io
 import json
@@ -18,6 +19,8 @@ from typing import Optional
 import httpx
 
 from app.core.config import settings
+
+logger = logging.getLogger("ivyea.routers.listing.common")
 
 DB_PATH = settings.data_dir / "listing.sqlite3"
 IMAGES_DIR = settings.data_dir / "listing_images"
@@ -80,7 +83,7 @@ for _col in [
         _conn.commit()
         _conn.close()
     except Exception:
-        pass
+        logger.debug("_db 失败（旁路，已忽略）", exc_info=True)
 
 
 def project_row(project_id: str, columns: str = "*"):
@@ -146,7 +149,7 @@ def _strip_json(text: str):
             if isinstance(obj, dict):
                 return obj
         except Exception:
-            pass
+            logger.debug("json.loads 失败（旁路，已忽略）", exc_info=True)
     return None
 
 

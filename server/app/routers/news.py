@@ -10,13 +10,12 @@ purged by ``_cleanup_old()`` which runs on every ``/refresh`` call and on startu
 from __future__ import annotations
 
 import json
-import os
 import re
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.core.config import settings

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import logging
 import secrets
 import sys
 from pathlib import Path
@@ -22,6 +23,14 @@ def _detect_root() -> Path:
 
 _ROOT = _detect_root()
 load_dotenv(_ROOT / "server" / ".env")
+
+# load_dotenv 把 .env 灌进了 os.environ —— 也就是说**每个子进程都能读到**
+# 会话签名密钥和管理员密码哈希（终端里一条 env 命令就全看见了）。这里立刻把
+# IvyeaOps 自己的凭据摘走存进内部字典；下面这些 os.getenv 在摘走**之前**执行，
+# 读到的仍是正确的值。详见 core/secret_env。
+from app.core import secret_env as _secret_env  # noqa: E402
+
+logger = logging.getLogger("ivyea.core.config")
 
 
 def _inherit_system_proxy() -> None:
@@ -108,7 +117,7 @@ class Settings:
                     import bcrypt
                     self.admin_password_hash = bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
                 except Exception:
-                    pass
+                    logger.debug("self.admin_password_hash = bcrypt.hashpw 失败（旁路，已忽略）", exc_info=True)
 
     session_cookie_name: str = "ivyea_ops_session"
     session_max_age_seconds: int = 60 * 60 * 24 * 7  # 7 days
@@ -146,3 +155,8 @@ class Settings:
 
 
 settings = Settings()
+
+
+# settings 的字段在类体里就已经从环境读完了（上面那些 os.getenv），
+# 所以摘除放在这里：读取在前、摘除在后，两边都对。
+_secret_env.harvest()

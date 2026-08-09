@@ -11,17 +11,19 @@ click — saves them from typing paths by hand.
 from __future__ import annotations
 
 import asyncio
+import logging
 import json
 import os
 import shutil
 import sqlite3
-import socket
 import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import httpx
+
+logger = logging.getLogger("ivyea.services.settings_test")
 
 _WINDOWS = sys.platform == "win32"
 
@@ -118,7 +120,7 @@ async def _probe_sorftime(key: str) -> Dict[str, Any]:
                 try:
                     body = json.loads(line[5:].strip())
                 except Exception:
-                    pass
+                    logger.debug("json.loads 失败（旁路，已忽略）", exc_info=True)
         if body is None:
             return _err("响应解析失败")
         if "error" in body:
@@ -151,7 +153,7 @@ async def _probe_sif(key: str) -> Dict[str, Any]:
                 try:
                     body = json.loads(line[5:].strip())
                 except Exception:
-                    pass
+                    logger.debug("json.loads 失败（旁路，已忽略）", exc_info=True)
         if body is None:
             try:
                 body = r.json()
@@ -197,10 +199,6 @@ async def _probe_sellersprite(key: str) -> Dict[str, Any]:
         return _err("MCP 未返回工具，请检查 key 或开通的接口权限")
     except Exception as e:  # noqa: BLE001
         return _err(str(e)[:200])
-
-
-async def _probe_sorftime_placeholder() -> None:  # noqa: keep line count consistent
-        return _err(f"调用失败：{e}")
 
 
 async def _probe_openai(key: str) -> Dict[str, Any]:
@@ -384,7 +382,7 @@ async def _probe_feishu_app() -> Dict[str, Any]:
         if not token:
             return _err("返回中没有 tenant_access_token")
         if not chat_id:
-            return _ok(f"App 凭证有效（tenant_token 已获取）；未填 Chat ID，无法测试消息发送")
+            return _ok("App 凭证有效（tenant_token 已获取）；未填 Chat ID，无法测试消息发送")
         # Try send a test message to chat_id
         async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as c:
             r = await c.post(

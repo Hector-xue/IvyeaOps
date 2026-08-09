@@ -35,6 +35,8 @@ from typing import Any
 from app.core.skill_paths import STUDIO_ROOT
 from app.services import ai_synthesis_service, skill_repo
 
+logger = logging.getLogger("ivyea.services.skill_architect")
+
 _log = logging.getLogger(__name__)
 
 
@@ -329,7 +331,7 @@ def _extract_json(text: str) -> Any:
     try:
         return json.loads(t)
     except Exception:
-        pass
+        logger.debug("json.loads 失败（旁路，已忽略）", exc_info=True)
     # Fall back to the outermost {...} span.
     start, end = t.find("{"), t.rfind("}")
     if start != -1 and end > start:

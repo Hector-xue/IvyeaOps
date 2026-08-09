@@ -6,7 +6,6 @@ Empty stored values fall back to the corresponding env var.
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any, Dict
 
@@ -83,6 +82,13 @@ _DEFAULTS: Dict[str, Any] = {
     "gbrain_bin": "",           # empty = use env / auto-detect
     "brain_root": "",           # empty = use env / default /root/brain
     "openai_api_key": "",       # for GBrain embeddings
+    # 通知渠道（见 services/notify）。notify_webhook 留空则退回 alert_webhook，
+    # 老部署不用重配。notify_events 存 JSON 数组，留空用 notify.DEFAULT_EVENTS。
+    "notify_webhook": "",
+    "notify_events": "",
+    # AI 花费预算（美元/月）。0 = 不设预算。超了发一次通知，见 services/budget。
+    "ai_budget_monthly_usd": 0,
+    "ai_budget_alerted_month": "",
     # Feishu notifications
     "alert_webhook": "",
     "alert_app_id": "",
@@ -99,6 +105,16 @@ _DEFAULTS: Dict[str, Any] = {
     "password_hash": "",
     # First-run setup wizard completion flag.
     # False/absent = wizard has not been completed; True = skip wizard on next login.
+    # 能力市场（门道社区的 Skill 来源）。**默认关闭**：这是个会往外发请求的功能，
+    # 而这个产品的卖点是"数据不出本机"。默认开会让用户在不知情的情况下产生外联 ——
+    # 哪怕请求完全匿名，这个信任成本也不该由我们替他付。
+    "skill_market_enabled": False,
+    # 可换源：用户能指向自建镜像。签名校验保证换源之后依然安全。
+    "skill_market_url": "",
+    # 门道社区的市场公钥（校验安装包签名）。
+    # 校验和只能证明"没传坏"，签名才能证明"是那边发布的那份" —— 这正是
+    # 用户把市场换成自建镜像之后，安全性依然成立的前提。
+    "skill_market_pubkey": "R3li0pMksP_Ls5lmu5kH86L_PvhH6NMhParfS8lGCXE=",
     "setup_done": False,
     # Auto bug-fix: when a feature/tool operation fails, offer to launch an AI
     # repair flow (hermes in an isolated worktree, review-first). Off by default
@@ -274,9 +290,14 @@ def _read_file() -> Dict[str, Any]:
     if not p.is_file():
         return {}
     try:
-        return json.loads(p.read_text("utf-8"))
+        raw = json.loads(p.read_text("utf-8"))
     except Exception:
         return {}
+    # 凭据在盘上是密文（见 core/secrets 的说明）。解密收口在这里，是因为
+    # load() 和 get() 都走它 —— 放到上层去解，漏一条路径就是一处明文泄漏。
+    # 没有 enc:v1: 前缀的值原样返回，老装机的明文配置照常能用。
+    from app.core import secrets as _secrets
+    return _secrets.decrypt_mapping(raw)
 
 
 def load() -> Dict[str, Any]:
@@ -295,7 +316,8 @@ def get(key: str, default: Any = None) -> Any:
         return val
     env_key = _ENV_MAP.get(key)
     if env_key:
-        env_val = os.getenv(env_key, "")
+        from app.core import secret_env
+        env_val = secret_env.get(env_key, "")
         if env_val:
             if isinstance(_DEFAULTS.get(key), int):
                 try:
@@ -314,6 +336,15 @@ def save(updates: Dict[str, Any]) -> Dict[str, Any]:
             current[k] = v
     p = _path()
     tmp = p.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(current, ensure_ascii=False, indent=2), "utf-8")
+    # 落盘前把凭据字段加密。注意返回给调用方的仍然是**明文** current ——
+    # 保存后前端要回显、runner 配置同步要用真值。
+    from app.core import secrets as _secrets
+    on_disk = _secrets.encrypt_mapping(current)
+    tmp.write_text(json.dumps(on_disk, ensure_ascii=False, indent=2), "utf-8")
     tmp.replace(p)
+    # 只记**改了哪些键**，不记值 —— 值里全是凭据，留痕的目的是"谁改了什么设置"，
+    # 不是把密钥抄一份到审计库里。
+    from app.core import audit as _audit
+    _audit.record("settings", "save", target=",".join(sorted(updates.keys()))[:1000],
+                  detail={"keys": sorted(updates.keys())})
     return current

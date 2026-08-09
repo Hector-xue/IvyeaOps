@@ -17,12 +17,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import re
 from contextlib import asynccontextmanager
 from typing import Any, Callable, Coroutine, Dict, List, Optional, Tuple
 
 import httpx
+from app.core import secret_env as _secret_env
+
+logger = logging.getLogger("ivyea.services.sorftime_service")
 
 _log = logging.getLogger(__name__)
 
@@ -39,7 +41,7 @@ _CONN_TIMEOUT = 10.0
 
 def _url() -> str:
     from app.core import hub_settings
-    key = str(hub_settings.get("sorftime_key") or os.getenv("SORFTIME_KEY", "")).strip()
+    key = str(hub_settings.get("sorftime_key") or _secret_env.get("SORFTIME_KEY", "")).strip()
     if not key:
         raise RuntimeError("Sorftime Key 未配置，请在系统配置 → 市场数据中保存后重试")
     return f"{_SORFTIME_BASE}?key={key}"
@@ -91,7 +93,7 @@ async def _call_tool(
                     body = _json.loads(raw)
                     break
                 except Exception:
-                    pass
+                    logger.debug("_json.loads 失败（旁路，已忽略）", exc_info=True)
 
     if body is None:
         raise RuntimeError(f"sorftime/{tool_name}: could not parse SSE response")
@@ -291,7 +293,6 @@ async def _safe_call(
 async def _make_client():
     """Async context manager that creates an httpx client and performs the
     MCP initialize handshake required by Sorftime before any tool/call."""
-    import json as _json
     async with httpx.AsyncClient(
         timeout=httpx.Timeout(_TOOL_TIMEOUT, connect=_CONN_TIMEOUT),
         limits=httpx.Limits(max_connections=20),

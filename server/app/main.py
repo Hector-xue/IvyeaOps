@@ -4,22 +4,22 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
-from pathlib import Path
 
-# Central logging config: one place sets level + format (was previously left to
-# per-module getLogger with no root setup). Override level via IVYEA_OPS_LOG_LEVEL.
-_log_level = os.environ.get("IVYEA_OPS_LOG_LEVEL", "INFO").upper()
-logging.basicConfig(
-    level=getattr(logging, _log_level, logging.INFO),
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
+# Central logging config lives in app.core.obs: level + format + 落盘 + request_id。
+# 级别用 IVYEA_OPS_LOG_LEVEL 覆盖，落盘用 IVYEA_OPS_LOG_FILE=0 关掉。
+from app.core.obs import configure_logging  # noqa: E402
+
+configure_logging()
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.core import obs
 from app.core.config import settings
 from app.core.security import require_admin, require_module
 from app.core.skill_paths import (
@@ -45,7 +45,13 @@ from app.routers import deep_analysis as deep_analysis_router
 from app.routers import skill_tools as skill_tools_router
 from app.routers import autofix as autofix_router
 from app.routers import lingxing as lingxing_router
+from app.routers import skill_market as skill_market_router
+from app.routers import notify as notify_router
+from app.routers import mcp_server as mcp_server_router
+from app.routers import mcp_tokens as mcp_tokens_router
 from app.agents.router import api_router as agents_api_router, ws_router as agents_ws_router
+
+logger = logging.getLogger("ivyea.main")
 
 
 # Methods that can mutate state; anything not in this set is exempt from the
@@ -57,6 +63,12 @@ _UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 async def lifespan(app: FastAPI):
     settings.data_dir.mkdir(parents=True, exist_ok=True)
 
+    # 测试里把后台任务关掉。它们（探活各 agent 二进制、起终端采集、拉起几个
+    # 调度循环）跟被测逻辑无关，却占掉每个测试 setup 的大半时间 —— app/tests 有
+    # 224 个测试，每个都完整跑一遍 lifespan。**建表仍然照做**，否则测试会撞
+    # "no such table"。
+    skip_bg = os.environ.get("IVYEA_OPS_SKIP_STARTUP_TASKS", "").lower() in {"1", "true", "yes"}
+
     # Rebuild runner-side config from the authoritative IvyeaOps settings on
     # every boot. This is required on a fresh Windows installation where the
     # key may already exist in hub settings but ~/.hermes/config.yaml has not
@@ -66,7 +78,7 @@ async def lifespan(app: FastAPI):
         from app.services.hermes_config_sync import on_settings_saved as _sync_runner_settings
         _sync_runner_settings(_hub_settings.load())
     except Exception as e:
-        print(f"[IvyeaOps] runner settings sync skipped: {e}")
+        logger.warning("runner settings sync skipped: %s", e)
 
     # Skill Studio directories: we provision our own state dir
     # (~/.hermes/skill-studio/) but intentionally NEVER touch SKILLS_ROOT —
@@ -74,9 +86,9 @@ async def lifespan(app: FastAPI):
     # Studio API will surface a clear error on first call.
     ensure_studio_dirs()
     if not SKILLS_ROOT.exists():
-        print(f"[IvyeaOps] WARNING skills root missing: {SKILLS_ROOT}")
+        logger.warning("skills root missing: %s", SKILLS_ROOT)
     for key, value in studio_paths_summary().items():
-        print(f"[IvyeaOps] {key}: {value}")
+        logger.info("%s: %s", key, value)
 
     # Best-effort: sweep expired trash entries on startup. Failure here must
     # never block the server from coming up — the API will retry on demand.
@@ -84,18 +96,18 @@ async def lifespan(app: FastAPI):
         from app.services.trash import purge_expired
         purged = purge_expired()
         if purged:
-            print(f"[IvyeaOps] purged {purged} expired trash entries")
+            logger.info("purged %s expired trash entries", purged)
     except Exception as e:
-        print(f"[IvyeaOps] trash purge skipped: {e}")
+        logger.warning("trash purge skipped: %s", e)
 
     # Best-effort: sweep expired ASIN audit artifacts (30-day retention).
     try:
         from app.services.asin_audit import sweep_expired as _sweep_audits
         n = _sweep_audits()
         if n:
-            print(f"[IvyeaOps] purged {n} expired audit dirs")
+            logger.info("purged %s expired audit dirs", n)
     except Exception as e:
-        print(f"[IvyeaOps] audit sweep skipped: {e}")
+        logger.warning("audit sweep skipped: %s", e)
 
     # Rescue ghost "running" jobs left behind by a prior crash/restart:
     # _live_jobs is empty on boot, so anything status=running on disk is stale.
@@ -103,26 +115,26 @@ async def lifespan(app: FastAPI):
         from app.services.asin_audit import sweep_stale_running
         n = sweep_stale_running()
         if n:
-            print(f"[IvyeaOps] marked {n} stale running jobs as failed")
+            logger.warning("marked %s stale running jobs as failed", n)
     except Exception as e:
-        print(f"[IvyeaOps] stale running sweep skipped: {e}")
+        logger.warning("stale running sweep skipped: %s", e)
 
     # Same pair of sweeps for ad-audit jobs.
     try:
         from app.services.ad_audit import sweep_expired as _sweep_ad
         n = _sweep_ad()
         if n:
-            print(f"[IvyeaOps] purged {n} expired ad-audit dirs")
+            logger.info("purged %s expired ad-audit dirs", n)
     except Exception as e:
-        print(f"[IvyeaOps] ad-audit expired sweep skipped: {e}")
+        logger.warning("ad-audit expired sweep skipped: %s", e)
 
     try:
         from app.services.ad_audit import sweep_stale_running as _sweep_ad_stale
         n = _sweep_ad_stale()
         if n:
-            print(f"[IvyeaOps] marked {n} stale ad-audit jobs as failed")
+            logger.warning("marked %s stale ad-audit jobs as failed", n)
     except Exception as e:
-        print(f"[IvyeaOps] ad-audit stale sweep skipped: {e}")
+        logger.warning("ad-audit stale sweep skipped: %s", e)
 
     # Best-effort: when IvyeaOps boots on a new version, refresh the bundled
     # IvyeaAgent once in the background so the two stay in sync (skipped for
@@ -131,57 +143,86 @@ async def lifespan(app: FastAPI):
         from app.services.ivyea_agent_service import maybe_sync_agent_on_upgrade
         maybe_sync_agent_on_upgrade()
     except Exception as e:
-        print(f"[IvyeaOps] agent auto-sync skipped: {e}")
+        logger.warning("agent auto-sync skipped: %s", e)
 
     # Market research history DB.
     try:
         from app.routers.market import _init_history_db as _init_market_hist
         _init_market_hist()
-        print("[IvyeaOps] market history DB ready")
+        logger.info("market history DB ready")
     except Exception as e:
-        print(f"[IvyeaOps] market history DB init skipped: {e}")
+        logger.warning("market history DB init skipped: %s", e)
 
     # Agents native backend: ensure its metadata tables exist (no-op against
     # the live ~/.agents/auth.db the old Node service shared).
     try:
         from app.agents.db import init_db as _init_agents_db
         _init_agents_db()
-        print("[IvyeaOps] agents DB ready")
+        logger.info("agents DB ready")
     except Exception as e:
-        print(f"[IvyeaOps] agents DB init skipped: {e}")
+        logger.warning("agents DB init skipped: %s", e)
 
     # Launch-playbook history DB.
     try:
         from app.routers.playbook import _init_history_db as _init_playbook_hist
         _init_playbook_hist()
-        print("[IvyeaOps] playbook history DB ready")
+        logger.info("playbook history DB ready")
     except Exception as e:
-        print(f"[IvyeaOps] playbook history DB init skipped: {e}")
+        logger.warning("playbook history DB init skipped: %s", e)
 
     # Home monitor (watchlist + snapshots) DB.
     try:
         from app.routers.home import _init_db as _init_home_db
         _init_home_db()
-        print("[IvyeaOps] home monitor DB ready")
+        logger.info("home monitor DB ready")
     except Exception as e:
-        print(f"[IvyeaOps] home monitor DB init skipped: {e}")
+        logger.warning("home monitor DB init skipped: %s", e)
 
     # Registered-users DB (multi-user mode).
     try:
         from app.services import users_service
         users_service.init_db()
-        print("[IvyeaOps] users DB ready")
+        logger.info("users DB ready")
     except Exception as e:
-        print(f"[IvyeaOps] users DB init skipped: {e}")
+        logger.warning("users DB init skipped: %s", e)
+
+    # 统一审计流水（谁在哪个板块做了什么）。
+    try:
+        from app.core import audit
+        audit.init_db()
+        logger.info("audit log DB ready")
+    except Exception as e:
+        logger.warning("audit log DB init skipped: %s", e)
+
+    # 对外 MCP 的令牌表。
+    try:
+        from app.services import mcp_tokens as _mcp_tokens
+        _mcp_tokens.init_db()
+        logger.info("MCP tokens DB ready")
+    except Exception as e:
+        logger.warning("MCP tokens DB init skipped: %s", e)
+
+    # 任务账本 + 开机自愈。被上一次重启打断的任务：可重入的重新排队，不可重入的
+    # 标成 orphaned 留在列表里等人处理 —— **绝不静默改成 failed**，
+    # 那会让用户以为任务是自己跑挂的。
+    try:
+        from app.core import jobs
+        jobs.init_db()
+        healed = jobs.recover_orphans()
+        jobs.purge(older_than_days=30)
+        logger.info("jobs DB ready（重排队 %d、孤儿 %d）",
+                    healed["requeued"], healed["orphaned"])
+    except Exception as e:
+        logger.warning("jobs DB init skipped: %s", e)
 
     # Brain chat/upload metadata DB is local SQLite; initialize eagerly so
     # schema problems are visible at boot, while keeping the service lightweight.
     try:
         from app.services.brain_chat_service import init_db as _init_brain_chat
         _init_brain_chat()
-        print("[IvyeaOps] brain chat DB ready")
+        logger.info("brain chat DB ready")
     except Exception as e:
-        print(f"[IvyeaOps] brain chat DB init skipped: {e}")
+        logger.warning("brain chat DB init skipped: %s", e)
 
     # Multi-agent hub: schema + agent discovery + PTY reaper.  All best-effort
     # so a misconfigured agent (e.g. missing binary) never blocks server boot.
@@ -196,16 +237,17 @@ async def lifespan(app: FastAPI):
         _console_sessions.init_db()
         from app.services import schedules as _schedules
         _schedules.init_db()
-        agents = _agent_reg.discover_agents()
-        ok = sum(1 for a in agents if a.get("enabled"))
-        print(f"[IvyeaOps] agent registry: {ok}/{len(agents)} enabled")
-        _pty_mgr.start_background_tasks()
+        if not skip_bg:
+            agents = _agent_reg.discover_agents()
+            ok = sum(1 for a in agents if a.get("enabled"))
+            logger.info("agent registry: %s/%s enabled", ok, len(agents))
+            _pty_mgr.start_background_tasks()
     except Exception as e:
-        print(f"[IvyeaOps] agent hub init skipped: {e}")
+        logger.warning("agent hub init skipped: %s", e)
 
-    print(f"[IvyeaOps] starting on {settings.host}:{settings.port}")
-    print(f"[IvyeaOps] data dir: {settings.data_dir}")
-    print(f"[IvyeaOps] dev_mode: {settings.dev_mode}")
+    logger.info("starting on %s:%s", settings.host, settings.port)
+    logger.info("data dir: %s", settings.data_dir)
+    logger.info("dev_mode: %s", settings.dev_mode)
 
     # Terminal subsystem:
     # (1) legacy tmux auto-capture for the old shared terminal page
@@ -213,12 +255,12 @@ async def lifespan(app: FastAPI):
     try:
         terminal.start_autocapture()
     except Exception as e:
-        print(f"[IvyeaOps] terminal auto-capture not started: {e}")
+        logger.warning("terminal auto-capture not started: %s", e)
     try:
         terminal.init_live_sessions()
-        print("[IvyeaOps] live terminal sessions ready")
+        logger.info("live terminal sessions ready")
     except Exception as e:
-        print(f"[IvyeaOps] live terminal init skipped: {e}")
+        logger.warning("live terminal init skipped: %s", e)
 
     # systemd integration: announce READY and start the watchdog ping
     # loop. Both are no-ops when running outside systemd (NOTIFY_SOCKET
@@ -226,7 +268,7 @@ async def lifespan(app: FastAPI):
     from app.services.watchdog import notify_ready, notify_status, watchdog_loop
     notify_ready()
     notify_status("ready")
-    _watchdog_task = asyncio.create_task(watchdog_loop(), name="sd-watchdog")
+    _watchdog_task = None if skip_bg else asyncio.create_task(watchdog_loop(), name="sd-watchdog")
 
     # Home market-traffic daily recorder: wakes every 30 min and records a
     # daily point for each tracked baseline / watched ASIN that lacks one.
@@ -237,12 +279,12 @@ async def lifespan(app: FastAPI):
                 from app.routers.home import run_due_recordings
                 summary = await run_due_recordings()
                 if summary.get("recorded_market") or summary.get("recorded_asin"):
-                    print(f"[IvyeaOps] market recorder: {summary}")
+                    logger.info("market recorder: %s", summary)
             except Exception as e:
-                print(f"[IvyeaOps] market recorder error: {e}")
+                logger.warning("market recorder error: %s", e)
             await asyncio.sleep(1800)
 
-    _market_task = asyncio.create_task(_market_daily_loop(), name="market-recorder")
+    _market_task = None if skip_bg else asyncio.create_task(_market_daily_loop(), name="market-recorder")
 
     # Token-usage archiver: snapshot each tool's token data into IvyeaOps's own
     # DB once a day so history survives even after a tool is uninstalled.
@@ -250,16 +292,16 @@ async def lifespan(app: FastAPI):
     try:
         from app.services import token_archive
         token_archive.init_db()
-        print("[IvyeaOps] token archive DB ready")
+        logger.info("token archive DB ready")
     except Exception as e:
-        print(f"[IvyeaOps] token archive init skipped: {e}")
+        logger.warning("token archive init skipped: %s", e)
 
     try:
         from app.services import lingxing_service
         lingxing_service.init_db()
-        print("[IvyeaOps] lingxing audit DB ready")
+        logger.info("lingxing audit DB ready")
     except Exception as e:
-        print(f"[IvyeaOps] lingxing audit init skipped: {e}")
+        logger.warning("lingxing audit init skipped: %s", e)
 
     async def _token_archive_loop():
         await asyncio.sleep(120)  # let boot settle before first snapshot
@@ -267,20 +309,20 @@ async def lifespan(app: FastAPI):
             try:
                 from app.services import token_archive
                 summary = await asyncio.to_thread(token_archive.archive_run, 7)
-                print(f"[IvyeaOps] token archive: {summary}")
+                logger.info("token archive: %s", summary)
             except Exception as e:
-                print(f"[IvyeaOps] token archive error: {e}")
+                logger.warning("token archive error: %s", e)
             await asyncio.sleep(86400)  # daily
 
-    _archive_task = asyncio.create_task(_token_archive_loop(), name="token-archiver")
+    _archive_task = None if skip_bg else asyncio.create_task(_token_archive_loop(), name="token-archiver")
 
     # 领星 weekly advisory automation scheduler (gated by lingxing_auto_enabled).
     try:
         from app.services.lingxing_automation import scheduler_loop as _lx_auto_loop
-        _lingxing_auto_task = asyncio.create_task(_lx_auto_loop(), name="lingxing-auto")
+        _lingxing_auto_task = None if skip_bg else asyncio.create_task(_lx_auto_loop(), name="lingxing-auto")
     except Exception as e:
         _lingxing_auto_task = None
-        print(f"[IvyeaOps] lingxing auto scheduler skipped: {e}")
+        logger.warning("lingxing auto scheduler skipped: %s", e)
 
     # IvyeaAgent daemon 是 IvyeaOps 的子进程，没有独立的 systemd 单元 —— 也就是说
     # **每次 `systemctl restart ivyea-ops` 都会把它一起带走**，之后只有当某个请求
@@ -292,11 +334,11 @@ async def lifespan(app: FastAPI):
         try:
             from app.services.ivyea_agent_service import ensure_available
             status = await asyncio.to_thread(ensure_available)
-            print(f"[IvyeaOps] ivyea-agent available: {status.get('available')}")
+            logger.info("ivyea-agent available: %s", status.get('available'))
         except Exception as e:  # noqa: BLE001 — 拉不起来不该挡住 ops 启动
-            print(f"[IvyeaOps] ivyea-agent warmup skipped: {e}")
+            logger.warning("ivyea-agent warmup skipped: %s", e)
 
-    _warm_task = asyncio.create_task(_warm_agent(), name="agent-warmup")
+    _warm_task = None if skip_bg else asyncio.create_task(_warm_agent(), name="agent-warmup")
 
     # 定时任务调度器：每 30s 看一眼有没有到点的任务。
     try:
@@ -304,43 +346,36 @@ async def lifespan(app: FastAPI):
         _scheduler_task = asyncio.create_task(_sched_loop(), name="agent-scheduler")
     except Exception as e:
         _scheduler_task = None
-        print(f"[IvyeaOps] agent scheduler skipped: {e}")
+        logger.warning("agent scheduler skipped: %s", e)
 
     yield
-    _warm_task.cancel()
-    if _scheduler_task:
-        _scheduler_task.cancel()
-    _watchdog_task.cancel()
-    _market_task.cancel()
-    _archive_task.cancel()
-    if _lingxing_auto_task:
-        _lingxing_auto_task.cancel()
-    try:
-        await _watchdog_task
-    except (asyncio.CancelledError, Exception):
-        pass
-    try:
-        await _market_task
-    except (asyncio.CancelledError, Exception):
-        pass
-    try:
-        await _archive_task
-    except (asyncio.CancelledError, Exception):
-        pass
+    # skip_bg 时这些任务压根没起，值是 None —— 统一按"有才取消/等待"处理，
+    # 免得关停路径上冒 AttributeError（那会让每个测试的 teardown 都吐一堆噪音）。
+    for _task in (_warm_task, _scheduler_task, _watchdog_task, _market_task,
+                  _archive_task, _lingxing_auto_task):
+        if _task is not None:
+            _task.cancel()
+    for _task in (_watchdog_task, _market_task, _archive_task):
+        if _task is None:
+            continue
+        try:
+            await _task
+        except (asyncio.CancelledError, Exception):
+            logger.debug("_task 失败（旁路，已忽略）", exc_info=True)
     try:
         await terminal.stop_autocapture()
     except Exception as e:
-        print(f"[IvyeaOps] terminal auto-capture stop error: {e}")
+        logger.warning("terminal auto-capture stop error: %s", e)
     try:
         await terminal.shutdown_live_sessions()
     except Exception as e:
-        print(f"[IvyeaOps] live terminal shutdown error: {e}")
+        logger.warning("live terminal shutdown error: %s", e)
     try:
         from app.services.pty_manager import manager as _pty_mgr
         await _pty_mgr.shutdown()
     except Exception as e:
-        print(f"[IvyeaOps] pty manager shutdown error: {e}")
-    print("[IvyeaOps] stopped")
+        logger.warning("pty manager shutdown error: %s", e)
+    logger.info("stopped")
 
 
 app = FastAPI(
@@ -383,7 +418,7 @@ async def _user_context(request: Request, call_next):
             from app.core.security import _resolve_session_principal, current_user
             current_user.set(_resolve_session_principal(token))
         except Exception:
-            pass
+            logger.debug("current_user.set 失败（旁路，已忽略）", exc_info=True)
     return await call_next(request)
 
 
@@ -396,6 +431,13 @@ async def _origin_guard(request: Request, call_next):
         # Origin/Referer and is NOT CSRF-vulnerable. Without this exemption the
         # whole agent→board flow (market_generate_report etc.) gets 403'd.
         if request.url.path.startswith("/api/ivyea-agent-bridge/"):
+            return await call_next(request)
+
+        # 对外 MCP 同理：连过来的是 Claude Desktop / Cursor，不是浏览器，
+        # 不带 Origin/Referer。它认的是 Authorization 头里的 Bearer 令牌而不是
+        # Cookie 会话 —— 浏览器没法在跨站请求上凭空加一个 Bearer 头，
+        # 所以这条路径本来就不在 CSRF 的攻击面里。不豁免的话整个功能直接 403。
+        if request.url.path == "/api/mcp" or request.url.path.startswith("/api/mcp/"):
             return await call_next(request)
 
         # Native app requests (no browser CSRF risk) — skip origin check.
@@ -422,6 +464,116 @@ async def _origin_guard(request: Request, call_next):
             )
     return await call_next(request)
 
+
+# --- 可观测性：request_id 贯穿 + 统一错误契约 ---
+# 注册顺序即洋葱顺序：**最后注册的最先执行**。request_id 必须是最外层，
+# 这样它下面每一层（用户上下文、CSRF、路由、异常处理）打的日志都带得上 id。
+@app.middleware("http")
+async def _request_id(request: Request, call_next):
+    # 反代/网关可能已经分配过 id，有就沿用，方便和 nginx 日志对上。
+    rid = (request.headers.get("x-request-id") or "").strip()[:64] or obs.new_request_id()
+    request.state.request_id = rid
+    token = obs.REQUEST_ID.set(rid)
+    started = time.monotonic()
+    try:
+        response = await call_next(request)
+        response.headers["X-Request-Id"] = rid
+        _log_access(request, response.status_code, time.monotonic() - started)
+        return response
+    finally:
+        obs.REQUEST_ID.reset(token)
+
+
+def _log_access(request: Request, status: int, elapsed: float) -> None:
+    """自己记一条访问日志。
+
+    **为什么不靠 uvicorn 自带的那条**：uvicorn 在协议层记录访问日志，那已经在
+    ASGI 应用之外 —— 我们的 contextvar 早被 reset 了，所以它那行永远是 [-]，
+    带不上 request_id。而"让用户贴一个 id 就能查到整条链路"这件事，恰恰要求
+    每个请求至少有一行带 id 的日志。
+
+    分级是为了别把日志刷爆：前端有大量轮询，全 INFO 会让真正有用的那几行淹掉。
+    出错的、慢的走 INFO（这两类正是用户会来报的），其余降到 DEBUG。
+    """
+    level = logging.INFO if (status >= 400 or elapsed >= 1.0) else logging.DEBUG
+    logger.log(level, "%s %s -> %s (%.0fms)",
+               request.method, request.url.path, status, elapsed * 1000)
+
+
+# status → 稳定错误码 + 给用户的下一步动作。code 是给前端做分支的，
+# 不随文案改动；hint 是说人话的"我该怎么办"。
+_ERROR_CODES: dict[int, tuple[str, str]] = {
+    400: ("BAD_REQUEST", ""),
+    401: ("UNAUTHORIZED", "会话已过期，请重新登录。"),
+    403: ("FORBIDDEN", "当前账号没有该模块的权限，请让管理员在「用户管理」里开通。"),
+    404: ("NOT_FOUND", ""),
+    409: ("CONFLICT", ""),
+    422: ("INVALID_PARAMS", ""),
+    429: ("RATE_LIMITED", "请求过于频繁，请稍候再试。"),
+    500: ("INTERNAL_ERROR", "完整堆栈已记录在本机日志里；可在「系统配置」导出诊断包附到 issue。"),
+    502: ("UPSTREAM_ERROR", "上游服务（模型或数据源）没有正常返回，稍后重试或换一个 provider。"),
+    503: ("UNAVAILABLE", "依赖的服务暂时不可用。"),
+    504: ("UPSTREAM_TIMEOUT", "上游服务超时，稍后重试。"),
+}
+
+
+def _error_body(request: Request, status_code: int, message: str) -> dict:
+    """错误响应体。
+
+    **detail 必须保留**：前端 client.ts 读的就是 `err.response.data.detail`
+    （见 client/src/api/client.ts 的错误归一化），改成只给 error 会让全站错误
+    提示同时变哑。所以这里是**增量**的 —— 老字段原样留着，新增 error 对象。
+    """
+    code, hint = _ERROR_CODES.get(status_code, ("ERROR", ""))
+    # 对外 MCP 认的是 Bearer 令牌，不是浏览器会话。给对面的 Agent 一句
+    # "请重新登录"，它既没有登录这个动作可做，也会把这句话原样转述给用户。
+    path = request.url.path
+    if status_code in (401, 403) and (path == "/api/mcp" or path.startswith("/api/mcp/")):
+        hint = "MCP 令牌无效、已过期、已撤销，或缺少该工具需要的权限。请在 IvyeaOps「系统配置 → 对外 MCP」重新生成。"
+    return {
+        "detail": message,
+        "error": {
+            "code": code,
+            "message": message,
+            "request_id": getattr(request.state, "request_id", ""),
+            "hint": hint,
+        },
+    }
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _http_exception_handler(request: Request, exc: StarletteHTTPException):
+    message = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+    headers = dict(getattr(exc, "headers", None) or {})
+    rid = getattr(request.state, "request_id", "")
+    if rid:
+        headers["X-Request-Id"] = rid
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=_error_body(request, exc.status_code, message),
+        headers=headers,
+    )
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception):
+    """未捕获异常：**先把完整堆栈落盘**，再给用户一个能追溯的 id。
+
+    在此之前这类错误只会出现在 stdout（自托管用户多数看不到），用户能反馈的
+    只有"报错了"。现在他贴一个 request_id，你就能在 data/logs 里 grep 到全链路。
+    """
+    rid = getattr(request.state, "request_id", "")
+    logger.exception(
+        "未捕获异常 %s %s (request_id=%s)", request.method, request.url.path, rid or "-"
+    )
+    headers = {"X-Request-Id": rid} if rid else None
+    return JSONResponse(
+        status_code=500,
+        content=_error_body(request, 500, "服务器内部错误，请把 request_id 反馈给我们。"),
+        headers=headers,
+    )
+
+
 # --- API routes (prefixed /api) ---
 # IMPORTANT: must be registered BEFORE the SPA catch-all below.
 # Admin-only dependency: locks routers that can execute code / touch the
@@ -437,6 +589,15 @@ app.include_router(amazon.router, prefix="/api/amazon", tags=["amazon"], depende
 app.include_router(ad_audit.router, prefix="/api/ad-audit", tags=["ad-audit"], dependencies=[Depends(require_module("tools"))])
 app.include_router(monitor.router, prefix="/api/monitor", tags=["monitor"], dependencies=[Depends(require_module("servmon"))])
 app.include_router(skill.router, prefix="/api/skill", tags=["skill"], dependencies=[Depends(require_module("skill-hub"))])
+# 能力市场：与 Skill 中心同属一个板块权限。默认关闭（会外联），见 services/skill_market。
+app.include_router(skill_market_router.router, prefix="/api/skill-market", tags=["skill-market"], dependencies=[Depends(require_module("skill-hub"))])
+# 对外 MCP：**故意不挂 require_user** —— 它认的是 Bearer 令牌（见 services/mcp_tokens），
+# 因为连过来的是 Claude Desktop / Cursor，不是浏览器，没有会话 Cookie 可用。
+# 令牌的签发与撤销走下面这组管理接口，只有管理员能动。
+app.include_router(mcp_server_router.router, prefix="/api/mcp", tags=["mcp"])
+app.include_router(mcp_tokens_router.router, prefix="/api/mcp-admin", tags=["mcp"])
+# 通知渠道与 AI 预算：改的是"这台机器往哪儿发请求"，只有管理员能动。
+app.include_router(notify_router.router, prefix="/api/notify", tags=["notify"])
 app.include_router(news.router, prefix="/api/news", tags=["news"], dependencies=[Depends(require_module("news"))])
 app.include_router(brain.router, prefix="/api/brain", tags=["brain"], dependencies=[Depends(require_module("brain"))])
 app.include_router(listing_router.router, prefix="/api/listing", tags=["listing"], dependencies=[Depends(require_module("listing"))])

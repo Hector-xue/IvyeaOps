@@ -11,6 +11,7 @@ the feed list via the ``news_feeds`` setting (one ``url|source|category`` per li
 from __future__ import annotations
 
 import asyncio
+import logging
 import json
 import re
 from datetime import datetime
@@ -22,6 +23,8 @@ import httpx
 
 from app.core import hub_settings
 from app.core.config import settings
+
+logger = logging.getLogger("ivyea.services.news_digest")
 
 _NEWS_DIR = settings.data_dir / "news"
 
@@ -221,7 +224,7 @@ def _scan_for_array(t: str) -> Optional[list]:
             if isinstance(v, list) and v and all(isinstance(x, dict) for x in v):
                 return v
         except Exception:
-            pass
+            logger.debug("v 失败（旁路，已忽略）", exc_info=True)
         pos = t.find("[", pos + 1)
     return None
 
@@ -259,7 +262,7 @@ def _extract_json_array(text: str) -> Optional[list]:
                 pos = repaired.find("{", end)
                 continue
         except Exception:
-            pass
+            logger.debug("o 失败（旁路，已忽略）", exc_info=True)
         pos = repaired.find("{", pos + 1)
     return objs or None
 

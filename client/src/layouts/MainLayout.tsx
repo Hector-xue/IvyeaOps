@@ -195,6 +195,10 @@ export default function MainLayout() {
     () => localStorage.getItem("ivyea-ops.sidebar.collapsed") === "1" || window.innerWidth <= 680,
   );
   const [mobileMenu, setMobileMenu] = useState(false);
+  // **实际**是不是收起态。移动端 collapsed 默认就是 true（宽度 ≤680），但抽屉一打开
+  // 侧边栏是按展开呈现的 —— 内容却还在按 collapsed 渲染，于是会话列表直接 return
+  // null、分组标题也不显示。结果就是移动端抽屉里**从来没有过会话列表**。
+  // 侧边栏内部的所有渲染判断都该用这个，而不是裸 collapsed。
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 900);
 
   useEffect(() => {
@@ -203,11 +207,22 @@ export default function MainLayout() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // "更多工具" group. Defaults to open so an upgrade never looks like boards went
-  // missing; auto-opens whenever the active route lives inside it.
+  // 「更多工具」默认**收起**。
+  //
+  // 原本默认展开，理由是"升级后别让人以为板块没了"。但实测代价太大：18 个板块一次
+  // 铺开占 774px，把会话整个挤到折叠线以下 —— 1440×900 下首屏一条会话都看不见，
+  // 而会话恰恰是这个外壳的主角。
+  //
+  // "板块没了"的担心改由两件事兜住：芯片上带**数量**（更多工具 18），以及当前路由
+  // 落在其中时**自动展开**（下面的 activeIsTool）。手动开过一次就记住。
   const [toolsOpen, setToolsOpen] = useState(() => {
-    try { return localStorage.getItem(TOOLS_OPEN_KEY) !== "0"; } catch { return true; }
+    try { return localStorage.getItem(TOOLS_OPEN_KEY) === "1"; } catch { return false; }
   });
+  // 收起时显示的板块数 —— 让"更多工具"看着像个装了东西的抽屉，而不是一个空按钮。
+  const toolCount = useMemo(
+    () => toolGroups.reduce((n, s) => n + s.items.length, 0),
+    [toolGroups],
+  );
   const activeIsTool = useMemo(
     () => toolGroups.some((s) => s.items.some((b) => boardPath(b) === location.pathname)),
     [toolGroups, location.pathname],
@@ -217,6 +232,8 @@ export default function MainLayout() {
     // Only reacts to the route landing inside the group — never fights a manual close.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIsTool]);
+  const railCollapsed = collapsed && !mobileMenu;
+
   const toggleTools = () => {
     const next = !toolsOpen;
     setToolsOpen(next);
@@ -387,7 +404,7 @@ export default function MainLayout() {
       to={b.to}
       end={b.to === "/"}
       className={({ isActive }) => "ni" + (isActive ? " active" : "")}
-      title={collapsed ? b.label : undefined}
+      title={railCollapsed ? b.label : undefined}
       onClick={() => isMobile && setMobileMenu(false)}
     >
       <i className="ic">{b.icon}</i>
@@ -400,7 +417,7 @@ export default function MainLayout() {
   const pinnedGroup = pinnedTools.length > 0 && (
     <div>
       {divider}
-      {!collapsed && <div style={{ fontSize: 9, color: "var(--t3)", padding: "4px 16px 2px", letterSpacing: ".08em" }}>我的工具</div>}
+      {!railCollapsed && <div style={{ fontSize: 9, color: "var(--t3)", padding: "4px 16px 2px", letterSpacing: ".08em" }}>我的工具</div>}
       {pinnedTools.map((pt) => {
         const to = `/skill-tools?tool=${encodeURIComponent(pt.name)}`;
         const active = location.pathname === "/skill-tools" &&
@@ -410,7 +427,7 @@ export default function MainLayout() {
             key={pt.name}
             to={to}
             className={"ni" + (active ? " active" : "")}
-            title={collapsed ? pt.label : undefined}
+            title={railCollapsed ? pt.label : undefined}
             onClick={() => isMobile && setMobileMenu(false)}
           >
             <i className="ic">{pt.icon}</i>
@@ -440,54 +457,71 @@ export default function MainLayout() {
             {collapsed ? "▶" : "◀"}
           </button>
         </div>
-        <nav data-tour="sidebar">
+        <nav data-tour="sidebar" className={isConsoleShell ? "sb-nav-console" : undefined}>
           {isConsoleShell ? (
             <>
-              {/* ── 新建任务 + 一级项 ─────────────────────────────────── */}
-              <button
-                className="ni ni-action"
-                onClick={startNewTask}
-                title={collapsed ? "新建任务" : undefined}
-                data-tour="console-new"
-              >
-                <i className="ic">⊕</i>
-                <span className="ni-label">新建任务</span>
-              </button>
-              {primary.map(renderNavItem)}
+              {/*
+               * 三段式：固定区 / 弹性区（会话）/ 收纳区。
+               *
+               * 改造前这里是**一条长滚动**，会话排在最尾 —— 实测 1440×900 下第一条
+               * 会话在 961px，视口才 813px，首屏 0 条可见。会话是这个外壳的主角，
+               * 得让它拿走中间那块可伸缩的空间；板块是"偶尔打开的目录"，沉到底部。
+               */}
+              {/* ── 固定区：新建任务 + 一级项 ───────────────────────────── */}
+              <div className="sb-nav-fixed">
+                <button
+                  className="ni ni-action"
+                  onClick={startNewTask}
+                  title={railCollapsed ? "新建任务" : undefined}
+                  data-tour="console-new"
+                >
+                  <i className="ic">⊕</i>
+                  <span className="ni-label">新建任务</span>
+                </button>
+                {primary.map(renderNavItem)}
+              </div>
 
-              {/* ── 更多工具（现有全部板块）────────────────────────────── */}
-              {toolGroups.length > 0 && (
-                <>
-                  {divider}
-                  <button
-                    className={"ni ni-group" + (toolsOpen ? " open" : "")}
-                    onClick={toggleTools}
-                    title={collapsed ? "更多工具" : undefined}
-                    aria-expanded={toolsOpen}
-                  >
-                    <i className="ic">⋯</i>
-                    <span className="ni-label">更多工具</span>
-                    <span className="ni-caret">{toolsOpen ? "▾" : "▸"}</span>
-                  </button>
-                  {toolsOpen && toolGroups.map((sec, si) => (
-                    <div key={sec.title} className="ni-sub">
-                      {si > 0 && divider}
-                      {!collapsed && <div className="ns">{sec.title}</div>}
-                      {sec.items.map(renderNavItem)}
-                    </div>
-                  ))}
-                </>
-              )}
+              {/* ── 弹性区：工作区 / 会话（自己滚）─────────────────────── */}
+              <div className="sb-nav-flex scroll-thin">
+                <SessionRail
+                  collapsed={railCollapsed}
+                  activeSessionId={activeSessionId}
+                  onNavigate={() => isMobile && setMobileMenu(false)}
+                />
+              </div>
 
-              {/* ── 工作区 / 会话 ────────────────────────────────────────── */}
-              {divider}
-              <SessionRail
-                collapsed={collapsed}
-                activeSessionId={activeSessionId}
-                onNavigate={() => isMobile && setMobileMenu(false)}
-              />
-
-              {pinnedGroup}
+              {/* ── 收纳区：更多工具 + 我的工具 ─────────────────────────── */}
+              <div className="sb-nav-dock">
+                {toolGroups.length > 0 && (
+                  <>
+                    {divider}
+                    <button
+                      className={"ni ni-group" + (toolsOpen ? " open" : "")}
+                      onClick={toggleTools}
+                      title={railCollapsed ? `更多工具（${toolCount}）` : undefined}
+                      aria-expanded={toolsOpen}
+                    >
+                      <i className="ic">⋯</i>
+                      <span className="ni-label">更多工具</span>
+                      {/* 数量是"板块没丢"的凭据 —— 收起状态下唯一能说明这件事的东西 */}
+                      {!railCollapsed && !toolsOpen && <span className="ni-count">{toolCount}</span>}
+                      <span className="ni-caret">{toolsOpen ? "▾" : "▸"}</span>
+                    </button>
+                    {toolsOpen && (
+                      <div className="sb-tools-open scroll-thin">
+                        {toolGroups.map((sec, si) => (
+                          <div key={sec.title} className="ni-sub">
+                            {si > 0 && divider}
+                            {!railCollapsed && <div className="ns">{sec.title}</div>}
+                            {sec.items.map(renderNavItem)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+                {pinnedGroup}
+              </div>
             </>
           ) : (
             <>

@@ -18,7 +18,6 @@ from __future__ import annotations
 from app.core.proc import no_window_kwargs
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Any

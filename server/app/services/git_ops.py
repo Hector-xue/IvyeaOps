@@ -122,13 +122,21 @@ def get_status(project_id: str) -> dict[str, Any]:
                 rest = line[len("# branch.ab "):].strip()
                 parts = rest.split()
                 # Format: "+<ahead> -<behind>"
+                # git 的输出格式是 "+<ahead> -<behind>"；真解析不出数字说明
+                # 这一行不是我们认识的格式，保持默认值即可 —— 这是**明确预期
+                # 可以忽略**的一类，所以收窄到 ValueError 而不是裸 except
+                # （裸 except 连 KeyboardInterrupt 都会吞掉）。
                 for p in parts:
                     if p.startswith("+"):
-                        try: ahead = int(p[1:])
-                        except: pass
+                        try:
+                            ahead = int(p[1:])
+                        except ValueError:
+                            pass
                     elif p.startswith("-"):
-                        try: behind = int(p[1:])
-                        except: pass
+                        try:
+                            behind = int(p[1:])
+                        except ValueError:
+                            pass
             elif line.startswith("1 "):
                 # 1 XY sub mH mI mW hH hI path
                 tokens = line.split(" ", 8)
@@ -316,6 +324,9 @@ def commit(project_id: str, message: str, *, allow_empty: bool = False) -> dict[
     if allow_empty:
         args.append("--allow-empty")
     cp = _run_git(cwd, args, check=False)
+    from app.core import audit as _audit
+    _audit.record("git", "commit", target=f"{project_id}: {msg[:120]}",
+                  outcome="ok" if cp.returncode == 0 else "failed")
     if cp.returncode != 0:
         err = (cp.stderr or cp.stdout or "").strip()
         # Most common case: nothing to commit
@@ -381,6 +392,9 @@ def checkout_branch(project_id: str, name: str) -> dict[str, Any]:
         raise GitError("不是 git 仓库")
     name = _validate_branch_name(name)
     cp = _run_git(cwd, ["checkout", name], check=False)
+    from app.core import audit as _audit
+    _audit.record("git", "checkout", target=f"{project_id}: {name}",
+                  outcome="ok" if cp.returncode == 0 else "failed")
     if cp.returncode != 0:
         # Most common: uncommitted changes would be overwritten.
         raise GitError((cp.stderr or cp.stdout or "切换分支失败").strip()[:300])

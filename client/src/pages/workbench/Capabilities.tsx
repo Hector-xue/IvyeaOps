@@ -334,7 +334,10 @@ function PresetsSection() {
   const [skills, setSkills] = useState<IvyeaSkillInfo[]>([]);
   const [spaces, setSpaces] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState({ name: "", skill: "", approval: "none" as "none" | "remote", workspace: "", note: "" });
+  const [draft, setDraft] = useState({
+    name: "", skill: "", approval: "none" as "none" | "remote",
+    workspace: "", system: "", note: "",
+  });
 
   const load = useCallback(async () => {
     const [p, sk, ws] = await Promise.all([
@@ -354,7 +357,7 @@ function PresetsSection() {
     try {
       await consolePresetSave(draft);
       setAdding(false);
-      setDraft({ name: "", skill: "", approval: "none", workspace: "", note: "" });
+      setDraft({ name: "", skill: "", approval: "none", workspace: "", system: "", note: "" });
       await load();
       notifyConsolePresetsChanged();
       toast("success", "预设已保存");
@@ -373,21 +376,23 @@ function PresetsSection() {
   };
 
   return (
-    <Section title="预设打法" sub="任务台开一轮时可以一键套用 · 每个人的预设只有自己看得到">
+    <Section title="预设打法" sub="技能 + 审批档位 + 工作区 + 人设，任务台一键套用 · 每个人的预设只有自己看得到">
       {rows.length === 0 && !adding && (
         <div className="cap-empty">还没有预设。把常跑的活存成一条，下次在任务台点一下就位。</div>
       )}
       {rows.length > 0 && (
         <table className="tbl cap-table">
-          <thead><tr><th>名称</th><th>技能</th><th>审批</th><th>工作区</th><th>备注</th><th /></tr></thead>
+          <thead><tr><th>名称</th><th>人设</th><th>技能</th><th>审批</th><th>工作区</th><th /></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.name}>
-                <td><b>{r.name}</b></td>
+                <td><b>{r.name}</b>{r.note && <div className="cap-dim">{r.note}</div>}</td>
+                <td className="cap-persona" title={r.system || undefined}>
+                  {r.system || <span className="cap-dim">无</span>}
+                </td>
                 <td>{r.skill ? <code>{r.skill}</code> : <span className="cap-dim">不限定</span>}</td>
                 <td>{r.approval === "remote" ? "逐项审批" : "只读建议"}</td>
                 <td>{r.workspace || <span className="cap-dim">默认</span>}</td>
-                <td className="cap-dim">{r.note || "—"}</td>
                 <td><button className="tbtn danger" onClick={() => void drop(r.name)}>删除</button></td>
               </tr>
             ))}
@@ -414,6 +419,14 @@ function PresetsSection() {
           </select>
           <input className="inp" placeholder="备注（可选）" value={draft.note}
                  onChange={(e) => setDraft({ ...draft, note: e.target.value })} />
+          {/* 人设独占一整行：它是这里唯一需要写几句话的字段，挤在网格里会很难写。 */}
+          <textarea
+            className="inp cap-persona-input"
+            rows={3}
+            placeholder="人设 / 判断标准（可选）。例如：你是有十年经验的亚马逊广告优化师，先看否词和搜索词报告再谈出价，任何调整都要给出数据依据。"
+            value={draft.system}
+            onChange={(e) => setDraft({ ...draft, system: e.target.value })}
+          />
           <div className="cap-preset-actions">
             <button className="tbtn tbtn-acc" onClick={() => void save()}>保存</button>
             <button className="tbtn" onClick={() => setAdding(false)}>取消</button>

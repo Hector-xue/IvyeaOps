@@ -12,6 +12,7 @@ stream_vision —— 老实现直连 apimart /messages（该端点恒 403）导�
 from __future__ import annotations
 
 import asyncio
+import logging
 import json
 import sqlite3
 import time
@@ -30,6 +31,8 @@ from .common import (
     _parse_copy_result, _strip_json, project_row, update_project,
 )
 from .jobs import JobHandle, start_job
+
+logger = logging.getLogger("ivyea.routers.listing.copywriting")
 
 router = APIRouter()
 
@@ -130,7 +133,7 @@ try:
     _cjc.commit()
     _cjc.close()
 except Exception:
-    pass
+    logger.debug("_copy_job_db 失败（旁路，已忽略）", exc_info=True)
 
 
 class CopyJobReq(BaseModel):
@@ -175,7 +178,7 @@ async def _analyze_images_vision(image_paths: list[str], product_type: str) -> d
                     "webp": "image/webp", "gif": "image/gif"}.get(ext, "image/jpeg")
             images_b64.append(f"data:{mime};base64,{data}")
         except Exception:
-            pass
+            logger.debug("uri = await _img_datauri_from_url 失败（旁路，已忽略）", exc_info=True)
     if not images_b64:
         return {"mode": "skipped", "features": [], "reason": "Could not read image files"}
 
@@ -431,7 +434,7 @@ async def _run_copy_job(job_id: str) -> None:
             try:
                 update_project(project_id, copy_result=result_json, copy_job_id=job_id)
             except Exception:
-                pass
+                logger.debug("update_project 失败（旁路，已忽略）", exc_info=True)
 
     except Exception as exc:
         conn = _copy_job_db()
@@ -545,7 +548,7 @@ def get_copy_job(job_id: str, _user: str = Depends(require_user)):
             try:
                 d[key] = json.loads(d[key])
             except Exception:
-                pass
+                logger.debug("d 失败（旁路，已忽略）", exc_info=True)
     if d.get("result"):
         d["result"] = _parse_copy_result(d["result"]) or d["result"]
     return d

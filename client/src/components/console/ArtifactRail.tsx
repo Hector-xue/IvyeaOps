@@ -4,23 +4,40 @@
  * 默认是一条 40px 的图标条，点开才占宽度，所以不抢会话区。
  * 只放**真的有数据**的格：报告、待办、审批记录、会话信息。
  *
- * 「文件 / diff / 浏览器」暂缺是有意的：工作区绑目录是管理员功能且当前无人绑定，
- * 没有可复用的文件列表端点 —— 现在加等于摆个永远是空的壳子。等真有数据源再补。
+ * 「浏览器」仍然缺：agent 只有 web_fetch / web_search，没有浏览器自动化 ——
+ * 那一格要先有那个能力，不是补个端点的事。
+ *
+ * 「文件 / diff」的数据源是 Agent 发来的 file_change 事件（write_file / edit_file
+ * 落盘成功后才发），所以这里列的都是**真的改到磁盘上**的东西。
  */
 import { useMemo, useState, type ReactNode } from "react";
 import { MarkdownReport } from "../../lib/reportFormat";
+import type { IvyeaFileChange } from "../../api/ivyeaAgent";
 
 export type RailTodo = { content?: string; status?: string; [k: string]: any };
 export type RailApproval = { title: string; decision: string; at: number };
 
-type TabKey = "report" | "todo" | "approval" | "session";
+type TabKey = "report" | "file" | "diff" | "todo" | "approval" | "session";
 
 const TABS: { key: TabKey; icon: string; label: string }[] = [
   { key: "report", icon: "▤", label: "报告" },
+  { key: "file", icon: "◰", label: "文件" },
+  { key: "diff", icon: "±", label: "改动" },
   { key: "todo", icon: "☑", label: "待办" },
   { key: "approval", icon: "⚑", label: "审批" },
   { key: "session", icon: "◷", label: "会话" },
 ];
+
+const ACTION_LABEL: Record<string, string> = {
+  create: "新建", overwrite: "覆盖", edit: "编辑",
+};
+
+/** diff 的一行归到哪一类。render_diff 的格式是「行号 +/- 内容」。 */
+function diffLineKind(line: string): "add" | "del" | "ctx" {
+  const m = line.match(/^\s*\d*\s*([+-])\s/);
+    if (m) return m[1] === "+" ? "add" : "del";
+  return "ctx";
+}
 
 /**
  * 审批决定的四种归宿。**超时和未决必须和"拒绝"分开显示** ——
@@ -49,6 +66,7 @@ function Empty({ children }: { children: ReactNode }) {
 export default function ArtifactRail({
   answers,
   todos,
+  fileChanges = [],
   approvals,
   sessionId,
   model,
@@ -58,6 +76,8 @@ export default function ArtifactRail({
   /** 本会话里 Agent 给出的正文，按先后顺序。 */
   answers: string[];
   todos: RailTodo[];
+  /** Agent 本会话改过的文件（含 diff）。 */
+  fileChanges?: IvyeaFileChange[];
   approvals: RailApproval[];
   sessionId: string;
   model?: string;
@@ -73,8 +93,21 @@ export default function ArtifactRail({
     [answers],
   );
 
+  // 「文件」按路径去重（同一个文件改三次算一个文件）；「改动」数的是改动次数。
+  const files = useMemo(() => {
+    const by = new Map<string, IvyeaFileChange[]>();
+    for (const c of fileChanges) {
+      const list = by.get(c.path) || [];
+      list.push(c);
+      by.set(c.path, list);
+    }
+    return [...by.entries()].map(([path, list]) => ({ path, list }));
+  }, [fileChanges]);
+
   const counts: Record<TabKey, number> = {
     report: answers.filter((a) => a.trim()).length,
+    file: files.length,
+    diff: fileChanges.length,
     todo: todos.length,
     approval: approvals.length,
     session: 0,
@@ -147,6 +180,57 @@ export default function ArtifactRail({
                     <MarkdownReport text={report} />
                   </div>
                 </>
+              )
+          )}
+
+          {open === "file" && (
+            files.length === 0
+              ? <Empty>这一会话 Agent 还没有改动过文件。写入或编辑之后，动过的文件会列在这里。</Empty>
+              : (
+                <ul className="cr-files">
+                  {files.map((f) => {
+                    const name = f.path.split(/[\\/]/).pop() || f.path;
+                    const last = f.list[f.list.length - 1];
+                    return (
+                      <li key={f.path} title={f.path}>
+                        <span className={"cr-file-act act-" + last.action}>
+                          {ACTION_LABEL[last.action] || last.action}
+                        </span>
+                        <span className="cr-file-name">{name}</span>
+                        {f.list.length > 1 && <em>改 {f.list.length} 次</em>}
+                        <span className="cr-file-path">{f.path}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )
+          )}
+
+          {open === "diff" && (
+            fileChanges.length === 0
+              ? <Empty>还没有改动。Agent 写入或编辑文件后，逐条的前后对比会显示在这里。</Empty>
+              : (
+                <div className="cr-diffs">
+                  {fileChanges.map((c, i) => (
+                    <div className="cr-diff" key={i}>
+                      <div className="cr-diff-head" title={c.path}>
+                        <span className={"cr-file-act act-" + c.action}>
+                          {ACTION_LABEL[c.action] || c.action}
+                        </span>
+                        <span className="cr-file-name">{c.path.split(/[\\/]/).pop()}</span>
+                        {/* 片段级 diff 的行号是**片段内**的相对行号，不标出来会被
+                            当成文件行号去对，对不上就会以为显示错了 */}
+                        {c.scope === "fragment" && <em>仅被替换的片段</em>}
+                      </div>
+                      <pre className="cr-diff-body scroll-thin">
+                        {c.diff.split("\n").map((line, j) => (
+                          <div key={j} className={"dl dl-" + diffLineKind(line)}>{line || " "}</div>
+                        ))}
+                      </pre>
+                      {c.truncated && <div className="cr-diff-cut">改动过大，diff 已截断</div>}
+                    </div>
+                  ))}
+                </div>
               )
           )}
 

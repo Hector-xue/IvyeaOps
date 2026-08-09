@@ -25,11 +25,14 @@ the defaults.
 from __future__ import annotations
 
 import os
+import logging
 import shutil
 import sys
 from pathlib import Path
 
 from app.core.config import settings
+
+logger = logging.getLogger("ivyea.core.skill_paths")
 
 
 # --- Roots -----------------------------------------------------------------
@@ -75,6 +78,14 @@ AUDIT_LOG_FILE: Path = STUDIO_ROOT / "audit.log"
 # temp _MEIPASS extraction dir, so parents[3] is wrong — the skills are shipped
 # next to IvyeaOpsServer.exe instead. Resolve relative to the exe when frozen.
 def _bundled_skills_root() -> Path:
+    # 可用 IVYEA_OPS_BUNDLED_SKILLS 指向别处：打包方想换一套自带技能时用得上，
+    # 测试则指向一个空目录，让"播种"变成 no-op —— 否则每个用 tmp 目录当
+    # SKILLS_ROOT 的测试都会被仓库自带技能污染（"期望 3 个，实际 7 个"）。
+    # 必须是环境变量而不是 monkeypatch 模块属性：多个测试 fixture 会
+    # importlib.reload 这个模块，reload 会把模块属性打回原值，环境变量才留得住。
+    override = os.getenv("IVYEA_OPS_BUNDLED_SKILLS")
+    if override:
+        return Path(override)
     if getattr(sys, "frozen", False):
         return (Path(sys.executable).resolve().parent / "skills")
     return (Path(__file__).resolve().parents[3] / "skills")
@@ -102,7 +113,7 @@ def seed_bundled_skills() -> int:
             shutil.copytree(skill_md.parent, dest)
             seeded += 1
         except Exception:
-            pass
+            logger.debug("shutil.copytree 失败（旁路，已忽略）", exc_info=True)
     return seeded
 
 
@@ -155,7 +166,7 @@ def _migrate_one(legacy: Path, target: Path) -> int:
         try:
             (target / _MIGRATED_MARKER).write_text(str(legacy), encoding="utf-8")
         except OSError:
-            pass
+            logger.debug("(target / _MIGRATED_MARKER).write_text(str(l 失败（旁路，已忽略）", exc_info=True)
     return copied
 
 
@@ -193,7 +204,7 @@ def ensure_studio_dirs() -> None:
         for name, n in moved.items():
             log.info("migrated %d %s entrie(s) from the legacy ~/.hermes layout", n, name)
     except Exception:  # noqa: BLE001
-        pass
+        logger.debug("migrate_legacy_layout 失败（旁路，已忽略）", exc_info=True)
 
     STUDIO_ROOT.mkdir(parents=True, exist_ok=True)
     SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -204,7 +215,7 @@ def ensure_studio_dirs() -> None:
         if n:
             log.info("seeded %d bundled skill(s) into %s", n, SKILLS_ROOT)
     except Exception:
-        pass
+        logger.debug("seed_bundled_skills 失败（旁路，已忽略）", exc_info=True)
 
 
 def studio_paths_summary() -> dict[str, str]:

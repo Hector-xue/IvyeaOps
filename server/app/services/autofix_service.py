@@ -21,6 +21,7 @@ from __future__ import annotations
 from app.core.proc import no_window_kwargs
 
 import asyncio
+import logging
 import shutil
 import subprocess
 import sys
@@ -30,6 +31,8 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger("ivyea.services.autofix_service")
 
 # repo root: server/app/services/autofix_service.py -> parents[3] == IvyeaOps/
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -90,13 +93,14 @@ _lock = asyncio.Lock()
 def _git(*args: str, cwd: Path | str | None = None, timeout: int = 60) -> subprocess.CompletedProcess:
     # Resolve REPO_ROOT at call time (not as a default arg, which binds once at
     # definition) so tests can repoint REPO_ROOT and never touch the real repo.
-    return subprocess.run(
+    from app.core import proc as _proc
+    return _proc.run(
         ["git", *args],
         cwd=str(cwd if cwd is not None else REPO_ROOT),
         capture_output=True,
         text=True,
         timeout=timeout,
-        **no_window_kwargs(),
+        audit_module="autofix", audit_action="git",
     )
 
 
@@ -195,7 +199,7 @@ async def _run_diagnose(job: Job) -> None:
             try:
                 await asyncio.wait_for(proc.communicate(), timeout=5)
             except Exception:
-                pass
+                logger.debug("asyncio.wait_for 失败（旁路，已忽略）", exc_info=True)
             raise RuntimeError(f"修复超时（>{_DIAGNOSE_TIMEOUT_S}s），已终止")
 
         raw = (out or b"").decode("utf-8", errors="replace")
@@ -238,13 +242,15 @@ def _cleanup_worktree(job: Job) -> None:
         try:
             _git("branch", "-D", job.branch)
         except Exception:
-            pass
+            logger.debug("_git 失败（旁路，已忽略）", exc_info=True)
         job.branch = ""
 
 
 # ── apply ──────────────────────────────────────────────────────────────────
 async def apply(job_id: str) -> Dict[str, Any]:
     """Apply the reviewed diff to the real working tree and commit it."""
+    from app.core import audit as _audit
+    _audit.record("autofix", "apply", target=job_id)
     global _active
     job = _require(job_id)
     if job.status != "diagnosed":
@@ -318,6 +324,8 @@ def restart(job_id: str) -> Dict[str, Any]:
     The restart kills *this* process, so we spawn a fully detached shell that
     sleeps briefly (letting the HTTP response flush) then restarts the unit.
     """
+    from app.core import audit as _audit
+    _audit.record("autofix", "restart", target=job_id)
     job = _require(job_id)
     if job.status not in ("applied", "failed"):
         raise RuntimeError(f"当前状态 {job.status} 无法重启")
@@ -343,6 +351,8 @@ def restart(job_id: str) -> Dict[str, Any]:
 # ── rollback ───────────────────────────────────────────────────────────────
 async def rollback(job_id: str) -> Dict[str, Any]:
     """Revert an applied fix to the pre-apply SHA, rebuild if needed."""
+    from app.core import audit as _audit
+    _audit.record("autofix", "rollback", target=job_id)
     job = _require(job_id)
     if not job.pre_sha:
         raise RuntimeError("没有可回滚的提交记录")
@@ -359,6 +369,8 @@ async def rollback(job_id: str) -> Dict[str, Any]:
 
 # ── reject / clear ─────────────────────────────────────────────────────────
 def reject(job_id: str) -> Dict[str, Any]:
+    from app.core import audit as _audit
+    _audit.record("autofix", "reject", target=job_id)
     global _active
     job = _require(job_id)
     _cleanup_worktree(job)

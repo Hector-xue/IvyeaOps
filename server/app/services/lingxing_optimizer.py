@@ -18,6 +18,7 @@ is deterministic and auditable — the LLM only reviews, it doesn't invent chang
 from __future__ import annotations
 
 import asyncio
+import logging
 import json
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -26,6 +27,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from app.core import hub_settings as _hs
 from app.services import lingxing_data as _data
 from app.services import lingxing_service as _gw
+
+logger = logging.getLogger("ivyea.services.lingxing_optimizer")
 
 _REPORT_TTL_S = 7 * 86400
 
@@ -116,7 +119,7 @@ async def _campaign_budgets(sid: int) -> Dict[str, Dict[str, Any]]:
             m[str(c.get("campaign_id"))] = {"daily_budget": _f(c.get("daily_budget")),
                                             "state": c.get("state"), "name": c.get("name")}
     except _gw.LingXingError:
-        pass
+        logger.debug("res = await _data.fetch_dataset 失败（旁路，已忽略）", exc_info=True)
     return m
 
 
@@ -207,7 +210,7 @@ async def _recent_touched(sid: int) -> set:
             if datetime.fromisoformat(t.get("created_at")) < cutoff:
                 continue
         except Exception:
-            pass
+            logger.debug("if datetime.fromisoformat 失败（旁路，已忽略）", exc_info=True)
         tid = intent.get("target_id") or intent.get("keyword_text")
         if tid:
             touched.add(str(tid))
@@ -236,7 +239,7 @@ async def run_store(sid: int,
             try:
                 progress(phase, min(state["done"], total_steps), total_steps)
             except Exception:  # noqa: BLE001 — progress must never break the run
-                pass
+                logger.debug("progress 失败（旁路，已忽略）", exc_info=True)
 
     margin = await _store_margin(sid)
     tick("读取店铺毛利")

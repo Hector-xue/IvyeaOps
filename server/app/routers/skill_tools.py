@@ -7,11 +7,12 @@ Endpoints:
 from __future__ import annotations
 
 import asyncio
+import logging
 import contextlib
 import json
 import re
 import time
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -19,6 +20,8 @@ from pydantic import BaseModel, Field
 
 from app.core.security import require_user
 from app.services import skill_repo
+
+logger = logging.getLogger("ivyea.routers.skill_tools")
 
 router = APIRouter(dependencies=[Depends(require_user)])
 
@@ -478,7 +481,7 @@ async def run_tool(
                 )
                 run_id = rec["id"]
             except Exception:
-                pass
+                logger.debug("skill_runs.record_run 失败（旁路，已忽略）", exc_info=True)
 
             if not err:
                 yield f'data: {json.dumps({"type": "done", "provider": provider_used or "ivyea-agent", "elapsed_s": elapsed, "run_id": run_id}, ensure_ascii=False)}\n\n'
@@ -493,7 +496,7 @@ async def run_tool(
                     error=str(exc),
                 )
             except Exception:
-                pass
+                logger.debug("skill_runs.record_run 失败（旁路，已忽略）", exc_info=True)
 
     return StreamingResponse(
         generator(),

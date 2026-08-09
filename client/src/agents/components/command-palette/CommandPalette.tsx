@@ -48,11 +48,13 @@ const PAGE_LABELS: Record<Page, string> = {
   branches: 'Branches',
 };
 
-type CommandPaletteProps = {
+export type CommandPaletteProps = {
   selectedProject: Project | null;
   onStartNewChat: (project: Project) => void;
   onOpenSettings: (tab?: string) => void;
   onShowTab?: (tab: AppTab) => void;
+  /** 由 CommandPaletteHost 传入：本体是被 Cmd+K 拉起来的，挂上就该是打开状态。 */
+  defaultOpen?: boolean;
 };
 
 const NAV_TABS: Array<{ id: AppTab; label: string; keywords: string }> = [
@@ -68,8 +70,9 @@ export default function CommandPalette({
   onStartNewChat,
   onOpenSettings,
   onShowTab,
+  defaultOpen = false,
 }: CommandPaletteProps) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(defaultOpen);
   const [search, setSearch] = React.useState('');
   const [pages, setPages] = React.useState<Page[]>([]);
   const { toggleDarkMode } = useTheme();

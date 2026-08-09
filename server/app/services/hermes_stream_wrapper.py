@@ -28,6 +28,8 @@ import os
 import sys
 from pathlib import Path
 
+logger = logging.getLogger("ivyea.services.hermes_stream_wrapper")
+
 # ── Path bootstrap (mirrors hermes_cli/main.py) ────────────────────────────
 _HERMES_ROOT = Path.home() / ".hermes" / "hermes-agent"
 if str(_HERMES_ROOT) not in sys.path:
@@ -64,7 +66,7 @@ def main() -> int:
             from tools.mcp_tool import discover_mcp_tools
             discover_mcp_tools()
         except Exception:
-            pass  # MCP unavailable — agent continues with no tools
+            logger.debug("discover_mcp_tools 失败（旁路，已忽略）", exc_info=True)
 
         cfg = load_config()
         model_cfg = cfg.get("model") or {}

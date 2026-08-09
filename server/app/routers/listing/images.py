@@ -12,7 +12,6 @@ import json
 import logging
 import mimetypes
 import re
-from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -28,6 +27,8 @@ from .jobs import JobHandle, start_job
 from .visuals import (
     ReviewRenderReq, _persist_shot_plan, review_render_core,
 )
+
+logger = logging.getLogger("ivyea.routers.listing.images")
 
 router = APIRouter()
 
@@ -225,7 +226,8 @@ async def _submit_generation(prompt: str, size: str, ref_urls: list[str],
     attempts = [{**base_body, "input_fidelity": "high"}, base_body] if ref_urls else [base_body]
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(45, connect=20)) as client:
-        logging.info(f"[generate-image] slot={slot} ref_urls={len(ref_urls)} fidelity={'high' if ref_urls else 'n/a'}")
+        logger.info("[generate-image] slot=%s ref_urls=%s fidelity=%s",
+                    slot, len(ref_urls), "high" if ref_urls else "n/a")
         resp = None
         for idx, attempt in enumerate(attempts):
             resp = await client.post(
@@ -235,7 +237,8 @@ async def _submit_generation(prompt: str, size: str, ref_urls: list[str],
             )
             if resp.status_code == 200:
                 break  # accepted (with or without high fidelity)
-            logging.info(f"[generate-image] attempt {idx} -> HTTP {resp.status_code}: {resp.text[:160]}")
+            logger.info("[generate-image] attempt %s -> HTTP %s: %s",
+                        idx, resp.status_code, resp.text[:160])
             # The plain retry exists only for providers that reject the optional
             # input_fidelity field. Retrying 5xx/rate-limit errors with the same
             # payload just doubles the request time.

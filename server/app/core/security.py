@@ -178,12 +178,20 @@ def require_module(module_key: str):
     granted users reach the module's API while others get 403."""
 
     def _dep(
+        _user: str = Depends(require_user),
         session: Optional[str] = Cookie(default=None, alias=settings.session_cookie_name),
     ) -> str:
         # No cookie → trust an upstream require_user override (test fixtures),
         # matching require_admin's behavior.
+        #
+        # 这里必须走 Depends(require_user) 而不是直接 `return require_user(session)`：
+        # 直接调用是普通的 Python 函数调用，**绕过 FastAPI 的 dependency_overrides**，
+        # 于是上面这句注释描述的行为从来没有真的发生过 —— 测试里 override 了
+        # require_user 也没用，请求照样 401。app/tests 里 61 项常年红着就是这个原因
+        # （而它们不在 CI 里，所以没人知道）。
+        # 生产行为不变：没有 cookie 时 require_user 自己就会抛 401。
         if not session:
-            return require_user(session)
+            return _user
         cu = _resolve_session_principal(session)
         current_user.set(cu)
         if cu.get("role") == "admin":

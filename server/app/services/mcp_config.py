@@ -7,7 +7,6 @@ shape, handles scopes, and keeps approval state consistent — safer than hand
 """
 from __future__ import annotations
 
-from app.core.proc import no_window_kwargs
 
 import json
 import os
@@ -68,10 +67,11 @@ def list_servers() -> list[dict[str, Any]]:
 
 def _run_mcp(args: list[str], action: str) -> None:
     try:
-        cp = subprocess.run(
+        from app.core import proc as _proc
+        cp = _proc.run(
             [_claude_bin(), "mcp", *args],
             capture_output=True, text=True, timeout=_TIMEOUT_S,
-            **no_window_kwargs(),
+            audit_module="mcp", audit_action=action,
         )
     except subprocess.TimeoutExpired as e:
         raise MCPError(f"{action}超时") from e

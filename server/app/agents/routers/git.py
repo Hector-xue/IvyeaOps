@@ -10,6 +10,7 @@ from __future__ import annotations
 from app.core.proc import no_window_kwargs
 
 import asyncio
+import logging
 import os
 import re
 from typing import Optional
@@ -20,6 +21,8 @@ from pydantic import BaseModel
 
 from app.agents import repos
 from app.agents.db import db_conn
+
+logger = logging.getLogger("ivyea.agents.routers.git")
 
 router = APIRouter()
 
@@ -138,7 +141,7 @@ async def _current_branch(project_path: str) -> str:
         if out.strip():
             return out.strip()
     except _GitError:
-        pass
+        logger.debug("out = await _git 失败（旁路，已忽略）", exc_info=True)
     return (await _git(["rev-parse", "--abbrev-ref", "HEAD"], project_path)).strip()
 
 
@@ -445,7 +448,7 @@ async def initial_commit(body: _ProjBody):
             await _git(["rev-parse", "HEAD"], pp)
             return _err(400, error="Repository already has commits. Use regular commit instead.")
         except _GitError:
-            pass
+            logger.debug("_git 失败（旁路，已忽略）", exc_info=True)
         await _git(["add", "."], pp)
         out = await _git(["commit", "-m", "Initial commit"], pp)
         return {"success": True, "output": out, "message": "Initial commit created successfully"}
@@ -564,7 +567,7 @@ async def fetch(body: _ProjBody):
         try:
             remote_name = (await _git(["rev-parse", "--abbrev-ref", f"{branch}@{{upstream}}"], pp)).strip().split("/")[0]
         except _GitError:
-            pass
+            logger.debug("remote_name = 失败（旁路，已忽略）", exc_info=True)
         _validate_remote(remote_name)
         out = await _git(["fetch", remote_name], pp)
         return {"success": True, "output": out or "Fetch completed successfully", "remoteName": remote_name}
@@ -587,7 +590,7 @@ async def pull(body: _ProjBody):
             remote_name = tracking.split("/")[0]
             remote_branch = "/".join(tracking.split("/")[1:])
         except _GitError:
-            pass
+            logger.debug("tracking = 失败（旁路，已忽略）", exc_info=True)
         _validate_remote(remote_name); _validate_branch(remote_branch)
         out = await _git(["pull", remote_name, remote_branch], pp)
         return {"success": True, "output": out or "Pull completed successfully",
@@ -618,7 +621,7 @@ async def push(body: _ProjBody):
             remote_name = tracking.split("/")[0]
             remote_branch = "/".join(tracking.split("/")[1:])
         except _GitError:
-            pass
+            logger.debug("tracking = 失败（旁路，已忽略）", exc_info=True)
         _validate_remote(remote_name); _validate_branch(remote_branch)
         out = await _git(["push", remote_name, remote_branch], pp)
         return {"success": True, "output": out or "Push completed successfully",
@@ -746,7 +749,7 @@ async def generate_commit_message(body: _GenMsgBody):
                 if out:
                     diff_context += f"\n--- {rel} ---\n{out}"
             except Exception:
-                pass
+                logger.debug("_ 失败（旁路，已忽略）", exc_info=True)
         if not diff_context.strip():
             for f in body.files:
                 try:
@@ -758,7 +761,7 @@ async def generate_commit_message(body: _GenMsgBody):
                         with open(fp, "r", encoding="utf-8", errors="replace") as fh:
                             diff_context += f"\n--- {rel} (new file) ---\n{fh.read()[:1000]}\n"
                 except Exception:
-                    pass
+                    logger.debug("_ 失败（旁路，已忽略）", exc_info=True)
         message = await _generate_with_ai(body.files, diff_context, pp)
         return {"message": message}
     except Exception as e:

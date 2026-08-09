@@ -8,7 +8,10 @@ import type {
   ProviderModelsDefinition,
 } from "../../../../types/app";
 import SessionProviderLogo from "../../../llm-logo-provider/SessionProviderLogo";
-import { NextTaskBanner } from "../../../task-master";
+// **直接引到具体文件，不要走 task-master 的桶文件**：桶把 TaskMasterPanel
+// 也一并导出，从桶里取任何一个东西都会把整个任务面板（约 84 kB）拽回首屏块，
+// MainContent 那边的 lazy 就白做了。
+import NextTaskBanner from "../../../task-master/view/NextTaskBanner";
 import {
   Dialog,
   DialogTrigger,

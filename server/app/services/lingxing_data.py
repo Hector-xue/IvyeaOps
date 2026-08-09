@@ -12,12 +12,14 @@ Adding a dataset = one registry entry; no panel code changes.
 from __future__ import annotations
 
 import hashlib
+import logging
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from app.core import hub_settings as _hs
 from app.services import lingxing_service as _gw
+
+logger = logging.getLogger("ivyea.services.lingxing_data")
 
 # Default cache freshness (seconds). Panels can force-refresh.
 _DEFAULT_TTL_S = 1800
@@ -269,7 +271,7 @@ def _cache_put(dataset: str, ph: str, params: Dict[str, Any], payload: Any) -> s
         finally:
             conn.close()
     except Exception:
-        pass
+        logger.debug("_gw.connect 失败（旁路，已忽略）", exc_info=True)
     return ts
 
 

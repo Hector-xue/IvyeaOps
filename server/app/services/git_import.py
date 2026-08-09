@@ -41,7 +41,6 @@ import httpx
 from fastapi import HTTPException
 from pydantic import BaseModel
 
-from app.core.skill_paths import SKILLS_ROOT
 from app.services.skill_repo import (
     _is_under,
     _resolved_skills_root,

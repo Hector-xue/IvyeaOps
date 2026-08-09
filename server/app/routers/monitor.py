@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import logging
 import subprocess
 import sys
 import time
@@ -137,7 +138,7 @@ def _disk(mount: str | None = None) -> DiskInfo:
                                 total_hw = sectors * 512
                     break
     except OSError:
-        pass
+        logger.debug("line.split 失败（旁路，已忽略）", exc_info=True)
     pct_hw = 100.0 * d.used / total_hw if total_hw else d.percent
     return DiskInfo(
         total=d.total,
@@ -232,8 +233,9 @@ def services(_user: str = Depends(require_user)) -> List[ServiceStatus]:
         return out
     for name in _WATCHED_SERVICES:
         try:
-            r = subprocess.run(
-                ["systemctl", "is-active", f"{name}.service"],
+            from app.core import proc as _proc
+            r = _proc.run(   # audit=False：面板每次刷新都会跑，记了只会淹掉真正的操作
+                ["systemctl", "is-active", f"{name}.service"], audit=False,
                 capture_output=True,
                 text=True,
                 timeout=2,
@@ -265,8 +267,9 @@ def logs(_user: str = Depends(require_user), n: int = 20) -> dict:
     if _WINDOWS:
         return {"lines": [], "note": "nginx 访问日志为 Linux 部署专用，Windows 不适用。"}
     try:
-        r = subprocess.run(
-            ["tail", "-n", str(n), "/var/log/nginx/access.log"],
+        from app.core import proc as _proc
+        r = _proc.run(   # audit=False：同上，只读且高频
+            ["tail", "-n", str(n), "/var/log/nginx/access.log"], audit=False,
             capture_output=True,
             text=True,
             timeout=2,
@@ -507,9 +510,11 @@ def stop_process(body: ProcessAction, _user: str = Depends(require_user)) -> dic
     """Stop a process by PID or a systemd service by name."""
     if body.service:
         try:
-            r = subprocess.run(
+            from app.core import proc as _proc
+            r = _proc.run(
                 ["systemctl", "stop", f"{body.service}.service"],
                 capture_output=True, text=True, timeout=10,
+                audit_module="server", audit_action="service.stop",
             )
             if r.returncode != 0:
                 return {"ok": False, "error": r.stderr.strip() or "stop failed"}
@@ -555,6 +560,8 @@ def start_process(body: ProcessAction, _user: str = Depends(require_user)) -> di
 import sqlite3 as _sqlite3
 from pathlib import Path as _Path
 from datetime import datetime as _datetime, timedelta as _timedelta, timezone as _timezone
+
+logger = logging.getLogger("ivyea.routers.monitor")
 
 # Token-usage DB / session paths are read from hub_settings (External
 # Integrations). Each helper returns a Path that *might* exist; callers
@@ -674,7 +681,7 @@ def _scan_claude_sessions(since: float) -> list:
                         if not model and msg.get("model"):
                             model = msg["model"]
                 except Exception:
-                    pass
+                    logger.debug("_json.loads 失败（旁路，已忽略）", exc_info=True)
         if session_input > 0 or session_output > 0 or session_cache_read > 0 or session_cache_write > 0:
             results.append({
                 "ts": ts,
@@ -1067,7 +1074,7 @@ def token_usage(_user: str = Depends(require_user)) -> dict:
                              "status": "from-archive", "sessions": 0,
                              "total_tokens": tok, "credits": 0})
     except Exception:
-        pass
+        logger.debug("backfill_sources: dict = {} 失败（旁路，已忽略）", exc_info=True)
 
     # Format output
     def _to_list(m, key_name):

@@ -7,6 +7,7 @@ store. The deliverable is a white-hat, on-site-only Amazon launch playbook.
 from __future__ import annotations
 
 import asyncio
+import logging
 import json
 import sqlite3
 import time
@@ -17,9 +18,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from app.core.config import settings
 from app.core.security import require_user
 from app.services import sorftime_service, playbook_synthesis_service
+
+logger = logging.getLogger("ivyea.routers.playbook")
 
 router = APIRouter()
 
@@ -267,7 +269,7 @@ async def _stream_synthesis(
             try:
                 await task
             except (asyncio.CancelledError, Exception):
-                pass
+                logger.debug("task 失败（旁路，已忽略）", exc_info=True)
 
 
 async def _run(req: PlaybookReq) -> AsyncGenerator[str, None]:

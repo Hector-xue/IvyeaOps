@@ -21,6 +21,7 @@ from __future__ import annotations
 from app.core.proc import no_window_kwargs
 
 import asyncio
+import logging
 import json
 import re
 import uuid
@@ -33,6 +34,8 @@ from app.core import hub_settings as _hs
 from app.services import ai_synthesis_service as _ai
 from app.services import lingxing_data as _data
 from app.services import lingxing_service as _gw
+
+logger = logging.getLogger("ivyea.services.lingxing_operate")
 
 PUT_SP_CAMPAIGN_ROUTE = "/basicOpen/adReport/manage/putSpCampaign"
 _RISK_THRESHOLD = 0.5
@@ -194,7 +197,7 @@ async def send_alert(text: str) -> None:
         async with httpx.AsyncClient(timeout=8) as c:
             await c.post(url, json={"msg_type": "text", "content": {"text": f"[领星操作] {text}"}})
     except Exception:
-        pass
+        logger.debug("c.post 失败（旁路，已忽略）", exc_info=True)
 
 
 # --- operate switch ---------------------------------------------------------
@@ -227,7 +230,7 @@ def _recently_touched_sync(sid: Any, days: int) -> Dict[str, str]:
             if datetime.fromisoformat(ts) < cutoff:
                 continue
         except Exception:
-            pass
+            logger.debug("if datetime.fromisoformat 失败（旁路，已忽略）", exc_info=True)
         k = str(intent.get("target_id") or intent.get("keyword_text") or "")
         if k:
             out[k] = ts
@@ -462,7 +465,7 @@ async def _refresh_live_before(intent: Dict[str, Any]) -> None:
             intent["change_pct"] = round(
                 (float(change[nf]) - float(before[nf])) / float(before[nf]) * 100, 1)
         except (TypeError, ValueError, ZeroDivisionError):
-            pass
+            logger.debug("intent 失败（旁路，已忽略）", exc_info=True)
 
 
 async def _process_ticket(tid: str) -> None:

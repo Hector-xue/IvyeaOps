@@ -11,17 +11,21 @@ self-sufficiency is tracked for before P9 cutover.
 from __future__ import annotations
 
 import os
+import logging
 import posixpath
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.agents import repos, synchronizer
 from app.agents.db import db_conn
+from app.agents.routers._actor import actor_is_admin, bind_actor
 
-router = APIRouter()
+logger = logging.getLogger("ivyea.agents.routers.projects")
+
+router = APIRouter(dependencies=[Depends(bind_actor)])
 
 _DEFAULT_PAGE = 20
 _MAX_PAGE = 200
@@ -98,7 +102,7 @@ def _sync() -> None:
     try:
         synchronizer.maybe_synchronize()
     except Exception:
-        pass
+        logger.debug("synchronizer.maybe_synchronize 失败（旁路，已忽略）", exc_info=True)
 
 
 @router.get("")
@@ -174,6 +178,13 @@ def _validate_workspace_path(requested: str) -> str:
             if forbidden == "/var" and (absolute.startswith("/var/tmp") or absolute.startswith("/var/folders")):
                 continue
             raise HTTPException(400, f"Cannot create workspace in system directory: {forbidden}")
+
+    # 上面这段"随便哪儿都行、只挡系统目录"是给**管理员**的（Windows 上要能在
+    # 别的盘建项目）。普通成员即使被授予 agents 板块，也只能在工作区根之内建
+    # —— 否则他可以把项目建到任意目录，再借文件接口读写那整棵树，等于绕开
+    # files._resolve_in_project 的项目内包含检查。
+    if not actor_is_admin() and absolute != root and not absolute.startswith(root + "/"):
+        raise HTTPException(403, "只有管理员可以在工作区根目录以外创建项目")
     return absolute
 
 
@@ -369,9 +380,9 @@ async def delete_project(project_id: str, force: bool = Query(False)) -> dict:
                 try:
                     os.unlink(jp if os.path.isabs(jp) else os.path.abspath(jp))
                 except FileNotFoundError:
-                    pass
+                    logger.debug("os.unlink 失败（旁路，已忽略）", exc_info=True)
                 except OSError:
-                    pass
+                    logger.debug("os.unlink 失败（旁路，已忽略）", exc_info=True)
         repos.delete_sessions_by_project_path(conn, row["project_path"])
         repos.delete_project_by_id(conn, project_id)
     return {"success": True}

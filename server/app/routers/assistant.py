@@ -6,6 +6,7 @@ no filesystem. Safe to expose to registered (non-admin) users.
 from __future__ import annotations
 
 import asyncio
+import logging
 import base64
 import json
 import time
@@ -28,6 +29,8 @@ from app.services.ai_synthesis_service import (
     _deepseek_key,
     assistant_text_cfg,
 )
+
+logger = logging.getLogger("ivyea.routers.assistant")
 
 router = APIRouter()
 
@@ -273,7 +276,7 @@ def _persist_job(job_id: str) -> None:
         )
         _prune_job_files()
     except Exception:
-        pass  # disk persistence is a durability nicety, never fatal to the request
+        logger.debug("_JOBS_DIR.mkdir 失败（旁路，已忽略）", exc_info=True)
 
 
 def _load_job(job_id: str) -> dict | None:
@@ -289,7 +292,7 @@ def _prune_job_files() -> None:
         for p in files[:-120]:  # keep the 120 most recent on disk
             p.unlink(missing_ok=True)
     except Exception:
-        pass
+        logger.debug("sorted 失败（旁路，已忽略）", exc_info=True)
 
 
 def _sweep_orphaned_jobs() -> None:
@@ -308,7 +311,7 @@ def _sweep_orphaned_jobs() -> None:
                 j["error"] = "服务重启导致任务中断，请重试"
                 p.write_text(json.dumps(j, ensure_ascii=False), encoding="utf-8")
     except Exception:
-        pass
+        logger.debug("try 失败（旁路，已忽略）", exc_info=True)
 
 
 _sweep_orphaned_jobs()
@@ -345,7 +348,7 @@ def _upstream_message(body: str) -> str:
             if j.get("message"):
                 return str(j["message"])
     except Exception:
-        pass
+        logger.debug("json.loads 失败（旁路，已忽略）", exc_info=True)
     return body
 
 

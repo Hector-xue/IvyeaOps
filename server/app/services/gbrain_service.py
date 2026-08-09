@@ -7,14 +7,17 @@ wrapper.
 from __future__ import annotations
 
 import os
+import logging
 import re
 import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from app.core.proc import no_window_kwargs
+
+logger = logging.getLogger("ivyea.services.gbrain_service")
 
 
 def _brain_root() -> Path:
@@ -261,7 +264,7 @@ def _ollama_models(base: str = "http://127.0.0.1:11434") -> list[str]:
         if r.status_code < 400:
             return [str(m.get("name", "")) for m in (r.json().get("models") or [])]
     except Exception:
-        pass
+        logger.debug("httpx.get 失败（旁路，已忽略）", exc_info=True)
     return []
 
 
@@ -331,7 +334,7 @@ def ensure_ready() -> dict[str, Any]:
     try:
         embed_model = str(json.loads(_gbrain_config_path().read_text(encoding="utf-8")).get("embedding_model") or "")
     except Exception:
-        pass
+        logger.debug("str 失败（旁路，已忽略）", exc_info=True)
     if embed_model.startswith("ollama:"):
         result["embed_ready"] = True
     else:
@@ -343,7 +346,7 @@ def ensure_ready() -> dict[str, Any]:
                 actions.append("检测到 Ollama，已自动启用本地语义检索（nomic-embed-text）")
                 result["embed_ready"] = True
             except Exception:
-                pass
+                logger.debug("sync_gbrain_embedding 失败（旁路，已忽略）", exc_info=True)
         elif models:
             result["hint"] = ("Ollama 已运行但未拉取 embedding 模型；执行 "
                               "`ollama pull nomic-embed-text` 后即可自动启用语义检索。")
@@ -386,7 +389,7 @@ def overview() -> dict[str, Any]:
             elif embed_model:
                 embed_provider = "openai"  # bare model name = openai default
     except Exception:
-        pass
+        logger.debug("_P.home 失败（旁路，已忽略）", exc_info=True)
     # Configured if a non-openai provider is set, OR openai with a key present.
     embed_configured = bool(
         embed_provider and (embed_provider != "openai" or os.environ.get("OPENAI_API_KEY"))
@@ -459,7 +462,7 @@ def list_files() -> dict[str, Any]:
                     summary = line[:100]
                     break
         except Exception:
-            pass
+            logger.debug("line.strip 失败（旁路，已忽略）", exc_info=True)
         # Category = top-level directory
         category = rel_parts[0] if len(rel_parts) > 1 else "root"
         files.append({

@@ -10,12 +10,15 @@ from __future__ import annotations
 from app.core.proc import no_window_kwargs
 
 import asyncio
+import logging
 import re
 
 from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.agents.db import db_conn
+
+logger = logging.getLogger("ivyea.agents.routers.user")
 
 router = APIRouter()
 
@@ -90,7 +93,7 @@ async def update_git_config(body: GitConfigBody) -> dict:
             )
             await proc.communicate()
         except Exception:
-            pass
+            logger.debug("proc = await asyncio.create_subprocess_exec 失败（旁路，已忽略）", exc_info=True)
     return {"success": True, "gitName": body.gitName, "gitEmail": body.gitEmail}
 
 

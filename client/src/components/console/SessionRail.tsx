@@ -24,7 +24,8 @@ import {
 const DEFAULT_WS = "默认工作区";
 const OPEN_KEY = "ivyea-ops.console.ws-open";
 const SRC_KEY = "ivyea-ops.console.src-filter";
-const PAGE = 30;
+// 弹性区大约能装十几条。给 30 只会让"加载更多"永远不出现、滚动条永远很长。
+const PAGE = 15;
 
 /** 来源筛选的可选项。"" = 全部。 */
 const SOURCE_FILTERS: { key: "" | ConsoleSource; label: string }[] = [
@@ -188,6 +189,11 @@ export default function SessionRail({
   if (collapsed) return null;
   if (!loaded) return <div className="sb-ws-empty">载入会话…</div>;
 
+  // 有没有非任务台来源，决定要不要摆那一行筛选 chip。看的是**当前拿到的这批**
+  // 会话；筛选本身走服务端，所以这里只是"要不要给入口"。
+  const showSourceFilter = src !== "" || rows.some((r) => r.source && r.source !== "console");
+  const onlyDefaultWorkspace = spaces.length === 1 && spaces[0].name === DEFAULT_WS;
+
   const byWorkspace = (name: string) =>
     rows.filter((r) => (r.workspace || DEFAULT_WS) === name);
 
@@ -206,6 +212,12 @@ export default function SessionRail({
         onKeyDown={(e) => { if (e.key === "Escape") setQ(""); }}
       />
 
+      {/*
+        * 来源筛选只在**真的有一种以上来源**时出现。
+        * 196px 宽塞不下 4 个 chip，实测换行成 2 行；而绝大多数人只用任务台，
+        * 那两行就是纯占地方 —— 还把会话又往下推了一截。
+        */}
+      {showSourceFilter && (
       <div className="sb-src-filter">
         {SOURCE_FILTERS.map((f) => (
           <button
@@ -216,6 +228,7 @@ export default function SessionRail({
           >{f.label}</button>
         ))}
       </div>
+      )}
 
       {adding && (
         <>
@@ -247,9 +260,12 @@ export default function SessionRail({
 
       {spaces.map((ws) => {
         const items = byWorkspace(ws.name);
-        const isOpen = open[ws.name] !== false;
+        const isOpen = onlyDefaultWorkspace ? true : open[ws.name] !== false;
         return (
           <div key={ws.name} className="sb-ws-group">
+            {/* 只有「默认工作区」一个分组时，这个标题+计数+折叠箭头是纯噪音：
+                没有别的组可切，折叠它也没有意义。 */}
+            {!onlyDefaultWorkspace && (
             <button className="sb-ws-title" onClick={() => toggle(ws.name)}>
               <span className="sb-ws-caret">{isOpen ? "▾" : "▸"}</span>
               <span className="sb-ws-name" title={ws.path || undefined}>{ws.name}</span>
@@ -262,6 +278,7 @@ export default function SessionRail({
                 >✕</span>
               )}
             </button>
+            )}
 
             {isOpen && (items.length === 0 ? (
               <div className="sb-ws-empty">

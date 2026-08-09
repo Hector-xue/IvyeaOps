@@ -13,18 +13,18 @@ import json
 import mimetypes
 import os
 import re
-import stat as stat_mod
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.agents import repos
 from app.agents.db import db_conn
+from app.agents.routers._actor import actor_is_admin, bind_actor, require_admin_actor
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(bind_actor)])
 
 WORKSPACES_ROOT = os.getenv("WORKSPACES_ROOT") or os.path.expanduser("~")
 
@@ -53,15 +53,31 @@ def _project_root(project_id: str) -> str:
 
 
 def _resolve_in_project(project_root: str, target: str) -> str:
-    """Resolve a (relative or absolute) path. Relative paths resolve under the
-    project root; absolute paths are allowed anywhere so the file panel can browse
-    and open files outside the project (e.g. via the "上一级" navigation). The
-    agents board is admin-only and runs on the user's own machine — the built-in
-    terminal already grants full local filesystem access, so this is no wider a
-    boundary than what's already exposed."""
-    if os.path.isabs(target):
-        return os.path.abspath(target)
-    return os.path.abspath(os.path.join(project_root, target))
+    """把（相对或绝对）路径解析成绝对路径，并按调用者身份决定边界。
+
+    **管理员**：路径可以指到项目外面。文件面板的"上一级"导航要靠它，而管理员
+    本来就有内置终端可以访问整台机器的文件系统 —— 这里不构成新的暴露面。
+
+    **普通成员**：只能待在项目根之内。绝对路径、以及 ``../`` 爬出去的相对路径，
+    一律 403。
+
+    ——为什么要分开：这个函数原本对所有人都放行任意绝对路径，注释给的理由是
+    "the agents board is admin-only"。**这个前提已经不成立了**：main.py 用的是
+    ``require_module("agents")`` 而不是 ``require_admin``，而 permissions.py 的
+    「技术助理」预设默认就授予 agents。也就是说一个非管理员被授予该板块后，可以
+    ``GET /projects/{id}/file?filePath=/etc/shadow`` 读走整台机器上的任何文件
+    （而服务在不少装机上是 root 跑的）。把放行范围收回到"仅管理员"，既保住了
+    上面那个真实的浏览需求，又堵掉了越权读。
+    """
+    resolved = (os.path.abspath(target) if os.path.isabs(target)
+                else os.path.abspath(os.path.join(project_root, target)))
+    if actor_is_admin():
+        return resolved
+
+    root = os.path.abspath(project_root)
+    if resolved != root and not resolved.startswith(root + os.sep):
+        raise HTTPException(403, "只有管理员可以访问项目目录以外的路径")
+    return resolved
 
 
 def _validate_filename(name: str) -> None:
@@ -333,7 +349,7 @@ def _windows_drives() -> list[dict]:
     import string
     letters: list[str] = []
     try:
-        letters = [d for d in os.listdrives()]  # Python 3.12+: ['C:\\', 'D:\\', …]
+        letters = list(os.listdrives())  # Python 3.12+: ['C:\\', 'D:\\', …]
     except Exception:
         letters = []
     if not letters:
@@ -343,10 +359,10 @@ def _windows_drives() -> list[dict]:
 
 @router.get("/browse-filesystem")
 async def browse_filesystem(path: Optional[str] = Query(None)) -> dict:
-    # Directory picker for opening a project at any folder. The agents board is
-    # admin-only and runs on the user's own machine (the terminal already grants
-    # full local access), so we browse the whole filesystem — not just the home
-    # dir — which is what users need to open projects on other drives (D:\…).
+    # 给"新建项目"用的目录选择器，能浏览整个文件系统（用户要在别的盘打开项目）。
+    # 这条对**管理员**保持原样；普通成员即使被授予了 agents 板块也不该拿到一个
+    # 全盘目录浏览器 —— 那等于绕过 _resolve_in_project 的项目内包含检查去踩点。
+    require_admin_actor("浏览文件系统")
     if os.name == "nt" and path == "__drives__":
         return {"path": "__drives__", "parent": "", "isDrives": True,
                 "suggestions": _windows_drives()}
@@ -384,9 +400,10 @@ class CreateFolderBody(BaseModel):
 async def create_folder(body: CreateFolderBody) -> dict:
     if not body.path:
         raise HTTPException(400, "Path is required")
+    # 和 browse-filesystem 同一套信任模型：允许在浏览到的任何位置建项目目录，
+    # 但仅限管理员 —— 否则普通成员能在机器上任意位置创建目录。
+    require_admin_actor("在任意位置创建目录")
     target = os.path.abspath(_expand_workspace_path(body.path))
-    # Same trust model as browse-filesystem (admin-only, local machine): allow
-    # creating the project folder anywhere the user browses to, not just home.
     parent = os.path.dirname(target)
     if not os.path.exists(parent):
         raise HTTPException(404, "Parent directory does not exist")

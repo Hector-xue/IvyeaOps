@@ -14,14 +14,33 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    name: ruff (后端 lint 门禁)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # 配置在 server/ruff.toml。选的规则是"当前全仓零违规"的那批 ——
+      # 一旦变红，必然是这次改动引入的，不会有"历史债太多所以忽略它"的余地。
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: check
+          src: server
+
   server:
     name: server tests (${{ matrix.os }} · py${{ matrix.python }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # macOS 之前只在 release.yml 里被打包、从来没跑过测试 —— 也就是说
+        # "支持 macOS" 这句话一直没有任何东西在验证它。
+        os: [ubuntu-latest, windows-latest, macos-latest]
         python: ["3.9", "3.12"]
+        exclude:
+          # macos-latest 是 arm64，setup-python 上面没有 3.9 的构建。
+          # macOS 用户装的是发行版包，跟着 3.12 那栏走就够。
+          - os: macos-latest
+            python: "3.9"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -55,6 +74,76 @@ jobs:
         run: python -m pytest tests -q --timeout=120 --timeout-method=thread
         env:
           PYTHONUTF8: "1"   # Windows 中文编码护栏
+
+  # server/app/tests 单独成一个作业，原因有二：
+  #   1. 它慢一个数量级（224 项要 7 分钟，上面那批 327 项只要 20 秒），塞进矩阵
+  #      会让每个平台都多等 7 分钟；
+  #   2. 它此前**从来没进过 CI** —— 于是 require_module 绕过 dependency_overrides
+  #      的问题让它 61 项常年红着而无人知晓。单独一个作业既能挡住回归，又不拖慢
+  #      主矩阵的反馈速度。
+  # 只跑 ubuntu：这批是纯业务逻辑，跨平台风险由上面的矩阵覆盖。
+  app-tests:
+    name: server tests · app/tests (ubuntu · py3.12)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r server/requirements.txt
+          pip install pytest pytest-asyncio anyio pytest-timeout
+      - name: Test
+        working-directory: server
+        run: python -m pytest app/tests -q --timeout=180 --timeout-method=thread
+        env:
+          PYTHONUTF8: "1"
+
+  # 跨平台搬家：在 Linux 上导出备份，在 Windows 上还原并逐行核对。
+  #
+  # 为什么值得单独一个作业：这个仓库反复吃过"宣称支持某平台、却没有任何东西在
+  # 验证它"的亏（macOS 一直只打包不测试、app/tests 从没进过 CI 所以 61 项常年红）。
+  # 「换台机器数据能完整搬过去」是自托管产品最不能出错的承诺之一，而路径分隔符、
+  # 文本编码、隐藏文件这些恰恰是最容易在跨平台时悄悄坏掉的地方。
+  migrate-cross-platform:
+    name: 跨平台迁移 (Linux 导出 → Windows 还原)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r server/requirements.txt
+      - name: 造数据并导出
+        working-directory: server
+        shell: bash
+        run: python ../scripts/ci_migrate_export.py
+        env: { PYTHONUTF8: "1" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: migrate-archive
+          path: server/ci-migrate/*.zip
+          retention-days: 1
+
+  migrate-restore-windows:
+    name: 跨平台迁移 · Windows 还原
+    runs-on: windows-latest
+    needs: [migrate-cross-platform]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r server/requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: migrate-archive
+          path: server/ci-migrate
+      - name: 还原并核对
+        working-directory: server
+        shell: bash
+        run: python ../scripts/ci_migrate_verify.py
+        env: { PYTHONUTF8: "1" }
 
   client:
     name: client build + typecheck

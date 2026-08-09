@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Optional
 
 import httpx
@@ -13,10 +14,12 @@ from .ai import _call_ai, _collect_vision, _load_skill_knowledge, has_vision
 from .common import (
     _build_product_context, _copy_source, _img_datauri_from_path,
     _img_datauri_from_url, _keywords_from_text, _reference_images,
-    project_row, update_project,
+    _strip_json, project_row, update_project,
 )
 from .jobs import JobHandle, start_job
 from .scrape import _imgflow_base
+
+logger = logging.getLogger("ivyea.routers.listing.analyze")
 
 router = APIRouter()
 
@@ -139,7 +142,7 @@ async def run_analyze(project_id: str, handle: Optional[JobHandle] = None) -> di
                 if resp.status_code == 200:
                     imgflow_analysis = resp.json()
         except Exception:
-            pass
+            logger.debug("resp = await client.post 失败（旁路，已忽略）", exc_info=True)
 
     # 2. Skill-enhanced AI analysis
     progress("analyze", "AI 结构化分析中（走统一降级链）…", 0.65)
@@ -193,11 +196,11 @@ async def run_analyze(project_id: str, handle: Optional[JobHandle] = None) -> di
     if fallback_used:
         combined["fallback"] = True
         combined["warning"] = warning
-    try:
-        parsed = json.loads(content.strip().strip("```json").strip("```"))
-        combined["structured"] = parsed
-    except Exception:
-        combined["structured"] = None
+    # 这里原本是 content.strip().strip("```json").strip("```") —— str.strip(chars)
+    # 按**字符集**剥离而不是去前缀，等于把两端所有的 ` j s o n 字符都啃掉，
+    # 模型回复稍一变形就会把正文吃掉。同包已有更稳的 _strip_json（定位 {...} 区间），
+    # 直接复用。
+    combined["structured"] = _strip_json(content)
 
     progress("save", "保存分析结果…", 0.95)
     update_project(project_id, analysis_data=json.dumps(combined, ensure_ascii=False), status="analyzed")

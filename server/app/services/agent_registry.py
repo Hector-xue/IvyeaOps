@@ -25,6 +25,7 @@ from __future__ import annotations
 from app.core.proc import no_window_kwargs
 
 import os
+import logging
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -39,7 +40,11 @@ from app.services import agent_session_service as svc
 # kiro gateway on :8000 has been retired.
 # ---------------------------------------------------------------------------
 KIRO_GATEWAY_URL = os.environ.get("IVYEA_OPS_KIRO_GATEWAY", "").strip()
-KIRO_GATEWAY_KEY = os.environ.get("IVYEA_OPS_KIRO_GATEWAY_KEY", "hermes2024")
+from app.core import secret_env as _secret_env
+
+logger = logging.getLogger("ivyea.services.agent_registry")
+
+KIRO_GATEWAY_KEY = _secret_env.get("IVYEA_OPS_KIRO_GATEWAY_KEY", "hermes2024")
 
 
 def _list_kiro_models() -> list[str]:
@@ -444,7 +449,7 @@ def _claude_authenticated() -> bool:
             if json.load(f).get("oauthAccount"):
                 return True
     except Exception:
-        pass
+        logger.debug("True 失败（旁路，已忽略）", exc_info=True)
     return False
 
 
@@ -474,7 +479,7 @@ def _read_codex_models() -> list[str]:
                     if slug and slug not in models:
                         models.append(slug)
     except Exception:
-        pass
+        logger.debug("slug = 失败（旁路，已忽略）", exc_info=True)
     return models
 
 

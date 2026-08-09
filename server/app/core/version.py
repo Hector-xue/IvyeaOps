@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import subprocess
+import logging
 import sys
 from pathlib import Path
+
+logger = logging.getLogger("ivyea.core.version")
 
 
 def runtime_root() -> Path:
@@ -55,6 +58,6 @@ def app_version() -> str:
             _CACHED = value
             return value
     except Exception:
-        pass
+        logger.debug("value = 失败（旁路，已忽略）", exc_info=True)
     _CACHED = "dev"
     return _CACHED

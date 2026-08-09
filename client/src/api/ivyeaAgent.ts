@@ -353,6 +353,26 @@ export type IvyeaChatPayload = {
 };
 
 /**
+ * 一次文件改动。step 事件里虽然有 `path`，但它只说明"调用了 write_file"，
+ * 说不出**改了什么** —— diff 那一格靠这个事件。
+ */
+export type IvyeaFileChange = {
+  path: string;
+  action: "create" | "overwrite" | "edit" | string;
+  /**
+   * "file" = 整文件前后对比（write_file）；
+   * "fragment" = 只有被替换的那一段（edit_file），**行号是片段内的相对行号**，
+   * 别拿去对文件行号。
+   */
+  scope: "file" | "fragment" | string;
+  diff: string;
+  /** 服务端截断过（超大文件）。 */
+  truncated?: boolean;
+  session_id?: string;
+  turn_id?: string;
+};
+
+/**
  * 结构化步骤事件（agent serve ≥ v1.9 才会发；旧版本只有自由文本 event）。
  * 契约见 ivyea_agent/stream_json.py:step_event。
  * - phase "plan" = todo_write/progress_update 这类规划汇报调用，UI 折起来
@@ -403,6 +423,8 @@ export async function ivyeaAgentChatStream(
     onSkillMatch?: (data: IvyeaSkillMatch) => void;
     /** 需要人工确认的写操作。 */
     onPermission?: (data: IvyeaPermissionRequest) => void;
+    /** Agent 改过一个文件（带 diff）。 */
+    onFileChange?: (data: IvyeaFileChange) => void;
     /** 审批超时被自动拒绝。 */
     onPermissionTimeout?: (data: { request_id: string }) => void;
   },
@@ -446,6 +468,7 @@ export async function ivyeaAgentChatStream(
     // 所以升级前后前端都不会白屏。
     else if (event === "step") handlers.onStep?.(data);
     else if (event === "skill_match") handlers.onSkillMatch?.(data);
+    else if (event === "file_change") handlers.onFileChange?.(data);
     else if (event === "permission_request") handlers.onPermission?.(data);
     else if (event === "permission_timeout") handlers.onPermissionTimeout?.(data);
     else handlers.onEvent?.(data);
@@ -1036,7 +1059,10 @@ export async function consoleSessionImport(
 /** 智能体预设：一套"这类活按这么跑"的设置（技能 + 审批档位 + 工作区）。按用户隔离。 */
 export type ConsolePreset = {
   name: string; skill: string; approval: "none" | "remote";
-  workspace: string; note: string; created: number;
+  workspace: string;
+  /** 人设/判断标准。套用时整段并进这一轮的系统提示。 */
+  system: string;
+  note: string; created: number;
 };
 
 export async function consolePresets() {

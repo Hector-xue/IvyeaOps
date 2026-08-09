@@ -8,6 +8,7 @@ them (read the watchlist, write snapshots) with zero client changes.
 from __future__ import annotations
 
 import asyncio
+import logging
 import json
 import math
 import sqlite3
@@ -18,10 +19,11 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.core.config import settings
 from app.core.security import require_user
 from app.services import asin_pulse_service, category_service, market_traffic_service, sellersprite_service
 from app.services.asin_pulse_service import SNAPSHOT_METRICS
+
+logger = logging.getLogger("ivyea.routers.home")
 
 router = APIRouter()
 
@@ -583,7 +585,7 @@ async def add_market_watch(item: MarketWatchIn, _user: str = Depends(require_use
     try:
         await _record_market_one(query, item.marketplace, source)
     except Exception:
-        pass
+        logger.debug("_record_market_one 失败（旁路，已忽略）", exc_info=True)
     return {"id": mid}
 
 
@@ -738,7 +740,7 @@ async def run_due_recordings(data_source: str | None = None) -> dict:
             if await _record_market_one(query, mkt, source):
                 recorded_market += 1
         except Exception:
-            pass
+            logger.debug("recorded_market += 1 失败（旁路，已忽略）", exc_info=True)
 
     for asin, mkt, source in watched:
         with _connect() as conn:
@@ -753,7 +755,7 @@ async def run_due_recordings(data_source: str | None = None) -> dict:
             if await _record_asin_one(asin, mkt, source):
                 recorded_asin += 1
         except Exception:
-            pass
+            logger.debug("recorded_asin += 1 失败（旁路，已忽略）", exc_info=True)
 
     return {"day": day, "recorded_market": recorded_market, "recorded_asin": recorded_asin}
 
@@ -1240,7 +1242,7 @@ async def keyword_extends_sales(req: KeywordPulseReq, _user: str = Depends(requi
                             )
                             it["evidence_sales"] = round(mid)
                 except Exception:
-                    pass
+                    logger.debug("_ 失败（旁路，已忽略）", exc_info=True)
 
     now = int(time.time() * 1000)
     with _connect() as conn:

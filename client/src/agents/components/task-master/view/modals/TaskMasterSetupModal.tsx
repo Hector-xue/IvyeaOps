@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import { Plus, Terminal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../../../../lib/utils';
-import Shell from '../../../shell/view/Shell';
+// 同 StandaloneShell：xterm 按需加载，别钉在首屏块里。
+const Shell = lazy(() => import('../../../shell/view/Shell'));
 import type { TaskMasterProject } from '../../types';
 
 type TaskMasterSetupModalProps = {
@@ -55,6 +56,7 @@ export default function TaskMasterSetupModal({ isOpen, project, onClose, onAfter
 
         <div className="flex-1 p-4">
           <div className="h-full overflow-hidden rounded-lg bg-black">
+            <Suspense fallback={null}>
             <Shell
               selectedProject={project}
               selectedSession={null}
@@ -67,6 +69,7 @@ export default function TaskMasterSetupModal({ isOpen, project, onClose, onAfter
                 }
               }}
             />
+            </Suspense>
           </div>
         </div>
 

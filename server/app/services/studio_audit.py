@@ -22,13 +22,15 @@ Every event carries:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from app.core.skill_paths import AUDIT_LOG_FILE as AUDIT_LOG
+
+logger = logging.getLogger("ivyea.services.studio_audit")
 
 
 _WRITE_LOCK = threading.Lock()
@@ -71,8 +73,7 @@ def record(
                     pass
     except OSError as e:
         # Swallow — auditing is a side effect, not a gate.
-        import sys
-        print(f"[audit] failed to write event {event_type}: {e}", file=sys.stderr)
+        logger.warning("failed to write audit event %s: %s", event_type, e)
 
 
 def tail(limit: int = 100) -> list[dict]:

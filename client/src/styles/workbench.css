@@ -254,6 +254,29 @@ body::after{
 .sb-toggle{background:transparent;border:1px solid var(--b);border-radius:var(--r);color:var(--t3);cursor:pointer;font-size:9px;padding:2px 6px;font-family:var(--font);flex-shrink:0;transition:all .1s}
 .sb-toggle:hover{color:var(--t);border-color:var(--b2)}
 .sb nav{flex:1;overflow-y:auto;padding:6px 0}
+/* ── 新外壳侧边栏：三段式 ────────────────────────────────────────────────
+ * 经典外壳仍走上面那条"整条滚动"的规则，一行不动。
+ *
+ * 这里改成 固定 / 弹性 / 收纳 三段，是因为改造前会话排在一条长滚动的最尾：
+ * 「更多工具」展开后占 774px，而视口才 813px —— 首屏一条会话都看不见，
+ * 可会话恰恰是这个外壳的主角。现在弹性区吃掉剩余高度并自己滚，
+ * 会话不再被板块列表挤下去。
+ */
+.sb-nav-console{display:flex;flex-direction:column;overflow:hidden;padding:6px 0 0}
+.sb-nav-fixed{flex-shrink:0}
+/* min-height:0 是必须的：flex 子项默认 min-height:auto，不写的话它会被内容撑高，
+   overflow 永远不生效，三段式就退化回一条长滚动。 */
+.sb-nav-flex{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column}
+.sb-nav-dock{flex-shrink:0;border-top:1px solid var(--b)}
+/* 展开板块时给它自己的高度上限，别把会话区压没 */
+.sb-tools-open{max-height:46vh;overflow-y:auto}
+/* 收起时的板块数量：说明"东西还在里面" */
+.ni-count{margin-left:auto;font-size:9px;color:var(--t3);background:var(--bg3);
+  border-radius:99px;padding:0 5px;line-height:1.7}
+/* 相邻兄弟选择器：只有**存在数量徽标时**箭头才让出 auto 间距。
+   写成 .ni-group .ni-caret 的话，展开态（没有徽标）箭头会贴到标签旁边。 */
+.ni-count + .ni-caret{margin-left:4px}
+.sb.collapsed .ni-count{display:none}
 .sb nav::-webkit-scrollbar{width:0}
 .ns{padding:10px 12px 3px;font-size:9px;color:var(--t3);letter-spacing:.12em;text-transform:uppercase}
 .ni{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;color:var(--t2);border-left:2px solid transparent;font-size:11px;transition:all .1s;white-space:nowrap;text-decoration:none}
@@ -3206,6 +3229,9 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
   margin-top:10px;padding:12px;border:1px solid var(--b);border-radius:8px;background:var(--bg2)}
 /* 按钮那一格永远独占一整行，免得挤在某个 select 旁边看着像它的附属控件 */
 .cap-preset-actions{grid-column:1/-1;display:flex;gap:8px}
+/* 人设可能是几句话；表格里截断，完整内容走 title 提示 */
+.cap-persona{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t2)}
+.cap-persona-input{grid-column:1/-1;resize:vertical;min-height:56px;line-height:1.6}
 
 /* 跟进建议开关：藏在标题右侧，关掉后留一个极轻的入口重新打开 */
 .cc-followups-head{display:flex;align-items:center;gap:6px}
@@ -3250,3 +3276,52 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
   /* 芯片行放大后更容易挤爆一行，允许换行而不是把页面撑宽 */
   .cc-chips { flex-wrap: wrap; }
 }
+
+/* 套用中的人设：可见 + 可摘。不给它做成下拉，它不是选择器，是一个"当前状态"。 */
+.cc-chip-preset{display:inline-flex;align-items:center;gap:4px;
+  color:var(--acc);border-color:color-mix(in srgb,var(--acc) 40%,transparent);
+  background:color-mix(in srgb,var(--acc) 8%,transparent);max-width:190px}
+.cc-chip-preset i{font-style:normal;font-size:9px}
+.cc-chip-x{background:none;border:none;padding:0 0 0 2px;cursor:pointer;color:inherit;
+  opacity:.6;font-size:9px;line-height:1;font-family:var(--font)}
+.cc-chip-x:hover{opacity:1}
+
+/* ── 产物栏：文件 / 改动 ────────────────────────────────────────────────── */
+.cr-files{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.cr-files li{display:grid;grid-template-columns:auto 1fr auto;gap:6px;align-items:center;
+  font-size:11px;color:var(--t2)}
+.cr-file-act{font-size:9px;padding:1px 5px;border-radius:3px;white-space:nowrap;
+  background:color-mix(in srgb,var(--t3) 16%,transparent);color:var(--t3)}
+.cr-file-act.act-create{background:color-mix(in srgb,var(--acc) 16%,transparent);color:var(--acc)}
+.cr-file-act.act-overwrite{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--amber)}
+.cr-file-act.act-edit{background:color-mix(in srgb,var(--blue) 16%,transparent);color:var(--blue)}
+.cr-file-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t)}
+.cr-files li em{font-size:9px;color:var(--t3);font-style:normal}
+/* 完整路径单独一行、弱化：文件名才是扫读时要看的 */
+.cr-file-path{grid-column:1/-1;font-size:9px;color:var(--t3);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+.cr-diffs{display:flex;flex-direction:column;gap:10px}
+.cr-diff{border:1px solid var(--b);border-radius:6px;overflow:hidden}
+.cr-diff-head{display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg2);
+  font-size:10.5px;border-bottom:1px solid var(--b)}
+.cr-diff-head em{margin-left:auto;font-size:9px;color:var(--t3);font-style:normal}
+.cr-diff-body{margin:0;padding:6px 0;max-height:320px;overflow:auto;
+  font-family:'JetBrains Mono','Fira Code','SF Mono',Consolas,monospace;font-size:10.5px;line-height:1.55}
+.cr-diff-body .dl{padding:0 8px;white-space:pre;min-height:1.55em}
+.dl-add{background:color-mix(in srgb,var(--acc) 10%,transparent);color:var(--t)}
+.dl-del{background:color-mix(in srgb,var(--red) 10%,transparent);color:var(--t2)}
+.dl-ctx{color:var(--t3)}
+.cr-diff-cut{padding:4px 8px;font-size:9.5px;color:var(--amber);background:var(--bg2)}
+
+/* ── 子 agent 调研 ────────────────────────────────────────────────────────
+ * 不做成芯片：调研任务是一句话，芯片会把它挤成一小截，而那句话恰恰是这里
+ * 唯一有信息量的东西。所以整行铺开，任务文字占主位。
+ */
+.cs-subs{display:flex;flex-direction:column;gap:4px}
+.cs-sub{display:flex;align-items:flex-start;gap:6px;padding:4px 8px;font-size:11px;
+  border:1px solid var(--b);border-left:2px solid var(--purple);border-radius:var(--r);
+  background:var(--bg2);color:var(--t2);line-height:1.55}
+.cs-sub .cs-mark{margin-top:2px;flex-shrink:0}
+.cs-sub-task{flex:1;min-width:0;color:var(--t)}
+.cs-sub .cs-ms{flex-shrink:0;color:var(--t3);font-size:9.5px;margin-top:2px}
+.cs-sub.cs-running{border-left-color:var(--amber)}

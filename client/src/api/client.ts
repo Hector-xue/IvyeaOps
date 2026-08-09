@@ -420,9 +420,49 @@ export type AdAuditStructured = {
   meta?: Record<string, any>;
 };
 
+/** 统一结论契约（后端 app/core/findings.py）。证据是结构化的，能核对。 */
+export type FindingEvidence = {
+  metric: string;
+  value: unknown;
+  unit?: string;
+  target?: string;
+  source?: string;
+  as_of?: string;
+  note?: string;
+};
+
+export type FindingAction = {
+  type: string;
+  target?: string;
+  detail?: string;
+  /** 执行前提/阈值，如「点击≥15 且 0 单」。没有它就无法判断该不该照做。 */
+  guardrail?: string;
+  reversible?: boolean;
+  confidence?: number;
+};
+
+export type Finding = {
+  id?: string;
+  severity?: "critical" | "high" | "medium" | "low";
+  title: string;
+  reasoning?: string;
+  evidence?: FindingEvidence[];
+  actions?: FindingAction[];
+  priority_score?: number;
+};
+
+export type FindingList = {
+  findings: Finding[];
+  data_notes?: string;
+  /** 完全没给证据的结论 id —— 用户最该能一眼看出的就是"这条凭什么"。 */
+  unsupported?: string[];
+};
+
 export type AdAuditFull = AdAuditJobMeta & {
   raw_md?: string | null;
   structured?: AdAuditStructured | null;
+  /** 与 structured 并存：老字段原样保留，新消费方读这份。 */
+  findings?: FindingList | null;
   preview_columns?: string[] | null;
 };
 
@@ -505,7 +545,12 @@ export async function adAuditList(limit = 20) {
   return data;
 }
 
-export function adAuditDownloadUrl(jobId: string, fmt: "md" | "json" | "xlsx" | "html") {
+/** deliverable / brief 走统一结论契约，是"发给别人看"的版本（结论 + 证据页 +
+ *  说明页）；xlsx/md/json/html 是原始报表。两者不是一个东西。 */
+export function adAuditDownloadUrl(
+  jobId: string,
+  fmt: "md" | "json" | "xlsx" | "html" | "deliverable" | "brief",
+) {
   return `/api/ad-audit/${jobId}/download?fmt=${fmt}`;
 }
 
@@ -967,5 +1012,87 @@ export type TokenUsageData = {
 
 export async function monitorTokenUsage() {
   const { data } = await api.get<TokenUsageData>("/monitor/token-usage");
+  return data;
+}
+
+/* ── 能力市场（门道社区的 Skill 来源）───────────────────────────────── */
+
+export type MarketAttribution = {
+  /** original = 作者本人上传；shared = 用户分享自己发现的好 Skill */
+  origin?: "original" | "shared";
+  original_author?: string;
+  source_url?: string;
+  license?: string;
+};
+
+export type MarketItem = MarketAttribution & {
+  slug: string;
+  title: string;
+  summary?: string;
+  category?: string;
+  class?: string;
+  latest?: string;
+  install_count?: number;
+};
+
+export type MarketCapability = {
+  kind: string;
+  detail: string;
+  severity: "info" | "warn" | "block";
+  where?: string;
+};
+
+export type MarketManifest = {
+  class: string;
+  files: string[];
+  total_bytes: number;
+  installable: boolean;
+  blockers: string[];
+  capabilities: MarketCapability[];
+  /** 说人话的那一段，界面直接渲染它 */
+  human_summary: string;
+};
+
+export type MarketPreview = {
+  slug: string;
+  version: string;
+  /** 分享类必须在界面上标出来源 —— 只存在数据库里的署名等于没保留 */
+  attribution?: MarketAttribution;
+  integrity: { ok: boolean; problems: string[] };
+  manifest: MarketManifest;
+  sha256: string;
+  /** 用户确认的是这份指纹；install 会核对，防止"看的是 A、装的是 B" */
+  confirm_token: string;
+};
+
+export type MarketStatus = {
+  enabled: boolean;
+  url: string;
+  installed: Record<string, { version: string; sha256: string; class: string }>;
+};
+
+export async function marketStatus() {
+  const { data } = await api.get<MarketStatus>("/skill-market/status");
+  return data;
+}
+
+export async function marketBrowse(params: { q?: string; category?: string; sort?: string }) {
+  const { data } = await api.get<{ total: number; items: MarketItem[] }>(
+    "/skill-market/skills", { params });
+  return data;
+}
+
+export async function marketPreview(slug: string, version: string) {
+  const { data } = await api.post<MarketPreview>("/skill-market/preview", { slug, version });
+  return data;
+}
+
+export async function marketInstall(slug: string, version: string, confirm_token: string) {
+  const { data } = await api.post("/skill-market/install", { slug, version, confirm_token });
+  return data;
+}
+
+export async function marketUninstall(slug: string) {
+  const { data } = await api.post("/skill-market/uninstall", { slug });
   return data;
 }

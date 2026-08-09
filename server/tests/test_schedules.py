@@ -90,8 +90,8 @@ def test_impossible_date_does_not_hang():
 # ── 任务 CRUD ───────────────────────────────────────────────────────────────
 
 def _mk(**kw):
-    base = dict(name="每日巡检", cron="0 9 * * *", prompt="跑一遍广告巡检",
-                principal="alice@x.com", role="user")
+    base = {"name": "每日巡检", "cron": "0 9 * * *", "prompt": "跑一遍广告巡检",
+                "principal": "alice@x.com", "role": "user"}
     base.update(kw)
     return sc.create_task(**base)
 

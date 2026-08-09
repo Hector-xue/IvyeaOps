@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -26,6 +27,8 @@ from app.core import hub_settings as _hs
 from app.services import ai_synthesis_service as _ai
 from app.services import lingxing_data as _data
 from app.services import lingxing_service as _gw
+
+logger = logging.getLogger("ivyea.services.lingxing_automation")
 
 _run_lock = asyncio.Lock()
 
@@ -200,7 +203,7 @@ def _enforce_guardrails(proposals: List[Dict[str, Any]], max_pct: int) -> List[D
             if cp > max_pct:
                 p["guardrail_flag"] = f"超出幅度上限 {max_pct}%（建议被标记，执行时会被拦截）"
         except (TypeError, ValueError):
-            pass
+            logger.debug("abs 失败（旁路，已忽略）", exc_info=True)
         out.append(p)
     return out
 
@@ -279,7 +282,7 @@ async def _notify_run(run: Dict[str, Any]) -> None:
                 f"自动化建议完成（{'定时' if run.get('trigger') == 'scheduled' else '手动'}）："
                 f"{n} 条建议。{(run.get('summary') or '')[:150]}")
     except Exception:  # noqa: BLE001
-        pass
+        logger.debug("_op.send_alert 失败（旁路，已忽略）", exc_info=True)
 
 
 def start_background_run(trigger: str = "manual") -> str:
@@ -307,8 +310,8 @@ async def scheduler_loop() -> None:
                 hr = int(_hs.get("lingxing_auto_hour") or 9)
                 if now.weekday() == wd and now.hour == hr and last_fired_date != today:
                     last_fired_date = today
-                    print(f"[IvyeaOps] lingxing auto run firing ({today})")
+                    logger.info("lingxing auto run firing (%s)", today)
                     await run_once(trigger="scheduled")
         except Exception as e:  # noqa: BLE001
-            print(f"[IvyeaOps] lingxing auto scheduler error: {e}")
+            logger.warning("lingxing auto scheduler error: %s", e)
         await asyncio.sleep(1200)

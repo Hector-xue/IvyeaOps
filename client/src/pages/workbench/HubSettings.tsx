@@ -8,6 +8,14 @@ import {
   type HubSettings, type HealthResp, type TestResult, type SelfCheckResp,
 } from "../../api/settings";
 import { installAgentStreamUrl } from "../../api/setup";
+import {
+  listMcpTokens, issueMcpToken, revokeMcpToken, getMcpClientConfig,
+  type McpToken, type IssuedToken,
+} from "../../api/mcp";
+import {
+  getNotifyConfig, testNotify, getBudget,
+  type NotifyConfig, type BudgetStatus,
+} from "../../api/notify";
 import { lockBodyScroll } from "../../lib/scrollLock";
 import {
   FONT_OPTIONS, ZOOM_OPTIONS, WEIGHT_OPTIONS,
@@ -810,9 +818,305 @@ const EMPTY: HubSettings = {
   kiro_gateway_db: "", kiro_cli_db: "", kiro_cli_sessions_dir: "",
   claude_projects_dir: "", hermes_node_bin: "", bun_bin: "",
   autofix_enabled: false,
+  skill_market_enabled: false,
+  skill_market_url: "",
+  skill_market_pubkey: "",
+  notify_webhook: "",
+  notify_events: "",
+  ai_budget_monthly_usd: 0,
 };
 
 // ── 外观 / 显示：字体族 + 全局字号（即时生效 + localStorage，无后端）───────────────
+/** 通知渠道与 AI 预算。管理员专属；非管理员拿到 403 就整块不渲染。 */
+function NotifySection({
+  vals, set, save,
+}: {
+  vals: Partial<HubSettings>;
+  set: <K extends keyof HubSettings>(k: K, v: HubSettings[K]) => void;
+  save: (keys: (keyof HubSettings)[], vals: Partial<HubSettings>) => Promise<void>;
+}) {
+  const [cfg, setCfg] = useState<NotifyConfig | null>(null);
+  const [budget, setBudget] = useState<BudgetStatus | null>(null);
+  const [denied, setDenied] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; detail: string } | null>(null);
+
+  const reload = useCallback(async () => {
+    try {
+      const [c, b] = await Promise.all([getNotifyConfig(), getBudget()]);
+      setCfg(c);
+      setBudget(b);
+    } catch {
+      setDenied(true);
+    }
+  }, []);
+  useEffect(() => { void reload(); }, [reload]);
+
+  if (denied) return null;
+
+  const picked: string[] = (() => {
+    const raw = (vals.notify_events || "").trim();
+    if (!raw) return cfg?.enabled_events || [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch { return []; }
+  })();
+
+  const toggle = (key: string) => {
+    const next = picked.includes(key) ? picked.filter((k) => k !== key) : [...picked, key];
+    set("notify_events", JSON.stringify(next));
+  };
+
+  const runTest = async () => {
+    setTesting(true);
+    setResult(null);
+    try {
+      // 先把地址存下来再测 —— 否则用户改了输入框直接点测试，测的还是旧地址，
+      // 结果对不上会让人以为是通知功能坏了。
+      await save(["notify_webhook"], vals);
+      setResult(await testNotify());
+      await reload();
+    } catch {
+      setResult({ ok: false, detail: "保存或发送失败" });
+    } finally { setTesting(false); }
+  };
+
+  const CHANNEL_LABEL: Record<string, string> = {
+    feishu: "飞书", dingtalk: "钉钉", wecom: "企业微信",
+    slack: "Slack", generic: "自定义接收端",
+  };
+
+  return (
+    <Section
+      title="通知与 AI 预算"
+      desc="机器在服务器上跑，人在别处。任务挂了、这个月花超了，直接推到你手机上。"
+      keys={["notify_webhook", "notify_events", "ai_budget_monthly_usd"]}
+      vals={vals} onSave={save}
+    >
+      <Field
+        label="通知地址（Webhook）"
+        hint={<>
+          支持飞书、钉钉、企业微信、Slack 和自建接收端 —— <b>粘进来就行，是哪一家我们自己认</b>。
+          {cfg?.webhook_set && cfg.channel && <>当前识别为「{CHANNEL_LABEL[cfg.channel] || cfg.channel}」。</>}
+          {" "}报文里只有事件类型、任务名和时间，<b>不含任何店铺数据或密钥</b>。
+        </>}
+      >
+        <div className="hs-test-row" style={{ gap: 8 }}>
+          <TxtInput value={vals.notify_webhook || ""} onChange={(v) => set("notify_webhook", v)}
+            placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/…" />
+          <button className="hs-test-btn" onClick={runTest} disabled={testing || !vals.notify_webhook}>
+            {testing ? "发送中…" : "发条测试消息"}
+          </button>
+        </div>
+        {result && (
+          <div className="ms" style={{ marginTop: 6, color: result.ok ? "var(--ok)" : "var(--err)" }}>
+            {result.ok ? "✓ " : "× "}{result.detail}
+          </div>
+        )}
+      </Field>
+
+      {cfg && (
+        <Field label="发哪些事" hint="默认只发需要你动手的三类。每跑完一个任务都响一次的机器人，三天就会被静音。">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+            {Object.entries(cfg.events).map(([key, label]) => (
+              <label key={key} className="hs-toggle-line" style={{ margin: 0 }}>
+                <input type="checkbox" checked={picked.includes(key)} onChange={() => toggle(key)} />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
+        </Field>
+      )}
+
+      <Field
+        label="每月 AI 预算（美元）"
+        hint={<>
+          填 0 表示不设预算。超了会推一条通知，<b>每月只提醒一次</b>，
+          且<b>不会掐掉正在跑的任务</b> —— 这是按公开价目表对 token 的本地估算，不是账单，
+          拿估算值去停用户的活儿，错一次就是事故。
+        </>}
+      >
+        <TxtInput value={String(vals.ai_budget_monthly_usd ?? 0)}
+          onChange={(v) => set("ai_budget_monthly_usd", Number(v) || 0)} placeholder="0" />
+        {budget?.enabled && (
+          <div className="ms" style={{ marginTop: 6 }}>
+            {budget.month} 已用 <b>${budget.spend_usd.toFixed(2)}</b> / ${budget.limit_usd.toFixed(2)}
+            （{Math.round(budget.ratio * 100)}%）
+            {budget.exceeded && <span style={{ color: "var(--err)" }}> · 已超</span>}
+          </div>
+        )}
+      </Field>
+    </Section>
+  );
+}
+
+/** 对外 MCP：把这台机器的亚马逊能力开放给 Claude Desktop / Cursor 等客户端。
+ *
+ *  管理员专属。非管理员拿到 403，这一整块就不渲染 —— 与其给他一个点了报错的
+ *  面板，不如干脆不出现。 */
+function McpSection() {
+  const [tokens, setTokens] = useState<McpToken[] | null>(null);
+  const [denied, setDenied] = useState(false);
+  const [endpoint, setEndpoint] = useState("");
+  const [name, setName] = useState("");
+  const [allowWrite, setAllowWrite] = useState(false);
+  const [ttl, setTtl] = useState(0);
+  const [fresh, setFresh] = useState<IssuedToken | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState("");
+
+  const reload = useCallback(async () => {
+    try {
+      const [list, cfg] = await Promise.all([listMcpTokens(), getMcpClientConfig()]);
+      setTokens(list.tokens);
+      setEndpoint(cfg.endpoint);
+    } catch {
+      setDenied(true);
+    }
+  }, []);
+  useEffect(() => { void reload(); }, [reload]);
+
+  if (denied) return null;
+
+  const issue = async () => {
+    setBusy(true);
+    try {
+      setFresh(await issueMcpToken(name || "未命名", allowWrite ? ["read", "write"] : ["read"], ttl));
+      setName("");
+      await reload();
+    } finally { setBusy(false); }
+  };
+
+  const revoke = async (t: McpToken) => {
+    if (!window.confirm(`撤销「${t.name}」？用它连着的客户端会立刻断开，且无法恢复。`)) return;
+    await revokeMcpToken(t.id);
+    if (fresh?.id === t.id) setFresh(null);
+    await reload();
+  };
+
+  const snippet = JSON.stringify({
+    mcpServers: {
+      "ivyea-ops": {
+        type: "http",
+        url: endpoint || "http://<你的 IvyeaOps 地址>/api/mcp",
+        headers: { Authorization: `Bearer ${fresh?.token || "<粘贴你的令牌>"}` },
+      },
+    },
+  }, null, 2);
+
+  const copy = async (text: string, what: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(what);
+      setTimeout(() => setCopied(""), 2000);
+    } catch { /* 剪贴板在非 HTTPS 下不可用，用户可以手动选中复制 */ }
+  };
+
+  const when = (ts: number | null) =>
+    ts ? new Date(ts * 1000).toLocaleString("zh-CN", { hour12: false }) : "—";
+
+  return (
+    <div className="hs-section">
+      <div className="hs-section-hd">
+        <div>
+          <div className="hs-section-title">对外 MCP（让别的 AI 用上你的数据）</div>
+          <div className="hs-section-desc">
+            生成一个令牌，Claude Desktop、Cursor 或任何支持 MCP 的客户端就能调用这台机器上的广告结论、
+            知识库和关键词调研。<b>令牌指向的是你自己的服务器</b> —— 数据不经过我们，也不经过任何第三方云。
+          </div>
+        </div>
+      </div>
+      <div className="hs-fields">
+        <div className="hs-agent-card hs-agent-card-wide">
+          <div className="hs-agent-card-title">新建令牌</div>
+          <div className="hs-agent-card-desc">
+            明文<b>只显示这一次</b>，关掉就再也拿不到（服务端只存哈希）。丢了就撤销重发。
+          </div>
+          <div className="hs-test-row" style={{ marginTop: 8, gap: 8, flexWrap: "wrap" }}>
+            <TxtInput value={name} onChange={setName} placeholder="用途备注，如「我的 MacBook 上的 Claude」" />
+            <SheetSelect className="hs-input" value={String(ttl)} onChange={(v) => setTtl(Number(v))}
+              title="有效期" options={[
+                { value: "0", label: "永久有效" },
+                { value: "30", label: "30 天后过期" },
+                { value: "90", label: "90 天后过期" },
+                { value: "365", label: "一年后过期" },
+              ]} />
+            <button className="hs-save-btn" onClick={issue} disabled={busy}>
+              {busy ? "生成中…" : "生成令牌"}
+            </button>
+          </div>
+          <label className="hs-toggle-line">
+            <input type="checkbox" checked={allowWrite} onChange={(e) => setAllowWrite(e.target.checked)} />
+            <span>
+              允许写操作（改广告投放）——
+              <b>默认不给</b>。做分析的令牌不该顺带具备改你真实投放的能力。
+            </span>
+          </label>
+          {fresh && (
+            <div className="hs-agent-card" style={{ marginTop: 10, borderColor: "var(--acc)" }}>
+              <div className="hs-agent-card-title">令牌已生成 —— 现在复制，之后看不到了</div>
+              <code style={{ display: "block", wordBreak: "break-all", padding: "8px 0" }}>{fresh.token}</code>
+              <button className="hs-test-btn" onClick={() => copy(fresh.token, "token")}>
+                {copied === "token" ? "✓ 已复制" : "复制令牌"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="hs-agent-card hs-agent-card-wide">
+          <div className="hs-agent-card-title">客户端配置</div>
+          <div className="hs-agent-card-desc">
+            粘进 Claude Desktop 的 <code>claude_desktop_config.json</code> 或 Cursor 的 <code>mcp.json</code>，重启客户端即可。
+            对方机器要能访问到这个地址；<b>暴露到公网时务必套 HTTPS</b> —— 令牌是明文放在请求头里的。
+          </div>
+          <pre style={{ overflowX: "auto", fontSize: 12, margin: "8px 0" }}>{snippet}</pre>
+          <button className="hs-test-btn" onClick={() => copy(snippet, "cfg")}>
+            {copied === "cfg" ? "✓ 已复制" : "复制配置"}
+          </button>
+        </div>
+
+        <div className="hs-agent-card hs-agent-card-wide">
+          <div className="hs-agent-card-title">已发出的令牌</div>
+          {tokens === null ? (
+            <div className="hs-agent-card-desc">加载中…</div>
+          ) : tokens.length === 0 ? (
+            <div className="hs-agent-card-desc">还没有发过令牌。</div>
+          ) : (
+            <table className="hs-table" style={{ width: "100%", fontSize: 13 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left" }}>备注</th>
+                  <th style={{ textAlign: "left" }}>权限</th>
+                  <th style={{ textAlign: "left" }}>最后使用</th>
+                  <th style={{ textAlign: "left" }}>过期</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {tokens.map((t) => (
+                  <tr key={t.id} style={t.revoked ? { opacity: 0.45 } : undefined}>
+                    <td>{t.name}</td>
+                    <td>{t.scopes.includes("write") ? "读 + 写" : "只读"}</td>
+                    {/* 显示最后使用时间，用户才判断得出哪个令牌早就该撤销了 */}
+                    <td>{t.revoked ? "已撤销" : when(t.last_used_at)}</td>
+                    <td>{t.expires_at ? when(t.expires_at) : "永久"}</td>
+                    <td>
+                      {!t.revoked && (
+                        <button className="hs-test-btn" onClick={() => revoke(t)}>撤销</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AppearanceSection() {
   const [fontId, setFontId] = useState(getFontId());
   const [zoom, setZoom] = useState(getZoom());
@@ -1140,6 +1444,7 @@ export default function HubSettings() {
         title="可选 AI 能力"
         desc="低频或增强项：AI 降级链、图片分析、知识库语义检索和自动修复。默认值已可覆盖大多数场景。"
         keys={["text_ai_providers", "autofix_enabled",
+          "skill_market_enabled", "skill_market_url", "skill_market_pubkey",
           "vision_ai_providers", "openai_api_key", "deepseek_api_key",
           "gbrain_embed_provider", "gbrain_embed_model", "gbrain_embed_api_key"]}
         vals={vals} onSave={save}
@@ -1205,6 +1510,33 @@ export default function HubSettings() {
             <SecretInput value={vals.gbrain_embed_api_key} onChange={v => set("gbrain_embed_api_key", v)} placeholder="对应服务商的 API Key" />
           </Field>
         )}
+
+        <div className="hs-agent-card hs-agent-card-wide">
+          <div className="hs-agent-card-title"><Tag kind="opt">功能</Tag>能力市场（门道社区）</div>
+          <div className="hs-agent-card-desc">
+            从门道社区浏览并安装 Skill。<b>默认关闭</b>：它会向社区发起请求，而 IvyeaOps 的默认立场是数据不出你的机器。
+            开启后也只在你主动浏览或安装时联网 —— 请求匿名、不带机器标识、不回传任何使用统计；装过的 Skill 落在本地，断网照常用。
+            安装前会先给你看这个 Skill 的能力清单，确认后才落盘。
+          </div>
+          <label className="hs-toggle-line">
+            <input type="checkbox" checked={vals.skill_market_enabled}
+              onChange={e => set("skill_market_enabled", e.target.checked)} />
+            <span>{vals.skill_market_enabled ? "能力市场已开启（Skill 中心 → 社区市场）" : "能力市场已关闭"}</span>
+          </label>
+          {vals.skill_market_enabled && (
+            <>
+              <Field label="市场地址" hint={<>留空用默认的门道社区。可换成自建镜像 —— 换源之后仍会校验安装包的校验和与签名。</>}>
+                <TxtInput value={vals.skill_market_url} onChange={v => set("skill_market_url", v)}
+                  placeholder="https://mendao.ivyea.com/api/market" />
+              </Field>
+              <Field label={<><Tag kind="opt">可选</Tag>市场公钥</>}
+                hint={<>用于校验安装包签名。留空则只校验 sha256（能证明"没传坏"，但证明不了"是那边发布的那份"）。</>}>
+                <TxtInput value={vals.skill_market_pubkey} onChange={v => set("skill_market_pubkey", v)}
+                  placeholder="base64 编码的 Ed25519 公钥" />
+              </Field>
+            </>
+          )}
+        </div>
 
         <div className="hs-agent-card hs-agent-card-wide">
           <div className="hs-agent-card-title"><Tag kind="opt">功能</Tag>自动修复 Bug</div>
@@ -1403,6 +1735,12 @@ export default function HubSettings() {
         </Section>
 
       </AdvancedBlock>
+
+      {/* ── 通知与预算（管理员专属）── */}
+      <NotifySection vals={vals} set={set} save={save} />
+
+      {/* ── 对外 MCP（管理员专属，非管理员自动不渲染）── */}
+      <McpSection />
 
       {/* ── 外观 / 显示（低频显示项，放页面下方）── */}
       <AppearanceSection />

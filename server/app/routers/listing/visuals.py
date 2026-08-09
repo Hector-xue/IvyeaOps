@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import base64
 import io
 import json
@@ -27,6 +28,8 @@ from .common import (
     project_row, update_project,
 )
 from .jobs import JobHandle, start_job
+
+logger = logging.getLogger("ivyea.routers.listing.visuals")
 
 router = APIRouter()
 
@@ -1318,7 +1321,7 @@ def _persist_visual_anchor(project_id: str, row, result: dict) -> None:
         conn.commit()
         conn.close()
     except Exception:
-        pass
+        logger.debug("_db 失败（旁路，已忽略）", exc_info=True)
 
 
 def _auto_product_source(project_id: str, scrape_data: dict) -> str:
@@ -1459,7 +1462,7 @@ def _persist_shot_plan(project_id: str, plan: dict, deliverable: str = "gallery"
         conn.commit()
         conn.close()
     except Exception:
-        pass
+        logger.debug("_db 失败（旁路，已忽略）", exc_info=True)
 
 
 # ─── 整套策划（后台 job）─────────────────────────────────────────────────────
@@ -1496,7 +1499,7 @@ async def run_plan_image_set(project_id: str, body: PlanImageSetReq,
     try:
         update_project(project_id, scrape_data=json.dumps(scrape_data, ensure_ascii=False))
     except Exception:
-        pass
+        logger.debug("update_project 失败（旁路，已忽略）", exc_info=True)
     progress("identity", "分析产品视觉身份…", 0.25)
     try:
         product_profile = await asyncio.wait_for(

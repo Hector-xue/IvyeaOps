@@ -418,3 +418,25 @@ def test_timeout_is_a_distinct_outcome():
     cs.record_approval_request("r1", "s1", "alice@x.com", "x")
     cs.record_approval_decision("r1", "timeout")
     assert cs.session_approvals("s1")[0]["decision"] == "timeout"
+
+
+def test_preset_carries_a_persona():
+    """预设的价值一半在人设：能定义"以什么角色、什么判断标准跑"，
+    而不只是"按什么流程跑"。"""
+    cs.save_preset("广告专家", "alice@x.com", skill="ads",
+                   system="你是有十年经验的亚马逊广告优化师，任何调整都要给数据依据。")
+    row = cs.list_presets("alice@x.com")[0]
+    assert "十年经验" in row["system"] and row["skill"] == "ads"
+
+
+def test_preset_persona_is_capped():
+    """人设每轮都整段进系统提示。不设上限的话，一条预设能把上下文吃掉一大块。"""
+    cs.save_preset("超长", "alice@x.com", system="很长" * 5000)
+    assert len(cs.list_presets("alice@x.com")[0]["system"]) == 4000
+
+
+def test_existing_presets_keep_working_without_a_persona():
+    """加这列之前建的预设 system 为空 —— 那一轮就不该注入任何人设，
+    行为与加列之前逐字一致。"""
+    cs.save_preset("老预设", "alice@x.com", skill="x", approval="remote")
+    assert cs.list_presets("alice@x.com")[0]["system"] == ""

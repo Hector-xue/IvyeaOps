@@ -22,6 +22,7 @@ and the chat SSE endpoint can interleave reads cleanly.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
 import shlex
@@ -37,10 +38,11 @@ from typing import Any
 _WINDOWS = sys.platform == "win32"
 if not _WINDOWS:
     import pty
-    import signal
 
 from app.services import agent_registry as registry
 from app.services import agent_session_service as svc
+
+logger = logging.getLogger("ivyea.services.pty_manager")
 
 # ---------------------------------------------------------------------------
 # Tunables
@@ -224,7 +226,7 @@ class PtyManager:
                     _src, _, sid_part = raw.partition(":")
                     resume_id = sid_part or None
             except Exception:
-                pass
+                logger.debug("svc.consume_resume_target 失败（旁路，已忽略）", exc_info=True)
             # registry.build_argv may raise if the binary is missing — let
             # that propagate so the caller can return a clean 400.
             argv, env_extra = registry.build_argv(
@@ -249,7 +251,7 @@ class PtyManager:
                     os.write(sess_obj.fd_master, (resume_prompt + "\n").encode("utf-8"))
                     sess_obj.last_io_at = time.time()
                 except OSError:
-                    pass
+                    logger.debug("os.write 失败（旁路，已忽略）", exc_info=True)
         return sess_obj
 
     async def _spawn(
@@ -264,7 +266,10 @@ class PtyManager:
         if _WINDOWS:
             raise RuntimeError("PTY not supported on Windows.")
         master, slave = pty.openpty()
-        env = os.environ.copy()
+        # 终端里跑的是用户/AI 敲进来的任意命令 —— 这里绝不能把 IvyeaOps 的
+        # 会话签名密钥、管理员密码哈希一起递过去（一条 env 命令就全看见了）。
+        from app.core.proc import child_env as _scrubbed_env
+        env = _scrubbed_env()
         env.update(env_extra)
         env["TERM"] = env.get("TERM", "xterm-256color")
         env["LANG"] = env.get("LANG", "en_US.UTF-8")
@@ -314,7 +319,7 @@ class PtyManager:
             )
         except Exception:
             # Don't let a logging error block the spawn.
-            pass
+            logger.debug("svc.add_message 失败（旁路，已忽略）", exc_info=True)
         return sess_obj
 
     async def _read_loop(self, sess_obj: PtySession) -> None:
@@ -333,18 +338,18 @@ class PtyManager:
             try:
                 loop.remove_reader(sess_obj.fd_master)
             except Exception:
-                pass
+                logger.debug("loop.remove_reader 失败（旁路，已忽略）", exc_info=True)
             # Schedule a full _kill so the subprocess and pool entry are
             # cleaned up. Use call_soon_threadsafe-equivalent via the loop.
             try:
                 loop.create_task(self._kill(sess_obj.session_id, reason="runaway"))
             except Exception:
-                pass
+                logger.debug("loop.create_task 失败（旁路，已忽略）", exc_info=True)
             # Wake up the awaiting _read_loop so it falls through finally.
             try:
                 queue.put_nowait(b"")
             except Exception:
-                pass
+                logger.debug("queue.put_nowait 失败（旁路，已忽略）", exc_info=True)
 
         def on_readable() -> None:
             # Circuit breaker — bail out before burning more CPU when the
@@ -369,7 +374,7 @@ class PtyManager:
                     # The fd may have been recycled by another transport
                     # (e.g., httpx TCP). uvloop refuses remove_reader in
                     # that case; ignore — the new owner manages it now.
-                    pass
+                    logger.debug("loop.remove_reader 失败（旁路，已忽略）", exc_info=True)
                 return
             try:
                 chunk = os.read(sess_obj.fd_master, READ_CHUNK)
@@ -382,7 +387,7 @@ class PtyManager:
                 except Exception:
                     # Same reasoning as above — fd may be owned elsewhere
                     # already; the read returned 0 because of that.
-                    pass
+                    logger.debug("loop.remove_reader 失败（旁路，已忽略）", exc_info=True)
                 queue.put_nowait(b"")
                 return
             # Successful read — reset the breaker.
@@ -408,7 +413,7 @@ class PtyManager:
                     try:
                         q.put_nowait(payload)
                     except asyncio.QueueFull:
-                        pass
+                        logger.debug("q.put_nowait 失败（旁路，已忽略）", exc_info=True)
                 # Periodic persistence flush.
                 now = time.time()
                 if (now - sess_obj.last_flush) * 1000 >= PERSIST_FLUSH_MS and sess_obj.pending_persist:
@@ -420,7 +425,7 @@ class PtyManager:
             try:
                 loop.remove_reader(sess_obj.fd_master)
             except Exception:
-                pass
+                logger.debug("loop.remove_reader 失败（旁路，已忽略）", exc_info=True)
             # Final flush
             if sess_obj.pending_persist:
                 self._persist_frame(sess_obj.session_id, bytes(sess_obj.pending_persist))
@@ -454,7 +459,7 @@ class PtyManager:
             )
         except Exception:
             # Persistence failure is non-fatal.
-            pass
+            logger.debug("svc.add_message 失败（旁路，已忽略）", exc_info=True)
 
     async def _on_exit(self, sess_obj: PtySession) -> None:
         if sess_obj.closed:
@@ -465,7 +470,7 @@ class PtyManager:
         try:
             asyncio.get_running_loop().remove_reader(sess_obj.fd_master)
         except Exception:
-            pass
+            logger.debug("asyncio.get_running_loop 失败（旁路，已忽略）", exc_info=True)
         try:
             rc = await asyncio.wait_for(sess_obj.proc.wait(), timeout=5)
         except asyncio.TimeoutError:
@@ -473,13 +478,13 @@ class PtyManager:
         try:
             os.close(sess_obj.fd_master)
         except OSError:
-            pass
+            logger.debug("os.close 失败（旁路，已忽略）", exc_info=True)
         # Notify subscribers and detach.
         for q in list(sess_obj.subscribers):
             try:
                 q.put_nowait({"type": "exit", "code": rc})
             except asyncio.QueueFull:
-                pass
+                logger.debug("q.put_nowait 失败（旁路，已忽略）", exc_info=True)
         # Update session status.
         try:
             svc.update_session(sess_obj.session_id, status="dormant")
@@ -491,7 +496,7 @@ class PtyManager:
                 content=f"[CLI 退出] code={rc}",
             )
         except Exception:
-            pass
+            logger.debug("svc.update_session 失败（旁路，已忽略）", exc_info=True)
         # Drop from pool.
         async with self._lock:
             self._pool.pop(sess_obj.session_id, None)
@@ -524,7 +529,7 @@ class PtyManager:
         try:
             asyncio.get_running_loop().remove_reader(sess_obj.fd_master)
         except Exception:
-            pass
+            logger.debug("asyncio.get_running_loop 失败（旁路，已忽略）", exc_info=True)
         try:
             sess_obj.proc.terminate()
             try:
@@ -532,21 +537,21 @@ class PtyManager:
             except asyncio.TimeoutError:
                 sess_obj.proc.kill()
         except ProcessLookupError:
-            pass
+            logger.debug("sess_obj.proc.terminate 失败（旁路，已忽略）", exc_info=True)
         try:
             os.close(sess_obj.fd_master)
         except OSError:
-            pass
+            logger.debug("os.close 失败（旁路，已忽略）", exc_info=True)
         for q in list(sess_obj.subscribers):
             try:
                 q.put_nowait({"type": "exit", "code": -1, "reason": reason})
             except asyncio.QueueFull:
-                pass
+                logger.debug("q.put_nowait 失败（旁路，已忽略）", exc_info=True)
         self._pool.pop(session_id, None)
         try:
             svc.update_session(session_id, status="dormant")
         except Exception:
-            pass
+            logger.debug("svc.update_session 失败（旁路，已忽略）", exc_info=True)
 
     async def _idle_reaper(self) -> None:
         try:
@@ -590,7 +595,7 @@ class PtyManager:
                     content=data.rstrip("\r\n"),
                 )
             except Exception:
-                pass
+                logger.debug("svc.add_message 失败（旁路，已忽略）", exc_info=True)
 
     async def resize(self, session_id: str, cols: int, rows: int) -> None:
         sess_obj = self._pool.get(session_id)
@@ -604,7 +609,7 @@ class PtyManager:
         try:
             fcntl.ioctl(sess_obj.fd_master, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
         except OSError:
-            pass
+            logger.debug("fcntl.ioctl 失败（旁路，已忽略）", exc_info=True)
 
     def subscribe(self, session_id: str) -> asyncio.Queue[dict[str, Any]]:
         sess_obj = self._pool.get(session_id)
@@ -621,7 +626,7 @@ class PtyManager:
                     "data": snapshot.decode("utf-8", errors="replace"),
                 })
             except asyncio.QueueFull:
-                pass
+                logger.debug("q.put_nowait 失败（旁路，已忽略）", exc_info=True)
         return q
 
     def unsubscribe(self, session_id: str, queue: asyncio.Queue) -> None:

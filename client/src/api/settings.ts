@@ -57,6 +57,10 @@ export interface HubSettings {
   brain_root: string;
   openai_api_key: string;
   // Feishu alerts
+  // 通知渠道（见 server/app/services/notify）
+  notify_webhook: string;
+  notify_events: string;
+  ai_budget_monthly_usd: number;
   alert_webhook: string;
   alert_app_id: string;
   alert_app_secret: string;
@@ -84,6 +88,10 @@ export interface HubSettings {
   bun_bin: string;
   // Auto bug-fix toggle (admin-only feature)
   autofix_enabled: boolean;
+  /** 能力市场（门道社区）。默认关闭 —— 它会外联，而产品立场是数据不出本机。 */
+  skill_market_enabled: boolean;
+  skill_market_url: string;
+  skill_market_pubkey: string;
   // SIF — 深度分析工具箱，独立 key（mcp.sif.com Bearer token）
   sif_key: string;
   // SellerSprite — separate key, auto-registers stdio MCP server in Hermes

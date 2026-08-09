@@ -9,11 +9,14 @@ request can batch its queries on one connection (the router opens it via
 from __future__ import annotations
 
 import json
+import logging
 import posixpath
 import sqlite3
 import uuid
 from pathlib import Path
 from typing import Any, Optional
+
+logger = logging.getLogger("ivyea.agents.repos")
 
 
 # --- path / display-name helpers (shared/utils.ts) --------------------------
@@ -44,7 +47,7 @@ def generate_display_name(project_name: str, actual_project_dir: Optional[str] =
         if isinstance(name, str) and name:
             return name
     except Exception:
-        pass
+        logger.debug("json.loads 失败（旁路，已忽略）", exc_info=True)
     if project_path.startswith("/"):
         parts = [p for p in project_path.split("/") if p]
         return parts[-1] if parts else project_path

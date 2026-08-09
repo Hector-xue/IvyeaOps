@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import codecs
 import json
 import time
@@ -17,6 +18,8 @@ from app.services import brain_chat_service as bc
 from app.services import gbrain_service as gb
 from app.services import console_sessions
 from app.services import ivyea_agent_service as ia
+
+logger = logging.getLogger("ivyea.routers.brain")
 
 
 router = APIRouter(dependencies=[Depends(require_user)])
@@ -314,7 +317,7 @@ def search(body: SearchBody) -> dict[str, Any]:
         try:
             return _ia_search(body.query, body.mode)
         except Exception:  # noqa: BLE001 — degrade to legacy GBrain search
-            pass
+            logger.debug("_ia_search 失败（旁路，已忽略）", exc_info=True)
     return _handle(gb.search, body.query, body.mode)
 
 
@@ -324,7 +327,7 @@ def get_page(slug: str) -> dict[str, Any]:
         try:
             return _ia_page(slug)
         except Exception:  # noqa: BLE001 — degrade to legacy GBrain page
-            pass
+            logger.debug("_ia_page 失败（旁路，已忽略）", exc_info=True)
     return _handle(gb.get_page, slug)
 
 
@@ -334,7 +337,7 @@ def get_page_post(body: PageBody) -> dict[str, Any]:
         try:
             return _ia_page(body.slug)
         except Exception:  # noqa: BLE001 — degrade to legacy GBrain page
-            pass
+            logger.debug("_ia_page 失败（旁路，已忽略）", exc_info=True)
     return _handle(gb.get_page, body.slug)
 
 
@@ -344,7 +347,7 @@ def list_files() -> dict[str, Any]:
         try:
             return _ia_list_files()
         except Exception:  # noqa: BLE001 — degrade to legacy GBrain file list
-            pass
+            logger.debug("_ia_list_files 失败（旁路，已忽略）", exc_info=True)
     return _handle(gb.list_files)
 
 
@@ -356,7 +359,7 @@ def read_file(path: str = Query(..., min_length=1, max_length=240)) -> dict[str,
         try:
             return _ia_read_file(path)
         except Exception:  # noqa: BLE001 — degrade to legacy GBrain read
-            pass
+            logger.debug("_ia_read_file 失败（旁路，已忽略）", exc_info=True)
     return _handle(gb.read_file, path)
 
 
@@ -426,7 +429,7 @@ async def upload_knowledge(
         try:
             return _ia_upload_bytes(file.filename or "upload.txt", data, title, category)
         except Exception:  # noqa: BLE001 — degrade to legacy GBrain upload
-            pass
+            logger.debug("_ia_upload_bytes 失败（旁路，已忽略）", exc_info=True)
     return _handle(bc.upload_knowledge, file.filename or "upload", data, category, title, import_after_save)
 
 
@@ -441,7 +444,7 @@ async def ingest_text(body: IngestTextBody) -> dict[str, Any]:
         try:
             return await _ia_ingest_analyzed(body.text)
         except Exception:  # noqa: BLE001 — degrade to legacy GBrain ingest
-            pass
+            logger.debug("await _ia_ingest_analyzed 失败（旁路，已忽略）", exc_info=True)
     return _handle(bc.ingest_pasted_text, body.text, body.import_after_save)
 
 
@@ -526,7 +529,7 @@ async def ingest_url(body: IngestUrlBody) -> dict[str, Any]:
         try:
             return await _ia_ingest_analyzed(body_text, analysis=analysis)
         except Exception:  # noqa: BLE001 — degrade to legacy GBrain ingest
-            pass
+            logger.debug("await _ia_ingest_analyzed 失败（旁路，已忽略）", exc_info=True)
     return _handle(bc.ingest_pasted_text, body_text, body.import_after_save)
 
 
@@ -785,7 +788,7 @@ async def chat_message_stream(session_id: str, body: ChatStreamBody,
                 if "".join(parts).strip():
                     engine = "ivyea-agent"
             except Exception:  # noqa: BLE001 — degrade to fallbacks below
-                pass
+                logger.debug("str 失败（旁路，已忽略）", exc_info=True)
 
         # 2) Hermes (only when IvyeaAgent is unavailable), token-by-token.
         if not "".join(parts).strip() and not use_ivyea and bc.hermes_available():
@@ -810,7 +813,7 @@ async def chat_message_stream(session_id: str, body: ChatStreamBody,
                     await proc.stdin.drain()
                     proc.stdin.close()
                 except Exception:
-                    pass
+                    logger.debug("proc.stdin.write 失败（旁路，已忽略）", exc_info=True)
 
                 decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
                 deadline = time.monotonic() + _STREAM_DEADLINE_S
@@ -836,11 +839,11 @@ async def chat_message_stream(session_id: str, body: ChatStreamBody,
                         try:
                             proc.kill()
                         except Exception:
-                            pass
+                            logger.debug("proc.kill 失败（旁路，已忽略）", exc_info=True)
                     try:
                         await proc.wait()
                     except Exception:
-                        pass
+                        logger.debug("proc.wait 失败（旁路，已忽略）", exc_info=True)
 
         if not engine and "".join(parts).strip():
             engine = "hermes"

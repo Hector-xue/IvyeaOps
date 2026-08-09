@@ -7,6 +7,7 @@ terminal_live_service so the UI can view old records.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
 import shutil
@@ -20,11 +21,12 @@ from typing import Any
 _WINDOWS = sys.platform == "win32"
 if not _WINDOWS:
     import pty
-    import signal
 
 import pyte
 
 from app.services import terminal_live_service as svc
+
+logger = logging.getLogger("ivyea.services.terminal_live_manager")
 
 MAX_LIVE_TERMINALS = int(os.environ.get("IVYEA_OPS_MAX_TERMINALS", "8"))
 IDLE_RECYCLE_SECS = int(os.environ.get("IVYEA_OPS_TERMINAL_IDLE_SECS", str(12 * 60 * 60)))
@@ -295,9 +297,9 @@ class TerminalLiveManager:
                         term.last_snapshot_hash = h
                         term.last_snapshot_at = time.time()
                     except Exception:
-                        pass
+                        logger.debug("svc.rotate_snapshot 失败（旁路，已忽略）", exc_info=True)
             except Exception:
-                pass
+                logger.debug("for sid 失败（旁路，已忽略）", exc_info=True)
             await asyncio.sleep(SNAPSHOT_INTERVAL_S)
 
     def capture_now(self, session_id: str) -> dict[str, Any]:
@@ -339,7 +341,8 @@ class TerminalLiveManager:
         if _WINDOWS:
             return await self._spawn_windows(session_id, shell=shell, workdir=workdir)
         master, slave = pty.openpty()
-        env = os.environ.copy()
+        from app.core.proc import child_env as _scrubbed_env
+        env = _scrubbed_env()
         env["TERM"] = env.get("TERM", "xterm-256color")
         env["LANG"] = env.get("LANG", "en_US.UTF-8")
         env["FORCE_COLOR"] = "1"
@@ -370,7 +373,7 @@ class TerminalLiveManager:
                 content=f"[terminal started] shell={safe_shell} cwd={cwd}\n",
             )
         except Exception:
-            pass
+            logger.debug("svc.add_history 失败（旁路，已忽略）", exc_info=True)
         return term
 
     async def _spawn_windows(self, session_id: str, *, shell: str, workdir: str | None) -> LiveTerminal:
@@ -403,7 +406,7 @@ class TerminalLiveManager:
             svc.add_history(session_id, stream="system",
                             content=f"[terminal started] shell={safe_shell} cwd={cwd}\n")
         except Exception:
-            pass
+            logger.debug("svc.add_history 失败（旁路，已忽略）", exc_info=True)
         return term
 
     async def _read_loop_win(self, term: LiveTerminal) -> None:
@@ -450,7 +453,7 @@ class TerminalLiveManager:
                     try:
                         q.put_nowait(payload)
                     except asyncio.QueueFull:
-                        pass
+                        logger.debug("q.put_nowait 失败（旁路，已忽略）", exc_info=True)
                 now = time.time()
                 if (now - term.last_flush) * 1000 >= PERSIST_FLUSH_MS and term.pending_persist:
                     flushed = bytes(term.pending_persist)
@@ -474,25 +477,25 @@ class TerminalLiveManager:
                 try:
                     loop.remove_reader(term.fd_master)
                 except Exception:
-                    pass
+                    logger.debug("loop.remove_reader 失败（旁路，已忽略）", exc_info=True)
                 try:
                     queue.put_nowait(b"")
                 except Exception:
-                    pass
+                    logger.debug("queue.put_nowait 失败（旁路，已忽略）", exc_info=True)
                 return
             term.closed = True
             try:
                 loop.remove_reader(term.fd_master)
             except Exception:
-                pass
+                logger.debug("loop.remove_reader 失败（旁路，已忽略）", exc_info=True)
             try:
                 loop.create_task(self._kill(term.session_id, reason="runaway"))
             except Exception:
-                pass
+                logger.debug("loop.create_task 失败（旁路，已忽略）", exc_info=True)
             try:
                 queue.put_nowait(b"")
             except Exception:
-                pass
+                logger.debug("queue.put_nowait 失败（旁路，已忽略）", exc_info=True)
 
         def on_readable() -> None:
             term.iters_since_progress += 1
@@ -503,7 +506,7 @@ class TerminalLiveManager:
                 try:
                     loop.remove_reader(term.fd_master)
                 except Exception:
-                    pass
+                    logger.debug("loop.remove_reader 失败（旁路，已忽略）", exc_info=True)
                 return
             try:
                 chunk = os.read(term.fd_master, READ_CHUNK)
@@ -512,14 +515,14 @@ class TerminalLiveManager:
                     try:
                         loop.remove_reader(term.fd_master)
                     except Exception:
-                        pass
+                        logger.debug("loop.remove_reader 失败（旁路，已忽略）", exc_info=True)
                     queue.put_nowait(b"")
                 return
             if not chunk:
                 try:
                     loop.remove_reader(term.fd_master)
                 except Exception:
-                    pass
+                    logger.debug("loop.remove_reader 失败（旁路，已忽略）", exc_info=True)
                 queue.put_nowait(b"")
                 return
             term.iters_since_progress = 0
@@ -541,7 +544,7 @@ class TerminalLiveManager:
                     try:
                         q.put_nowait(payload)
                     except asyncio.QueueFull:
-                        pass
+                        logger.debug("q.put_nowait 失败（旁路，已忽略）", exc_info=True)
                 now = time.time()
                 if (now - term.last_flush) * 1000 >= PERSIST_FLUSH_MS and term.pending_persist:
                     flushed = bytes(term.pending_persist)
@@ -552,7 +555,7 @@ class TerminalLiveManager:
             try:
                 loop.remove_reader(term.fd_master)
             except Exception:
-                pass
+                logger.debug("loop.remove_reader 失败（旁路，已忽略）", exc_info=True)
             if term.pending_persist:
                 self._persist_output(term.session_id, bytes(term.pending_persist))
                 term.pending_persist.clear()
@@ -600,13 +603,13 @@ class TerminalLiveManager:
             try:
                 svc.update_last_output(session_id, persist_text)
             except Exception:
-                pass
+                logger.debug("svc.update_last_output 失败（旁路，已忽略）", exc_info=True)
             return
         term.last_out_text = persist_text
         try:
             svc.add_history(session_id, stream="output", content=persist_text)
         except Exception:
-            pass
+            logger.debug("svc.add_history 失败（旁路，已忽略）", exc_info=True)
 
     @staticmethod
     def _render_plain(term: "LiveTerminal | None", data: bytes) -> str:
@@ -669,12 +672,12 @@ class TerminalLiveManager:
                 if term.winpty.isalive():
                     term.winpty.terminate(force=True)
             except Exception:  # noqa: BLE001
-                pass
+                logger.debug("term.winpty.terminate 失败（旁路，已忽略）", exc_info=True)
         else:
             try:
                 asyncio.get_running_loop().remove_reader(term.fd_master)
             except Exception:
-                pass
+                logger.debug("asyncio.get_running_loop 失败（旁路，已忽略）", exc_info=True)
             try:
                 rc = await asyncio.wait_for(term.proc.wait(), timeout=5)
             except asyncio.TimeoutError:
@@ -682,17 +685,17 @@ class TerminalLiveManager:
             try:
                 os.close(term.fd_master)
             except OSError:
-                pass
+                logger.debug("os.close 失败（旁路，已忽略）", exc_info=True)
         for q in list(term.subscribers):
             try:
                 q.put_nowait({"type": "exit", "code": rc})
             except asyncio.QueueFull:
-                pass
+                logger.debug("q.put_nowait 失败（旁路，已忽略）", exc_info=True)
         try:
             svc.update_session(term.session_id, status="closed")
             svc.add_history(term.session_id, stream="system", content=f"\n[terminal exited] code={rc}\n")
         except Exception:
-            pass
+            logger.debug("svc.update_session 失败（旁路，已忽略）", exc_info=True)
         async with self._lock:
             self._pool.pop(term.session_id, None)
 
@@ -717,12 +720,12 @@ class TerminalLiveManager:
                 if term.winpty.isalive():
                     term.winpty.terminate(force=True)
             except Exception:  # noqa: BLE001
-                pass
+                logger.debug("term.winpty.terminate 失败（旁路，已忽略）", exc_info=True)
         else:
             try:
                 asyncio.get_running_loop().remove_reader(term.fd_master)
             except Exception:
-                pass
+                logger.debug("asyncio.get_running_loop 失败（旁路，已忽略）", exc_info=True)
             try:
                 term.proc.terminate()
                 try:
@@ -730,22 +733,22 @@ class TerminalLiveManager:
                 except asyncio.TimeoutError:
                     term.proc.kill()
             except ProcessLookupError:
-                pass
+                logger.debug("term.proc.terminate 失败（旁路，已忽略）", exc_info=True)
             try:
                 os.close(term.fd_master)
             except OSError:
-                pass
+                logger.debug("os.close 失败（旁路，已忽略）", exc_info=True)
         for q in list(term.subscribers):
             try:
                 q.put_nowait({"type": "exit", "code": -1, "reason": reason})
             except asyncio.QueueFull:
-                pass
+                logger.debug("q.put_nowait 失败（旁路，已忽略）", exc_info=True)
         self._pool.pop(session_id, None)
         try:
             svc.update_session(session_id, status="closed")
             svc.add_history(session_id, stream="system", content=f"\n[terminal closed] reason={reason}\n")
         except Exception:
-            pass
+            logger.debug("svc.update_session 失败（旁路，已忽略）", exc_info=True)
 
     async def _idle_reaper(self) -> None:
         try:
@@ -792,7 +795,7 @@ class TerminalLiveManager:
             try:
                 svc.add_history(session_id, stream="input", content=f"{line}\n")
             except Exception:
-                pass
+                logger.debug("svc.add_history 失败（旁路，已忽略）", exc_info=True)
 
     async def resize(self, session_id: str, cols: int, rows: int) -> None:
         term = self._pool.get(session_id)
@@ -802,7 +805,7 @@ class TerminalLiveManager:
             try:
                 term.winpty.setwinsize(rows, cols)
             except Exception:  # noqa: BLE001
-                pass
+                logger.debug("term.winpty.setwinsize 失败（旁路，已忽略）", exc_info=True)
             return
         import fcntl
         import struct
@@ -811,7 +814,7 @@ class TerminalLiveManager:
         try:
             fcntl.ioctl(term.fd_master, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
         except OSError:
-            pass
+            logger.debug("fcntl.ioctl 失败（旁路，已忽略）", exc_info=True)
 
     def subscribe(self, session_id: str) -> asyncio.Queue[dict[str, Any]]:
         term = self._pool.get(session_id)
@@ -824,7 +827,7 @@ class TerminalLiveManager:
             try:
                 q.put_nowait({"type": "snapshot", "data": snapshot.decode("utf-8", errors="replace")})
             except asyncio.QueueFull:
-                pass
+                logger.debug("q.put_nowait 失败（旁路，已忽略）", exc_info=True)
         return q
 
     def unsubscribe(self, session_id: str, queue: asyncio.Queue) -> None:

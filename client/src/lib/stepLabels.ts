@@ -35,6 +35,14 @@ export type ConsoleStep = {
   status: StepStatus;
   ms?: number;
   destructive?: boolean;
+  /**
+   * 这一步和别的步**真的同时在跑**。
+   *
+   * 不是猜的：agent 的并行分支会先把本步所有工具的「开始」一次性发出来，再并发
+   * 执行。所以一条 running 到达时若已有同类还在 running，两者必然重叠 ——
+   * 顺序执行的话上一条早就收尾了。没有这个凭据就别在界面上写"并行"。
+   */
+  parallel?: boolean;
   args?: Record<string, any>;
 };
 
@@ -164,13 +172,14 @@ export function stepFromEvent(ev: IvyeaStepEvent): ConsoleStep {
   }
 
   if (ev.name === "dispatch_subagent" || ev.phase === "subagent") {
-    const task = String(args.task || "");
+    // 子 agent 的**调研任务**才是有信息量的东西，"子任务"三个字等于没说。
+    // 放进 title 而不是 detail：detail 在芯片里会被挤成一小截。
+    const task = String(args.task || "").trim();
     return {
       ...base,
       phase: "subagent",
       icon: PHASE_ICONS.subagent,
-      title: "子任务",
-      detail: task.length > 60 ? task.slice(0, 60) + "…" : task,
+      title: task || "子 agent 调研",
     };
   }
 
@@ -213,7 +222,19 @@ export function formatMs(ms?: number): string {
 /** 把同一 id 的 running → ok/error 就地合并，保持时间线只有一行。 */
 export function mergeStep(list: ConsoleStep[], next: ConsoleStep): ConsoleStep[] {
   const idx = list.findIndex((s) => s.key === next.key && s.phase !== "note");
-  if (idx < 0) return [...list, next];
+  if (idx < 0) {
+    // 新来的子 agent，若此刻已有同类在跑 —— 它们是真并行（见 ConsoleStep.parallel）。
+    if (next.phase === "subagent" && next.status === "running") {
+      const running = list.filter((s) => s.phase === "subagent" && s.status === "running");
+      if (running.length) {
+        return [
+          ...list.map((s) => (running.includes(s) ? { ...s, parallel: true } : s)),
+          { ...next, parallel: true },
+        ];
+      }
+    }
+    return [...list, next];
+  }
   const prev = list[idx];
   const merged: ConsoleStep = {
     ...prev,
@@ -223,6 +244,8 @@ export function mergeStep(list: ConsoleStep[], next: ConsoleStep): ConsoleStep[]
     title: next.title || prev.title,
     args: next.args && Object.keys(next.args).length ? next.args : prev.args,
     destructive: next.destructive ?? prev.destructive,
+    // 收尾事件不带这个标记，别把已经判定出来的并行关系擦掉
+    parallel: next.parallel ?? prev.parallel,
   };
   const out = [...list];
   out[idx] = merged;

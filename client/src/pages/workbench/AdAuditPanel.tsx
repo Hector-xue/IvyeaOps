@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useConfirm } from "../../components/ConfirmDialog";
 import SheetSelect from "../../components/SheetSelect";
 import DeepAnalysisPanel from "../../components/DeepAnalysisPanel";
+import FindingCards from "../../components/FindingCards";
 import { marketplaceOptions } from "../../lib/marketplaces";
 import {
   adAuditClearFailed,
@@ -945,6 +946,12 @@ function AdResultPanel({ data, onReset }: { data: AdAuditFull; onReset: () => vo
         )}
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "xlsx")} download style={{ textDecoration: "none" }}>{data.output_mode === "xlsx_plan" ? "📊 优化方案 xlsx" : "📊 Excel（带色块）"}</a>
+          {/* 交付物：结论一页、证据一页（指标/数值/时间窗/来源）、说明一页。
+              和上面那份原始报表的区别是「能直接发给别人」—— 被追问时翻证据页。 */}
+          <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "deliverable")} download
+            title="结论 + 证据 + 说明，直接发给老板/客户" style={{ textDecoration: "none" }}>📑 交付物（带证据页）</a>
+          <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "brief")} download
+            title="同样内容的 Markdown，贴进飞书文档 / Notion" style={{ textDecoration: "none" }}>📝 结论摘要</a>
           <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "html")} download title="单文件网页版" style={{ textDecoration: "none" }}>🌐 HTML</a>
           <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "md")} download style={{ textDecoration: "none" }}>📄 Markdown</a>
           {data.output_mode !== "xlsx_plan" && <a className="tbtn" href={adAuditDownloadUrl(data.job_id, "json")} download style={{ textDecoration: "none" }}>🧾 JSON</a>}
@@ -984,6 +991,9 @@ function AdResultPanel({ data, onReset }: { data: AdAuditFull; onReset: () => vo
           {s.action_summary && s.action_summary.length > 0 && (
             <AdActionTable items={s.action_summary} />
           )}
+          {/* 统一结论卡片：证据可点开核对、无证据的显式标出。
+              与下面的老面板并存 —— 老结构还有它自己的表格视图，不替换。 */}
+          <FindingCards data={data.findings} />
           {s.cross_campaign_insights && s.cross_campaign_insights.length > 0 && (
             <AdCrossCampaignPanel items={s.cross_campaign_insights} />
           )}

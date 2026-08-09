@@ -13,6 +13,7 @@ Protocol (matches the frontend shell client):
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
 import shutil
@@ -22,6 +23,8 @@ import threading
 import time
 from dataclasses import dataclass, field
 from typing import Optional
+
+logger = logging.getLogger("ivyea.agents.shell_pty")
 
 _WINDOWS = sys.platform == "win32"
 if not _WINDOWS:
@@ -153,7 +156,7 @@ async def _safe_send(ws, message: dict) -> None:
     try:
         await ws.send_text(json.dumps(message, ensure_ascii=False))
     except Exception:
-        pass
+        logger.debug("ws.send_text 失败（旁路，已忽略）", exc_info=True)
 
 
 def _proc_env() -> dict:
@@ -214,7 +217,7 @@ def _win_proc_env() -> dict:
             if v:
                 env.setdefault(k, v)
     except Exception:
-        pass
+        logger.debug("env.setdefault 失败（旁路，已忽略）", exc_info=True)
     return env
 
 
@@ -244,7 +247,7 @@ def _reader_thread_win(session: ShellSession, loop: asyncio.AbstractEventLoop) -
                 loop.call_soon_threadsafe(
                     lambda s=session: asyncio.ensure_future(_on_exit_win(s)))
             except RuntimeError:
-                pass
+                logger.debug("loop.call_soon_threadsafe 失败（旁路，已忽略）", exc_info=True)
             return
         time.sleep(0.02)  # transient empty read; avoid a busy spin
 
@@ -260,7 +263,7 @@ async def _on_exit_win(session: ShellSession) -> None:
         try:
             await session.drain_task
         except Exception:
-            pass
+            logger.debug("session.drain_task 失败（旁路，已忽略）", exc_info=True)
     await _safe_send(session.ws, {"type": "output",
                                   "data": f"\r\n\x1b[33mProcess exited with code {code}\x1b[0m\r\n"})
     _cleanup(session.key)
@@ -307,7 +310,7 @@ async def _spawn(key: str, command: str, cwd: str, cols: int, rows: int) -> Shel
     try:
         fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
     except OSError:
-        pass
+        logger.debug("fcntl.ioctl 失败（旁路，已忽略）", exc_info=True)
     proc = await asyncio.create_subprocess_exec(
         "bash", "-c", command, stdin=slave, stdout=slave, stderr=slave,
         cwd=cwd, env=_proc_env(), start_new_session=True)
@@ -331,7 +334,7 @@ async def _spawn(key: str, command: str, cwd: str, cols: int, rows: int) -> Shel
             try:
                 loop.remove_reader(master)
             except Exception:
-                pass
+                logger.debug("loop.remove_reader 失败（旁路，已忽略）", exc_info=True)
 
     loop.add_reader(master, _on_readable)
     session.drain_task = asyncio.create_task(_drain(session))
@@ -377,7 +380,7 @@ async def _on_exit(session: ShellSession) -> None:
     try:
         loop.remove_reader(session.fd_master)
     except Exception:
-        pass
+        logger.debug("loop.remove_reader 失败（旁路，已忽略）", exc_info=True)
     # Final drain: a fast process can write its output and exit before the
     # readable callback fires, so pull any remaining bytes off the master here.
     while True:
@@ -396,7 +399,7 @@ async def _on_exit(session: ShellSession) -> None:
         try:
             await session.drain_task
         except Exception:
-            pass
+            logger.debug("session.drain_task 失败（旁路，已忽略）", exc_info=True)
     await _safe_send(session.ws, {"type": "output",
                                   "data": f"\r\n\x1b[33mProcess exited with code {code}\x1b[0m\r\n"})
     _cleanup(session.key)
@@ -413,17 +416,17 @@ def _cleanup(key: str) -> None:
             if session.winpty.isalive():
                 session.winpty.terminate(force=True)
         except Exception:  # noqa: BLE001
-            pass
+            logger.debug("session.winpty.terminate 失败（旁路，已忽略）", exc_info=True)
         return
     loop = asyncio.get_event_loop()
     try:
         loop.remove_reader(session.fd_master)
     except Exception:
-        pass
+        logger.debug("loop.remove_reader 失败（旁路，已忽略）", exc_info=True)
     try:
         os.close(session.fd_master)
     except OSError:
-        pass
+        logger.debug("os.close 失败（旁路，已忽略）", exc_info=True)
 
 
 def _kill(key: str) -> None:
@@ -435,14 +438,14 @@ def _kill(key: str) -> None:
             if session.winpty.isalive():
                 session.winpty.terminate(force=True)
         except Exception:  # noqa: BLE001
-            pass
+            logger.debug("session.winpty.terminate 失败（旁路，已忽略）", exc_info=True)
         return
     try:
         session.proc.terminate()
     except ProcessLookupError:
-        pass
+        logger.debug("session.proc.terminate 失败（旁路，已忽略）", exc_info=True)
     except Exception:
-        pass
+        logger.debug("session.proc.terminate 失败（旁路，已忽略）", exc_info=True)
 
 
 # --- per-connection handler -------------------------------------------------
@@ -465,12 +468,12 @@ class ShellConnection:
                     try:
                         session.winpty.write(str(data.get("data") or ""))
                     except Exception:  # noqa: BLE001
-                        pass
+                        logger.debug("session.winpty.write 失败（旁路，已忽略）", exc_info=True)
                 else:
                     try:
                         os.write(session.fd_master, str(data.get("data") or "").encode("utf-8"))
                     except OSError:
-                        pass
+                        logger.debug("os.write 失败（旁路，已忽略）", exc_info=True)
         elif mtype == "resize":
             session = _SESSIONS.get(self.key) if self.key else None
             if session:
@@ -480,13 +483,13 @@ class ShellConnection:
                     try:
                         session.winpty.setwinsize(rows, cols)
                     except Exception:  # noqa: BLE001
-                        pass
+                        logger.debug("session.winpty.setwinsize 失败（旁路，已忽略）", exc_info=True)
                 else:
                     try:
                         fcntl.ioctl(session.fd_master, termios.TIOCSWINSZ,
                                     struct.pack("HHHH", rows, cols, 0, 0))
                     except OSError:
-                        pass
+                        logger.debug("fcntl.ioctl 失败（旁路，已忽略）", exc_info=True)
 
     async def _init(self, data: dict) -> None:
         project_path = data.get("projectPath") or os.getcwd()

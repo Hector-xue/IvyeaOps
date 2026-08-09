@@ -1,10 +1,20 @@
-import type { ReactNode } from 'react';
+import { Suspense, lazy, type ReactNode } from 'react';
 import { IS_PLATFORM } from '../../../constants/config';
 import { useAuth } from '../context/AuthContext';
-import Onboarding from '../../onboarding/view/Onboarding';
 import AuthLoadingScreen from './AuthLoadingScreen';
 import LoginForm from './LoginForm';
 import SetupForm from './SetupForm';
+
+// 引导只在第一次进来时出现，之后再也不会渲染。
+const Onboarding = lazy(() => import('../../onboarding/view/Onboarding'));
+
+function LazyOnboarding({ onComplete }: { onComplete: () => void }) {
+  return (
+    <Suspense fallback={<AuthLoadingScreen />}>
+      <Onboarding onComplete={onComplete} />
+    </Suspense>
+  );
+}
 
 type ProtectedRouteProps = {
   children: ReactNode;
@@ -19,7 +29,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (IS_PLATFORM) {
     if (!hasCompletedOnboarding) {
-      return <Onboarding onComplete={refreshOnboardingStatus} />;
+      return <LazyOnboarding onComplete={refreshOnboardingStatus} />;
     }
 
     return <>{children}</>;
@@ -34,7 +44,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!hasCompletedOnboarding) {
-    return <Onboarding onComplete={refreshOnboardingStatus} />;
+    return <LazyOnboarding onComplete={refreshOnboardingStatus} />;
   }
 
   return <>{children}</>;

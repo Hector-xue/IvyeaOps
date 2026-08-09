@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import type { ComponentProps } from 'react';
-// PrismLight with a curated language set (see lib/prismLight) instead of the
-// full Prism build that bundles every language.
-import SyntaxHighlighter from '../../../../../lib/prismLight';
-import { oneDark as prismOneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+// 同 chat 的 Markdown：高亮器按需加载。
+import LazyHighlighter from '../../../../../lib/LazyHighlighter';
 import { copyTextToClipboard } from '../../../../../utils/clipboard';
 
 type MarkdownCodeBlockProps = {
@@ -57,18 +55,16 @@ export default function MarkdownCodeBlock({
         {copied ? 'Copied!' : 'Copy'}
       </button>
 
-      <SyntaxHighlighter
+      <LazyHighlighter
         language={language}
-        style={prismOneDark}
+        code={rawContent}
         customStyle={{
           margin: 0,
           borderRadius: '0.5rem',
           fontSize: '0.875rem',
           padding: language !== 'text' ? '2rem 1rem 1rem 1rem' : '1rem',
         }}
-      >
-        {rawContent}
-      </SyntaxHighlighter>
+      />
     </div>
   );
 }

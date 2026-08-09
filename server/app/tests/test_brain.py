@@ -34,8 +34,22 @@ def client(tmp_path: Path, monkeypatch):
     from app import main as main_mod
     importlib.reload(main_mod)
 
+    # 知识库的"前门"是 IvyeaAgent，只有本地 agent 服务不可达时才回退到 GBrain
+    # markdown 存储（见 routers/brain._ivyea_front_door）。这批测试写的是 GBrain
+    # 那条路 —— 如果不钉死，结果就取决于**跑测试的机器上 8765 端口有没有 agent
+    # 在跑**：开发机上走 agent 分支去读真实知识库，于是 `total` 对不上、文件也不是
+    # 测试自己造的那份；CI 上没 agent 又能过。测试不该依赖某个服务恰好起着。
+    #
+    # （前门那条路自己的覆盖是缺的，见 test_brain_front_door 那条。）
+    monkeypatch.setattr(bc_mod, "ivyea_chat_available", lambda: False)
+
     from app.core import security as sec_mod
     main_mod.app.dependency_overrides[sec_mod.require_user] = lambda: "tester"
+    # 聊天消息那几个接口用的是 require_user_info（返回 principal 字典）而不是
+    # require_user —— 只 override 后者覆盖不到，请求会 401。
+    main_mod.app.dependency_overrides[sec_mod.require_user_info] = lambda: {
+        "id": "admin", "role": "admin", "email": "tester", "permissions": [],
+    }
 
     with TestClient(main_mod.app) as c:
         yield c, brain, gb_mod, bc_mod
@@ -114,7 +128,7 @@ def test_ingest_text_uses_hermes_analysis_and_creates_new_directory(client, monk
     monkeypatch.setattr(_gb, "import_brain", lambda: {"ok": True, "raw": "import ok"})
     monkeypatch.setattr(
         bc,
-        "_call_hermes_json",
+        "_call_runner_json",
         lambda prompt: {
             "title": "Trail Camera 广告复盘",
             "directory": "amazon/ads/reviews",
@@ -148,7 +162,7 @@ def test_ingest_text_falls_back_and_sanitizes_bad_directory(client, monkeypatch)
     monkeypatch.setattr(_gb, "import_brain", lambda: {"ok": True, "raw": "import ok"})
     monkeypatch.setattr(
         bc,
-        "_call_hermes_json",
+        "_call_runner_json",
         lambda prompt: {
             "title": "../危险标题",
             "directory": "../../.ssh/secret",
@@ -176,7 +190,7 @@ def test_ingest_text_falls_back_and_sanitizes_bad_directory(client, monkeypatch)
 def test_ingest_text_rules_fallback_when_hermes_unavailable(client, monkeypatch):
     c, brain, _gb, bc = client
     monkeypatch.setattr(_gb, "import_brain", lambda: {"ok": True, "raw": "import ok"})
-    monkeypatch.setattr(bc, "_call_hermes_json", lambda prompt: (_ for _ in ()).throw(RuntimeError("offline")))
+    monkeypatch.setattr(bc, "_call_runner_json", lambda prompt: (_ for _ in ()).throw(RuntimeError("offline")))
 
     r = c.post(
         "/api/brain/ingest/text",

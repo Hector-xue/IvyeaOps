@@ -22,7 +22,6 @@ import sqlite3
 import time
 import uuid
 from io import BytesIO
-from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -32,6 +31,8 @@ from pydantic import BaseModel
 from app.core.config import settings
 from app.core.security import require_user
 from app.services.ai_synthesis_service import _apimart_base, _apimart_key
+
+logger = logging.getLogger("ivyea.routers.image_translate")
 
 router = APIRouter()
 
@@ -109,7 +110,7 @@ try:
     _mig.commit()
     _mig.close()
 except Exception:
-    pass
+    logger.debug("_db 失败（旁路，已忽略）", exc_info=True)
 
 
 def _row_to_item(r: sqlite3.Row) -> dict:
@@ -320,7 +321,7 @@ def delete_workspace_image(image_id: str, _u: str = Depends(require_user)):
     try:
         (WORKSPACE_DIR / row["filename"]).unlink(missing_ok=True)
     except OSError:
-        pass
+        logger.debug("(WORKSPACE_DIR / row[filename]).unlink(mis 失败（旁路，已忽略）", exc_info=True)
     conn.execute("DELETE FROM workspace_images WHERE id=?", (image_id,))
     conn.commit()
     conn.close()
@@ -334,9 +335,9 @@ def list_folders(_u: str = Depends(require_user)):
     conn = _db()
     folders = conn.execute("SELECT * FROM folders ORDER BY created_at ASC").fetchall()
     # image count per folder (folder_id may be NULL/'' for unfiled)
-    counts = {fid: n for fid, n in conn.execute(
+    counts = dict(conn.execute(
         "SELECT COALESCE(folder_id,''), COUNT(*) FROM workspace_images GROUP BY COALESCE(folder_id,'')"
-    ).fetchall()}
+    ).fetchall())
     conn.close()
     return {
         "folders": [{"id": f["id"], "name": f["name"], "count": counts.get(f["id"], 0)} for f in folders],
