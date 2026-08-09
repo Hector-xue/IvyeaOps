@@ -1012,7 +1012,15 @@ export async function monitorTokenUsage() {
 
 /* ── 能力市场（门道社区的 Skill 来源）───────────────────────────────── */
 
-export type MarketItem = {
+export type MarketAttribution = {
+  /** original = 作者本人上传；shared = 用户分享自己发现的好 Skill */
+  origin?: "original" | "shared";
+  original_author?: string;
+  source_url?: string;
+  license?: string;
+};
+
+export type MarketItem = MarketAttribution & {
   slug: string;
   title: string;
   summary?: string;
@@ -1043,6 +1051,8 @@ export type MarketManifest = {
 export type MarketPreview = {
   slug: string;
   version: string;
+  /** 分享类必须在界面上标出来源 —— 只存在数据库里的署名等于没保留 */
+  attribution?: MarketAttribution;
   integrity: { ok: boolean; problems: string[] };
   manifest: MarketManifest;
   sha256: string;

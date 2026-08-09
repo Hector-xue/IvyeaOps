@@ -134,6 +134,9 @@ def preview(body: PreviewBody, _admin: str = Depends(require_admin)) -> dict:
         "integrity": {"ok": not problems, "problems": problems},
         "manifest": manifest.to_dict(),
         "market_manifest": meta.get("manifest", {}),
+        # 分享类的署名要一路带到确认弹窗上 —— 用户在决定装不装的那一刻，
+        # 就该知道这东西是谁写的、什么许可证。
+        "attribution": meta.get("attribution", {}),
         "sha256": headers.get("X-Skill-Sha256", "") or meta.get("sha256", ""),
         # 用户确认的是这份指纹；install 会核对，防止"看的是 A、装的是 B"。
         "confirm_token": hashlib.sha256(blob).hexdigest(),

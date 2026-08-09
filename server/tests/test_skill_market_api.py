@@ -254,3 +254,30 @@ def test_market_unreachable_degrades_gracefully(client, monkeypatch):
         __import__("fastapi").HTTPException(503, "连不上能力市场")))
     r = c.get("/api/skill-market/skills")
     assert r.status_code == 503
+
+
+def test_attribution_reaches_the_confirm_dialog(client, monkeypatch):
+    """分享类的署名要一路带到确认弹窗 —— 用户在决定装不装的那一刻，
+    就该知道这东西是谁写的、什么许可证。只存在数据库里的署名等于没保留。"""
+    from app.routers import skill_market as mod
+
+    tarball = make_tarball(GOOD_SKILL)
+    sha = hashlib.sha256(tarball).hexdigest()
+
+    def fake_get(path, **params):
+        if path.endswith("/manifest"):
+            return FakeResponse({
+                "manifest": {"class": "A"}, "sha256": sha, "signature": "",
+                "attribution": {"origin": "shared", "original_author": "宝玉 (JimLiu)",
+                                "source_url": "https://example.com/x", "license": "MIT"},
+            })
+        if path.endswith("/download"):
+            return FakeResponse(tarball, {"X-Skill-Sha256": sha, "X-Skill-Signature": ""})
+        return FakeResponse({"total": 0, "items": []})
+
+    monkeypatch.setattr(mod, "_get", fake_get)
+    c, _, _ = client
+    body = c.post("/api/skill-market/preview",
+                  json={"slug": "creative/x", "version": "1.0.0"}).json()
+    assert body["attribution"]["original_author"] == "宝玉 (JimLiu)"
+    assert body["attribution"]["license"] == "MIT"

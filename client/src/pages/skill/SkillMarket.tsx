@@ -19,10 +19,44 @@ import {
   marketPreview,
   marketStatus,
   marketUninstall,
+  type MarketAttribution,
   type MarketItem,
   type MarketPreview,
   type MarketStatus,
 } from "../../api/client";
+
+
+/**
+ * 来源标注。
+ *
+ * 分享类的 Skill 是**别人写的**，界面上必须把这件事说清楚 —— 原作者、许可证、
+ * 出处。署名只存在数据库里等于没保留：用户看到的仍然是"门道提供的 Skill"，
+ * 那对原作者不公平，也让使用者不知道自己拿到的东西受什么许可证约束。
+ */
+function Attribution({ item }: { item: MarketAttribution }) {
+  if (item.origin !== "shared") return null;
+  return (
+    <div style={{ marginTop: 8, fontSize: 12.5, color: "#5b6560", lineHeight: 1.6 }}>
+      <span
+        style={{
+          fontSize: 11, background: "#eef1ee", color: "#5b6560",
+          padding: "1px 6px", borderRadius: 2, marginRight: 6,
+        }}
+      >
+        社区分享
+      </span>
+      原作者 <b>{item.original_author || "未注明"}</b>
+      {item.license && <> · {item.license}</>}
+      {item.source_url && (
+        item.source_url.startsWith("http") ? (
+          <> · <a href={item.source_url} target="_blank" rel="noreferrer noopener">出处</a></>
+        ) : (
+          <> · {item.source_url}</>
+        )
+      )}
+    </div>
+  );
+}
 
 function CapabilityDialog({
   preview,
@@ -78,6 +112,8 @@ function CapabilityDialog({
             ))}
           </ul>
         )}
+
+        <Attribution item={preview.attribution || {}} />
 
         {!preview.integrity.ok && (
           <div style={{ marginTop: 12, color: "#a8382c", fontSize: 13 }}>
@@ -222,6 +258,7 @@ export default function SkillMarket() {
               {it.summary && (
                 <div style={{ marginTop: 5, fontSize: 13.5, color: "#47514d" }}>{it.summary}</div>
               )}
+              <Attribution item={it} />
               <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
                 <button
                   className="tbtn"
