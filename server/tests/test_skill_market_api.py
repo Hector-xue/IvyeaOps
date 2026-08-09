@@ -239,6 +239,29 @@ def test_tarball_path_traversal_is_refused(client, monkeypatch):
     assert r.status_code == 400 and "越界" in r.text
 
 
+def test_install_path_containment_is_not_string_prefix_matching(client, monkeypatch):
+    """包含检查必须按路径层级比，不能比字符串前缀。
+
+    两个原因，各自都足以致命：
+    1. 字符串前缀会把 "…/community/foo-evil" 判成在 "…/community/foo" 之内 ——
+       任何平台上都是个洞。
+    2. 写死 "/" 做分隔符在 Windows 上恒不成立，结果是 Windows 用户装**任何**
+       Skill 都被判"非法的安装路径"。这条 CI 上真实挂过。
+    """
+    from pathlib import Path
+
+    from app.core.skill_paths import SKILLS_ROOT
+
+    root = (Path(SKILLS_ROOT) / "community").resolve()
+    sibling = (Path(SKILLS_ROOT) / "community-evil" / "x").resolve()
+    inside = (Path(SKILLS_ROOT) / "community" / "vendor" / "x").resolve()
+
+    assert not sibling.is_relative_to(root)      # 前缀相同但不在其内
+    assert inside.is_relative_to(root)
+    # 而字符串前缀写法会把上面第一个判成"在里面"：
+    assert str(sibling).startswith(str(root))
+
+
 def test_market_unreachable_degrades_gracefully(client, monkeypatch):
     """断网不该让整个板块白屏，要给一个能看懂的状态。"""
     import httpx

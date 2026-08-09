@@ -183,13 +183,18 @@ def install(body: InstallBody, _admin: str = Depends(require_admin)) -> dict:
     validate_skill_name(body.slug)
     dest = (Path(SKILLS_ROOT) / "community" / body.slug).resolve()
     root = (Path(SKILLS_ROOT) / "community").resolve()
-    if dest != root and not str(dest).startswith(str(root) + "/"):
+    # **别用 str(...).startswith(root + "/") 做包含检查**：Windows 的分隔符是
+    # 反斜杠，那样写恒为假，结果是 Windows 用户装任何 Skill 都会被判"非法路径"。
+    # Path.is_relative_to（3.9 起可用）按路径层级比，不碰分隔符字面量。
+    if dest != root and not dest.is_relative_to(root):
         raise HTTPException(400, "非法的安装路径")
 
     dest.mkdir(parents=True, exist_ok=True)
     for name, blob_bytes in files.items():
         target = (dest / name).resolve()
-        if not str(target).startswith(str(dest.resolve())):
+        # 同样按路径层级比。原写法用字符串前缀，"…/community/foo-evil" 会被
+        # 判成在 "…/community/foo" 之内 —— 在任何平台上都是个洞。
+        if target != dest and not target.is_relative_to(dest):
             raise HTTPException(400, f"越界文件：{name}")
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(blob_bytes)
@@ -214,7 +219,7 @@ def uninstall(body: UninstallBody, _admin: str = Depends(require_admin)) -> dict
     from pathlib import Path
     dest = (Path(SKILLS_ROOT) / "community" / body.slug).resolve()
     root = (Path(SKILLS_ROOT) / "community").resolve()
-    if dest != root and not str(dest).startswith(str(root) + "/"):
+    if dest != root and not dest.is_relative_to(root):
         raise HTTPException(400, "非法路径")
 
     moved = False
