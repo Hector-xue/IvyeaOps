@@ -545,7 +545,12 @@ export async function adAuditList(limit = 20) {
   return data;
 }
 
-export function adAuditDownloadUrl(jobId: string, fmt: "md" | "json" | "xlsx" | "html") {
+/** deliverable / brief 走统一结论契约，是"发给别人看"的版本（结论 + 证据页 +
+ *  说明页）；xlsx/md/json/html 是原始报表。两者不是一个东西。 */
+export function adAuditDownloadUrl(
+  jobId: string,
+  fmt: "md" | "json" | "xlsx" | "html" | "deliverable" | "brief",
+) {
   return `/api/ad-audit/${jobId}/download?fmt=${fmt}`;
 }
 

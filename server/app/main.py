@@ -46,6 +46,7 @@ from app.routers import skill_tools as skill_tools_router
 from app.routers import autofix as autofix_router
 from app.routers import lingxing as lingxing_router
 from app.routers import skill_market as skill_market_router
+from app.routers import notify as notify_router
 from app.routers import mcp_server as mcp_server_router
 from app.routers import mcp_tokens as mcp_tokens_router
 from app.agents.router import api_router as agents_api_router, ws_router as agents_ws_router
@@ -595,6 +596,8 @@ app.include_router(skill_market_router.router, prefix="/api/skill-market", tags=
 # 令牌的签发与撤销走下面这组管理接口，只有管理员能动。
 app.include_router(mcp_server_router.router, prefix="/api/mcp", tags=["mcp"])
 app.include_router(mcp_tokens_router.router, prefix="/api/mcp-admin", tags=["mcp"])
+# 通知渠道与 AI 预算：改的是"这台机器往哪儿发请求"，只有管理员能动。
+app.include_router(notify_router.router, prefix="/api/notify", tags=["notify"])
 app.include_router(news.router, prefix="/api/news", tags=["news"], dependencies=[Depends(require_module("news"))])
 app.include_router(brain.router, prefix="/api/brain", tags=["brain"], dependencies=[Depends(require_module("brain"))])
 app.include_router(listing_router.router, prefix="/api/listing", tags=["listing"], dependencies=[Depends(require_module("listing"))])

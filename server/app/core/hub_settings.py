@@ -82,6 +82,13 @@ _DEFAULTS: Dict[str, Any] = {
     "gbrain_bin": "",           # empty = use env / auto-detect
     "brain_root": "",           # empty = use env / default /root/brain
     "openai_api_key": "",       # for GBrain embeddings
+    # 通知渠道（见 services/notify）。notify_webhook 留空则退回 alert_webhook，
+    # 老部署不用重配。notify_events 存 JSON 数组，留空用 notify.DEFAULT_EVENTS。
+    "notify_webhook": "",
+    "notify_events": "",
+    # AI 花费预算（美元/月）。0 = 不设预算。超了发一次通知，见 services/budget。
+    "ai_budget_monthly_usd": 0,
+    "ai_budget_alerted_month": "",
     # Feishu notifications
     "alert_webhook": "",
     "alert_app_id": "",

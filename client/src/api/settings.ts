@@ -57,6 +57,10 @@ export interface HubSettings {
   brain_root: string;
   openai_api_key: string;
   // Feishu alerts
+  // 通知渠道（见 server/app/services/notify）
+  notify_webhook: string;
+  notify_events: string;
+  ai_budget_monthly_usd: number;
   alert_webhook: string;
   alert_app_id: string;
   alert_app_secret: string;

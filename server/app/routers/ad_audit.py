@@ -309,8 +309,33 @@ def ad_download(
     fmt: str = "md",
     _user: str = Depends(require_user),
 ) -> FileResponse:
-    if fmt not in ("md", "json", "xlsx", "html"):
-        raise HTTPException(status_code=400, detail="fmt must be md, json, xlsx or html")
+    if fmt not in ("md", "json", "xlsx", "html", "deliverable", "brief"):
+        raise HTTPException(status_code=400,
+                            detail="fmt must be md, json, xlsx, html, deliverable or brief")
+
+    # deliverable / brief 走统一的结论契约（core/findings），跟报表里那份原始
+    # xlsx 是两个东西：**这份是给别人看的** —— 结论一页、证据一页（指标/数值/
+    # 时间窗/来源）、说明一页。别人质疑"你凭什么这么说"时翻第二页。
+    if fmt in ("deliverable", "brief"):
+        job = ad_audit.get_job(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="没有这个任务")
+        findings = job.get("findings") or {}
+        meta = {"job_id": job_id, "kind": "广告审计"}
+        from app.services import deliverable
+        if fmt == "brief":
+            text = deliverable.build_markdown(findings, meta)
+            out = ad_audit._job_dir(job_id) / "brief.md"
+            out.write_text(text, encoding="utf-8")
+            return FileResponse(out, media_type="text/markdown",
+                                filename=f"ad-audit-{job_id}-结论.md")
+        out = deliverable.build_xlsx(
+            ad_audit._job_dir(job_id) / "deliverable.xlsx", findings, meta)
+        return FileResponse(
+            out,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            filename=f"ad-audit-{job_id}-交付物.xlsx")
+
     path = ad_audit.download_path(job_id, fmt)
     if path is None:
         if fmt == "xlsx":

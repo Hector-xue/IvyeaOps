@@ -12,6 +12,10 @@ import {
   listMcpTokens, issueMcpToken, revokeMcpToken, getMcpClientConfig,
   type McpToken, type IssuedToken,
 } from "../../api/mcp";
+import {
+  getNotifyConfig, testNotify, getBudget,
+  type NotifyConfig, type BudgetStatus,
+} from "../../api/notify";
 import { lockBodyScroll } from "../../lib/scrollLock";
 import {
   FONT_OPTIONS, ZOOM_OPTIONS, WEIGHT_OPTIONS,
@@ -817,9 +821,136 @@ const EMPTY: HubSettings = {
   skill_market_enabled: false,
   skill_market_url: "",
   skill_market_pubkey: "",
+  notify_webhook: "",
+  notify_events: "",
+  ai_budget_monthly_usd: 0,
 };
 
 // ── 外观 / 显示：字体族 + 全局字号（即时生效 + localStorage，无后端）───────────────
+/** 通知渠道与 AI 预算。管理员专属；非管理员拿到 403 就整块不渲染。 */
+function NotifySection({
+  vals, set, save,
+}: {
+  vals: Partial<HubSettings>;
+  set: <K extends keyof HubSettings>(k: K, v: HubSettings[K]) => void;
+  save: (keys: (keyof HubSettings)[], vals: Partial<HubSettings>) => Promise<void>;
+}) {
+  const [cfg, setCfg] = useState<NotifyConfig | null>(null);
+  const [budget, setBudget] = useState<BudgetStatus | null>(null);
+  const [denied, setDenied] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; detail: string } | null>(null);
+
+  const reload = useCallback(async () => {
+    try {
+      const [c, b] = await Promise.all([getNotifyConfig(), getBudget()]);
+      setCfg(c);
+      setBudget(b);
+    } catch {
+      setDenied(true);
+    }
+  }, []);
+  useEffect(() => { void reload(); }, [reload]);
+
+  if (denied) return null;
+
+  const picked: string[] = (() => {
+    const raw = (vals.notify_events || "").trim();
+    if (!raw) return cfg?.enabled_events || [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch { return []; }
+  })();
+
+  const toggle = (key: string) => {
+    const next = picked.includes(key) ? picked.filter((k) => k !== key) : [...picked, key];
+    set("notify_events", JSON.stringify(next));
+  };
+
+  const runTest = async () => {
+    setTesting(true);
+    setResult(null);
+    try {
+      // 先把地址存下来再测 —— 否则用户改了输入框直接点测试，测的还是旧地址，
+      // 结果对不上会让人以为是通知功能坏了。
+      await save(["notify_webhook"], vals);
+      setResult(await testNotify());
+      await reload();
+    } catch {
+      setResult({ ok: false, detail: "保存或发送失败" });
+    } finally { setTesting(false); }
+  };
+
+  const CHANNEL_LABEL: Record<string, string> = {
+    feishu: "飞书", dingtalk: "钉钉", wecom: "企业微信",
+    slack: "Slack", generic: "自定义接收端",
+  };
+
+  return (
+    <Section
+      title="通知与 AI 预算"
+      desc="机器在服务器上跑，人在别处。任务挂了、这个月花超了，直接推到你手机上。"
+      keys={["notify_webhook", "notify_events", "ai_budget_monthly_usd"]}
+      vals={vals} onSave={save}
+    >
+      <Field
+        label="通知地址（Webhook）"
+        hint={<>
+          支持飞书、钉钉、企业微信、Slack 和自建接收端 —— <b>粘进来就行，是哪一家我们自己认</b>。
+          {cfg?.webhook_set && cfg.channel && <>当前识别为「{CHANNEL_LABEL[cfg.channel] || cfg.channel}」。</>}
+          {" "}报文里只有事件类型、任务名和时间，<b>不含任何店铺数据或密钥</b>。
+        </>}
+      >
+        <div className="hs-test-row" style={{ gap: 8 }}>
+          <TxtInput value={vals.notify_webhook || ""} onChange={(v) => set("notify_webhook", v)}
+            placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/…" />
+          <button className="hs-test-btn" onClick={runTest} disabled={testing || !vals.notify_webhook}>
+            {testing ? "发送中…" : "发条测试消息"}
+          </button>
+        </div>
+        {result && (
+          <div className="ms" style={{ marginTop: 6, color: result.ok ? "var(--ok)" : "var(--err)" }}>
+            {result.ok ? "✓ " : "× "}{result.detail}
+          </div>
+        )}
+      </Field>
+
+      {cfg && (
+        <Field label="发哪些事" hint="默认只发需要你动手的三类。每跑完一个任务都响一次的机器人，三天就会被静音。">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+            {Object.entries(cfg.events).map(([key, label]) => (
+              <label key={key} className="hs-toggle-line" style={{ margin: 0 }}>
+                <input type="checkbox" checked={picked.includes(key)} onChange={() => toggle(key)} />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
+        </Field>
+      )}
+
+      <Field
+        label="每月 AI 预算（美元）"
+        hint={<>
+          填 0 表示不设预算。超了会推一条通知，<b>每月只提醒一次</b>，
+          且<b>不会掐掉正在跑的任务</b> —— 这是按公开价目表对 token 的本地估算，不是账单，
+          拿估算值去停用户的活儿，错一次就是事故。
+        </>}
+      >
+        <TxtInput value={String(vals.ai_budget_monthly_usd ?? 0)}
+          onChange={(v) => set("ai_budget_monthly_usd", Number(v) || 0)} placeholder="0" />
+        {budget?.enabled && (
+          <div className="ms" style={{ marginTop: 6 }}>
+            {budget.month} 已用 <b>${budget.spend_usd.toFixed(2)}</b> / ${budget.limit_usd.toFixed(2)}
+            （{Math.round(budget.ratio * 100)}%）
+            {budget.exceeded && <span style={{ color: "var(--err)" }}> · 已超</span>}
+          </div>
+        )}
+      </Field>
+    </Section>
+  );
+}
+
 /** 对外 MCP：把这台机器的亚马逊能力开放给 Claude Desktop / Cursor 等客户端。
  *
  *  管理员专属。非管理员拿到 403，这一整块就不渲染 —— 与其给他一个点了报错的
@@ -1604,6 +1735,9 @@ export default function HubSettings() {
         </Section>
 
       </AdvancedBlock>
+
+      {/* ── 通知与预算（管理员专属）── */}
+      <NotifySection vals={vals} set={set} save={save} />
 
       {/* ── 对外 MCP（管理员专属，非管理员自动不渲染）── */}
       <McpSection />

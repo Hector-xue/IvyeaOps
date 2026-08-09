@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -162,6 +163,36 @@ def progress(job_id: str, pct: float, message: str = "",
         )
 
 
+def _notify(job_id: str, event: str, title: str, body: str, level: str) -> None:
+    """任务终态通知。**放在这里而不是各个板块里**：这是所有后台任务唯一的
+    出口，接在这儿就不会漏掉某个板块，也不会有人新加一种任务时忘了接。
+
+    任何失败都吞掉 —— 通知发不出去，不能连带把任务标记成失败。
+
+    **发送放到后台线程**：webhook 是网络调用，超时最长 8 秒。任务记账不该为了
+    发一条提醒而卡在那儿等一个第三方服务器。"""
+    try:
+        from app.services import notify
+        name = ""
+        with _connect() as conn:
+            row = conn.execute("SELECT kind FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if row:
+                name = row["kind"] or ""
+        if not notify.webhook_url():
+            return          # 没配就别起线程了
+        text = title.format(kind=name or "任务")
+
+        def _fire() -> None:
+            try:
+                notify.send_sync(event, text, body, level=level)
+            except Exception:  # noqa: BLE001
+                logger.debug("任务通知发送失败（旁路，已忽略）", exc_info=True)
+
+        threading.Thread(target=_fire, name=f"notify-{job_id}", daemon=True).start()
+    except Exception:  # noqa: BLE001
+        logger.debug("任务通知调度失败（旁路，已忽略）", exc_info=True)
+
+
 def finish(job_id: str, *, result: Any = None) -> None:
     with _connect() as conn:
         conn.execute(
@@ -170,6 +201,7 @@ def finish(job_id: str, *, result: Any = None) -> None:
             (SUCCEEDED, json.dumps(result, ensure_ascii=False, default=str)
              if result is not None else None, int(time.time()), job_id),
         )
+    _notify(job_id, "job.succeeded", "{kind} 已完成", f"任务 {job_id} 跑完了。", "info")
 
 
 def fail(job_id: str, error: str) -> None:
@@ -178,6 +210,7 @@ def fail(job_id: str, error: str) -> None:
             "UPDATE jobs SET status=?, error=?, finished_at=?, lease_until=NULL WHERE id=?",
             (FAILED, str(error)[:2000], int(time.time()), job_id),
         )
+    _notify(job_id, "job.failed", "{kind} 失败", str(error)[:400], "error")
 
 
 def cancel(job_id: str) -> bool:
