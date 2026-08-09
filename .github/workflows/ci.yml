@@ -101,6 +101,50 @@ jobs:
         env:
           PYTHONUTF8: "1"
 
+  # 跨平台搬家：在 Linux 上导出备份，在 Windows 上还原并逐行核对。
+  #
+  # 为什么值得单独一个作业：这个仓库反复吃过"宣称支持某平台、却没有任何东西在
+  # 验证它"的亏（macOS 一直只打包不测试、app/tests 从没进过 CI 所以 61 项常年红）。
+  # 「换台机器数据能完整搬过去」是自托管产品最不能出错的承诺之一，而路径分隔符、
+  # 文本编码、隐藏文件这些恰恰是最容易在跨平台时悄悄坏掉的地方。
+  migrate-cross-platform:
+    name: 跨平台迁移 (Linux 导出 → Windows 还原)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r server/requirements.txt
+      - name: 造数据并导出
+        working-directory: server
+        shell: bash
+        run: python ../scripts/ci_migrate_export.py
+        env: { PYTHONUTF8: "1" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: migrate-archive
+          path: server/ci-migrate/*.zip
+          retention-days: 1
+
+  migrate-restore-windows:
+    name: 跨平台迁移 · Windows 还原
+    runs-on: windows-latest
+    needs: [migrate-cross-platform]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r server/requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: migrate-archive
+          path: server/ci-migrate
+      - name: 还原并核对
+        working-directory: server
+        shell: bash
+        run: python ../scripts/ci_migrate_verify.py
+        env: { PYTHONUTF8: "1" }
+
   client:
     name: client build + typecheck
     runs-on: ubuntu-latest
