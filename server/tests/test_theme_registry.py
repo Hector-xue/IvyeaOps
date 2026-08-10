@@ -28,15 +28,62 @@ _CSS = _CLIENT / "src" / "styles" / "workbench.css"
 _TS = _CLIENT / "src" / "lib" / "themes.ts"
 
 
+_TOKENS = _CLIENT / "src" / "styles" / "mendao-tokens.css"
+
+# 选择器里的主题名：`[data-theme=light]` 和 `[data-theme="mendao-light"]` 都要认
+_SEL = re.compile(r"\[data-theme=\"?([\w-]+)\"?\]")
+
+
+def _collect(text: str, into: dict[str, dict[str, str]]) -> None:
+    """把一段 CSS 里的变量声明按主题归堆。
+
+    要处理三种写法，因为三种都真实存在：
+      · `:root{...}`                              —— 默认主题(dark)，同时是所有主题的底
+      · `[data-theme=light]{...}`                 —— 旧 16 套，不带引号
+      · `[data-theme="a"],\\n[data-theme="b"]{...}` —— 门道两套共用的接线块与别名块
+    """
+    for m in re.finditer(r"([^{}]+)\{([^{}]*)\}", text, re.S):
+        sel, body = m.group(1), m.group(2)
+        decls = dict(re.findall(r"(--[\w-]+):\s*([^;]+);", body))
+        if not decls:
+            continue
+        names = _SEL.findall(sel)
+        if ":root" in sel and not names:
+            names = ["*"]          # `*` = 所有主题共享的底
+        for n in names:
+            into.setdefault(n, {}).update(decls)
+
+
+def _resolve(value: str, scope: dict[str, str], depth: int = 0) -> str:
+    """把 `var(--x)` 一层层展开。门道那两套是两跳：
+    `--acc: var(--md-info)` → `--md-info: rgb(var(--md-c-info))` → `rgb(64 120 242)`。
+    """
+    if depth > 8:
+        raise AssertionError(f"变量解析成环：{value!r}")
+    m = re.search(r"var\((--[\w-]+)\)", value)
+    if not m:
+        return value.strip()
+    inner = scope.get(m.group(1))
+    assert inner is not None, f"{value!r} 引用了未定义的变量 {m.group(1)}"
+    return _resolve(value[: m.start()] + inner + value[m.end():], scope, depth + 1)
+
+
 def _css_themes() -> dict[str, dict[str, str]]:
-    """从 workbench.css 抽出每套主题的变量。`:root` 就是默认的 dark。"""
+    """每套主题**最终生效**的变量值（已展开 var 间接层）。"""
+    raw: dict[str, dict[str, str]] = {}
+    _collect(_TOKENS.read_text(encoding="utf-8"), raw)
     css = _CSS.read_text(encoding="utf-8")
     # 主题块全在文件开头的调色板区，正文样式里不会再出现 [data-theme=] 选择器
-    head = css[: css.index("html, body")] if "html, body" in css else css[:12000]
+    head = css[: css.index("html, body")] if "html, body" in css else css[:14000]
+    _collect(head, raw)
+
+    shared = raw.pop("*", {})
     out: dict[str, dict[str, str]] = {}
-    for m in re.finditer(r"(?:^:root|\[data-theme=([\w-]+)\])\s*\{(.*?)\n\}", head, re.S | re.M):
-        name = m.group(1) or "dark"
-        out[name] = dict(re.findall(r"(--[\w-]+):\s*([^;]+);", m.group(2)))
+    for name, decls in raw.items():
+        scope = {**shared, **decls}          # 主题自己的声明压过 :root 的底
+        out[name] = {k: _resolve(v, scope) for k, v in scope.items()}
+    # `:root` 既是共享底、又是 dark 这一套本身
+    out.setdefault("dark", {k: _resolve(v, shared) for k, v in shared.items()})
     return out
 
 

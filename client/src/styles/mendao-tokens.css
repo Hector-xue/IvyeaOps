@@ -1,0 +1,149 @@
+/* 门道调色板 —— 移植自 /root/mendao 的 styles/mendao.css
+ * ============================================================================
+ *
+ * 参照系是代码编辑器（浅色 One Light / 深色 One Dark）。三条纪律照搬：
+ *
+ *   1. **中性色是主体。** 正文、线条、表面全部中性 —— IDE 的彩色也只出现在
+ *      语法 token 上，正文段落从来不是花的。彩色只进"语义位"。
+ *   2. **六支语义色各有分工**，不是一堆好看的颜色轮着用：
+ *      accent 红=需要你处理 · ok 绿=成了 · info 蓝=可点/进行中 ·
+ *      warn 橙=数量/风险 · hint 紫=系统与机器 · calm 青=类型/元信息。
+ *   3. **深浅两套值，一套变量名。**
+ *
+ * ── 为什么全部带 `--md-` 前缀 ──────────────────────────────────────────
+ * 门道原版叫 `--c-ink`、`--accent`、`--muted`、`--ring`。后三个和 agents 子树
+ * 的 shadcn 变量**同名**（agents/index.css）。虽然那边已经收进 #agents-root，
+ * 但那是个懒加载 chunk，谁先谁后取决于用户点没点过 Agents 页 —— 这种"看运气"
+ * 的耦合修过一次就不该再造一个。加前缀是零成本的隔离。
+ *
+ * ── 为什么写成 RGB 通道值 ─────────────────────────────────────────────
+ * `17 17 17` 而不是 `#111`：这样 `rgb(var(--md-c-ink) / .4)` 能直接调透明度，
+ * 而 ops 里大量地方需要半透明派生（原本靠 color-mix）。同时给出 `--md-ink`
+ * 这类可直接用的 rgb() 别名，纯 CSS 处用它们更省事。
+ *
+ * ── 比门道多一支 sink ─────────────────────────────────────────────────
+ * 门道只有 canvas/paper/wash 三级表面，因为它是论坛、页面简单。ops 有终端、
+ * 表格、嵌套面板、开关轨道，`--bg3` 用了 90 处 —— 三级不够分。sink 是灰阶上
+ * 再深/浅一档，不违背这套语汇（canvas→paper→wash→sink 本来就是连续灰阶）。
+ */
+
+:root[data-theme="mendao-light"] {
+  /* --- 浅色：One Light 血统 --- */
+  --md-c-canvas: 250 250 249;   /* 页面底。**门道原版是纯白 255**，这里压暗一档 ——
+                                   门道的 canvas 和 paper 同为纯白，靠 .sb 那条
+                                   inset 阴影分侧栏；而 flat 皮肤会把阴影清掉，
+                                   两者同色会让侧栏和内容融成一片。 */
+  --md-c-paper:  255 255 255;   /* 面板/卡片/侧栏 */
+  --md-c-wash:   244 244 242;   /* 次级表面：输入框底、hover、表头、代码块 */
+  --md-c-sink:   236 236 233;   /* 第四级：嵌套面板、tooltip、开关轨道 */
+  --md-c-hair:   237 237 235;   /* 发丝线：同类分隔 */
+  --md-c-rule:   214 214 210;   /* 结构线：区块划分 */
+  --md-c-ink:     17  17  17;   /* 正文 / 墨线 */
+  --md-c-muted:  110 110 104;
+  --md-c-faint:  156 156 150;
+
+  --md-c-accent: 194  64  47;   /* 红：需要你处理 */
+  --md-c-ok:      80 161  79;   /* 绿：成了 */
+  --md-c-info:    64 120 242;   /* 蓝：可点 / 进行中 */
+  --md-c-warn:   152 104   1;   /* 橙：数量 / 风险 */
+  --md-c-hint:   166  38 164;   /* 紫：系统与机器 */
+  --md-c-calm:     1 132 188;   /* 青：类型 / 元信息 */
+
+  /* 代码高亮。按语法角色命名不按颜色命名 —— 换主题时"关键字"永远是关键字，
+     而"那个紫色"会变。终端和编辑器的配色都从这里取。 */
+  --md-c-syn-key:      166  38 164;
+  --md-c-syn-str:       80 161  79;
+  --md-c-syn-fn:        64 120 242;
+  --md-c-syn-num:      152 104   1;
+  --md-c-syn-type:     193 132   1;
+  --md-c-syn-comment:  160 161 167;
+}
+
+:root[data-theme="mendao-dark"] {
+  /* --- 深色：One Dark 血统 --- */
+  --md-c-canvas:  23  25  31;
+  --md-c-paper:   30  33  40;
+  --md-c-wash:    37  41  49;
+  --md-c-sink:    45  50  59;
+  --md-c-hair:    46  51  60;
+  --md-c-rule:    62  68  79;
+  --md-c-ink:    215 218 224;
+  --md-c-muted:  154 160 171;
+  --md-c-faint:  116 122 133;
+
+  --md-c-accent: 224 108 117;
+  --md-c-ok:     152 195 121;
+  --md-c-info:    97 175 239;
+  --md-c-warn:   209 154 102;
+  --md-c-hint:   198 120 221;
+  --md-c-calm:    86 182 194;
+
+  --md-c-syn-key:      198 120 221;
+  --md-c-syn-str:      152 195 121;
+  --md-c-syn-fn:        97 175 239;
+  --md-c-syn-num:      209 154 102;
+  --md-c-syn-type:     229 192 123;
+  --md-c-syn-comment:  127 132 142;
+}
+
+/* ── agents 子树的中性阶 ─────────────────────────────────────────────────
+ *
+ * agents（claudecodeui 移植）里有 1213 处 `gray-*` 字面色阶，11 档全用到，
+ * 写法是 `text-gray-900 dark:text-gray-100` 这种明暗配对。它们不吃 ops 的
+ * CSS 变量，也不吃那座 shadcn 桥 —— 换主题时这一层纹丝不动。
+ *
+ * 解法是让 tailwind.config 的 gray 色阶指向 `--ag-n*`：默认值（在
+ * workbench.css 的 :root 里）就是今天那份静态灰阶，所以**旧 16 套零变化**；
+ * 门道两套在这里覆盖成自己的灰。
+ *
+ * 两套都必须是"50 最浅 → 950 最深"的单调阶。深色模式用 700~950 当表面、
+ * 50~200 当文字，浅色模式反过来 —— 同一条单调阶同时服务两边，这正是
+ * agents 那些 `dark:` 配对成立的前提，不能因为是深色主题就把阶倒过来。
+ */
+:root[data-theme="mendao-light"] {
+  --ag-n50:  255 255 255;   /* paper */
+  --ag-n100: 250 250 249;   /* canvas */
+  --ag-n200: 237 237 235;   /* hair */
+  --ag-n300: 214 214 210;   /* rule */
+  --ag-n400: 176 176 171;
+  --ag-n500: 156 156 150;   /* faint */
+  --ag-n600: 110 110 104;   /* muted */
+  --ag-n700:  80  80  76;
+  --ag-n800:  51  51  48;
+  --ag-n900:  34  34  32;
+  --ag-n950:  17  17  17;   /* ink */
+}
+:root[data-theme="mendao-dark"] {
+  --ag-n50:  215 218 224;   /* ink */
+  --ag-n100: 197 202 210;
+  --ag-n200: 175 181 191;
+  --ag-n300: 154 160 171;   /* muted */
+  --ag-n400: 133 140 152;
+  --ag-n500: 116 122 133;   /* faint */
+  --ag-n600:  88  95 106;
+  --ag-n700:  62  68  79;   /* rule */
+  --ag-n800:  45  50  59;   /* sink */
+  --ag-n900:  30  33  40;   /* paper */
+  --ag-n950:  23  25  31;   /* canvas */
+}
+
+/* 可直接使用的 rgb() 别名。两套主题共用这一份 —— 它们引用的是 --md-c-*，
+   所以自动跟着深浅走，不需要写两遍。 */
+:root[data-theme="mendao-light"],
+:root[data-theme="mendao-dark"] {
+  --md-canvas: rgb(var(--md-c-canvas));
+  --md-paper:  rgb(var(--md-c-paper));
+  --md-wash:   rgb(var(--md-c-wash));
+  --md-sink:   rgb(var(--md-c-sink));
+  --md-hair:   rgb(var(--md-c-hair));
+  --md-rule:   rgb(var(--md-c-rule));
+  --md-ink:    rgb(var(--md-c-ink));
+  --md-muted:  rgb(var(--md-c-muted));
+  --md-faint:  rgb(var(--md-c-faint));
+  --md-accent: rgb(var(--md-c-accent));
+  --md-ok:     rgb(var(--md-c-ok));
+  --md-info:   rgb(var(--md-c-info));
+  --md-warn:   rgb(var(--md-c-warn));
+  --md-hint:   rgb(var(--md-c-hint));
+  --md-calm:   rgb(var(--md-c-calm));
+}

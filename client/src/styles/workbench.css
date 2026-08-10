@@ -36,6 +36,14 @@
   --fs-7:7px;--fs-75:7.5px;--fs-8:8px;--fs-85:8.5px;--fs-9:9px;--fs-95:9.5px;
   --fs-10:10px;--fs-105:10.5px;--fs-11:11px;--fs-115:11.5px;--fs-12:12px;
   --fs-125:12.5px;--fs-13:13px;--fs-135:13.5px;--fs-14:14px;--fs-15:15px;--fs-16:16px;
+
+  /* agents 子树的中性灰阶（tailwind.config 的 gray 指过来）。
+     这里就是今天那份静态色阶的原值，所以 16 套主题一个像素都不会变；
+     门道两套在 mendao-tokens.css 里覆盖它。 */
+  --ag-n50:245 245 245;--ag-n100:235 235 235;--ag-n200:214 214 214;
+  --ag-n300:184 184 184;--ag-n400:144 144 144;--ag-n500:110 110 110;
+  --ag-n600:80 80 80;--ag-n700:56 56 56;--ag-n800:38 38 38;
+  --ag-n900:28 28 28;--ag-n950:17 17 17;
 }
 
 /* ── Terminal Green (default dark) ── */
@@ -218,6 +226,57 @@
   --grain-opacity:.52;
   --warm-glow:rgba(160,30,110,.26);
   --bg-cover:rgba(10,3,8,.82);
+}
+
+/* ══ 门道 · 线条直角风 ═══════════════════════════════════════════════════
+ *
+ * 调色板在 styles/mendao-tokens.css（--md-* 前缀）。这两块只做**接线**：
+ * 把 ops 自己的变量名指过去。分成两个文件是因为一份是"门道有哪些颜色"，
+ * 一份是"ops 的哪个位置用哪一支"——后者才是这里要表达的东西。
+ *
+ * 三处和其余 16 套不一样的地方，都是有意的：
+ *
+ * ① **表面是不透明的。** 其余 16 套的 --bg/--bg1/--bg2/--bg3 是半透明 rgba，
+ *    层次靠底下那张 /art/bg.png 叠出来。门道语汇里没有背景画的位置，所以
+ *    --bg-cover 设成不透明（把画完全盖住）、颗粒和暖角晕关掉，四级表面
+ *    改用四支实色（canvas→paper→wash→sink）自己拉开层次。
+ *
+ * ② **--acc 是 info 蓝，不是门道的 accent 红。** ops 里 var(--acc) 用了 615 处，
+ *    其中 197 处是 color-mix 派生，语义压倒性地是"可点/进行中/选中/进度"
+ *    —— 这正是门道 info 的定义。用朱红会让整个界面看起来一直在报警。
+ *    门道最有辨识度的"主按钮墨底反白"由单独的 --acc-ink 承担。
+ *
+ * ③ **--fs-* 在这里被重排成门道的刻度。** 上面那张表是按旧值命名的间接表
+ *    （17 档），这里把它压成 10.5 / 12 / 13.5 / 15 四档。ops 现在大量 8~9px
+ *    的中文标签就是"不够大气"的根因；门道最小档是 10.5px。
+ *    ≥17px 的 19 处字面量没进表，它们继续充当 display 档。
+ * ═══════════════════════════════════════════════════════════════════════ */
+[data-theme="mendao-light"],
+[data-theme="mendao-dark"]{
+  /* 四级表面：全部不透明 */
+  --bg:var(--md-canvas);--bg1:var(--md-paper);--bg2:var(--md-wash);--bg3:var(--md-sink);
+  /* 分级线宽：结构线 / 发丝线 */
+  --b:var(--md-rule);--b2:var(--md-hair);--brd:var(--b);
+  /* 三级文字 */
+  --t:var(--md-ink);--t2:var(--md-muted);--t3:var(--md-faint);
+  /* 强调色见 ② */
+  --acc:var(--md-info);
+  --acc-ink:var(--md-ink);
+  /* 语义色一一对应 */
+  --blue:var(--md-info);--amber:var(--md-warn);--red:var(--md-accent);
+  --purple:var(--md-hint);--cyan:var(--md-calm);
+  /* 门道用系统黑体，不用等宽（等宽留给数字、代码和元信息） */
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+  --sans:var(--font);
+  /* 背景画三件套：关掉。遮罩设成不透明的页面底色，把画完全盖住 */
+  --grain-opacity:0;
+  --warm-glow:transparent;
+  --bg-cover:var(--md-canvas);
+  /* 字号刻度重排（见 ③）*/
+  --fs-7:10.5px;--fs-75:10.5px;--fs-8:10.5px;--fs-85:10.5px;--fs-9:10.5px;--fs-95:10.5px;
+  --fs-10:12px;--fs-105:12px;--fs-11:12px;
+  --fs-115:13.5px;--fs-12:13.5px;--fs-125:13.5px;--fs-13:13.5px;
+  --fs-135:15px;--fs-14:15px;--fs-15:15px;--fs-16:15px;
 }
 
 /* ─────────────────────────────────────────────────────────────────

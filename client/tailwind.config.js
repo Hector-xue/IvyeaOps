@@ -18,10 +18,28 @@ export default {
   theme: {
     extend: {
       colors: {
+        // 中性阶走 CSS 变量，不再是静态 hex —— agents 里有 1213 处 `gray-*`
+        // 字面色阶（11 档全用到），它们既不吃 ops 的变量也不吃 shadcn 那座桥，
+        // 换主题时是唯一纹丝不动的一层。
+        //
+        // 默认值定义在 workbench.css 的 :root，就是原来这份静态色阶的原值
+        // （所以旧 16 套零变化）；门道两套在 mendao-tokens.css 里覆盖。
+        //
+        // 必须写成 `rgb(var(--x) / <alpha-value>)` 而不是 `var(--x)`：
+        // agents 里有 362 处带透明度修饰符的写法（`bg-gray-800/60`），
+        // 后一种写法会让它们**静默失效**。
         gray: {
-          50:  '#f5f5f5', 100: '#ebebeb', 200: '#d6d6d6', 300: '#b8b8b8',
-          400: '#909090', 500: '#6e6e6e', 600: '#505050', 700: '#383838',
-          800: '#262626', 900: '#1c1c1c', 950: '#111111',
+          50:  'rgb(var(--ag-n50)  / <alpha-value>)',
+          100: 'rgb(var(--ag-n100) / <alpha-value>)',
+          200: 'rgb(var(--ag-n200) / <alpha-value>)',
+          300: 'rgb(var(--ag-n300) / <alpha-value>)',
+          400: 'rgb(var(--ag-n400) / <alpha-value>)',
+          500: 'rgb(var(--ag-n500) / <alpha-value>)',
+          600: 'rgb(var(--ag-n600) / <alpha-value>)',
+          700: 'rgb(var(--ag-n700) / <alpha-value>)',
+          800: 'rgb(var(--ag-n800) / <alpha-value>)',
+          900: 'rgb(var(--ag-n900) / <alpha-value>)',
+          950: 'rgb(var(--ag-n950) / <alpha-value>)',
         },
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',

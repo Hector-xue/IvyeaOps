@@ -37,6 +37,11 @@ export type ThemeDef = {
 };
 
 export const THEMES: readonly ThemeDef[] = [
+  // 门道两套排在最前 —— 它们是默认，选择器里第一眼要看到的就是它们。
+  // accent 必须等于 CSS 里 --acc 解析后的值，也就是 --md-info（见 workbench.css
+  // 的接线块）：浅色 #4078f2、深色 #61afef。
+  { id: "mendao-light",  name: "门道·浅", icon: "▤", accent: "#4078f2", mode: "light" },
+  { id: "mendao-dark",   name: "门道·深", icon: "▥", accent: "#61afef", mode: "dark"  },
   { id: "dark",          name: "暗夜",   icon: "🌲", accent: "#4ade80", mode: "dark"  },
   { id: "deep-space",    name: "星渊",   icon: "🌌", accent: "#4d8fff", mode: "dark"  },
   { id: "smoke-gold",    name: "烟金",   icon: "✦",  accent: "#f0a030", mode: "dark"  },
