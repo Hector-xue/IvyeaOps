@@ -49,22 +49,22 @@ export const ToolDiffViewer: React.FC<ToolDiffViewerProps> = ({
         {onFileClick ? (
           <button
             onClick={onFileClick}
-            className="cursor-pointer truncate font-mono text-[11px] text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+            className="cursor-pointer truncate font-mono text-[length:var(--fs-11)] text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
           >
             {filePath}
           </button>
         ) : (
-          <span className="truncate font-mono text-[11px] text-gray-600 dark:text-gray-400">
+          <span className="truncate font-mono text-[length:var(--fs-11)] text-gray-600 dark:text-gray-400">
             {filePath}
           </span>
         )}
-        <span className={`rounded px-1.5 py-px text-[10px] font-medium ${badgeClasses} ml-2 flex-shrink-0`}>
+        <span className={`rounded px-1.5 py-px text-[length:var(--fs-10)] font-medium ${badgeClasses} ml-2 flex-shrink-0`}>
           {badge}
         </span>
       </div>
 
       {/* Diff lines */}
-      <div className="font-mono text-[11px] leading-[18px]">
+      <div className="font-mono text-[length:var(--fs-11)] leading-[18px]">
         {diffLines.map((diffLine, i) => (
           <div key={i} className="flex">
             <span

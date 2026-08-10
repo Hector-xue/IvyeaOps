@@ -22,7 +22,22 @@
 }
 
 @layer base {
-  :root {
+  /* 这些变量**必须挂在 #agents-root 上，不能挂 :root**。
+   *
+   * 它们是 shadcn 那套通用名（--background/--foreground/--accent/--muted/
+   * --ring/--border/--radius），而 ops 主应用自己也有 --ring 等同名变量
+   * （workbench.css:2569 的 `--ring: color-mix(in srgb, var(--acc) 48%, transparent)`）。
+   *
+   * 这个文件是随 /agents 路由**懒加载**的 chunk，注入时间晚于 index CSS。
+   * 挂在 :root 上的后果是：用户点开过一次 Agents 页，全站的 --ring 就变成
+   * 一串裸 HSL 三元组（`221.2 83.2% 53.3%`），而 ops 那边写的是
+   * `box-shadow: 0 0 0 2px var(--ring)` —— 值不合法 → **整条 box-shadow 被丢弃**
+   * → 全站输入框的焦点圈消失，刷新前一直如此。--border / --accent 同理
+   * （workbench.css:694,701,707）。
+   *
+   * 挂在 #agents-root 上，子树内照常继承，ops 那边一个字都碰不到。
+   */
+  #agents-root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
@@ -76,7 +91,7 @@
   
   /* Fallback for older iOS versions */
   @supports (padding-top: constant(safe-area-inset-top)) {
-    :root {
+    #agents-root {
       --safe-area-inset-top: constant(safe-area-inset-top);
       --safe-area-inset-right: constant(safe-area-inset-right);
       --safe-area-inset-bottom: constant(safe-area-inset-bottom);
@@ -84,7 +99,9 @@
     }
   }
 
-  .dark {
+  /* .dark 这个 class 是打在 #agents-root 自身上的（见 utils/ivyeaOpsTheme.ts），
+     所以写成 #agents-root.dark 而不是后代选择器。同样不能是裸 .dark —— 理由同上。 */
+  #agents-root.dark {
     /* IvyeaOps 暗夜主题色系 */
     --background: 0 0% 5%;           /* #0c0c0c */
     --foreground: 0 0% 91%;          /* #e8e8e8 */

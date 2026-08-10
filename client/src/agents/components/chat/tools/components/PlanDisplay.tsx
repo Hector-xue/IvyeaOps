@@ -91,7 +91,7 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
 
             {showRawParameters && rawContent && (
               <Collapsible className="mt-3">
-                <CollapsibleTrigger className="flex items-center gap-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground">
+                <CollapsibleTrigger className="flex items-center gap-1.5 py-0.5 text-[length:var(--fs-11)] text-muted-foreground hover:text-foreground">
                   <svg
                     className="h-2.5 w-2.5 flex-shrink-0 transition-transform duration-150 data-[state=open]:rotate-90"
                     fill="none"
@@ -103,7 +103,7 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
                   raw params
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <pre className="mt-1 overflow-hidden whitespace-pre-wrap break-words rounded border border-border/40 bg-muted p-2 font-mono text-[11px] text-muted-foreground">
+                  <pre className="mt-1 overflow-hidden whitespace-pre-wrap break-words rounded border border-border/40 bg-muted p-2 font-mono text-[length:var(--fs-11)] text-muted-foreground">
                     {rawContent}
                   </pre>
                 </CollapsibleContent>
@@ -125,7 +125,7 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
             </Button>
             <Button size="sm" onClick={handleBuild}>
               Build{' '}
-              <kbd className="ml-1 rounded bg-primary-foreground/20 px-1 py-0.5 font-mono text-[10px]">
+              <kbd className="ml-1 rounded bg-primary-foreground/20 px-1 py-0.5 font-mono text-[length:var(--fs-10)]">
                 ⌘↩
               </kbd>
             </Button>

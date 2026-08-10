@@ -39,7 +39,7 @@ export default function SidebarFooter({
                 <span className="block truncate text-sm font-medium text-blue-600 dark:text-blue-300">
                   {releaseInfo?.title || `v${latestVersion}`}
                 </span>
-                <span className="text-[10px] text-blue-500/70 dark:text-blue-400/60">
+                <span className="text-[length:var(--fs-10)] text-blue-500/70 dark:text-blue-400/60">
                   {t('version.updateAvailable')}
                 </span>
               </div>

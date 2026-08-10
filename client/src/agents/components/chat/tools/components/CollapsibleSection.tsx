@@ -45,7 +45,7 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
             <span className="flex-shrink-0 font-medium text-muted-foreground">{toolName}</span>
           )}
           {toolName && (
-            <span className="flex-shrink-0 text-[10px] text-muted-foreground/40">/</span>
+            <span className="flex-shrink-0 text-[length:var(--fs-10)] text-muted-foreground/40">/</span>
           )}
           <button
             onClick={onTitleClick}
@@ -70,7 +70,7 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
             <span className="flex-shrink-0 font-medium">{toolName}</span>
           )}
           {toolName && (
-            <span className="flex-shrink-0 text-[10px] text-muted-foreground/40">/</span>
+            <span className="flex-shrink-0 text-[length:var(--fs-10)] text-muted-foreground/40">/</span>
           )}
           <span className="flex-1 truncate text-left">{title}</span>
           {badge && <span className="ml-auto flex-shrink-0">{badge}</span>}

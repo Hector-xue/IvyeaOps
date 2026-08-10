@@ -115,7 +115,7 @@ export default function CommitHistoryItem({
                       }`}
                     >
                       <span
-                        className={`inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border text-[9px] font-bold ${getStatusBadgeClass(file.status)}`}
+                        className={`inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border text-[length:var(--fs-9)] font-bold ${getStatusBadgeClass(file.status)}`}
                       >
                         {file.status}
                       </span>

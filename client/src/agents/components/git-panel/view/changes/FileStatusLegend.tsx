@@ -37,7 +37,7 @@ export default function FileStatusLegend({ isMobile }: FileStatusLegendProps) {
             {LEGEND_ITEMS.map((item) => (
               <span key={item.status} className="flex items-center gap-2">
                 <span
-                  className={`inline-flex h-5 w-5 items-center justify-center rounded border text-[10px] font-bold ${getStatusBadgeClass(item.status)}`}
+                  className={`inline-flex h-5 w-5 items-center justify-center rounded border text-[length:var(--fs-10)] font-bold ${getStatusBadgeClass(item.status)}`}
                 >
                   {item.status}
                 </span>

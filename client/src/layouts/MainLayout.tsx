@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api, logout } from "../api/client";
 import { useAuth } from "../App";
 import { resetBodyScrollLock } from "../lib/scrollLock";
+import { DEFAULT_THEME, THEMES, isThemeId, themeLabel } from "../lib/themes";
 import {
   CONSOLE_NEW_EVENT,
   KEEP_ALIVE_PATHS,
@@ -116,65 +117,11 @@ export default function MainLayout() {
   const [appVersion, setAppVersion] = useState("dev");
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updating, setUpdating] = useState(false);
-  const THEMES = [
-    "dark", "deep-space", "smoke-gold", "catppuccin", "hermes", "light",
-    "klein", "mars", "hermes-orange", "burgundy", "mummy",
-    "prussian", "tiffany", "titian", "schonbrunn", "bordeaux",
-  ] as const;
-  type Theme = typeof THEMES[number];
-  const THEME_LABELS: Record<Theme, string> = {
-    "dark":         "🌲 暗夜",
-    "deep-space":   "🌌 星渊",
-    "smoke-gold":   "✦ 烟金",
-    "catppuccin":   "🔮 紫幕",
-    "hermes":       "◆ 幽林",
-    "light":        "☀ 月岩",
-    "klein":        "◈ 克莱蓝",
-    "mars":         "⬡ 马尔绿",
-    "hermes-orange":"◉ 爱马橙",
-    "burgundy":     "⊕ 勃艮红",
-    "mummy":        "△ 木乃棕",
-    "prussian":     "▣ 普鲁蓝",
-    "tiffany":      "◇ 蒂芙蓝",
-    "titian":       "✦ 提香红",
-    "schonbrunn":   "⊙ 申布黄",
-    "bordeaux":     "⊗ 波尔红",
-  };
-  const THEME_ICONS: Record<Theme, string> = {
-    "dark": "🌲", "deep-space": "🌌", "smoke-gold": "✦",
-    "catppuccin": "🔮", "hermes": "◆", "light": "☀",
-    "klein": "◈", "mars": "⬡", "hermes-orange": "◉",
-    "burgundy": "⊕", "mummy": "△", "prussian": "▣",
-    "tiffany": "◇", "titian": "✦", "schonbrunn": "⊙", "bordeaux": "⊗",
-  };
-  const THEME_NAMES: Record<Theme, string> = {
-    "dark": "暗夜", "deep-space": "星渊", "smoke-gold": "烟金",
-    "catppuccin": "紫幕", "hermes": "幽林", "light": "月岩",
-    "klein": "克莱蓝", "mars": "马尔绿", "hermes-orange": "爱马橙",
-    "burgundy": "勃艮红", "mummy": "木乃棕", "prussian": "普鲁蓝",
-    "tiffany": "蒂芙蓝", "titian": "提香红", "schonbrunn": "申布黄", "bordeaux": "波尔红",
-  };
-  const THEME_ACCENTS: Record<Theme, string> = {
-    "dark":         "#4ade80",
-    "deep-space":   "#60a5fa",
-    "smoke-gold":   "#fbbf24",
-    "catppuccin":   "#a78bfa",
-    "hermes":       "#34d399",
-    "light":        "#16a34a",
-    "klein":        "#4d7fff",
-    "mars":         "#8aad3c",
-    "hermes-orange":"#f46020",
-    "burgundy":     "#c03060",
-    "mummy":        "#c87838",
-    "prussian":     "#2d8ab5",
-    "tiffany":      "#50c0b8",
-    "titian":       "#c86030",
-    "schonbrunn":   "#e8b01a",
-    "bordeaux":     "#b03280",
-  };
-  const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem("ivyea-ops.theme") as Theme | null;
-    return THEMES.includes(saved as any) ? saved! : "dark";
+  // 主题清单、图标、中文名、圆点色全部来自 lib/themes —— 这里曾经是五张手抄表，
+  // 其中四套主题的强调色和 CSS 里的 --acc 已经对不上（选择器圆点和真实界面两个色）。
+  const [theme, setTheme] = useState<string>(() => {
+    const saved = localStorage.getItem("ivyea-ops.theme");
+    return isThemeId(saved) ? saved : DEFAULT_THEME;
   });
   const [themePicker, setThemePicker] = useState(false);
 
@@ -348,7 +295,7 @@ export default function MainLayout() {
     return () => clearInterval(t);
   }, []);
 
-  const selectTheme = (t: Theme) => {
+  const selectTheme = (t: string) => {
     setTheme(t);
     document.documentElement.setAttribute("data-theme", t);
     localStorage.setItem("ivyea-ops.theme", t);
@@ -614,19 +561,19 @@ export default function MainLayout() {
                 style={{ minWidth: 72 }}
                 title="切换主题"
               >
-                {THEME_LABELS[theme]}
+                {themeLabel(theme)}
               </button>
               {themePicker && (
                 <div className="theme-picker">
                   {THEMES.map((t) => (
                     <button
-                      key={t}
-                      className={"theme-picker-card" + (t === theme ? " active" : "")}
-                      onClick={() => selectTheme(t)}
+                      key={t.id}
+                      className={"theme-picker-card" + (t.id === theme ? " active" : "")}
+                      onClick={() => selectTheme(t.id)}
                     >
-                      <span className="theme-picker-dot" style={{ background: THEME_ACCENTS[t] }} />
-                      <span className="theme-picker-icon">{THEME_ICONS[t]}</span>
-                      <span className="theme-picker-name">{THEME_NAMES[t]}</span>
+                      <span className="theme-picker-dot" style={{ background: t.accent }} />
+                      <span className="theme-picker-icon">{t.icon}</span>
+                      <span className="theme-picker-name">{t.name}</span>
                     </button>
                   ))}
                 </div>

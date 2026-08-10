@@ -101,7 +101,7 @@ export const SubagentContainer: React.FC<SubagentContainerProps> = ({
         {/* Tool history (collapsed) */}
         {childTools.length > 0 && (
           <Collapsible className="mt-2">
-            <CollapsibleTrigger className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground">
+            <CollapsibleTrigger className="flex items-center gap-1 text-[length:var(--fs-11)] text-muted-foreground hover:text-foreground">
               <svg
                 className="h-2.5 w-2.5 flex-shrink-0 transition-transform duration-150 data-[state=open]:rotate-90"
                 fill="none"
@@ -115,7 +115,7 @@ export const SubagentContainer: React.FC<SubagentContainerProps> = ({
             <CollapsibleContent>
               <div className="mt-1 space-y-0.5 border-l border-border pl-3">
                 {childTools.map((child, index) => (
-                  <div key={child.toolId} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <div key={child.toolId} className="flex items-center gap-1.5 text-[length:var(--fs-11)] text-muted-foreground">
                     <span className="w-4 flex-shrink-0 text-right text-muted-foreground/60">{index + 1}.</span>
                     <span className="font-medium text-foreground">{child.toolName}</span>
                     {getCompactToolDisplay(child.toolName, child.toolInput) && (
@@ -170,7 +170,7 @@ export const SubagentContainer: React.FC<SubagentContainerProps> = ({
                   {content}
                 </div>
               ) : content ? (
-                <pre className="line-clamp-6 whitespace-pre-wrap break-words font-mono text-[11px]">
+                <pre className="line-clamp-6 whitespace-pre-wrap break-words font-mono text-[length:var(--fs-11)]">
                   {JSON.stringify(content, null, 2)}
                 </pre>
               ) : null;

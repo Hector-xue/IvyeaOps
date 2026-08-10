@@ -1,7 +1,26 @@
+/** ops 主题 → agents 子树的桥。
+ *
+ *  agents 是移植进来的 claudecodeui，用的是 shadcn 那套 HSL 变量
+ *  （`--background: 222 84% 5%` 这种三元组）；ops 用的是自己的 `--bg/--acc/--t`。
+ *  这个文件把前者按后者算出来，inline 打在 `#agents-root` 上。
+ *
+ *  **这里以前手抄了 16 套调色板的 hex。** 那是第三份副本（另外两份在
+ *  workbench.css 和 MainLayout.tsx），而且已经漂了：deep-space / smoke-gold /
+ *  catppuccin / hermes 四套的 acc 和 CSS 里根本不是一个色，hermes 一个是橙
+ *  一个是绿。现在改成**运行时读 `<html>` 上实际生效的变量** —— 新增主题时
+ *  这个文件一个字都不用改，也不可能再漂。
+ */
+import { themeMode } from '../../lib/themes';
+
 function hexToHsl(hex: string): string {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;
   const b = parseInt(hex.slice(5, 7), 16) / 255;
+  return rgbToHsl(r * 255, g * 255, b * 255);
+}
+
+function rgbToHsl(r255: number, g255: number, b255: number): string {
+  const r = r255 / 255, g = g255 / 255, b = b255 / 255;
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
   let h = 0, s = 0;
   const l = (max + min) / 2;
@@ -17,73 +36,81 @@ function hexToHsl(hex: string): string {
   return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
 
-type ThemeRaw = {
-  bg: string; bg1: string; bg2: string; border: string;
-  fg: string; fgMuted: string; acc: string; light?: true;
-};
-
-// Source colors extracted from IvyeaOps workbench.css (solid equivalents of rgba values)
-const RAW: Record<string, ThemeRaw> = {
-  dark:             { bg:'#0c0c0c', bg1:'#111111', bg2:'#161616', border:'#262626', fg:'#e8e8e8', fgMuted:'#a8a8a8', acc:'#4ade80' },
-  'deep-space':     { bg:'#060c18', bg1:'#0a1020', bg2:'#0e1628', border:'#1e2d4a', fg:'#c8deff', fgMuted:'#84a8cc', acc:'#60a5fa' },
-  'smoke-gold':     { bg:'#0c0c0a', bg1:'#111110', bg2:'#181816', border:'#2e2d28', fg:'#e8e0cc', fgMuted:'#aaa090', acc:'#fbbf24' },
-  catppuccin:       { bg:'#11111b', bg1:'#1e1e2e', bg2:'#24243a', border:'#383850', fg:'#cdd6f4', fgMuted:'#b8bdd4', acc:'#a78bfa' },
-  hermes:           { bg:'#041c1c', bg1:'#0e2322', bg2:'#152b28', border:'#2b3e3a', fg:'#ffe6cb', fgMuted:'#a89e92', acc:'#34d399' },
-  light:            { bg:'#f0f0ee', bg1:'#ffffff', bg2:'#f8f8f6', border:'#dededb', fg:'#111111', fgMuted:'#555550', acc:'#16a34a', light: true },
-  klein:            { bg:'#000614', bg1:'#000a1e', bg2:'#00102e', border:'#0c1e44', fg:'#c8d8ff', fgMuted:'#7494d4', acc:'#4d7fff' },
-  mars:             { bg:'#080a04', bg1:'#0c1006', bg2:'#12180a', border:'#28341a', fg:'#ced8b8', fgMuted:'#96a87c', acc:'#8aad3c' },
-  'hermes-orange':  { bg:'#0e0703', bg1:'#160b05', bg2:'#1e1107', border:'#3a1e0c', fg:'#ffe4cc', fgMuted:'#b88c6c', acc:'#f46020' },
-  burgundy:         { bg:'#0c0306', bg1:'#14050a', bg2:'#1e0810', border:'#3c1020', fg:'#f2d4dc', fgMuted:'#b87888', acc:'#c03060' },
-  mummy:            { bg:'#0e0905', bg1:'#160e08', bg2:'#20150b', border:'#3c2818', fg:'#ead8c0', fgMuted:'#b49c7c', acc:'#c87838' },
-  prussian:         { bg:'#00080e', bg1:'#000c16', bg2:'#021222', border:'#0a2030', fg:'#c0d8ee', fgMuted:'#6494b8', acc:'#2d8ab5' },
-  tiffany:          { bg:'#040e0c', bg1:'#061412', bg2:'#081c1a', border:'#103028', fg:'#c0eeea', fgMuted:'#5eb4ae', acc:'#50c0b8' },
-  titian:           { bg:'#0c0703', bg1:'#140c05', bg2:'#1e1207', border:'#381808', fg:'#f0dcc4', fgMuted:'#b48c6c', acc:'#c86030' },
-  schonbrunn:       { bg:'#0c0a03', bg1:'#141104', bg2:'#1e1906', border:'#383010', fg:'#f8f0c0', fgMuted:'#b4ac6c', acc:'#e8b01a' },
-  bordeaux:         { bg:'#0a0308', bg1:'#12050e', bg2:'#1a0816', border:'#320e28', fg:'#f0d0e8', fgMuted:'#b478ac', acc:'#b03280' },
-};
+/**
+ * 把 ops 的一个颜色变量读成 HSL 三元组。
+ *
+ * **alpha 直接丢掉，只取 RGB 通道。** ops 的表面色是 `rgba(12,12,12,.72)`
+ * 这种半透明值（靠背景画透出层次），而 agents 子树是不透明的实心容器。
+ * 丢 alpha 得到的正是原来那张手抄表里的"solid equivalent"
+ * （`rgba(12,12,12,.72)` → `#0c0c0c`），所以视觉结果和以前一致。
+ */
+function readColor(cs: CSSStyleDeclaration, name: string, fallback: string): string {
+  const raw = cs.getPropertyValue(name).trim();
+  if (!raw) return hexToHsl(fallback);
+  const rgb = raw.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i);
+  if (rgb) return rgbToHsl(+rgb[1], +rgb[2], +rgb[3]);
+  if (/^#[0-9a-f]{6}$/i.test(raw)) return hexToHsl(raw);
+  if (/^#[0-9a-f]{3}$/i.test(raw)) {
+    return hexToHsl('#' + raw.slice(1).split('').map((c) => c + c).join(''));
+  }
+  // color-mix() 之类算不出来的写法：交给浏览器算。挂一个临时元素读回计算值。
+  const probe = document.createElement('span');
+  probe.style.cssText = `position:absolute;visibility:hidden;color:${raw}`;
+  document.body.appendChild(probe);
+  const resolved = getComputedStyle(probe).color;
+  probe.remove();
+  const m = resolved.match(/([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/);
+  return m ? rgbToHsl(+m[1], +m[2], +m[3]) : hexToHsl(fallback);
+}
 
 export function applyIvyeaOpsTheme(themeName: string, target?: HTMLElement): void {
-  const c = RAW[themeName] ?? RAW['dark'];
   const root = target ?? document.documentElement;
-  const isLight = c.light === true;
+  // 读 <html> 上实际生效的那套 —— 调用方保证 data-theme 已经写好了
+  // （MainLayout.selectTheme 先 setAttribute 再 dispatch，getComputedStyle
+  //  本身会强制一次样式重算，所以同一 tick 读到的就是新值）。
+  const cs = getComputedStyle(document.documentElement);
+  const isLight = themeMode(themeName) === 'light';
 
-  if (isLight) {
-    root.classList.remove('dark');
-  } else {
-    root.classList.add('dark');
-  }
+  // `.dark` 只由这里写。ThemeContext 以前也写一份，两处算出不同结果时会出现
+  // 「HSL 变量已经是浅色、.dark 还挂着」的撕裂。
+  root.classList.toggle('dark', !isLight);
 
-  const accHsl = hexToHsl(c.acc);
-  const bgHsl  = hexToHsl(c.bg);
+  const bg     = readColor(cs, '--bg',  '#0c0c0c');
+  const bg1    = readColor(cs, '--bg1', '#111111');
+  const bg2    = readColor(cs, '--bg2', '#161616');
+  const border = readColor(cs, '--b',   '#262626');
+  const fg     = readColor(cs, '--t',   '#e8e8e8');
+  const fgMut  = readColor(cs, '--t2',  '#a8a8a8');
+  const acc    = readColor(cs, '--acc', '#4ade80');
 
   const vars: Record<string, string> = {
-    '--background':            hexToHsl(c.bg),
-    '--foreground':            hexToHsl(c.fg),
-    '--card':                  hexToHsl(c.bg1),
-    '--card-foreground':       hexToHsl(c.fg),
-    '--popover':               hexToHsl(c.bg1),
-    '--popover-foreground':    hexToHsl(c.fg),
-    '--primary':               accHsl,
-    '--primary-foreground':    isLight ? '0 0% 100%' : bgHsl,
-    '--secondary':             hexToHsl(c.bg2),
-    '--secondary-foreground':  hexToHsl(c.fg),
-    '--muted':                 hexToHsl(c.bg2),
-    '--muted-foreground':      hexToHsl(c.fgMuted),
-    '--accent':                accHsl,
-    '--accent-foreground':     isLight ? '0 0% 100%' : bgHsl,
-    '--destructive':           '0 63% 31%',
-    '--destructive-foreground': hexToHsl(c.fg),
-    '--border':                hexToHsl(c.border),
-    '--input':                 hexToHsl(c.border),
-    '--ring':                  accHsl,
-    '--radius':                '0.5rem',
-    '--nav-glass-bg':          `${hexToHsl(c.bg1)} / 0.75`,
-    '--nav-tab-glow':          `${accHsl} / 0.20`,
-    '--nav-tab-ring':          `${accHsl} / 0.12`,
-    '--nav-float-ring':        `${hexToHsl(c.border)} / 0.4`,
-    '--nav-divider-color':     `${hexToHsl(c.border)} / 0.6`,
-    '--nav-input-bg':          `${hexToHsl(c.bg2)} / 0.6`,
-    '--nav-input-focus-ring':  `${accHsl} / 0.22`,
+    '--background':             bg,
+    '--foreground':             fg,
+    '--card':                   bg1,
+    '--card-foreground':        fg,
+    '--popover':                bg1,
+    '--popover-foreground':     fg,
+    '--primary':                acc,
+    '--primary-foreground':     isLight ? '0 0% 100%' : bg,
+    '--secondary':              bg2,
+    '--secondary-foreground':   fg,
+    '--muted':                  bg2,
+    '--muted-foreground':       fgMut,
+    '--accent':                 acc,
+    '--accent-foreground':      isLight ? '0 0% 100%' : bg,
+    '--destructive':            '0 63% 31%',
+    '--destructive-foreground': fg,
+    '--border':                 border,
+    '--input':                  border,
+    '--ring':                   acc,
+    '--radius':                 '0.5rem',
+    '--nav-glass-bg':           `${bg1} / 0.75`,
+    '--nav-tab-glow':           `${acc} / 0.20`,
+    '--nav-tab-ring':           `${acc} / 0.12`,
+    '--nav-float-ring':         `${border} / 0.4`,
+    '--nav-divider-color':      `${border} / 0.6`,
+    '--nav-input-bg':           `${bg2} / 0.6`,
+    '--nav-input-focus-ring':   `${acc} / 0.22`,
   };
 
   for (const [k, v] of Object.entries(vars)) {
