@@ -57,12 +57,12 @@ export const QuestionAnswerContent: React.FC<QuestionAnswerContentProps> = ({
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   {q.header && (
-                    <span className="inline-flex items-center rounded border border-blue-100/80 bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-blue-600 dark:border-blue-800/40 dark:bg-blue-900/30 dark:text-blue-400">
+                    <span className="inline-flex items-center rounded border border-blue-100/80 bg-blue-50 px-1.5 py-0.5 text-[length:var(--fs-9)] font-semibold uppercase tracking-wider text-blue-600 dark:border-blue-800/40 dark:bg-blue-900/30 dark:text-blue-400">
                       {q.header}
                     </span>
                   )}
                   {total > 1 && (
-                    <span className="text-[10px] tabular-nums text-gray-400 dark:text-gray-500">
+                    <span className="text-[length:var(--fs-10)] tabular-nums text-gray-400 dark:text-gray-500">
                       {idx + 1}/{total}
                     </span>
                   )}
@@ -78,11 +78,11 @@ export const QuestionAnswerContent: React.FC<QuestionAnswerContentProps> = ({
                       return (
                         <span
                           key={lbl}
-                          className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                          className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-1.5 py-0.5 text-[length:var(--fs-11)] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
                         >
                           {lbl}
                           {isCustom && (
-                            <span className="text-[9px] font-normal text-blue-400 dark:text-blue-500">(custom)</span>
+                            <span className="text-[length:var(--fs-9)] font-normal text-blue-400 dark:text-blue-500">(custom)</span>
                           )}
                         </span>
                       );
@@ -91,7 +91,7 @@ export const QuestionAnswerContent: React.FC<QuestionAnswerContentProps> = ({
                 )}
 
                 {!isExpanded && skipped && hasAnyAnswer && (
-                  <span className="mt-1 inline-block text-[10px] italic text-gray-400 dark:text-gray-500">
+                  <span className="mt-1 inline-block text-[length:var(--fs-10)] italic text-gray-400 dark:text-gray-500">
                     Skipped
                   </span>
                 )}
@@ -115,7 +115,7 @@ export const QuestionAnswerContent: React.FC<QuestionAnswerContentProps> = ({
                     return (
                       <div
                         key={opt.label}
-                        className={`flex items-start gap-2 rounded-lg px-2.5 py-1.5 text-[12px] ${
+                        className={`flex items-start gap-2 rounded-lg px-2.5 py-1.5 text-[length:var(--fs-12)] ${
                           wasSelected
                             ? 'border border-blue-200/60 bg-blue-50/80 dark:border-blue-800/40 dark:bg-blue-900/20'
                             : 'text-gray-400 dark:text-gray-500'
@@ -137,7 +137,7 @@ export const QuestionAnswerContent: React.FC<QuestionAnswerContentProps> = ({
                             {opt.label}
                           </span>
                           {opt.description && (
-                            <span className={`mt-0.5 block text-[11px] ${
+                            <span className={`mt-0.5 block text-[length:var(--fs-11)] ${
                               wasSelected ? 'text-blue-600/70 dark:text-blue-300/70' : 'text-gray-400 dark:text-gray-600'
                             }`}>
                               {opt.description}
@@ -151,7 +151,7 @@ export const QuestionAnswerContent: React.FC<QuestionAnswerContentProps> = ({
                   {answerLabels.filter(lbl => !q.options.some(o => o.label === lbl)).map(lbl => (
                     <div
                       key={lbl}
-                      className="flex items-start gap-2 rounded-lg border border-blue-200/60 bg-blue-50/80 px-2.5 py-1.5 text-[12px] dark:border-blue-800/40 dark:bg-blue-900/20"
+                      className="flex items-start gap-2 rounded-lg border border-blue-200/60 bg-blue-50/80 px-2.5 py-1.5 text-[length:var(--fs-12)] dark:border-blue-800/40 dark:bg-blue-900/20"
                     >
                       <div className={`mt-0.5 h-3.5 w-3.5 flex-shrink-0 ${q.multiSelect ? 'rounded-[3px]' : 'rounded-full'} flex items-center justify-center border-[1.5px] border-blue-500 bg-blue-500 dark:border-blue-400 dark:bg-blue-500`}>
                         <svg className="h-2 w-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
@@ -160,13 +160,13 @@ export const QuestionAnswerContent: React.FC<QuestionAnswerContentProps> = ({
                       </div>
                       <div className="min-w-0 flex-1">
                         <span className="font-medium text-gray-900 dark:text-gray-100">{lbl}</span>
-                        <span className="ml-1 text-[10px] text-blue-500 dark:text-blue-400">(custom)</span>
+                        <span className="ml-1 text-[length:var(--fs-10)] text-blue-500 dark:text-blue-400">(custom)</span>
                       </div>
                     </div>
                   ))}
 
                   {skipped && hasAnyAnswer && (
-                    <div className="px-2.5 py-1 text-[11px] italic text-gray-400 dark:text-gray-500">
+                    <div className="px-2.5 py-1 text-[length:var(--fs-11)] italic text-gray-400 dark:text-gray-500">
                       No answer provided
                     </div>
                   )}
@@ -178,7 +178,7 @@ export const QuestionAnswerContent: React.FC<QuestionAnswerContentProps> = ({
       })}
 
       {!hasAnyAnswer && total === 1 && (
-        <div className="text-[11px] italic text-gray-400 dark:text-gray-500">
+        <div className="text-[length:var(--fs-11)] italic text-gray-400 dark:text-gray-500">
           Skipped
         </div>
       )}

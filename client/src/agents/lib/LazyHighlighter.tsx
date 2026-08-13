@@ -1,5 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ComponentType } from 'react';
 
+import { useTheme } from '../contexts/ThemeContext';
+
 /**
  * 代码高亮的按需版本。
  *
@@ -19,7 +21,7 @@ type Highlighter = ComponentType<{
   children?: string;
 }>;
 
-type Loaded = { Comp: Highlighter; theme: unknown };
+type Loaded = { Comp: Highlighter; theme: unknown; themeLight: unknown };
 
 let cached: Loaded | null = null;
 let loading: Promise<Loaded | null> | null = null;
@@ -32,7 +34,14 @@ function load(): Promise<Loaded | null> {
       import('react-syntax-highlighter/dist/esm/styles/prism'),
     ])
       .then(([mod, styles]) => {
-        cached = { Comp: mod.default as unknown as Highlighter, theme: styles.oneDark };
+        // 深浅各一套。写死 oneDark 的话，门道浅色主题下每个代码块都是一块
+        // 深色补丁 —— 而代码块在这套界面里出现得非常频繁。
+        // **两套都缓存**：主题可以随时切，只缓存一套等于切了不生效。
+        cached = {
+          Comp: mod.default as unknown as Highlighter,
+          theme: styles.oneDark,
+          themeLight: styles.oneLight,
+        };
         return cached;
       })
       .catch(() => {
@@ -57,6 +66,9 @@ export default function LazyHighlighter({
   codeTagProps?: { style?: CSSProperties };
 }) {
   const [loaded, setLoaded] = useState<Loaded | null>(cached);
+  // 跟着 ops 主题的明暗走。用 context 而不是自己读 localStorage —— 明暗的判据
+  // 只有 lib/themes 一处（见 ThemeContext），多一处就会漂。
+  const { isDarkMode } = useTheme();
 
   useEffect(() => {
     if (cached) { setLoaded(cached); return; }
@@ -85,9 +97,9 @@ export default function LazyHighlighter({
     );
   }
 
-  const { Comp, theme } = loaded;
+  const { Comp, theme, themeLight } = loaded;
   return (
-    <Comp language={language} style={theme} customStyle={customStyle} codeTagProps={codeTagProps}>
+    <Comp language={language} style={isDarkMode ? theme : themeLight} customStyle={customStyle} codeTagProps={codeTagProps}>
       {code}
     </Comp>
   );

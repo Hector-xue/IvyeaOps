@@ -7,6 +7,7 @@ import { yaml } from "@codemirror/lang-yaml";
 import { python } from "@codemirror/lang-python";
 import { javascript } from "@codemirror/lang-javascript";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { themeMode } from "../../lib/themes";
 
 export type CodeEditorProps = {
   value: string;
@@ -100,7 +101,9 @@ export default function CodeEditor({
       value={value}
       onChange={onChange}
       extensions={extensions}
-      theme={oneDark}
+      // 这里原本是无条件 oneDark —— 浅色主题下整个编辑器是一块深色补丁。
+      // CodeMirror 的 theme={undefined} 就是它自带的浅色，够用。
+      theme={themeMode(localStorage.getItem("ivyea-ops.theme")) === "dark" ? oneDark : undefined}
       editable={!readonly}
       readOnly={readonly}
       basicSetup={{

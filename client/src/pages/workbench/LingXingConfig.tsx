@@ -6,16 +6,16 @@ import { errText } from "../../lib/errText";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--bg1)", border: "1px solid var(--b)", borderRadius: 3,
-  padding: "6px 8px", fontSize: 11, color: "var(--t)", outline: "none", fontFamily: "inherit", boxSizing: "border-box",
+  padding: "6px 8px", fontSize: "var(--fs-11)", color: "var(--t)", outline: "none", fontFamily: "inherit", boxSizing: "border-box",
 };
 function Btn({ onClick, children, primary, disabled }: any) {
-  return <button onClick={onClick} disabled={disabled} style={{ background: primary ? "var(--acc)" : "var(--bg2)", color: primary ? "#000" : "var(--t)", border: primary ? "none" : "1px solid var(--b)", borderRadius: 4, padding: "5px 12px", fontSize: 11, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.55 : 1 }}>{children}</button>;
+  return <button onClick={onClick} disabled={disabled} style={{ background: primary ? "var(--acc)" : "var(--bg2)", color: primary ? "#000" : "var(--t)", border: primary ? "none" : "1px solid var(--b)", borderRadius: 4, padding: "5px 12px", fontSize: "var(--fs-11)", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.55 : 1 }}>{children}</button>;
 }
 function Card({ title, children }: any) {
-  return <div className="card" style={{ padding: 12, marginBottom: 10 }}><div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>{title}</div>{children}</div>;
+  return <div className="card" style={{ padding: 12, marginBottom: 10 }}><div style={{ fontSize: "var(--fs-12)", fontWeight: 600, marginBottom: 8 }}>{title}</div>{children}</div>;
 }
 function Field({ label, children }: any) {
-  return <div style={{ display: "grid", gap: 3, fontSize: 10, color: "var(--t3)" }}><span>{label}</span>{children}</div>;
+  return <div style={{ display: "grid", gap: 3, fontSize: "var(--fs-10)", color: "var(--t3)" }}><span>{label}</span>{children}</div>;
 }
 
 export default function LingXingConfig() {
@@ -69,7 +69,7 @@ export default function LingXingConfig() {
 
   return (
     <div>
-      <div className="card" style={{ padding: "8px 12px", marginBottom: 10, fontSize: 11, color: "var(--t3)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      <div className="card" style={{ padding: "8px 12px", marginBottom: 10, fontSize: "var(--fs-11)", color: "var(--t3)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <span>开箱即用：① 填 OpenAPI 凭证 → ② 测试连接 → ③ 打开总开关。之后即可在「大盘/数据浏览/优化建议」浏览分析；写操作另有独立「操作开关」+ 三重复核。</span>
         <span style={{ marginLeft: "auto" }}><Btn onClick={() => setShowHelp((v) => !v)}>{showHelp ? "收起帮助文档" : "📖 帮助文档"}</Btn></span>
       </div>
@@ -93,20 +93,20 @@ export default function LingXingConfig() {
       <Card title="② 测试连接">
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <Btn onClick={test} disabled={busy}>测试连接（probe）</Btn>
-          {probe?.openapi && <span style={{ fontSize: 11, color: probe.openapi.ok ? "var(--acc)" : "var(--red)" }}>
+          {probe?.openapi && <span style={{ fontSize: "var(--fs-11)", color: probe.openapi.ok ? "var(--acc)" : "var(--red)" }}>
             OpenAPI：{probe.openapi.ok ? `✓ 已连通，店铺 ${probe.openapi.probe_seller_count ?? "?"} 个` : `✗ ${probe.openapi.error}`}</span>}
-          {probe?.mcp && <span style={{ fontSize: 11, color: "var(--t3)" }}>MCP：{probe.mcp.ok === false ? "未连通" : `工具 ${probe.mcp.tool_count ?? "?"} 个`}</span>}
+          {probe?.mcp && <span style={{ fontSize: "var(--fs-11)", color: "var(--t3)" }}>MCP：{probe.mcp.ok === false ? "未连通" : `工具 ${probe.mcp.tool_count ?? "?"} 个`}</span>}
         </div>
       </Card>
 
       {/* ③ switches */}
       <Card title="③ 总开关">
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ fontSize: 12, color: st?.master_enabled ? "var(--acc)" : "var(--t3)" }}>数据总开关：{st?.master_enabled ? "已启用" : "关闭"}</span>
+          <span style={{ fontSize: "var(--fs-12)", color: st?.master_enabled ? "var(--acc)" : "var(--t3)" }}>数据总开关：{st?.master_enabled ? "已启用" : "关闭"}</span>
           {st?.master_enabled
             ? <Btn onClick={() => patch({ lingxing_enabled: false }, "已关闭")} disabled={busy}>关闭</Btn>
             : <Btn primary onClick={() => patch({ lingxing_enabled: true }, "已启用")} disabled={busy}>启用数据（只读）</Btn>}
-          <span style={{ fontSize: 10, color: "var(--t3)" }}>写操作的「操作开关」在「操作执行」tab，默认关、带自动失效。</span>
+          <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>写操作的「操作开关」在「操作执行」tab，默认关、带自动失效。</span>
         </div>
       </Card>
 
@@ -131,7 +131,7 @@ export default function LingXingConfig() {
             lingxing_opt_window_days: Number(s.lingxing_opt_window_days), lingxing_scope_stores: s.lingxing_scope_stores || "",
           }, "参数已保存")} disabled={busy}>保存参数</Btn>
         </div>
-        <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 6 }}>白名单为空时，任何写操作都会被护栏拦截（fail-closed）；只放你确认要自动优化的店铺。</div>
+        <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginTop: 6 }}>白名单为空时，任何写操作都会被护栏拦截（fail-closed）；只放你确认要自动优化的店铺。</div>
       </Card>
 
       {/* ⑤ review models */}
@@ -148,14 +148,14 @@ export default function LingXingConfig() {
               options={avail.map((a) => ({ value: a.id, label: a.label + (a.ok ? "" : "（未配置/未装）"), disabled: !a.ok }))} />
           </Field>
         </div>
-        <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 6 }}>
+        <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginTop: 6 }}>
           默认优先用内置 IvyeaAgent；也可选全局兜底大模型、DeepSeek/Apimart、CLI 智能体(hermes/claude/codex,较慢)或下方自定义模型。某个不可用会自动回退默认链。建议把「魔鬼代言人」设成与其它不同的模型做真异构。「分析模型」是自动化建议产出建议时用的模型（优化引擎是纯规则、不用模型）。
         </div>
 
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--b)" }}>
-          <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 6 }}>自定义模型（OpenAI 兼容）</div>
+          <div style={{ fontSize: "var(--fs-11)", color: "var(--t3)", marginBottom: 6 }}>自定义模型（OpenAI 兼容）</div>
           {models.map((m, i) => (
-            <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 11, marginBottom: 4 }}>
+            <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: "var(--fs-11)", marginBottom: 4 }}>
               <b>{m.label || m.id}</b><span style={{ color: "var(--t3)" }}>{m.model} @ {m.base_url}</span>
               <span style={{ color: "var(--t3)" }}>引用名 custom:{m.id}</span>
               <Btn onClick={() => saveModels(models.filter((_, j) => j !== i))}>删除</Btn>
@@ -180,12 +180,12 @@ export default function LingXingConfig() {
           <Btn primary onClick={() => patch({ lingxing_rules_doc: rules }, "规则文档已保存")} disabled={busy}>保存规则文档</Btn>
           <Btn onClick={() => setRules(rulesDefault)} disabled={busy}>恢复默认</Btn>
         </div>
-        <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 6 }}>
+        <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginTop: 6 }}>
           确定性阈值（否词点击数/步长/冷却等）在「④ 优化参数」里调；这里改的是 LLM 复核与分析所遵循的方法论叙述。
         </div>
       </Card>
 
-      {msg && <div style={{ fontSize: 11, color: "var(--t3)" }}>{msg}</div>}
+      {msg && <div style={{ fontSize: "var(--fs-11)", color: "var(--t3)" }}>{msg}</div>}
     </div>
   );
 }

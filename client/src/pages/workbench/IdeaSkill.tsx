@@ -227,7 +227,7 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
   return (
     <div>
       {!embedded && <div className="ptitle">/ 想法工坊</div>}
-      <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 16 }}>
+      <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginBottom: 16 }}>
         一句话描述你的想法，AI 深入理解需求 → 制定方案 → 复核优化 → 生成并自检 Skill
       </div>
 
@@ -267,7 +267,7 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
               disabled={busy}
               title={m === "rigorous" ? "理解→方案确认→生成，质量更高" : "一条龙直接生成，更快"}
               style={{
-                fontSize: 10, padding: "5px 10px", border: "none", cursor: "pointer",
+                fontSize: "var(--fs-10)", padding: "5px 10px", border: "none", cursor: "pointer",
                 background: mode === m ? "var(--acc)" : "transparent",
                 color: mode === m ? "#fff" : "var(--t2)",
               }}
@@ -290,7 +290,7 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
         </button>
 
         {(phase !== "idle" && !busy) && (
-          <button className="tbtn" onClick={reset} style={{ fontSize: 11 }}>重置</button>
+          <button className="tbtn" onClick={reset} style={{ fontSize: "var(--fs-11)" }}>重置</button>
         )}
       </div>
 
@@ -306,13 +306,13 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
       {/* ── Clarifying questions ── */}
       {phase === "clarify" && clarifications.length > 0 && (
         <div className="card" style={{ background: "var(--bg2)", marginBottom: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>先确认几个问题，让方案更贴合需求</div>
-          <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 12 }}>
+          <div style={{ fontSize: "var(--fs-12)", fontWeight: 600, marginBottom: 4 }}>先确认几个问题，让方案更贴合需求</div>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginBottom: 12 }}>
             AI 觉得需求有歧义，回答后会据此制定方案
           </div>
           {clarifications.map((c, i) => (
             <div key={i} style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 11, color: "var(--t2)", display: "block", marginBottom: 4 }}>
+              <label style={{ fontSize: "var(--fs-11)", color: "var(--t2)", display: "block", marginBottom: 4 }}>
                 {c.question}
                 {c.why && <span style={{ color: "var(--t3)", marginLeft: 6 }}>（{c.why}）</span>}
               </label>
@@ -346,10 +346,10 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
       {/* ── Editable plan card ── */}
       {phase === "plan" && plan && (
         <div className="card" style={{ background: "var(--bg2)", marginBottom: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+          <div style={{ fontSize: "var(--fs-12)", fontWeight: 600, marginBottom: 4 }}>
             {String(plan.icon || "◇")} 方案已就绪，确认或微调后再生成
           </div>
-          <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 12 }}>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginBottom: 12 }}>
             类型: {String(plan.tool_kind || "-")} ｜ 运行时: {String(plan.runtime || "-")}
           </div>
 
@@ -369,7 +369,7 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
           </Field>
 
           {/* inputs editor */}
-          <div style={{ margin: "12px 0 6px", fontSize: 11, fontWeight: 600 }}>输入参数（用户执行时要填的）</div>
+          <div style={{ margin: "12px 0 6px", fontSize: "var(--fs-11)", fontWeight: 600 }}>输入参数（用户执行时要填的）</div>
           {(plan.inputs || []).map((inp, i) => (
             <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
               <input className="market-query-input" style={{ flex: "0 0 120px" }} placeholder="name"
@@ -379,20 +379,20 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
               <SheetSelect className="market-query-input" style={{ flex: "0 0 110px" }}
                 value={inp.type || "text"} onChange={(v) => patchInput(i, { type: v })}
                 title="参数类型" options={INPUT_TYPES} />
-              <label style={{ fontSize: 10, color: "var(--t2)", display: "flex", alignItems: "center", gap: 3 }}>
+              <label style={{ fontSize: "var(--fs-10)", color: "var(--t2)", display: "flex", alignItems: "center", gap: 3 }}>
                 <input type="checkbox" checked={!!inp.required}
                   onChange={(e) => patchInput(i, { required: e.target.checked })} />必填
               </label>
-              <button className="tbtn" style={{ fontSize: 11 }} onClick={() => removeInput(i)}>✕</button>
+              <button className="tbtn" style={{ fontSize: "var(--fs-11)" }} onClick={() => removeInput(i)}>✕</button>
             </div>
           ))}
-          <button className="tbtn" style={{ fontSize: 11, marginBottom: 10 }} onClick={addInput}>+ 添加参数</button>
+          <button className="tbtn" style={{ fontSize: "var(--fs-11)", marginBottom: 10 }} onClick={addInput}>+ 添加参数</button>
 
           {/* steps preview */}
           {plan.steps?.length ? (
             <div style={{ marginTop: 6 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>执行步骤</div>
-              <ol style={{ fontSize: 10, color: "var(--t2)", lineHeight: 1.6, paddingLeft: 18, margin: 0 }}>
+              <div style={{ fontSize: "var(--fs-11)", fontWeight: 600, marginBottom: 4 }}>执行步骤</div>
+              <ol style={{ fontSize: "var(--fs-10)", color: "var(--t2)", lineHeight: 1.6, paddingLeft: 18, margin: 0 }}>
                 {plan.steps.map((s, i) => <li key={i}>{s}</li>)}
               </ol>
             </div>
@@ -402,7 +402,7 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
             <button className="market-btn market-btn-submit" onClick={confirmAndGenerate}>
               🚀 确认并生成
             </button>
-            <button className="tbtn" onClick={() => { setPhase("idle"); setPlan(null); }} style={{ fontSize: 11 }}>
+            <button className="tbtn" onClick={() => { setPhase("idle"); setPlan(null); }} style={{ fontSize: "var(--fs-11)" }}>
               取消
             </button>
           </div>
@@ -413,7 +413,7 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
       {phase === "preview" && generated && (
         <div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>
+            <span style={{ fontSize: "var(--fs-14)", fontWeight: 600 }}>
               {String(generated.frontmatter?.icon || "⊞")} {generated.name}
             </span>
             {generated.category ? <span className="tag">{generated.category}</span> : null}
@@ -429,7 +429,7 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
             </div>
           )}
           {generated.validation?.ok && generated.validation.warnings.length > 0 && (
-            <div style={{ fontSize: 10, color: "var(--amber)", background: "rgba(245,158,11,.08)",
+            <div style={{ fontSize: "var(--fs-10)", color: "var(--amber)", background: "rgba(245,158,11,.08)",
               border: "1px solid rgba(245,158,11,.25)", borderRadius: 6, padding: "8px 10px", marginBottom: 10, lineHeight: 1.6 }}>
               提示（不影响使用）：
               <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
@@ -438,19 +438,19 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
             </div>
           )}
           {generated.validation?.ok && generated.validation.warnings.length === 0 && (
-            <div style={{ fontSize: 10, color: "var(--acc)", marginBottom: 10 }}>✓ 自检通过</div>
+            <div style={{ fontSize: "var(--fs-10)", color: "var(--acc)", marginBottom: 10 }}>✓ 自检通过</div>
           )}
 
           {generated.frontmatter?.description_zh ? (
-            <div style={{ fontSize: 11, color: "var(--t2)", marginBottom: 10 }}>
+            <div style={{ fontSize: "var(--fs-11)", color: "var(--t2)", marginBottom: 10 }}>
               {String(generated.frontmatter.description_zh)}
             </div>
           ) : null}
 
           <div className="card" style={{ background: "var(--bg2)", marginBottom: 14 }}>
-            <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 6 }}>SKILL.md 预览</div>
+            <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginBottom: 6 }}>SKILL.md 预览</div>
             <pre style={{
-              fontSize: 10, lineHeight: 1.6, maxHeight: 400, overflow: "auto", padding: 10,
+              fontSize: "var(--fs-10)", lineHeight: 1.6, maxHeight: 400, overflow: "auto", padding: 10,
               background: "var(--bg)", borderRadius: 4, whiteSpace: "pre-wrap", wordBreak: "break-word",
             }}>
               {generated.preview}
@@ -465,16 +465,16 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
             >
               {saving ? "保存中…" : "🚀 保存并打开工具"}
             </button>
-            <button className="tbtn" onClick={save} disabled={saving || saved} style={{ fontSize: 11 }}>
+            <button className="tbtn" onClick={save} disabled={saving || saved} style={{ fontSize: "var(--fs-11)" }}>
               {saved ? "✓ 已保存" : "仅保存到 Skill 库"}
             </button>
-            <button className="tbtn" onClick={reset} style={{ fontSize: 11 }}>
+            <button className="tbtn" onClick={reset} style={{ fontSize: "var(--fs-11)" }}>
               重新开始
             </button>
           </div>
 
           {saved && (
-            <div style={{ marginTop: 10, fontSize: 11, color: "var(--acc)" }}>
+            <div style={{ marginTop: 10, fontSize: "var(--fs-11)", color: "var(--acc)" }}>
               ✓ Skill 已保存！可在「运营商店」执行，或在工具页右上角「☆ 固定到侧边栏」把它变成常驻入口。
             </div>
           )}
@@ -487,7 +487,7 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 8 }}>
-      <label style={{ fontSize: 10, color: "var(--t2)", display: "block", marginBottom: 3 }}>{label}</label>
+      <label style={{ fontSize: "var(--fs-10)", color: "var(--t2)", display: "block", marginBottom: 3 }}>{label}</label>
       {children}
     </div>
   );

@@ -271,7 +271,7 @@ export default function ImageGen() {
           <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--b2)" }} />
         </div>
         <div style={{ display: "flex", alignItems: "center", padding: "2px 16px 10px", flexShrink: 0, borderBottom: "1px solid var(--b)" }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--t)", flex: 1 }}>生成历史</span>
+          <span style={{ fontSize: "var(--fs-14)", fontWeight: 600, color: "var(--t)", flex: 1 }}>生成历史</span>
           <button className="tbtn" onClick={startNew} disabled={loading} style={{ marginRight: 8 }}>＋ 新建</button>
           <button
             onClick={() => setHistoryOpen(false)}
@@ -280,7 +280,7 @@ export default function ImageGen() {
         </div>
         <div style={{ overflowY: "auto", flex: 1 }}>
           {sessions.length === 0
-            ? <div style={{ padding: "28px 16px", fontSize: 13, color: "var(--t3)", textAlign: "center" }}>暂无历史记录</div>
+            ? <div style={{ padding: "28px 16px", fontSize: "var(--fs-13)", color: "var(--t3)", textAlign: "center" }}>暂无历史记录</div>
             : sessions.map(s => {
               const allImgs = s.turns.flatMap(t => t.images).slice(0, 4);
               const isActive = s.id === currentId;
@@ -302,22 +302,22 @@ export default function ImageGen() {
                       ? allImgs.map((u, i) => (
                         <img key={i} src={u} alt="" style={{ width: 40, height: 40, borderRadius: 5, objectFit: "cover", background: "var(--bg3)" }} />
                       ))
-                      : <div style={{ width: 40, height: 40, borderRadius: 5, background: "var(--bg3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "var(--t3)" }}>▦</div>
+                      : <div style={{ width: 40, height: 40, borderRadius: 5, background: "var(--bg3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "var(--fs-16)", color: "var(--t3)" }}>▦</div>
                     }
                   </div>
                   <div style={{ flex: 1, overflow: "hidden" }}>
                     <div style={{
-                      fontSize: 13, fontWeight: isActive ? 600 : 400,
+                      fontSize: "var(--fs-13)", fontWeight: isActive ? 600 : 400,
                       color: isActive ? "var(--acc)" : "var(--t)",
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                     }}>{s.title}</div>
-                    <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 2 }}>
+                    <div style={{ fontSize: "var(--fs-11)", color: "var(--t3)", marginTop: 2 }}>
                       {new Date(s.updatedAt).toLocaleDateString("zh-CN")} · {s.turns.length}轮 · {s.size}
                     </div>
                   </div>
                   <button
                     onClick={(e) => deleteSession(s.id, e)}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", fontSize: 16, padding: "4px 6px", lineHeight: 1, flexShrink: 0, borderRadius: 4 }}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", fontSize: "var(--fs-16)", padding: "4px 6px", lineHeight: 1, flexShrink: 0, borderRadius: 4 }}
                     title="删除"
                   >✕</button>
                 </div>
@@ -355,12 +355,12 @@ export default function ImageGen() {
                 width: 30, height: 30, borderRadius: 8, flexShrink: 0,
                 background: "color-mix(in srgb, var(--acc) 18%, transparent)",
                 color: "var(--acc)", display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 11, fontWeight: 600, border: "1px solid transparent",
+                fontSize: "var(--fs-11)", fontWeight: 600, border: "1px solid transparent",
               }}>我</div>
               <div style={{
                 background: "color-mix(in srgb, var(--acc) 8%, transparent)",
                 border: "1px solid var(--b)", borderRadius: 10, padding: "8px 12px",
-                fontSize: 13, color: "var(--t)", lineHeight: 1.6, maxWidth: "80%",
+                fontSize: "var(--fs-13)", color: "var(--t)", lineHeight: 1.6, maxWidth: "80%",
                 display: "flex", flexDirection: "column", gap: 6,
               }}>
                 {turn.source && (
@@ -415,9 +415,9 @@ export default function ImageGen() {
           background: "color-mix(in srgb, var(--acc) 6%, transparent)",
         }}>
           <img src={sourceImage} alt="原图" style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6, border: "1px solid var(--b)" }} />
-          <div style={{ flex: 1, fontSize: 12, color: "var(--t2)", lineHeight: 1.5 }}>
+          <div style={{ flex: 1, fontSize: "var(--fs-12)", color: "var(--t2)", lineHeight: 1.5 }}>
             <strong style={{ color: "var(--t)" }}>基于这张图修改</strong>
-            <div style={{ color: "var(--t3)", fontSize: 11 }}>用下方文字描述要怎么改（如：换成纯白背景、加上节日氛围、提亮主体…）</div>
+            <div style={{ color: "var(--t3)", fontSize: "var(--fs-11)" }}>用下方文字描述要怎么改（如：换成纯白背景、加上节日氛围、提亮主体…）</div>
           </div>
           <button className="tbtn" onClick={() => setSourceImage(null)} disabled={loading} title="移除原图，改为从文字生成">✕ 移除</button>
         </div>

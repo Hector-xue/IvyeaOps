@@ -154,7 +154,7 @@ export default function SidebarSessionItem({
               <div className="flex items-center gap-2">
                 <div className="truncate text-xs font-medium text-foreground">{sessionView.sessionName}</div>
                 {compactSessionAge && (
-                  <span className="ml-auto flex-shrink-0 text-[11px] text-muted-foreground">{compactSessionAge}</span>
+                  <span className="ml-auto flex-shrink-0 text-[length:var(--fs-11)] text-muted-foreground">{compactSessionAge}</span>
                 )}
               </div>
               <div className="mt-0.5 flex items-center">
@@ -205,7 +205,7 @@ export default function SidebarSessionItem({
                 {compactSessionAge && (
                   <span
                     className={cn(
-                      'ml-auto flex-shrink-0 text-[11px] text-muted-foreground transition-opacity duration-200',
+                      'ml-auto flex-shrink-0 text-[length:var(--fs-11)] text-muted-foreground transition-opacity duration-200',
                       isEditing ? 'opacity-0' : 'group-hover:opacity-0',
                     )}
                   >

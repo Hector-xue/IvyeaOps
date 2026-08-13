@@ -3,11 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { getBudgetSummary, type BudgetStatus } from "../api/notify";
 
 /**
- * 顶栏常驻的「本月已花 $X」。
+ * 顶栏常驻的「本月用量」。
  *
- * 为什么值得占顶栏的位置：AI 花费是这个产品里唯一会**在你不看的时候持续增长**的
+ * 为什么值得占顶栏的位置：AI 用量是这个产品里唯一会**在你不看的时候持续增长**的
  * 东西。放在设置页里，用户只有在起疑心时才会去翻；放在顶栏，他每天都会顺眼扫到，
  * 异常增长当天就能发现。
+ *
+ * **显示 token 而不是金额。** 金额是按公开价目表折算的估算值，天天挂在眼前会被
+ * 当成账单看，而它不是；token 是实打实计出来的量，没有这层歧义。金额仍然算、
+ * 仍然驱动预算告警，只是挪进悬浮说明和设置页。
  *
  * 三条实现上的约束
  * ----------------
@@ -42,20 +46,25 @@ export default function CostChip() {
 
   if (hidden || !st) return null;
 
-  const money = st.known ? `$${st.spend_usd.toFixed(2)}` : "—";
+  const fmtTokens = (n: number) =>
+    n >= 1e9 ? `${(n / 1e9).toFixed(2)}B`
+    : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M`
+    : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n);
+  const shown = st.known ? fmtTokens(st.total_tokens) : "—";
   const color =
-    st.level === "exceeded" ? "var(--err)" :
+    st.level === "exceeded" ? "var(--red)" :
     st.level === "warn" ? "var(--amber)" : "var(--t3)";
 
   const title = [
-    st.known ? `本月 AI 花费约 ${money}` : "本月花费还在统计中",
+    st.known ? `本月已用 ${st.total_tokens.toLocaleString()} tokens` : "本月用量还在统计中",
+    // 金额放在悬浮说明里：它是估算，不该在顶栏被当成账单读。
+    st.known ? `按公开价目表折算约 $${st.spend_usd.toFixed(2)}（估算，不是账单）` : "",
     st.enabled ? `预算 $${st.limit_usd.toFixed(2)}（已用 ${Math.round(st.ratio * 100)}%）`
                : "未设预算 —— 点这里可以设一个月度上限",
     st.level === "exceeded" ? "已超预算：自动任务已暂停，手动操作不受影响" : "",
     st.level === "warn" ? "接近预算：到 100% 时自动任务会暂停" : "",
     // 数据新鲜度要说出来。一个不标时间的金额，用户没法判断该不该信它。
     st.known && st.age_seconds > 60 ? `数据更新于 ${Math.round(st.age_seconds / 60)} 分钟前` : "",
-    "按公开价目表对 token 的本地估算，不是账单",
   ].filter(Boolean).join("\n");
 
   return (
@@ -66,7 +75,8 @@ export default function CostChip() {
       onClick={() => navigate("/hub-settings")}
     >
       <span className="cost-chip-dot" style={{ background: color }} />
-      {money}
+      {shown}
+      <span className="cost-chip-unit">tok</span>
       {st.enabled && st.known && (
         <span className="cost-chip-ratio">{Math.round(st.ratio * 100)}%</span>
       )}

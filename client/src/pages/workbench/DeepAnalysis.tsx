@@ -37,9 +37,9 @@ export default function DeepAnalysis() {
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                 <span style={{ fontSize: 18 }}>{t.icon}</span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--t)" }}>{t.title}</span>
+                <span style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--t)" }}>{t.title}</span>
               </div>
-              <div style={{ fontSize: 10, color: "var(--t3)", lineHeight: 1.5 }}>{t.desc}</div>
+              <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", lineHeight: 1.5 }}>{t.desc}</div>
             </div>
           ))}
         </div>
@@ -49,7 +49,7 @@ export default function DeepAnalysis() {
           <button
             className="tbtn"
             onClick={() => setActive(null)}
-            style={{ marginBottom: 12, fontSize: 11 }}
+            style={{ marginBottom: 12, fontSize: "var(--fs-11)" }}
           >
             ← 返回工具列表
           </button>

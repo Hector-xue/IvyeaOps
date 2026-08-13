@@ -134,8 +134,8 @@ export default function LingXingOptimizer({ storeSid, onGoTickets }: {
     <div>
       {/* control bar */}
       <div className="card" style={{ padding: 12, marginBottom: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11, color: "var(--t3)" }}>店铺：{sellers.find((s) => String(s.sid) === sid)?.name || sid || "（上方选择）"}</span>
-        <span style={{ fontSize: 11, color: "var(--t3)" }}>窗口</span>
+        <span style={{ fontSize: "var(--fs-11)", color: "var(--t3)" }}>店铺：{sellers.find((s) => String(s.sid) === sid)?.name || sid || "（上方选择）"}</span>
+        <span style={{ fontSize: "var(--fs-11)", color: "var(--t3)" }}>窗口</span>
         <SheetSelect value={String(days)} onChange={(v) => setDays(Number(v))} title="时间窗口" style={{ ...inputStyle, width: 100 }}
           options={[14, 30, 60].map((d) => ({ value: String(d), label: `近 ${d} 天` }))} />
         <Btn primary onClick={start} disabled={busy || running || !sid}>{running ? "运行中…" : "运行优化引擎"}</Btn>
@@ -144,21 +144,21 @@ export default function LingXingOptimizer({ storeSid, onGoTickets }: {
             options={runs.map((r) => ({ value: String(r.id), label: `${fmtTs(r.started_at)} · ${r.status === "done" ? (r.summary?.split("·")[0] || "完成") : r.status === "failed" ? "失败" : "运行中"}` }))} />
         )}
         {running && <LxProgress phase={run.phase} done={run.done} total={run.total} />}
-        {err && <span style={{ fontSize: 11, color: "var(--red)" }}>{err}</span>}
+        {err && <span style={{ fontSize: "var(--fs-11)", color: "var(--red)" }}>{err}</span>}
       </div>
 
       {run?.status === "failed" && (
-        <div className="card" style={{ padding: 12, marginBottom: 10, fontSize: 11, color: "var(--red)" }}>运行失败：{run.error}</div>
+        <div className="card" style={{ padding: 12, marginBottom: 10, fontSize: "var(--fs-11)", color: "var(--red)" }}>运行失败：{run.error}</div>
       )}
 
       {running && <div className="card" style={{ marginBottom: 10 }}><LxTableSkeleton lines={6} /></div>}
 
       {data && (
-        <div className="card wb-enter" style={{ padding: "8px 12px", marginBottom: 10, fontSize: 11, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div className="card wb-enter" style={{ padding: "8px 12px", marginBottom: 10, fontSize: "var(--fs-11)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span><b>{data.note}</b> · 候选 <b>{data.count}</b> 条 · 窗口 {data.window_days} 天（已剔除近 2 天）</span>
           {allBatchable.length > 0 && (
             <span style={{ marginLeft: "auto", display: "inline-flex", gap: 8, alignItems: "center" }}>
-              <label style={{ display: "inline-flex", gap: 4, alignItems: "center", cursor: "pointer", fontSize: 10, color: "var(--t3)" }}>
+              <label style={{ display: "inline-flex", gap: 4, alignItems: "center", cursor: "pointer", fontSize: "var(--fs-10)", color: "var(--t3)" }}>
                 <input type="checkbox" checked={allBatchable.length > 0 && selected.length === allBatchable.length}
                   onChange={(e) => { const n: Record<number, boolean> = {}; if (e.target.checked) allBatchable.forEach((i) => { n[i] = true; }); setSel(n); }} />
                 全选（收割除外）
@@ -170,7 +170,7 @@ export default function LingXingOptimizer({ storeSid, onGoTickets }: {
       )}
 
       {data && cands.length === 0 && (
-        <div className="card wb-enter" style={{ padding: 30, textAlign: "center", color: "var(--t3)", fontSize: 11 }}>窗口内无达阈值的优化候选（数据不足或表现平稳）。</div>
+        <div className="card wb-enter" style={{ padding: 30, textAlign: "center", color: "var(--t3)", fontSize: "var(--fs-11)" }}>窗口内无达阈值的优化候选（数据不足或表现平稳）。</div>
       )}
 
       {data && cands.map((c: any, i: number) => (
@@ -179,10 +179,10 @@ export default function LingXingOptimizer({ storeSid, onGoTickets }: {
             {batchable(i) && (
               <input type="checkbox" checked={!!sel[i]} onChange={(e) => setSel((s) => ({ ...s, [i]: e.target.checked }))} title="加入批量生成" />
             )}
-            <span style={{ fontSize: 11, fontWeight: 600, color: LEVER_COLOR[c.lever] }}>{c.lever}</span>
-            <b style={{ fontSize: 12 }}>{c.target_name}</b>
+            <span style={{ fontSize: "var(--fs-11)", fontWeight: 600, color: LEVER_COLOR[c.lever] }}>{c.lever}</span>
+            <b style={{ fontSize: "var(--fs-12)" }}>{c.target_name}</b>
             {c.current && c.proposed && (
-              <span style={{ fontSize: 11, color: "var(--t2)" }}>
+              <span style={{ fontSize: "var(--fs-11)", color: "var(--t2)" }}>
                 {fmtVal(c.current, cur)} → <b>{fmtVal(c.proposed, cur)}</b>
                 {c.change_pct != null && <span style={{ color: "var(--t3)" }}> ({c.change_pct}%)</span>}
               </span>
@@ -190,7 +190,7 @@ export default function LingXingOptimizer({ storeSid, onGoTickets }: {
             <span style={{ marginLeft: "auto" }}>
               {c.harvest
                 ? (done[i]
-                  ? <span style={{ fontSize: 10, color: "var(--acc)" }}>✓ 工单 {done[i]}</span>
+                  ? <span style={{ fontSize: "var(--fs-10)", color: "var(--acc)" }}>✓ 工单 {done[i]}</span>
                   : <span style={{ display: "inline-flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
                       <SheetSelect value={String(hForm[i]?.campaign_id || "")} onChange={(v) => setH(i, "campaign_id", v)} title="目标活动(manual)" placeholder="目标活动" style={{ ...inputStyle, maxWidth: 140 }}
                         options={campaigns.map((cp) => ({ value: String(cp.campaign_id), label: String(cp.name || cp.campaign_id) }))} />
@@ -200,12 +200,12 @@ export default function LingXingOptimizer({ storeSid, onGoTickets }: {
                       <Btn onClick={() => makeHarvest(c, i)} disabled={!hForm[i]?.campaign_id || !hForm[i]?.ad_group_id}>生成工单</Btn>
                     </span>)
                 : done[i]
-                  ? <span style={{ fontSize: 10, color: "var(--acc)" }}>✓ 工单 {done[i]}</span>
+                  ? <span style={{ fontSize: "var(--fs-10)", color: "var(--acc)" }}>✓ 工单 {done[i]}</span>
                   : <Btn onClick={() => makeOne(c, i)}>生成工单</Btn>}
             </span>
           </div>
-          <div style={{ fontSize: 11, color: "var(--t2)", marginTop: 4 }}>{c.rule}</div>
-          <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 2 }}>
+          <div style={{ fontSize: "var(--fs-11)", color: "var(--t2)", marginTop: 4 }}>{c.rule}</div>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginTop: 2 }}>
             显著性：{c.significance} · 花费 {fmtBudget(c.metrics?.spend, cur)} · 销售 {fmtBudget(c.metrics?.sales, cur)} · ACOS {pct0(c.metrics?.acos)} · 订单 {c.metrics?.orders} · 点击 {c.metrics?.clicks}
           </div>
         </div>

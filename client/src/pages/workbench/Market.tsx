@@ -737,9 +737,9 @@ function MarkdownReport({ text }: { text: string }) {
     if (line.startsWith("# ")) {
       elements.push(<h1 key={i} style={{ fontSize: 17, fontWeight: 700, margin: "0 0 12px", color: "var(--t)", borderBottom: "2px solid var(--acc)", paddingBottom: 8 }}>{line.slice(2)}</h1>);
     } else if (line.startsWith("## ")) {
-      elements.push(<h2 key={i} style={{ fontSize: 14, fontWeight: 600, margin: "18px 0 8px", color: "var(--t)" }}>{line.slice(3)}</h2>);
+      elements.push(<h2 key={i} style={{ fontSize: "var(--fs-14)", fontWeight: 600, margin: "18px 0 8px", color: "var(--t)" }}>{line.slice(3)}</h2>);
     } else if (line.startsWith("### ")) {
-      elements.push(<h3 key={i} style={{ fontSize: 13, fontWeight: 600, margin: "12px 0 6px", color: "var(--t2)" }}>{line.slice(4)}</h3>);
+      elements.push(<h3 key={i} style={{ fontSize: "var(--fs-13)", fontWeight: 600, margin: "12px 0 6px", color: "var(--t2)" }}>{line.slice(4)}</h3>);
     } else if (line.startsWith("> ")) {
       elements.push(
         <div key={i} style={{ borderLeft: "3px solid var(--acc)", paddingLeft: 12, margin: "6px 0", color: "var(--t2)", fontStyle: "italic", lineHeight: 1.7 }}>

@@ -32,7 +32,8 @@ def test_cached_read_never_computes_inline(monkeypatch):
     """完整聚合本机实测 8.8 秒。顶栏在每个页面都在，让它现场开算，
     等于用户每开一个页面就给自己的机器来一次全盘扫描。"""
     called = []
-    monkeypatch.setattr(budget, "_compute", lambda: called.append(1) or 1.0)
+    monkeypatch.setattr(budget, "_compute",
+                        lambda: called.append(1) or {"cost_usd": 1.0, "total_tokens": 10})
     monkeypatch.setattr(budget, "_refresh_async", lambda: None)   # 不起后台线程
 
     assert budget.month_spend_usd(cached=True) is None   # 还没算过
@@ -50,17 +51,21 @@ def test_cold_cache_reports_unknown_not_zero(monkeypatch):
 
 def test_cache_hit_is_used_and_age_reported(monkeypatch):
     _settings(monkeypatch, {"ai_budget_monthly_usd": 100})
-    budget._cache["value"] = 42.0
+    # 缓存里存的是一次聚合的两个结果（金额 + token），不是单个数 ——
+    # 它们出自同一份数据，分两次算会因为中间又跑了任务而对不上。
+    budget._cache["value"] = {"cost_usd": 42.0, "total_tokens": 1_200_000}
     budget._cache["at"] = time.time() - 90
     st = budget.status(cached=True)
     assert st["known"] is True and st["spend_usd"] == 42.0
+    assert st["total_tokens"] == 1_200_000    # 顶栏显示的是这个
     assert 80 <= st["age_seconds"] <= 100     # 新鲜度如实报出来
 
 
 def test_refresh_does_not_stack_up(monkeypatch):
     """十个页面同时打开，不该同时开十次全盘扫描。"""
     starts = []
-    monkeypatch.setattr(budget, "_compute", lambda: (time.sleep(0.3), 1.0)[1])
+    monkeypatch.setattr(budget, "_compute",
+                        lambda: (time.sleep(0.3), {"cost_usd": 1.0, "total_tokens": 10})[1])
     import threading
     real = threading.Thread
 
@@ -116,11 +121,11 @@ def test_each_tier_notifies_once_but_both_tiers_fire(monkeypatch):
 def test_auto_tasks_pause_only_when_over_and_known(monkeypatch):
     _settings(monkeypatch, {"ai_budget_monthly_usd": 100})
 
-    budget._cache["value"] = 120.0
+    budget._cache["value"] = {"cost_usd": 120.0, "total_tokens": 9_000_000}
     budget._cache["at"] = time.time()
     assert budget.auto_tasks_paused() is True
 
-    budget._cache["value"] = 20.0
+    budget._cache["value"] = {"cost_usd": 20.0, "total_tokens": 1_000_000}
     assert budget.auto_tasks_paused() is False
 
 
@@ -134,7 +139,7 @@ def test_unknown_spend_does_not_pause_anything(monkeypatch):
 
 def test_no_budget_never_pauses(monkeypatch):
     _settings(monkeypatch, {"ai_budget_monthly_usd": 0})
-    budget._cache["value"] = 99999.0
+    budget._cache["value"] = {"cost_usd": 99999.0, "total_tokens": 9_9999_000}
     budget._cache["at"] = time.time()
     assert budget.auto_tasks_paused() is False
 

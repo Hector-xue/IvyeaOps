@@ -58,7 +58,17 @@ def market_status(_admin: str = Depends(require_admin)) -> dict:
         "enabled": sm.market_enabled(),
         "url": sm.market_url(),
         "installed": sm.installed(),
+        # 前端据此决定 B 类是显示「安装」还是「需手动安装」。
+        "allow_class_b": _allow_class_b(),
     }
+
+
+@router.get("/skills/{slug:path}/detail")
+def detail(slug: str, _admin: str = Depends(require_admin)) -> dict:
+    """转发门道的详情。**只转发不缓存** —— 缓存一份别人的目录，
+    迟早会显示已经下架或已修订的内容。"""
+    _require_enabled()
+    return _get(f"/skills/{slug}/detail").json()
 
 
 @router.get("/skills")
@@ -67,9 +77,11 @@ def browse(q: str = Query("", max_length=80), category: str = Query("", max_leng
            page: int = Query(1, ge=1, le=200),
            _admin: str = Depends(require_admin)) -> dict:
     _require_enabled()
-    # 只要 A 类：客户端当前只装纯提示词的 Skill，把 B 类列出来只会让用户
-    # 点进去才发现装不了。
-    return _get("/skills", q=q, category=category, sort=sort, page=page, **{"class": "A"}).json()
+    # **B 类也列出来，但在卡片上标清楚装不了。** 之前的做法是干脆过滤掉，理由是
+    # "免得用户点进去才发现装不了" —— 但那等于让用户以为社区里根本没有代码类
+    # 技能，而它们恰恰是最有价值的一批。现在照常展示、直接写明原因，
+    # 用户既知道有这个东西，也知道为什么还装不了。
+    return _get("/skills", q=q, category=category, sort=sort, page=page).json()
 
 
 def _fetch_package(slug: str, version: str) -> tuple:
@@ -103,6 +115,37 @@ def _unpack(blob: bytes) -> Dict[str, bytes]:
     return files
 
 
+def _allow_class_b() -> bool:
+    """用户是否允许安装含可执行脚本的技能。
+
+    **这个开关此前不存在** —— analyze() 有 allow_class_b 参数，但没有任何地方传过
+    它，于是 B 类是彻底堵死的：既不能一键装，界面上也没有别的出路，只能看。
+    那不是"谨慎"，那是把功能做了一半。现在它是个真开关（默认关），
+    而且关着的时候也有出路：下面的 /download 随时可以把包取下来自己审。
+    """
+    from app.core import hub_settings
+    return bool(hub_settings.get("skill_market_allow_class_b"))
+
+
+@router.get("/skills/{slug:path}/{version}/download")
+def download(slug: str, version: str, _admin: str = Depends(require_admin)):
+    """把安装包原样交给用户。
+
+    **不管 A 类 B 类都给。** 这是"不一键安装"与"完全不能用"之间的那条路：
+    用户可以下下来自己看一眼脚本、自己决定要不要放进技能库。
+    连这个都不给，"出于安全考虑不支持"就变成了纯粹的功能缺失。
+    """
+    _require_enabled()
+    from fastapi.responses import Response
+
+    _meta, blob, _headers = _fetch_package(slug, version)
+    from app.core import audit
+    audit.record("skill_market", "download", target=f"{slug}@{version}")
+    fname = slug.replace("/", "__") + f"-{version}.tar.gz"
+    return Response(blob, media_type="application/gzip",
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
 class PreviewBody(BaseModel):
     slug: str
     version: str
@@ -126,7 +169,7 @@ def preview(body: PreviewBody, _admin: str = Depends(require_admin)) -> dict:
         public_key=str(hub_settings.get("skill_market_pubkey") or ""),
     )
     files = _unpack(blob)
-    manifest = sm.analyze(files)
+    manifest = sm.analyze(files, allow_class_b=_allow_class_b())
 
     return {
         "slug": body.slug,
@@ -176,7 +219,7 @@ def install(body: InstallBody, _admin: str = Depends(require_admin)) -> dict:
         raise HTTPException(400, "完整性校验失败：" + "；".join(problems))
 
     files = _unpack(blob)
-    manifest = sm.analyze(files)
+    manifest = sm.analyze(files, allow_class_b=_allow_class_b())
     if not manifest.installable:
         raise HTTPException(400, "这个 Skill 未通过本地安全检查：" + "；".join(manifest.blockers))
 

@@ -28,7 +28,7 @@ function KVTable({ obj }: { obj: Record<string, unknown> }) {
   const entries = Object.entries(obj).filter(([, v]) => v !== null && v !== undefined && v !== "");
   if (entries.length === 0) return null;
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--fs-10)" }}>
       <tbody>
         {entries.map(([k, v]) => (
           <tr key={k} style={{ borderBottom: "1px solid var(--b)" }}>
@@ -39,10 +39,10 @@ function KVTable({ obj }: { obj: Record<string, unknown> }) {
                   <div>{v.map((it, i) => <div key={i}>{String(it)}</div>)}</div>
                 ) : (
                   <details>
-                    <summary style={{ fontSize: 9, color: "var(--t3)", cursor: "pointer" }}>
+                    <summary style={{ fontSize: "var(--fs-9)", color: "var(--t3)", cursor: "pointer" }}>
                       展开（{Array.isArray(v) ? `${v.length} 项` : "对象"}）
                     </summary>
-                    <pre style={{ fontSize: 9, maxHeight: 220, overflow: "auto", padding: 6, background: "var(--bg)", borderRadius: 4, marginTop: 4, whiteSpace: "pre-wrap" }}>
+                    <pre style={{ fontSize: "var(--fs-9)", maxHeight: 220, overflow: "auto", padding: 6, background: "var(--bg)", borderRadius: 4, marginTop: 4, whiteSpace: "pre-wrap" }}>
                       {JSON.stringify(v, null, 2)}
                     </pre>
                   </details>
@@ -56,13 +56,13 @@ function KVTable({ obj }: { obj: Record<string, unknown> }) {
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 10, color: "var(--t2)", marginBottom: 6 }}>{children}</div>;
+  return <div style={{ fontSize: "var(--fs-10)", color: "var(--t2)", marginBottom: 6 }}>{children}</div>;
 }
 
 function ErrorList({ errors }: { errors?: string[] }) {
   if (!errors?.length) return null;
   return (
-    <div style={{ marginBottom: 10, fontSize: 10, color: "var(--amber)" }}>
+    <div style={{ marginBottom: 10, fontSize: "var(--fs-10)", color: "var(--amber)" }}>
       {errors.map((e, i) => <div key={i}>⚠ {e}</div>)}
     </div>
   );
@@ -71,8 +71,8 @@ function ErrorList({ errors }: { errors?: string[] }) {
 function JsonDetails({ data }: { data: unknown }) {
   return (
     <details style={{ marginTop: 12 }}>
-      <summary style={{ fontSize: 10, color: "var(--t3)", cursor: "pointer" }}>查看原始 JSON</summary>
-      <pre style={{ fontSize: 9, maxHeight: 300, overflow: "auto", padding: 8, background: "var(--bg)", borderRadius: 4, marginTop: 4 }}>
+      <summary style={{ fontSize: "var(--fs-10)", color: "var(--t3)", cursor: "pointer" }}>查看原始 JSON</summary>
+      <pre style={{ fontSize: "var(--fs-9)", maxHeight: 300, overflow: "auto", padding: 8, background: "var(--bg)", borderRadius: 4, marginTop: 4 }}>
         {JSON.stringify(data, null, 2)}
       </pre>
     </details>
@@ -82,7 +82,7 @@ function JsonDetails({ data }: { data: unknown }) {
 /** 长文本块：不截断，超高滚动。 */
 function LongText({ text }: { text: string }) {
   return (
-    <div style={{ fontSize: 10, lineHeight: 1.7, color: "var(--t)", maxHeight: 260, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+    <div style={{ fontSize: "var(--fs-10)", lineHeight: 1.7, color: "var(--t)", maxHeight: 260, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
       {text}
     </div>
   );
@@ -93,13 +93,13 @@ function FlexiList({ value, max = 20 }: { value: unknown; max?: number }) {
   if (typeof value === "string") return <LongText text={value} />;
   if (Array.isArray(value)) {
     return (
-      <div style={{ fontSize: 10 }}>
+      <div style={{ fontSize: "var(--fs-10)" }}>
         {value.slice(0, max).map((t: any, i: number) => (
           <div key={i} style={{ padding: "3px 6px", background: "var(--bg3)", borderRadius: 4, marginBottom: 3, wordBreak: "break-word" }}>
             {isPrimitive(t) ? String(t) : t.keyword || t.关键词 || JSON.stringify(t)}
           </div>
         ))}
-        {value.length > max && <div style={{ fontSize: 9, color: "var(--t3)" }}>… 共 {value.length} 项，其余见原始 JSON</div>}
+        {value.length > max && <div style={{ fontSize: "var(--fs-9)", color: "var(--t3)" }}>… 共 {value.length} 项，其余见原始 JSON</div>}
       </div>
     );
   }
@@ -118,7 +118,7 @@ export function KeywordResult({ data, keyword }: { data: any; keyword: string })
 
   return (
     <div className="card" style={{ background: "var(--bg2)" }}>
-      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>「{keyword}」关键词分析</div>
+      <div style={{ fontSize: "var(--fs-12)", fontWeight: 600, marginBottom: 10 }}>「{keyword}」关键词分析</div>
       <ErrorList errors={data?.errors} />
 
       {hasDetail && (
@@ -140,7 +140,7 @@ export function KeywordResult({ data, keyword }: { data: any; keyword: string })
       {extendsList.length > 0 && (
         <div style={{ marginBottom: 12 }}>
           <SectionLabel>扩展关键词（{extendsList.length}）</SectionLabel>
-          <div style={{ fontSize: 10, overflowX: "auto" }}>
+          <div style={{ fontSize: "var(--fs-10)", overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--b)" }}>
@@ -168,7 +168,7 @@ export function KeywordResult({ data, keyword }: { data: any; keyword: string })
       {searchResults.length > 0 && (
         <div>
           <SectionLabel>搜索结果 Top ASIN（{searchResults.length}）</SectionLabel>
-          <div style={{ fontSize: 10, overflowX: "auto" }}>
+          <div style={{ fontSize: "var(--fs-10)", overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--b)" }}>
@@ -182,7 +182,7 @@ export function KeywordResult({ data, keyword }: { data: any; keyword: string })
                 {searchResults.slice(0, 10).map((item: any, i: number) => (
                   <tr key={i} style={{ borderBottom: "1px solid var(--b)" }}>
                     <td style={{ ...cellStyle, color: "var(--t3)" }}>{i + 1}</td>
-                    <td style={{ ...cellStyle, fontFamily: "monospace", fontSize: 9 }}>{item.asin || item.ASIN || "-"}</td>
+                    <td style={{ ...cellStyle, fontFamily: "monospace", fontSize: "var(--fs-9)" }}>{item.asin || item.ASIN || "-"}</td>
                     <td style={{ ...cellStyle, maxWidth: 320, wordBreak: "break-word" }}>{item.title || item.标题 || "-"}</td>
                     <td style={{ ...cellStyle, textAlign: "right" }}>{item.price || item.价格 || "-"}</td>
                   </tr>
@@ -194,7 +194,7 @@ export function KeywordResult({ data, keyword }: { data: any; keyword: string })
       )}
 
       {!hasDetail && extendsList.length === 0 && searchResults.length === 0 && (
-        <div style={{ fontSize: 10, color: "var(--t3)", padding: 10 }}>暂无数据。Sorftime 可能未收录该关键词。</div>
+        <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", padding: 10 }}>暂无数据。Sorftime 可能未收录该关键词。</div>
       )}
 
       <JsonDetails data={data} />
@@ -207,7 +207,7 @@ export function KeywordResult({ data, keyword }: { data: any; keyword: string })
 export function CompetitorResult({ data, asin }: { data: any; asin: string }) {
   return (
     <div className="card" style={{ background: "var(--bg2)" }}>
-      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>「{asin}」关键词信号分析</div>
+      <div style={{ fontSize: "var(--fs-12)", fontWeight: 600, marginBottom: 10 }}>「{asin}」关键词信号分析</div>
       <ErrorList errors={data?.errors} />
 
       {data?.traffic_terms && (
@@ -221,7 +221,7 @@ export function CompetitorResult({ data, asin }: { data: any; asin: string }) {
         <div style={{ marginBottom: 12 }}>
           <SectionLabel>竞品关键词</SectionLabel>
           {rowsOf(data.competitor_keywords).length > 0 ? (
-            <div style={{ fontSize: 10, overflowX: "auto" }}>
+            <div style={{ fontSize: "var(--fs-10)", overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--b)" }}>
@@ -268,7 +268,7 @@ export function CompetitorResult({ data, asin }: { data: any; asin: string }) {
 export function TrafficResult({ data, asin }: { data: any; asin: string }) {
   return (
     <div className="card" style={{ background: "var(--bg2)" }}>
-      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>「{asin}」流量诊断报告</div>
+      <div style={{ fontSize: "var(--fs-12)", fontWeight: 600, marginBottom: 10 }}>「{asin}」流量诊断报告</div>
       <ErrorList errors={data?.errors} />
 
       {data?.traffic_terms && (

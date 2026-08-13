@@ -107,7 +107,7 @@ function FileSection({
       {expanded && (
         <div className="dv-file-body">
           {!diff || diff.trim() === "" ? (
-            <div className="sks-empty" style={{ fontSize: 11 }}>(无 diff 文本)</div>
+            <div className="sks-empty" style={{ fontSize: "var(--fs-11)" }}>(无 diff 文本)</div>
           ) : (
             <DiffBody text={diff} />
           )}
@@ -131,7 +131,7 @@ function DiffBody({ text }: { text: string }) {
         ))}
       </pre>
       {truncated && (
-        <div className="sks-empty" style={{ fontSize: 10 }}>
+        <div className="sks-empty" style={{ fontSize: "var(--fs-10)" }}>
           过长已截断，仅显示前 {MAX_LINES_PER_FILE} 行
         </div>
       )}

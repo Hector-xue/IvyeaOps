@@ -88,7 +88,7 @@ export default function ClaudeStatus({
           </div>
 
           <div className="flex min-w-0 flex-col sm:flex-row sm:items-center sm:gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+            <span className="text-[length:var(--fs-10)] font-bold uppercase tracking-wider text-muted-foreground/70">
               {providerLabel}
             </span>
             <div className="flex items-center gap-1.5">
@@ -104,20 +104,20 @@ export default function ClaudeStatus({
         <div className="flex items-center gap-2">
           {isLoading && status?.can_interrupt !== false && onAbort && (
             <>
-              <div className="hidden items-center rounded-md bg-muted/50 px-2 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground sm:flex">
+              <div className="hidden items-center rounded-md bg-muted/50 px-2 py-0.5 text-[length:var(--fs-10)] font-medium tabular-nums text-muted-foreground sm:flex">
                 {formatElapsedTime(elapsedTime)}
               </div>
 
               <button
                 type="button"
                 onClick={onAbort}
-                className="group flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-1 text-[10px] font-bold text-destructive transition-all hover:bg-destructive hover:text-destructive-foreground"
+                className="group flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-1 text-[length:var(--fs-10)] font-bold text-destructive transition-all hover:bg-destructive hover:text-destructive-foreground"
               >
                 <svg className="h-3 w-3 fill-current" viewBox="0 0 24 24">
                   <path d="M6 6h12v12H6z" />
                 </svg>
                 <span className="hidden sm:inline">STOP</span>
-                <kbd className="hidden rounded bg-black/10 px-1 text-[9px] group-hover:bg-white/20 sm:block">
+                <kbd className="hidden rounded bg-black/10 px-1 text-[length:var(--fs-9)] group-hover:bg-white/20 sm:block">
                   ESC
                 </kbd>
               </button>

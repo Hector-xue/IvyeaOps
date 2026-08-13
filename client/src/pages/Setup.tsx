@@ -47,15 +47,15 @@ const S = {
     padding: "32px 28px",
   } as React.CSSProperties,
   stepHeader: {
-    fontSize: 9,
+    fontSize: "var(--fs-9)",
     letterSpacing: ".12em",
     color: "var(--t3)",
     textTransform: "uppercase" as const,
     marginBottom: 20,
   },
   title: { fontSize: 18, fontWeight: 600, color: "var(--t)", marginBottom: 6 },
-  sub: { fontSize: 12, color: "var(--t2)", lineHeight: 1.6, marginBottom: 24 },
-  label: { fontSize: 11, color: "var(--t2)", marginBottom: 5, display: "block" },
+  sub: { fontSize: "var(--fs-12)", color: "var(--t2)", lineHeight: 1.6, marginBottom: 24 },
+  label: { fontSize: "var(--fs-11)", color: "var(--t2)", marginBottom: 5, display: "block" },
   input: {
     width: "100%",
     background: "var(--bg2)",
@@ -63,12 +63,12 @@ const S = {
     borderRadius: 4,
     padding: "7px 10px",
     color: "var(--t)",
-    fontSize: 12,
+    fontSize: "var(--fs-12)",
     fontFamily: "var(--font)",
     boxSizing: "border-box" as const,
     outline: "none",
   } as React.CSSProperties,
-  hint: { fontSize: 10, color: "var(--t3)", marginTop: 4, lineHeight: 1.5 },
+  hint: { fontSize: "var(--fs-10)", color: "var(--t3)", marginTop: 4, lineHeight: 1.5 },
   row: { display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" },
   btnPrimary: {
     padding: "7px 20px",
@@ -77,7 +77,7 @@ const S = {
     border: "none",
     borderRadius: 4,
     cursor: "pointer",
-    fontSize: 12,
+    fontSize: "var(--fs-12)",
     fontFamily: "var(--font)",
     fontWeight: 600,
   } as React.CSSProperties,
@@ -88,7 +88,7 @@ const S = {
     border: "1px solid var(--b)",
     borderRadius: 4,
     cursor: "pointer",
-    fontSize: 12,
+    fontSize: "var(--fs-12)",
     fontFamily: "var(--font)",
   } as React.CSSProperties,
   pill: (ok: boolean) => ({
@@ -97,7 +97,7 @@ const S = {
     gap: 5,
     padding: "3px 10px",
     borderRadius: 12,
-    fontSize: 11,
+    fontSize: "var(--fs-11)",
     background: ok ? "rgba(74,222,128,.1)" : "rgba(248,113,113,.1)",
     color: ok ? "var(--acc)" : "var(--red)",
     border: `1px solid ${ok ? "rgba(74,222,128,.2)" : "rgba(248,113,113,.2)"}`,
@@ -108,7 +108,7 @@ const S = {
     borderRadius: 4,
     padding: "8px 10px",
     fontFamily: "monospace",
-    fontSize: 11,
+    fontSize: "var(--fs-11)",
     color: "var(--t2)",
     maxHeight: 180,
     overflowY: "auto" as const,
@@ -211,13 +211,13 @@ function AgentRow({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ flex: 1, fontSize: 12, color: "var(--t)" }}>{label}</span>
+        <span style={{ flex: 1, fontSize: "var(--fs-12)", color: "var(--t)" }}>{label}</span>
         <span style={S.pill(isOk)}>
           {isOk ? "✓ 已就绪" : state === "installing" ? "⏳ 安装中…" : state === "error" ? "✗ 失败" : "✗ 未安装"}
         </span>
         {!isOk && state !== "installing" && (
           <button
-            style={{ ...S.btnPrimary, padding: "4px 12px", fontSize: 11 }}
+            style={{ ...S.btnPrimary, padding: "4px 12px", fontSize: "var(--fs-11)" }}
             onClick={startInstall}
           >
             安装/修复
@@ -225,7 +225,7 @@ function AgentRow({
         )}
         {!isOk && state === "error" && (
           <button
-            style={{ ...S.btnSecondary, padding: "4px 10px", fontSize: 11 }}
+            style={{ ...S.btnSecondary, padding: "4px 10px", fontSize: "var(--fs-11)" }}
             onClick={startInstall}
           >
             重试
@@ -289,9 +289,9 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
               borderRadius: 6,
             }}
           >
-            <div style={{ fontSize: 16, marginBottom: 4 }}>{icon}</div>
-            <div style={{ fontSize: 11, color: "var(--t)", fontWeight: 500 }}>{name}</div>
-            <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 2 }}>{desc}</div>
+            <div style={{ fontSize: "var(--fs-16)", marginBottom: 4 }}>{icon}</div>
+            <div style={{ fontSize: "var(--fs-11)", color: "var(--t)", fontWeight: 500 }}>{name}</div>
+            <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginTop: 2 }}>{desc}</div>
           </div>
         ))}
       </div>
@@ -483,7 +483,7 @@ function StepFallbackModel({ onNext }: { onNext: () => void }) {
       <div style={{ marginBottom: 16 }}>
         <label style={S.label}>
           Base URL{" "}
-          <span style={{ fontSize: 9, color: "var(--t3)" }}>
+          <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)" }}>
             {provider === "custom" ? "（必填）" : "（留空用默认）"}
           </span>
         </label>
@@ -500,7 +500,7 @@ function StepFallbackModel({ onNext }: { onNext: () => void }) {
       {err && (
         <div
           style={{
-            fontSize: 11, color: "var(--red)", padding: "6px 10px",
+            fontSize: "var(--fs-11)", color: "var(--red)", padding: "6px 10px",
             background: "rgba(248,113,113,.08)", border: "1px solid rgba(248,113,113,.2)",
             borderRadius: 4, marginBottom: 10,
           }}
@@ -565,7 +565,7 @@ function StepApiKeys({
           Apimart API 密钥{" "}
           <span
             style={{
-              fontSize: 9,
+              fontSize: "var(--fs-9)",
               padding: "1px 5px",
               background: "rgba(74,222,128,.1)",
               color: "var(--acc)",
@@ -594,7 +594,7 @@ function StepApiKeys({
           Sorftime 市场数据密钥{" "}
           <span
             style={{
-              fontSize: 9,
+              fontSize: "var(--fs-9)",
               padding: "1px 5px",
               background: "rgba(251,191,36,.1)",
               color: "var(--amber)",
@@ -619,7 +619,7 @@ function StepApiKeys({
       {err && (
         <div
           style={{
-            fontSize: 11,
+            fontSize: "var(--fs-11)",
             color: "var(--red)",
             padding: "6px 10px",
             background: "rgba(248,113,113,.08)",
@@ -684,7 +684,7 @@ function StepTryIt({ onNext }: { onNext: () => void }) {
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "14px 0" }}>
         {DEMO_QUERIES.map((d) => (
-          <button key={d} style={{ ...S.btnSecondary, fontSize: 12, padding: "5px 10px" }}
+          <button key={d} style={{ ...S.btnSecondary, fontSize: "var(--fs-12)", padding: "5px 10px" }}
                   disabled={busy} onClick={() => run(d)}>
             {d}
           </button>
@@ -692,7 +692,7 @@ function StepTryIt({ onNext }: { onNext: () => void }) {
       </div>
 
       {busy && <div style={S.sub}>查询中…</div>}
-      {err && <div style={{ ...S.sub, color: "var(--err)" }}>{err}</div>}
+      {err && <div style={{ ...S.sub, color: "var(--red)" }}>{err}</div>}
 
       {rows && rows.length === 0 && (
         <div style={S.sub}>
@@ -706,20 +706,20 @@ function StepTryIt({ onNext }: { onNext: () => void }) {
             {rows.map((r) => (
               <div key={r.id} style={{ padding: 10, background: "var(--bg2)",
                                        border: "1px solid var(--b)", borderRadius: 6 }}>
-                <div style={{ fontSize: 12, marginBottom: 4 }}>{r.title}</div>
-                <div style={{ fontSize: 10, color: "var(--t3)" }}>
+                <div style={{ fontSize: "var(--fs-12)", marginBottom: 4 }}>{r.title}</div>
+                <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>
                   {r.category} · {r.source_type} · {r.retrieved_at}
                 </div>
                 {r.source_url && (
                   <a href={r.source_url} target="_blank" rel="noreferrer"
-                     style={{ fontSize: 10, color: "var(--acc)" }}>
+                     style={{ fontSize: "var(--fs-10)", color: "var(--acc)" }}>
                     {String(r.source_url).slice(0, 70)}
                   </a>
                 )}
               </div>
             ))}
           </div>
-          <div style={{ ...S.sub, fontSize: 11 }}>
+          <div style={{ ...S.sub, fontSize: "var(--fs-11)" }}>
             注意每条后面都跟着<b>出处和取回日期</b>。这是这个产品和「AI 随口说一句」
             的区别 —— 结论能被追问到源头。
           </div>
@@ -776,8 +776,8 @@ function StepDone({ onFinish }: { onFinish: () => void }) {
                 textAlign: "left",
               }}
             >
-              <div style={{ fontSize: 11, color: "var(--acc)", marginBottom: 4 }}>{name}</div>
-              <div style={{ fontSize: 10, color: "var(--t3)" }}>{desc}</div>
+              <div style={{ fontSize: "var(--fs-11)", color: "var(--acc)", marginBottom: 4 }}>{name}</div>
+              <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>{desc}</div>
             </div>
           ))}
         </div>

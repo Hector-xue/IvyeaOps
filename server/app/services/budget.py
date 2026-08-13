@@ -56,8 +56,20 @@ def month_spend_usd(*, cached: bool = False) -> Optional[float]:
             value = _cache["value"]
         if not fresh:
             _refresh_async()
-        return value          # 可能是 None（从没算过）或一个略旧的值
-    return _compute()
+        return None if value is None else value["cost_usd"]
+    return _compute()["cost_usd"]
+
+
+def month_tokens(*, cached: bool = True) -> Optional[float]:
+    """本月 token 总量。顶栏显示的是这个 —— 见 status() 里的说明。"""
+    if cached:
+        with _lock:
+            fresh = time.time() - _cache["at"] < _TTL_SECONDS
+            value = _cache["value"]
+        if not fresh:
+            _refresh_async()
+        return None if value is None else value["total_tokens"]
+    return _compute()["total_tokens"]
 
 
 def cache_age_seconds() -> Optional[float]:
@@ -94,16 +106,21 @@ def _refresh_async() -> None:
     threading.Thread(target=_run, name="budget-refresh", daemon=True).start()
 
 
-def _compute() -> float:
+def _compute() -> Dict[str, float]:
+    """本月的花费与 token 量。**一次聚合同时取两个** —— 它们出自同一份数据，
+    分两次算不但慢一倍，还会因为两次扫描之间又跑了任务而对不上。"""
+    out = {"cost_usd": 0.0, "total_tokens": 0.0}
     try:
         from app.routers.monitor import token_usage
         data = token_usage()
         for row in (data.get("monthly") or []):
             if row.get("month") == _month_key():
-                return float(row.get("cost_usd") or 0)
+                out["cost_usd"] = float(row.get("cost_usd") or 0)
+                out["total_tokens"] = float(row.get("total_tokens") or 0)
+                break
     except Exception as exc:  # noqa: BLE001 — 取不到就当没超，不能因此报错
-        logger.warning("读取本月花费失败：%s", exc)
-    return 0.0
+        logger.warning("读取本月用量失败：%s", exc)
+    return out
 
 
 # 分级：80% 提醒，100% 暂停自动任务。**手动操作永远不停** —— 用户明确要跑的
@@ -127,11 +144,15 @@ def status(*, cached: bool = False) -> Dict[str, Any]:
         "month": _month_key(),
         "limit_usd": limit,
         "spend_usd": round(spend, 2),
+        # **顶栏显示的是 token，不是金额。** 金额是按公开价目表折算的估算值，
+        # 天天挂在眼前容易被当成账单；token 是实打实计出来的量，没有这层歧义。
+        # 金额仍然保留 —— 预算告警要用它，设置页也要显示。
+        "total_tokens": int(month_tokens(cached=cached) or 0),
         "ratio": round(ratio, 3),
         "level": level,                       # ok | warn | exceeded
         "exceeded": level == "exceeded",
         "enabled": limit > 0,
-        # 界面要能如实说"这是几分钟前的数" —— 一个不标新鲜度的金额没法被信任。
+        # 界面要能如实说"这是几分钟前的数" —— 一个不标新鲜度的数字没法被信任。
         "known": known,
         "age_seconds": round(cache_age_seconds() or 0) if cached else 0,
     }

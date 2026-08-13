@@ -129,7 +129,7 @@ function LingXingInner() {
 
       {/* boot error / loading — never leave the page a dead end */}
       {!status && (
-        <div className="card" style={{ padding: 12, marginBottom: 10, fontSize: 11, display: "flex", gap: 10, alignItems: "center", color: err ? "var(--red)" : "var(--t3)" }}>
+        <div className="card" style={{ padding: 12, marginBottom: 10, fontSize: "var(--fs-11)", display: "flex", gap: 10, alignItems: "center", color: err ? "var(--red)" : "var(--t3)" }}>
           {err ? <>加载领星状态失败：{err}（后端可能未重启，新接口未生效）</> : "加载中…"}
           <span style={{ marginLeft: "auto" }}><Btn onClick={boot}>重试</Btn></span>
         </div>
@@ -145,7 +145,7 @@ function LingXingInner() {
         )}
         {status?.master_enabled && (
           <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 11, color: "var(--t3)" }}>店铺</span>
+            <span style={{ fontSize: "var(--fs-11)", color: "var(--t3)" }}>店铺</span>
             <SheetSelect value={storeSid} onChange={setStoreSid} title="选择店铺" placeholder="（加载中/无）"
               style={{ ...inputStyle, minWidth: 160 }}
               options={sellers.map((s) => ({ value: String(s.sid), label: String(s.name || s.sid), sub: String(s.sid) }))} />
@@ -156,7 +156,7 @@ function LingXingInner() {
       <div className="lx-tabs">
         {VIEWS.map(([v, l]) => (
           <button key={v} onClick={() => setView(v)} style={{
-            padding: "6px 14px", fontSize: 11, border: "none", borderRadius: 4, cursor: "pointer",
+            padding: "6px 14px", fontSize: "var(--fs-11)", border: "none", borderRadius: 4, cursor: "pointer",
             background: view === v ? "var(--acc)" : "var(--bg2)", color: view === v ? "#000" : "var(--t2)",
             fontWeight: view === v ? 600 : 400, position: "relative",
           }}>
@@ -173,9 +173,9 @@ function LingXingInner() {
 
       {view === "config" ? <LingXingConfig />
         : !status?.master_enabled ? (
-          <div className="card wb-enter" style={{ padding: 40, textAlign: "center", color: "var(--t3)", fontSize: 12 }}>
+          <div className="card wb-enter" style={{ padding: 40, textAlign: "center", color: "var(--t3)", fontSize: "var(--fs-12)" }}>
             领星数据未启用。请到「配置」tab 填好 OpenAPI 凭证、测试连接后启用。<br />
-            <span style={{ fontSize: 11 }}>（写操作另有独立「操作开关」+ 三重复核，默认关闭）</span>
+            <span style={{ fontSize: "var(--fs-11)" }}>（写操作另有独立「操作开关」+ 三重复核，默认关闭）</span>
           </div>
         )
         : view === "dashboard" ? <LingXingDashboard storeSid={storeSid} />
@@ -273,10 +273,10 @@ function Browse({ datasets, active, setActive, storeSid }: {
       <div style={{ width: 180 }} className="lx-side">
         {Object.entries(groups).map(([g, items]) => (
           <div key={g} className="card" style={{ padding: 8, marginBottom: 8 }}>
-            <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 4 }}>{g}</div>
+            <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginBottom: 4 }}>{g}</div>
             {items.map((d) => (
               <div key={d.key} onClick={() => setActive(d.key)} style={{
-                padding: "6px 8px", borderRadius: 4, cursor: "pointer", fontSize: 11, marginBottom: 2,
+                padding: "6px 8px", borderRadius: 4, cursor: "pointer", fontSize: "var(--fs-11)", marginBottom: 2,
                 background: active === d.key ? "var(--acc)" : "transparent",
                 color: active === d.key ? "#000" : "var(--t2)", fontWeight: active === d.key ? 600 : 400,
               }}>{d.label}</div>
@@ -288,10 +288,10 @@ function Browse({ datasets, active, setActive, storeSid }: {
       {/* main */}
       <div className="lx-main">
         <div className="card" style={{ padding: 12, marginBottom: 10 }}>
-          {ds?.hint && <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 8 }}>{ds.hint}</div>}
+          {ds?.hint && <div style={{ fontSize: "var(--fs-11)", color: "var(--t3)", marginBottom: 8 }}>{ds.hint}</div>}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
             {ds?.params.map((p) => (
-              <label key={p.name} style={{ display: "grid", gap: 3, fontSize: 10, color: "var(--t3)" }}>
+              <label key={p.name} style={{ display: "grid", gap: 3, fontSize: "var(--fs-10)", color: "var(--t3)" }}>
                 <span>{p.label || p.name}{p.required ? " *" : ""}</span>
                 <input type={p.type === "date" ? "date" : "text"} value={form[p.name] ?? ""}
                   placeholder={p.type === "date" ? "" : p.type}
@@ -308,9 +308,9 @@ function Browse({ datasets, active, setActive, storeSid }: {
               </span>
             )}
           </div>
-          {err && <div style={{ marginTop: 8, fontSize: 11, color: "var(--red)" }}>{err}</div>}
+          {err && <div style={{ marginTop: 8, fontSize: "var(--fs-11)", color: "var(--red)" }}>{err}</div>}
           {meta && (
-            <div style={{ marginTop: 8, fontSize: 10, color: "var(--t3)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ marginTop: 8, fontSize: "var(--fs-10)", color: "var(--t3)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <span>{meta.count ?? 0} 条 · {meta.cached ? "缓存" : "实时"} · 数据时间 {fmtTs(meta.synced_at)}{canPage && pageLen > 0 ? ` · 第 ${Math.floor(pageOff / pageLen) + 1} 页` : ""}</span>
               <label style={{ display: "inline-flex", gap: 4, alignItems: "center", cursor: "pointer" }}>
                 <input type="checkbox" checked={allCols} onChange={(e) => setAllCols(e.target.checked)} />全部列

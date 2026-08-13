@@ -138,7 +138,7 @@ export default function AsinMonitor({ kind, marketplace, dataSource, onChanged }
           <div className="pulse-onboard-icon">{kind === "own" ? "★" : "⊞"}</div>
           <div className="pulse-onboard-title">{emptyTitle}</div>
           <div className="pulse-onboard-sub">{emptySub}</div>
-          <div className="pulse-onboard-sub" style={{ marginTop: 8, fontSize: 11, color: "var(--t3)" }}>
+          <div className="pulse-onboard-sub" style={{ marginTop: 8, fontSize: "var(--fs-11)", color: "var(--t3)" }}>
             提示：打开页面显示的是缓存数据（不耗配额）；点「刷新」才实时拉取
           </div>
         </div>

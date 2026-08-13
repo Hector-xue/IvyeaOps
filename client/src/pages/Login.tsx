@@ -74,7 +74,7 @@ export default function Login() {
           )}
         </button>
 
-        <div style={{ marginTop: 14, fontSize: 12, color: "var(--t3)", textAlign: "center" }}>
+        <div style={{ marginTop: 14, fontSize: "var(--fs-12)", color: "var(--t3)", textAlign: "center" }}>
           {isReg ? (
             <>已有账号？<a onClick={() => { setMode("login"); setError(null); }} style={{ color: "var(--acc)", cursor: "pointer" }}>去登录</a></>
           ) : (

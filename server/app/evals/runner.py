@@ -47,6 +47,17 @@ def load_cases(suite: str, *, root: Optional[Path] = None, limit: int = 0) -> li
                 f"案例 {path.name} 的 expected_points 是空的 —— 还没人工标注合格要点。"
                 f"填完再跑；要点要写「必须命中什么」，不要写「应该讲得好」。")
         out.append(case)
+
+    # **id 撞了要当场报错。** 报告是按 id 列行的，两个案例同名就意味着看报告的人
+    # 分不清哪一行对应哪个案例 —— 而评测报告的全部价值就是"哪里退步了"。
+    seen: dict = {}
+    for case in out:
+        cid = case["id"]
+        if cid in seen:
+            raise ValueError(
+                f"案例 id 重复：{cid}（至少出现在两个文件里）。"
+                f"id 不写时取文件名；写了就必须唯一。")
+        seen[cid] = True
     return out[:limit] if limit else out
 
 

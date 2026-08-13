@@ -201,7 +201,7 @@ export default function MarketTraffic({ marketplace, dataSource }: { marketplace
             添加你关注的类目基线，系统每天自动记录大盘需求(搜索量)、TOP 合计销量与均价，
             累积成日曲线；并叠加自有 / 竞对销量，帮你判断涨跌是大盘还是自身原因
           </div>
-          <div className="pulse-onboard-sub" style={{ marginTop: 8, fontSize: 11, color: "var(--t3)" }}>
+          <div className="pulse-onboard-sub" style={{ marginTop: 8, fontSize: "var(--fs-11)", color: "var(--t3)" }}>
             提示：曲线从开始记录当天起累积，需几天数据才有趋势意义
           </div>
         </div>

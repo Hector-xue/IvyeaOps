@@ -253,7 +253,7 @@ export default function Assistant() {
         </div>
         {/* Sheet header */}
         <div style={{ display: "flex", alignItems: "center", padding: "2px 16px 10px", flexShrink: 0, borderBottom: "1px solid var(--b)" }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: "var(--t)", flex: 1 }}>历史对话</span>
+          <span style={{ fontSize: "var(--fs-14)", fontWeight: 600, color: "var(--t)", flex: 1 }}>历史对话</span>
           <button className="tbtn" onClick={startNew} disabled={streaming} style={{ marginRight: 8 }}>＋ 新对话</button>
           <button
             onClick={() => setHistoryOpen(false)}
@@ -264,7 +264,7 @@ export default function Assistant() {
         {/* Session list */}
         <div style={{ overflowY: "auto", flex: 1 }}>
           {sessions.length === 0
-            ? <div style={{ padding: "28px 16px", fontSize: 13, color: "var(--t3)", textAlign: "center" }}>暂无历史对话</div>
+            ? <div style={{ padding: "28px 16px", fontSize: "var(--fs-13)", color: "var(--t3)", textAlign: "center" }}>暂无历史对话</div>
             : sessions.map(s => (
               <div
                 key={s.id}
@@ -281,22 +281,22 @@ export default function Assistant() {
                   width: 32, height: 32, borderRadius: 8, flexShrink: 0,
                   background: s.id === currentId ? "color-mix(in srgb, var(--acc) 20%, transparent)" : "var(--bg3)",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 14, color: s.id === currentId ? "var(--acc)" : "var(--t3)",
+                  fontSize: "var(--fs-14)", color: s.id === currentId ? "var(--acc)" : "var(--t3)",
                 }}>✦</div>
                 <div style={{ flex: 1, overflow: "hidden" }}>
                   <div style={{
-                    fontSize: 13, fontWeight: s.id === currentId ? 600 : 400,
+                    fontSize: "var(--fs-13)", fontWeight: s.id === currentId ? 600 : 400,
                     color: s.id === currentId ? "var(--acc)" : "var(--t)",
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>{s.title || s.preview || s.id}</div>
-                  <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 2 }}>
+                  <div style={{ fontSize: "var(--fs-11)", color: "var(--t3)", marginTop: 2 }}>
                     {s.updated ? new Date(s.updated * 1000).toLocaleDateString("zh-CN") : "—"} · {s.turns}轮对话
                   </div>
                 </div>
                 <button
                   onClick={(e) => deleteSession(s.id, e)}
                   className="asst-icon-btn"
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", fontSize: 16, padding: "4px 6px", lineHeight: 1, flexShrink: 0, borderRadius: 4 }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", fontSize: "var(--fs-16)", padding: "4px 6px", lineHeight: 1, flexShrink: 0, borderRadius: 4 }}
                   title="删除"
                 >✕</button>
               </div>

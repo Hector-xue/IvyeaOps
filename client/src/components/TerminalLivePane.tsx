@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { TerminalSession, terminalWebSocketUrl } from "../api/terminalLive";
 import "xterm/css/xterm.css";
 import XtermActionToolbar from "./XtermActionToolbar";
+import { onThemeChange, xtermTheme } from "../lib/termTheme";
 import {
   enableNativeSelectionMode,
   getSelectedTerminalText,
@@ -214,6 +215,7 @@ export default function TerminalLivePane({ session, onExit, onLiveOutput }: Prop
   useEffect(() => {
     let disposed = false;
     let term: any = null;
+    let unsubTheme: (() => void) | null = null;
 
     (async () => {
       const xterm = await import("xterm");
@@ -222,13 +224,12 @@ export default function TerminalLivePane({ session, onExit, onLiveOutput }: Prop
 
       term = new xterm.Terminal({
         fontFamily: "'JetBrains Mono','Fira Code','SF Mono',Menlo,Consolas,monospace",
+        // 这是 xterm 的构造参数，**不是 CSS 样式** —— 它要 number，
+        // 而且字号会参与终端的行列计算，不能塞 CSS 变量。
         fontSize: 12,
-        theme: {
-          background: "#000000",
-          foreground: "#e8e8e8",
-          cursor: "#4ade80",
-          selectionBackground: "rgba(74,222,128,.25)",
-        },
+        // xterm 把字符画在 canvas 上，CSS 变量进不来 —— 这里在运行时把当前主题
+        // 读成对象喂给它，并在主题切换时重算（见下面的 onThemeChange）。
+        theme: xtermTheme(),
         cursorBlink: true,
         scrollback: 8000,
         convertEol: false,
@@ -248,6 +249,13 @@ export default function TerminalLivePane({ session, onExit, onLiveOutput }: Prop
       });
       termRef.current = term;
       fitRef.current = fit;
+
+      // 主题切换时把配色重算一遍。xterm 支持运行时改 options.theme，
+      // 不需要重建终端，所以正在跑的会话不会被打断。
+      unsubTheme = onThemeChange((next) => {
+        const t = termRef.current;
+        if (t) t.options.theme = next;
+      });
 
       term.onData((data: string) => {
         if (selectModeRef.current) return;
@@ -302,6 +310,7 @@ export default function TerminalLivePane({ session, onExit, onLiveOutput }: Prop
 
     return () => {
       disposed = true;
+      unsubTheme?.();
       const ws = wsRef.current;
       if (ws) {
         try {

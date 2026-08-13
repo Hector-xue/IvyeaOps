@@ -89,7 +89,7 @@ export default function FileTreeNode({
   const isRenaming = renamingItem?.path === item.path;
 
   const nameClassName = cn(
-    'text-[13px] leading-tight truncate',
+    'text-[length:var(--fs-13)] leading-tight truncate',
     isDirectory ? 'font-medium text-foreground' : 'text-foreground/90',
   );
 

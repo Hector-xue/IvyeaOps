@@ -16,7 +16,7 @@ const S = {
   // thin section divider
   divider: { height: 1, background: "var(--b)", margin: "12px 0" } as React.CSSProperties,
   // section label (like .sl in CSS but without extra top margin here)
-  sectionLabel: { fontSize: 9, color: "var(--t3)", letterSpacing: ".10em", textTransform: "uppercase" as const, marginBottom: 6 },
+  sectionLabel: { fontSize: "var(--fs-9)", color: "var(--t3)", letterSpacing: ".10em", textTransform: "uppercase" as const, marginBottom: 6 },
 };
 
 // ── Kind badge (uses the existing .tag colour variants) ──────────────────────
@@ -43,9 +43,9 @@ function KindBadge({ tool }: { tool: SkillToolMeta }) {
   if (!km && !rm && !agent) return null;
   return (
     <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
-      {km && <span className={`tag ${km.cls}`} style={{ fontSize: 8 }}>{km.label}</span>}
-      {rm && <span className={`tag ${rm.cls}`} style={{ fontSize: 8 }}>{rm.label}</span>}
-      {agent && <span className="tag tb-tag" style={{ fontSize: 8 }}>Agent</span>}
+      {km && <span className={`tag ${km.cls}`} style={{ fontSize: "var(--fs-8)" }}>{km.label}</span>}
+      {rm && <span className={`tag ${rm.cls}`} style={{ fontSize: "var(--fs-8)" }}>{rm.label}</span>}
+      {agent && <span className="tag tb-tag" style={{ fontSize: "var(--fs-8)" }}>Agent</span>}
     </span>
   );
 }
@@ -148,7 +148,7 @@ export default function SkillTools({ embedded }: { embedded?: boolean } = {}) {
         {/* Topbar row */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
           <button className="tbtn" onClick={() => setActiveTool(null)}>← 返回</button>
-          <span style={{ fontSize: 10, color: "var(--t3)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             运营商店 / <span style={{ color: "var(--t2)" }}>{activeTool.name.split("/").pop()}</span>
           </span>
           <button
@@ -186,7 +186,7 @@ export default function SkillTools({ embedded }: { embedded?: boolean } = {}) {
       {/* Search + filter bar */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 180px", position: "relative" }}>
-          <span style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "var(--t3)", fontSize: 10, pointerEvents: "none" }}>◎</span>
+          <span style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "var(--t3)", fontSize: "var(--fs-10)", pointerEvents: "none" }}>◎</span>
           <input
             className="inp"
             value={searchInput}
@@ -223,8 +223,8 @@ export default function SkillTools({ embedded }: { embedded?: boolean } = {}) {
       {!loading && tools.length === 0 && (
         <div style={{ textAlign: "center", padding: "40px 0", color: "var(--t3)" }}>
           <div style={{ fontSize: 28, marginBottom: 10 }}>⊞</div>
-          <div style={{ fontSize: 12, color: "var(--t2)", marginBottom: 6 }}>暂无可执行工具</div>
-          <div style={{ fontSize: 10 }}>在「想法工坊」中创建 Skill 后，会自动出现在这里</div>
+          <div style={{ fontSize: "var(--fs-12)", color: "var(--t2)", marginBottom: 6 }}>暂无可执行工具</div>
+          <div style={{ fontSize: "var(--fs-10)" }}>在「想法工坊」中创建 Skill 后，会自动出现在这里</div>
         </div>
       )}
 
@@ -232,10 +232,10 @@ export default function SkillTools({ embedded }: { embedded?: boolean } = {}) {
       {!loading && paramTools.length > 0 && (
         <div style={{ marginBottom: 22 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, ...S.accentBar }}>
-            <span style={{ fontSize: 9, color: "var(--t3)", letterSpacing: ".10em", textTransform: "uppercase", flex: 1 }}>
+            <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)", letterSpacing: ".10em", textTransform: "uppercase", flex: 1 }}>
               ⚡ 参数化工具 · 填参数即用
             </span>
-            <span style={{ fontSize: 9, color: "var(--t3)" }}>{paramTools.length}</span>
+            <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)" }}>{paramTools.length}</span>
           </div>
           <div className="g3">
             {paramTools.map((t) => (
@@ -247,7 +247,7 @@ export default function SkillTools({ embedded }: { embedded?: boolean } = {}) {
 
       {/* ── Agent 技能（文档型，描述任务交给 Agent 执行）── */}
       {!loading && agentSkills.length > 0 && (
-        <div style={{ fontSize: 9, color: "var(--t3)", letterSpacing: ".06em", marginBottom: 10 }}>
+        <div style={{ fontSize: "var(--fs-9)", color: "var(--t3)", letterSpacing: ".06em", marginBottom: 10 }}>
           🤖 AGENT 技能 · 点开描述任务，由 Agent 按技能文档执行
         </div>
       )}
@@ -264,10 +264,10 @@ export default function SkillTools({ embedded }: { embedded?: boolean } = {}) {
                 ...S.accentBar,
               }}
             >
-              <span style={{ fontSize: 9, color: "var(--t3)", letterSpacing: ".10em", textTransform: "uppercase", flex: 1 }}>{cat}</span>
-              <span style={{ fontSize: 9, color: "var(--t3)" }}>{items.length}</span>
+              <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)", letterSpacing: ".10em", textTransform: "uppercase", flex: 1 }}>{cat}</span>
+              <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)" }}>{items.length}</span>
               <span style={{
-                fontSize: 8, color: "var(--t3)",
+                fontSize: "var(--fs-8)", color: "var(--t3)",
                 transform: collapsed ? "rotate(-90deg)" : "none",
                 transition: "transform .14s",
                 display: "inline-block",
@@ -300,7 +300,7 @@ function ToolCard({ tool: t, onOpen, onDelete }: {
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
         <IconBox>{t.icon}</IconBox>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--t)", lineHeight: 1.3, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div style={{ fontSize: "var(--fs-11)", fontWeight: 600, color: "var(--t)", lineHeight: 1.3, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {t.pinned && <span style={{ color: "var(--acc)", marginRight: 3 }} title="已固定到侧边栏">★</span>}
             {t.name.split("/").pop()}
           </div>
@@ -309,19 +309,19 @@ function ToolCard({ tool: t, onOpen, onDelete }: {
         <button
           title="删除工具"
           onClick={onDelete}
-          style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: 11, padding: "0 2px", lineHeight: 1, flexShrink: 0 }}
+          style={{ background: "transparent", border: "none", color: "var(--t3)", cursor: "pointer", fontSize: "var(--fs-11)", padding: "0 2px", lineHeight: 1, flexShrink: 0 }}
         >✕</button>
       </div>
 
       {/* Description */}
-      <div style={{ fontSize: 10, color: "var(--t3)", lineHeight: 1.55, marginBottom: t.inputs.length ? 8 : 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+      <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", lineHeight: 1.55, marginBottom: t.inputs.length ? 8 : 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
         {t.description_zh || t.description || "—"}
       </div>
 
       {/* Footer row */}
       {t.inputs.length > 0 && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, borderTop: "1px solid var(--b)", paddingTop: 6 }}>
-          <span style={{ fontSize: 9, color: "var(--t3)" }}>
+          <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)" }}>
             {t.inputs.length} 个参数
           </span>
         </div>
@@ -391,12 +391,12 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
         <label style={{
           display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
           padding: "7px 10px", background: "var(--bg2)", border: "1px solid var(--b)",
-          borderRadius: "var(--r)", fontSize: 11, color: "var(--t2)", transition: "border-color .1s",
+          borderRadius: "var(--r)", fontSize: "var(--fs-11)", color: "var(--t2)", transition: "border-color .1s",
         }}
           onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--b2)")}
           onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--b)")}
         >
-          <span style={{ fontSize: 14 }}>📎</span>
+          <span style={{ fontSize: "var(--fs-14)" }}>📎</span>
           <span>{val ? "已选择图片 ✓" : (inp.placeholder || "点击选择图片…")}</span>
           <input type="file" accept="image/*,application/pdf" style={{ display: "none" }}
             onChange={async (e) => {
@@ -410,7 +410,7 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
             {val.startsWith("data:image/") && (
               <img src={val} alt="" style={{ height: 48, borderRadius: 3, border: "1px solid var(--b)", objectFit: "cover" }} />
             )}
-            <button className="tbtn" style={{ fontSize: 9 }} onClick={() => set("")}>移除</button>
+            <button className="tbtn" style={{ fontSize: "var(--fs-9)" }} onClick={() => set("")}>移除</button>
           </div>
         )}
       </div>
@@ -428,7 +428,7 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
         placeholder={inp.placeholder} style={{ resize: "vertical", fontFamily: "inherit" }} />
     );
     if (inp.type === "boolean") return (
-      <label style={{ fontSize: 11, color: "var(--t2)", display: "flex", alignItems: "center", gap: 7, cursor: "pointer" }}>
+      <label style={{ fontSize: "var(--fs-11)", color: "var(--t2)", display: "flex", alignItems: "center", gap: 7, cursor: "pointer" }}>
         <input type="checkbox" checked={val === "true"} onChange={(e) => set(e.target.checked ? "true" : "false")} /> 是
       </label>
     );
@@ -542,13 +542,13 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <IconBox size={34}>{tool.icon}</IconBox>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--t)", marginBottom: 3 }}>
+            <div style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--t)", marginBottom: 3 }}>
               {tool.name.split("/").pop()}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <KindBadge tool={tool} />
               {tool.category && (
-                <span style={{ fontSize: 9, color: "var(--t3)" }}>{tool.category}</span>
+                <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)" }}>{tool.category}</span>
               )}
             </div>
           </div>
@@ -556,7 +556,7 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
             className="tbtn"
             onClick={togglePin}
             disabled={pinning}
-            style={{ fontSize: 10, color: pinned ? "var(--acc)" : "var(--t3)", borderColor: pinned ? "color-mix(in srgb, var(--acc) 40%, transparent)" : "var(--b)", background: pinned ? "color-mix(in srgb, var(--acc) 6%, transparent)" : "transparent" }}
+            style={{ fontSize: "var(--fs-10)", color: pinned ? "var(--acc)" : "var(--t3)", borderColor: pinned ? "color-mix(in srgb, var(--acc) 40%, transparent)" : "var(--b)", background: pinned ? "color-mix(in srgb, var(--acc) 6%, transparent)" : "transparent" }}
             title={pinned ? "从侧边栏移除" : "固定到侧边栏"}
           >
             {pinned ? "★ 已固定" : "☆ 固定"}
@@ -566,7 +566,7 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
         {(tool.description_zh || tool.description) && (
           <>
             <div style={S.divider} />
-            <div style={{ fontSize: 10, color: "var(--t2)", lineHeight: 1.65 }}>
+            <div style={{ fontSize: "var(--fs-10)", color: "var(--t2)", lineHeight: 1.65 }}>
               {tool.description_zh || tool.description}
             </div>
           </>
@@ -575,7 +575,7 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
 
       {/* ── Agent-execution notice for doc-style skills ── */}
       {needsTask && (
-        <div style={{ fontSize: 10, color: "var(--t2)", background: "color-mix(in srgb, var(--blue) 6%, transparent)", border: "1px solid color-mix(in srgb, var(--blue) 22%, transparent)", borderLeft: "3px solid var(--blue)", borderRadius: "var(--r)", padding: "10px 12px", marginBottom: 14, lineHeight: 1.7 }}>
+        <div style={{ fontSize: "var(--fs-10)", color: "var(--t2)", background: "color-mix(in srgb, var(--blue) 6%, transparent)", border: "1px solid color-mix(in srgb, var(--blue) 22%, transparent)", borderLeft: "3px solid var(--blue)", borderRadius: "var(--r)", padding: "10px 12px", marginBottom: 14, lineHeight: 1.7 }}>
           🤖 这是一个文档型技能，没有参数表单——在下面描述你的任务，Agent 会按该技能的文档来执行。
           需要固定参数表单的话，可在「管理」中编辑该 Skill 补充 inputs。
         </div>
@@ -588,11 +588,11 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {tool.inputs.map((inp: SkillInput) => (
               <div key={inp.name}>
-                <label style={{ fontSize: 10, color: "var(--t2)", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                <label style={{ fontSize: "var(--fs-10)", color: "var(--t2)", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
                   {inp.label}
-                  {inp.required && <span style={{ color: "var(--red)", fontSize: 10 }}>*</span>}
+                  {inp.required && <span style={{ color: "var(--red)", fontSize: "var(--fs-10)" }}>*</span>}
                   {inp.placeholder && inp.type !== "select" && (
-                    <span style={{ color: "var(--t3)", fontSize: 9, fontWeight: 400, marginLeft: 2 }}>— {inp.placeholder}</span>
+                    <span style={{ color: "var(--t3)", fontSize: "var(--fs-9)", fontWeight: 400, marginLeft: 2 }}>— {inp.placeholder}</span>
                   )}
                 </label>
                 {renderControl(inp)}
@@ -615,7 +615,7 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
                 onClick={doEnrich}
                 disabled={enriching || loading}
                 title="让 AI 分析该技能文档，生成固定参数表单（审核后应用），把它变成填参数即用的可视化工具"
-                style={{ fontSize: 9, color: "var(--acc)", borderColor: "color-mix(in srgb, var(--acc) 35%, transparent)" }}
+                style={{ fontSize: "var(--fs-9)", color: "var(--acc)", borderColor: "color-mix(in srgb, var(--acc) 35%, transparent)" }}
               >
                 {enriching ? <><span className="spin" style={{ marginRight: 4 }} />分析中…</> : "⚡ AI 工具化（生成参数表单）"}
               </button>
@@ -641,15 +641,15 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
           className="btn-acc"
           onClick={() => run()}
           disabled={loading || (needsTask && !task.trim())}
-          style={{ fontSize: 11, padding: "6px 16px", display: "flex", alignItems: "center", gap: 6 }}
+          style={{ fontSize: "var(--fs-11)", padding: "6px 16px", display: "flex", alignItems: "center", gap: 6 }}
         >
           {loading ? <><span className="spin" />执行中…</> : needsTask ? "▷ 交给 Agent 执行" : "▷ 执行"}
         </button>
         {hasSample && !loading && (
-          <button className="tbtn" onClick={fillSample} style={{ fontSize: 10 }}>填充示例</button>
+          <button className="tbtn" onClick={fillSample} style={{ fontSize: "var(--fs-10)" }}>填充示例</button>
         )}
         {loading && (
-          <button className="tbtn" onClick={() => abortRef.current?.abort()} style={{ fontSize: 10, color: "var(--red)", borderColor: "rgba(248,113,113,.35)" }}>
+          <button className="tbtn" onClick={() => abortRef.current?.abort()} style={{ fontSize: "var(--fs-10)", color: "var(--red)", borderColor: "rgba(248,113,113,.35)" }}>
             停止
           </button>
         )}
@@ -658,12 +658,12 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
       {/* ── Error + repair ── */}
       {error && (
         <div style={{ marginTop: 12 }}>
-          <div style={{ fontSize: 10, color: "var(--red)", background: "rgba(248,113,113,.07)", border: "1px solid rgba(248,113,113,.25)", borderLeft: "3px solid var(--red)", borderRadius: "var(--r)", padding: "8px 12px", lineHeight: 1.65 }}>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--red)", background: "rgba(248,113,113,.07)", border: "1px solid rgba(248,113,113,.25)", borderLeft: "3px solid var(--red)", borderRadius: "var(--r)", padding: "8px 12px", lineHeight: 1.65 }}>
             {error}
           </div>
           {!repair && (
             <button className="tbtn" onClick={doRepair} disabled={repairing}
-              style={{ fontSize: 10, marginTop: 6, color: "var(--amber)", borderColor: "rgba(251,191,36,.35)" }}>
+              style={{ fontSize: "var(--fs-10)", marginTop: 6, color: "var(--amber)", borderColor: "rgba(251,191,36,.35)" }}>
               {repairing ? <><span className="spin" style={{ marginRight: 5 }} />AI 分析中…</> : "🛠 让 AI 修复此工具"}
             </button>
           )}
@@ -673,29 +673,29 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
       {/* ── 工具化 proposal ── */}
       {enrich && (
         <div style={{ marginTop: 12, background: "var(--bg2)", border: "1px solid color-mix(in srgb, var(--acc) 30%, transparent)", borderLeft: "3px solid var(--acc)", borderRadius: "var(--r)", padding: "10px 12px" }}>
-          <div style={{ fontSize: 10, fontWeight: 600, color: "var(--acc)", marginBottom: 4 }}>
+          <div style={{ fontSize: "var(--fs-10)", fontWeight: 600, color: "var(--acc)", marginBottom: 4 }}>
             ⚡ AI 提议的参数表单（审核后应用）
           </div>
-          <div style={{ fontSize: 9, color: "var(--t3)", marginBottom: 8 }}>
+          <div style={{ fontSize: "var(--fs-9)", color: "var(--t3)", marginBottom: 8 }}>
             提炼出 {(enrich.frontmatter as any)?.inputs?.length ?? 0} 个参数
             {(enrich.frontmatter as any)?.tool?.kind ? ` · 类型 ${(enrich.frontmatter as any).tool.kind}` : ""}
             {(enrich.frontmatter as any)?.tool?.runtime ? ` · 运行时 ${(enrich.frontmatter as any).tool.runtime}` : ""}
             ；应用后该技能变为填参数即用的可视化工具，原文档内容保留。
           </div>
           {!enrich.validation.ok && (
-            <div style={{ fontSize: 9, color: "var(--red)", marginBottom: 8 }}>
+            <div style={{ fontSize: "var(--fs-9)", color: "var(--red)", marginBottom: 8 }}>
               仍有问题：{enrich.validation.errors.join("；")}
             </div>
           )}
-          <pre style={{ fontSize: 10, lineHeight: 1.6, maxHeight: 260, overflow: "auto", padding: 10, background: "var(--bg1)", borderRadius: "var(--r)", whiteSpace: "pre-wrap", wordBreak: "break-word", border: "1px solid var(--b)" }}>
+          <pre style={{ fontSize: "var(--fs-10)", lineHeight: 1.6, maxHeight: 260, overflow: "auto", padding: 10, background: "var(--bg1)", borderRadius: "var(--r)", whiteSpace: "pre-wrap", wordBreak: "break-word", border: "1px solid var(--b)" }}>
             {enrich.preview}
           </pre>
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <button className="btn-acc" onClick={applyEnrich} disabled={applyingEnrich || !enrich.validation.ok}
-              style={{ fontSize: 10, padding: "5px 12px" }}>
+              style={{ fontSize: "var(--fs-10)", padding: "5px 12px" }}>
               {applyingEnrich ? "应用中…" : "✓ 应用，变成参数化工具"}
             </button>
-            <button className="tbtn" onClick={() => setEnrich(null)} style={{ fontSize: 10 }}>取消</button>
+            <button className="tbtn" onClick={() => setEnrich(null)} style={{ fontSize: "var(--fs-10)" }}>取消</button>
           </div>
         </div>
       )}
@@ -703,21 +703,21 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
       {/* ── Repair proposal ── */}
       {repair && (
         <div style={{ marginTop: 12, background: "var(--bg2)", border: "1px solid rgba(251,191,36,.30)", borderLeft: "3px solid var(--amber)", borderRadius: "var(--r)", padding: "10px 12px" }}>
-          <div style={{ fontSize: 10, fontWeight: 600, color: "var(--amber)", marginBottom: 8 }}>AI 提议的修复（审核后应用）</div>
+          <div style={{ fontSize: "var(--fs-10)", fontWeight: 600, color: "var(--amber)", marginBottom: 8 }}>AI 提议的修复（审核后应用）</div>
           {!repair.validation.ok && (
-            <div style={{ fontSize: 9, color: "var(--red)", marginBottom: 8 }}>
+            <div style={{ fontSize: "var(--fs-9)", color: "var(--red)", marginBottom: 8 }}>
               仍有问题：{repair.validation.errors.join("；")}
             </div>
           )}
-          <pre style={{ fontSize: 10, lineHeight: 1.6, maxHeight: 260, overflow: "auto", padding: 10, background: "var(--bg1)", borderRadius: "var(--r)", whiteSpace: "pre-wrap", wordBreak: "break-word", border: "1px solid var(--b)" }}>
+          <pre style={{ fontSize: "var(--fs-10)", lineHeight: 1.6, maxHeight: 260, overflow: "auto", padding: 10, background: "var(--bg1)", borderRadius: "var(--r)", whiteSpace: "pre-wrap", wordBreak: "break-word", border: "1px solid var(--b)" }}>
             {repair.preview}
           </pre>
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <button className="btn-acc" onClick={applyRepair} disabled={applying}
-              style={{ fontSize: 10, padding: "5px 12px" }}>
+              style={{ fontSize: "var(--fs-10)", padding: "5px 12px" }}>
               {applying ? "应用中…" : "✓ 应用并重试"}
             </button>
-            <button className="tbtn" onClick={() => setRepair(null)} style={{ fontSize: 10 }}>取消</button>
+            <button className="tbtn" onClick={() => setRepair(null)} style={{ fontSize: "var(--fs-10)" }}>取消</button>
           </div>
         </div>
       )}
@@ -727,20 +727,20 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
         <div style={{ marginTop: 14 }}>
           {/* Output header */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, ...S.accentBar }}>
-            <span style={{ fontSize: 9, color: "var(--t3)", letterSpacing: ".10em", textTransform: "uppercase", flex: 1 }}>
+            <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)", letterSpacing: ".10em", textTransform: "uppercase", flex: 1 }}>
               {loading ? <><span className="spin" style={{ marginRight: 4 }} />生成中…</> : "输出结果"}
             </span>
-            {provider && <span style={{ fontSize: 9, color: "var(--t3)" }}>via {provider}</span>}
+            {provider && <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)" }}>via {provider}</span>}
             {!loading && output && (
               <span style={{ display: "flex", gap: 6 }}>
-                <button className="tbtn" onClick={copyOut} style={{ fontSize: 9 }}>复制</button>
-                <button className="tbtn" onClick={exportOut} style={{ fontSize: 9 }}>导出 .md</button>
+                <button className="tbtn" onClick={copyOut} style={{ fontSize: "var(--fs-9)" }}>复制</button>
+                <button className="tbtn" onClick={exportOut} style={{ fontSize: "var(--fs-9)" }}>导出 .md</button>
               </span>
             )}
           </div>
           {/* Output body */}
           <div
-            style={{ background: "var(--bg1)", border: "1px solid var(--b)", borderRadius: "var(--r)", padding: "12px 14px", fontSize: 11, lineHeight: 1.8, color: "var(--t2)", overflowX: "auto" }}
+            style={{ background: "var(--bg1)", border: "1px solid var(--b)", borderRadius: "var(--r)", padding: "12px 14px", fontSize: "var(--fs-11)", lineHeight: 1.8, color: "var(--t2)", overflowX: "auto" }}
             dangerouslySetInnerHTML={{ __html: renderMarkdown(output) }}
           />
         </div>
@@ -754,11 +754,11 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
             onClick={() => setShowHistory((v) => !v)}
             style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 6 }}
           >
-            <span style={{ fontSize: 9, color: "var(--t3)", letterSpacing: ".10em", textTransform: "uppercase" }}>
+            <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)", letterSpacing: ".10em", textTransform: "uppercase" }}>
               历史记录
             </span>
-            <span style={{ fontSize: 9, color: "var(--t3)" }}>({runs.length})</span>
-            <span style={{ fontSize: 8, color: "var(--t3)", transform: showHistory ? "none" : "rotate(-90deg)", transition: "transform .14s", display: "inline-block" }}>▼</span>
+            <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)" }}>({runs.length})</span>
+            <span style={{ fontSize: "var(--fs-8)", color: "var(--t3)", transform: showHistory ? "none" : "rotate(-90deg)", transition: "transform .14s", display: "inline-block" }}>▼</span>
           </button>
 
           {showHistory && (
@@ -775,19 +775,19 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
                 <tbody>
                   {runs.map((r) => (
                     <tr key={r.id}>
-                      <td style={{ color: "var(--t3)", fontSize: 10 }}>{r.started_at}</td>
+                      <td style={{ color: "var(--t3)", fontSize: "var(--fs-10)" }}>{r.started_at}</td>
                       <td>
-                        <span style={{ fontSize: 10, color: r.status === "error" ? "var(--red)" : "var(--acc)" }}>
+                        <span style={{ fontSize: "var(--fs-10)", color: r.status === "error" ? "var(--red)" : "var(--acc)" }}>
                           {r.status === "error" ? "✕ 失败" : "✓ 完成"}
                         </span>
-                        {r.elapsed_s > 0 && <span style={{ fontSize: 9, color: "var(--t3)", marginLeft: 4 }}>{r.elapsed_s}s</span>}
+                        {r.elapsed_s > 0 && <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)", marginLeft: 4 }}>{r.elapsed_s}s</span>}
                       </td>
-                      <td style={{ fontSize: 10, color: "var(--t3)" }}>{r.provider}</td>
+                      <td style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>{r.provider}</td>
                       <td style={{ textAlign: "right" }}>
                         <span style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                          <button className="tbtn" style={{ fontSize: 9 }} onClick={() => viewRun(r.id)}>查看</button>
-                          <button className="tbtn" style={{ fontSize: 9 }} onClick={() => run(Object.fromEntries(Object.entries(r.params).map(([k, v]) => [k, String(v)])))}>重跑</button>
-                          <button className="tbtn" style={{ fontSize: 9 }} onClick={() => removeRun(r.id)}>删</button>
+                          <button className="tbtn" style={{ fontSize: "var(--fs-9)" }} onClick={() => viewRun(r.id)}>查看</button>
+                          <button className="tbtn" style={{ fontSize: "var(--fs-9)" }} onClick={() => run(Object.fromEntries(Object.entries(r.params).map(([k, v]) => [k, String(v)])))}>重跑</button>
+                          <button className="tbtn" style={{ fontSize: "var(--fs-9)" }} onClick={() => removeRun(r.id)}>删</button>
                         </span>
                       </td>
                     </tr>

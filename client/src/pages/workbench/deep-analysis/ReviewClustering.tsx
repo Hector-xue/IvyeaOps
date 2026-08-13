@@ -66,7 +66,7 @@ export default function ReviewClustering() {
 
   return (
     <div>
-      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>⊙ 评论聚类分析</div>
+      <div style={{ fontSize: "var(--fs-14)", fontWeight: 600, marginBottom: 12 }}>⊙ 评论聚类分析</div>
 
       <div className="market-input-row" style={{ flexWrap: "wrap" }}>
         <input
@@ -83,7 +83,7 @@ export default function ReviewClustering() {
           {loading ? "分析中…" : "开始分析"}
         </button>
         {loading && (
-          <button className="tbtn" onClick={() => abortRef.current?.abort()} style={{ fontSize: 10 }}>
+          <button className="tbtn" onClick={() => abortRef.current?.abort()} style={{ fontSize: "var(--fs-10)" }}>
             停止
           </button>
         )}
@@ -95,11 +95,11 @@ export default function ReviewClustering() {
       {output && (
         <div className="wb-enter" style={{ marginTop: 14 }}>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
-            {provider && <span style={{ fontSize: 9, color: "var(--t3)" }}>via {provider}</span>}
+            {provider && <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)" }}>via {provider}</span>}
             {!loading && (
               <button
                 className="tbtn"
-                style={{ fontSize: 10, marginLeft: "auto" }}
+                style={{ fontSize: "var(--fs-10)", marginLeft: "auto" }}
                 onClick={() => triggerDownload(output, `reviews-${asin.trim()}-${country}.md`, "text/markdown")}
               >
                 ⬇ 下载 Markdown

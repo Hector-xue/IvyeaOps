@@ -33,6 +33,7 @@ import FollowUps from "../../components/console/FollowUps";
 import {
   CONSOLE_PRESETS_CHANGED,
   consolePresets,
+  consoleWorkspaceCreate,
   consoleSessionApprovals,
   consoleSessions,
   ivyeaAgentChat,
@@ -54,6 +55,9 @@ import {
   type IvyeaSkillInfo,
 } from "../../api/ivyeaAgent";
 import { errText } from "../../lib/errText";
+
+/** 老版本 agent 的自由文本叙述最多保留最近几行 —— 长任务的叙述能有几十条。 */
+const MAX_NOTES = 12;
 
 const PREFS_KEY = "ivyea-ops.console.prefs";
 
@@ -193,11 +197,67 @@ function ConsoleInner() {
     return () => { alive = false; };
   }, []);
 
-  // ── 滚动到底 ─────────────────────────────────────────────────────────────
+  // ── 跟随滚动 ─────────────────────────────────────────────────────────────
+  //
+  // **只在用户本来就贴着底的时候才跟。** 原先是无条件 scrollTop = scrollHeight，
+  // 于是流式输出期间每来一个 token 就把滚动位置拽回底部 —— 用户想往上翻看前面
+  // 的问题或推理，手一松就被扯下来，根本读不了。
+  //
+  // 判据是"离底部还有多远"：用户一旦主动往上滚超过一屏的 20%，就认为他在读，
+  // 不再打断；他自己滚回底部，跟随自动恢复。
+  const stickRef = useRef(true);
   useEffect(() => {
     const el = bodyRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const onScroll = () => {
+      const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+      stickRef.current = gap <= Math.max(40, el.clientHeight * 0.2);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (el && stickRef.current) el.scrollTop = el.scrollHeight;
   }, [turns, followUps]);
+
+  // 新一轮发出后，把那条问题滚到视野顶端（只做一次）。
+  const pendingTopRef = useRef<string>("");
+  useEffect(() => {
+    const id = pendingTopRef.current;
+    if (!id) return;
+    const el = bodyRef.current;
+    const node = el?.querySelector(`[data-turn="${id}"]`) as HTMLElement | null;
+    if (!el || !node) return;
+    pendingTopRef.current = "";
+    el.scrollTop = node.offsetTop - el.offsetTop - 8;
+    stickRef.current = true;      // 之后照常跟随，直到用户自己往上翻
+  }, [turns]);
+
+  // ── 新建工作区（从输入框那个下拉里进来）──────────────────────────────────
+  //
+  // 放在这里而不是只留在左栏：用户想换工作区时点的是输入框那个 chip，
+  // 在那儿给出路，比让他去左栏找一个「+」自然得多。
+  const newWorkspace = useCallback(async () => {
+    const name = window.prompt("工作区名称（例如：我的店铺资料）");
+    if (!name || !name.trim()) return;
+    const path = window.prompt(
+      "绑定目录的绝对路径（Agent 的文件读写就发生在这个目录里）。\n" +
+      "留空则不绑目录 —— 那样它只能在会话里工作，碰不到你的文件。", "") || "";
+    try {
+      await consoleWorkspaceCreate(name.trim(), path.trim());
+      const d = await consoleSessions();
+      const names = (d.workspaces || []).map((w) => w.name);
+      if (names.length) setWorkspaces(names);
+      patch({ workspace: name.trim() });
+      notifyConsoleSessionsChanged();
+      notify("success", path.trim() ? `已创建并切到「${name.trim()}」，目录：${path.trim()}`
+                               : `已创建并切到「${name.trim()}」（未绑目录）`);
+    } catch (e) {
+      notify("error", errText(e, "工作区创建失败"));
+    }
+  }, [notify]);
 
   // ── 侧边栏「新建任务」────────────────────────────────────────────────────
   const resetSession = useCallback(() => {
@@ -369,6 +429,10 @@ function ConsoleInner() {
     const aiTurn: Turn = { id: aiId, role: "assistant", text: "", steps: [], skills: [], approvals: [], running: true };
     setTurns((prev) => [...prev, userTurn, aiTurn]);
     setBusy(true);
+    // **把刚发出的问题顶到视野上方**，答案在它下面生长 —— 这是主流对话产品的
+    // 做法，也是"我发的问题看不到了"的正解：原先直接钉在最底部，长回答一出来
+    // 就把问题和执行过程顶出屏幕，而那时候滚动又被强制拽回底部，翻都翻不上去。
+    pendingTopRef.current = userTurn.id;
 
     // @ 引用：把选中条目的正文取出来随本轮带下去。取不到的跳过并说明，
     // 不要让用户以为引用了、实际什么都没带。
@@ -463,10 +527,22 @@ function ConsoleInner() {
             notify("warn", "审批等待超时，这一步已自动取消。");
           },
           onEvent: (d) => {
-            // 老版本 agent 只有自由文本叙述 —— 不猜工具名，原样留一行注记。
+            // 自由文本叙述是**老版本 agent 的兜底**（< v1.9 只发人话、没有结构化
+            // 步骤）。新版两种都发，而它们说的是同一批动作 —— 实测一次带工具的
+            // 提问会来 44 条 step + 46 条 event，两个都渲染就等于每个动作出现两
+            // 次，且文本那份没有上限，几十行糊满整页把回答挤没了。
+            //
+            // 所以：**这一轮只要收到过结构化步骤，就不再渲染叙述。**
             const line = String(d?.text || "").trim().split("\n").filter(Boolean).pop() || "";
             if (!line) return;
-            patchTurn(aiId, (t) => ({ steps: [...(t.steps || []), noteStep(line, noteSeq++)] }));
+            patchTurn(aiId, (t) => {
+              const steps = t.steps || [];
+              if (steps.some((x) => x.phase !== "note")) return {};   // 有结构化的，叙述丢掉
+              // 真·老版本路径：注记也要有上限，否则长任务照样能刷满屏。
+              const notes = steps.filter((x) => x.phase === "note");
+              const next = [...steps, noteStep(line, noteSeq++)];
+              return { steps: notes.length >= MAX_NOTES ? next.slice(next.length - MAX_NOTES) : next };
+            });
           },
           onToken: (chunk) => {
             finalText += chunk;
@@ -567,6 +643,7 @@ function ConsoleInner() {
       attaching={attaching}
       skills={skills}
       workspaces={workspaces}
+      onNewWorkspace={newWorkspace}
       references={references}
       picked={picked}
       onPickedChange={setPicked}
@@ -619,7 +696,9 @@ function ConsoleInner() {
             <div className="cc-thread scroll-thin" ref={bodyRef}>
               {turns.map((t) =>
                 t.role === "user" ? (
-                  <div className="cc-user" key={t.id}><div className="cc-bubble">{t.text}</div></div>
+                  <div className="cc-user" key={t.id} data-turn={t.id}>
+                    <div className="cc-bubble">{t.text}</div>
+                  </div>
                 ) : (
                   <div className="cc-ai wb-enter" key={t.id}>
                     <StepTimeline

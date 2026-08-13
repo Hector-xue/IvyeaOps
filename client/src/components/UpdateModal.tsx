@@ -134,18 +134,18 @@ export default function UpdateModal({
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-          <span style={{ fontSize: 14 }}>⟳</span>
-          <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: ".04em" }}>
+          <span style={{ fontSize: "var(--fs-14)" }}>⟳</span>
+          <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, letterSpacing: ".04em" }}>
             软件更新{target ? ` · ${target}` : ""}
           </span>
           {!busy && (
             <button className="tbtn" onClick={onClose}
-              style={{ marginLeft: "auto", padding: "1px 8px", fontSize: 11 }}>✕</button>
+              style={{ marginLeft: "auto", padding: "1px 8px", fontSize: "var(--fs-11)" }}>✕</button>
           )}
         </div>
 
         {/* Stage line */}
-        <div style={{ fontSize: 11, color: "var(--t2)", marginBottom: 10, lineHeight: 1.7 }}>
+        <div style={{ fontSize: "var(--fs-11)", color: "var(--t2)", marginBottom: 10, lineHeight: 1.7 }}>
           {phase === "starting" && "正在准备更新…"}
           {phase === "downloading" && (
             <>正在下载安装包… <span style={{ color: "var(--t3)" }}>
@@ -183,7 +183,7 @@ export default function UpdateModal({
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           {phase === "done" && (
             <button className="tbtn" onClick={() => window.location.reload()}
-              style={{ padding: "4px 14px", fontSize: 11, color: "var(--acc)" }}>
+              style={{ padding: "4px 14px", fontSize: "var(--fs-11)", color: "var(--acc)" }}>
               刷新页面
             </button>
           )}
@@ -191,16 +191,16 @@ export default function UpdateModal({
             <>
               <a className="tbtn" href="https://github.com/Hector-xue/IvyeaOps/releases/latest"
                 target="_blank" rel="noreferrer"
-                style={{ padding: "4px 12px", fontSize: 11, textDecoration: "none" }}>
+                style={{ padding: "4px 12px", fontSize: "var(--fs-11)", textDecoration: "none" }}>
                 打开 Release 页面
               </a>
-              <button className="tbtn" onClick={onClose} style={{ padding: "4px 14px", fontSize: 11 }}>
+              <button className="tbtn" onClick={onClose} style={{ padding: "4px 14px", fontSize: "var(--fs-11)" }}>
                 关闭
               </button>
             </>
           )}
           {busy && (
-            <span style={{ fontSize: 10, color: "var(--t3)", alignSelf: "center" }}>
+            <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)", alignSelf: "center" }}>
               更新期间请勿关闭 IvyeaOps 窗口
             </span>
           )}

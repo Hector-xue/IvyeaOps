@@ -92,6 +92,7 @@ export interface HubSettings {
   skill_market_enabled: boolean;
   skill_market_url: string;
   skill_market_pubkey: string;
+  skill_market_allow_class_b: boolean;
   // SIF — 深度分析工具箱，独立 key（mcp.sif.com Bearer token）
   sif_key: string;
   // SellerSprite — separate key, auto-registers stdio MCP server in Hermes

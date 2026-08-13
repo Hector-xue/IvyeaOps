@@ -121,7 +121,7 @@ export default function Users() {
                   <td><span style={{ color: STATUS_COLOR[u.status] }}>{STATUS_LABEL[u.status] || u.status}</span></td>
                   <td style={{ maxWidth: 280 }}>
                     {u.position && <span style={{ fontWeight: 600, marginRight: 6 }}>{u.position}</span>}
-                    <span style={{ fontSize: 12, color: "var(--t3)" }}>
+                    <span style={{ fontSize: "var(--fs-12)", color: "var(--t3)" }}>
                       {(u.permissions && u.permissions.length)
                         ? u.permissions.map(labelOf).join("、")
                         : "（仅基础板块）"}
@@ -151,11 +151,11 @@ export default function Users() {
             style={{ background: "var(--bg, #fff)", border: "1px solid var(--b, #ddd)", borderRadius: 8, padding: 24, width: 460, maxWidth: "92vw", maxHeight: "86vh", overflow: "auto" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>授权板块</div>
-            <div style={{ fontSize: 12, color: "var(--t3)", marginBottom: 16 }}>{editing.email}</div>
+            <div style={{ fontWeight: 700, fontSize: "var(--fs-15)", marginBottom: 4 }}>授权板块</div>
+            <div style={{ fontSize: "var(--fs-12)", color: "var(--t3)", marginBottom: 16 }}>{editing.email}</div>
 
             <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, color: "var(--t2)", display: "block", marginBottom: 6 }}>按职位套用预设</label>
+              <label style={{ fontSize: "var(--fs-12)", color: "var(--t2)", display: "block", marginBottom: 6 }}>按职位套用预设</label>
               <SheetSelect value={editPos} onChange={applyPreset} title="按职位套用预设"
                 style={{ width: "100%", padding: "7px 10px", borderRadius: 4, border: "1px solid var(--b, #ccc)", background: "transparent", color: "inherit" }}
                 options={[
@@ -164,13 +164,13 @@ export default function Users() {
                 ]} />
             </div>
 
-            <div style={{ fontSize: 12, color: "var(--t2)", marginBottom: 8 }}>可访问板块（基础板块默认全员可用，这里只授权更高权限板块）</div>
+            <div style={{ fontSize: "var(--fs-12)", color: "var(--t2)", marginBottom: 8 }}>可访问板块（基础板块默认全员可用，这里只授权更高权限板块）</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18 }}>
               {catalog.modules.map((m) => (
-                <label key={m.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", padding: "6px 8px", border: "1px solid var(--b, #eee)", borderRadius: 4 }}>
+                <label key={m.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--fs-13)", cursor: "pointer", padding: "6px 8px", border: "1px solid var(--b, #eee)", borderRadius: 4 }}>
                   <input type="checkbox" checked={editPerms.includes(m.key)} onChange={() => togglePerm(m.key)} />
                   <span>{m.label}</span>
-                  {m.sensitive && <span title="敏感板块" style={{ fontSize: 10, color: "var(--red, #c0392b)", border: "1px solid currentColor", borderRadius: 3, padding: "0 4px" }}>敏感</span>}
+                  {m.sensitive && <span title="敏感板块" style={{ fontSize: "var(--fs-10)", color: "var(--red, #c0392b)", border: "1px solid currentColor", borderRadius: 3, padding: "0 4px" }}>敏感</span>}
                 </label>
               ))}
             </div>

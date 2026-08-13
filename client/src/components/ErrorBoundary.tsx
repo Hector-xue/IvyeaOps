@@ -31,7 +31,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           padding: 24,
           maxWidth: 640,
           margin: "40px auto",
-          fontSize: 12,
+          fontSize: "var(--fs-12)",
           color: "var(--t2)",
           lineHeight: 1.7,
         }}
@@ -46,7 +46,7 @@ export default class ErrorBoundary extends Component<Props, State> {
         >
           ⚠
         </div>
-        <div style={{ fontSize: 13, color: "var(--t)", marginBottom: 8 }}>
+        <div style={{ fontSize: "var(--fs-13)", color: "var(--t)", marginBottom: 8 }}>
           页面渲染出错
         </div>
         <pre
@@ -55,7 +55,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             border: "1px solid var(--b)",
             borderRadius: "var(--r)",
             padding: 10,
-            fontSize: 10,
+            fontSize: "var(--fs-10)",
             color: "var(--t3)",
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",

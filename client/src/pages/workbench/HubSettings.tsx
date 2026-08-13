@@ -273,7 +273,7 @@ function ProviderPicker({
           border: open ? "1px solid var(--acc)" : "1px solid var(--b)",
           background: "var(--bg2)",
           color: selected ? "var(--t)" : "var(--t3)",
-          fontSize: 12.5, fontFamily: "var(--font)", cursor: "pointer",
+          fontSize: "var(--fs-125)", fontFamily: "var(--font)", cursor: "pointer",
           outline: "none", transition: "border .12s",
         }}
       >
@@ -282,12 +282,12 @@ function ProviderPicker({
             {selected ? selected.label : "选择 Provider"}
           </span>
           {selected?.hint && (
-            <span style={{ color: "var(--t3)", fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ color: "var(--t3)", fontSize: "var(--fs-11)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {selected.hint}
             </span>
           )}
         </span>
-        <span style={{ color: "var(--t3)", fontSize: 9, marginLeft: 8, flexShrink: 0 }}>▼</span>
+        <span style={{ color: "var(--t3)", fontSize: "var(--fs-9)", marginLeft: 8, flexShrink: 0 }}>▼</span>
       </button>
 
       {/* centered modal — overlay + dialog */}
@@ -315,8 +315,8 @@ function ProviderPicker({
               display: "flex", alignItems: "center", justifyContent: "space-between",
               padding: "14px 16px", borderBottom: "1px solid var(--b)",
             }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--t)" }}>选择模型 Provider</span>
-              <span onClick={() => setOpen(false)} style={{ cursor: "pointer", color: "var(--t3)", fontSize: 16, lineHeight: 1 }}>✕</span>
+              <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--t)" }}>选择模型 Provider</span>
+              <span onClick={() => setOpen(false)} style={{ cursor: "pointer", color: "var(--t3)", fontSize: "var(--fs-16)", lineHeight: 1 }}>✕</span>
             </div>
             <div style={{ overflowY: "auto", WebkitOverflowScrolling: "touch", padding: 6 }}>
               {PROVIDERS.map(p => {
@@ -339,17 +339,17 @@ function ProviderPicker({
                         ? "color-mix(in srgb, var(--t) 7%, transparent)"
                         : "transparent",
                       color: isSel ? "var(--acc)" : "var(--t)",
-                      fontSize: 13, fontFamily: "var(--font)", cursor: "pointer",
+                      fontSize: "var(--fs-13)", fontFamily: "var(--font)", cursor: "pointer",
                       userSelect: "none", transition: "background .1s",
                     }}
                   >
                     <span style={{ flex: 1, fontWeight: isSel ? 500 : 400 }}>{p.label}</span>
                     {p.hint && (
-                      <span style={{ color: isSel ? "color-mix(in srgb, var(--acc) 70%, var(--t3))" : "var(--t3)", fontSize: 11 }}>
+                      <span style={{ color: isSel ? "color-mix(in srgb, var(--acc) 70%, var(--t3))" : "var(--t3)", fontSize: "var(--fs-11)" }}>
                         {p.hint}
                       </span>
                     )}
-                    <span style={{ width: 12, textAlign: "center", color: "var(--acc)", fontSize: 12, flexShrink: 0 }}>
+                    <span style={{ width: 12, textAlign: "center", color: "var(--acc)", fontSize: "var(--fs-12)", flexShrink: 0 }}>
                       {isSel ? "✓" : ""}
                     </span>
                   </div>
@@ -382,7 +382,7 @@ function LLMModelBlock({
 
   return (
     <div>
-      <div style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600, marginBottom: 10 }}>
+      <div style={{ fontSize: "var(--fs-11)", color: "var(--t2)", fontWeight: 600, marginBottom: 10 }}>
         {title}
         {hint && <span style={{ fontWeight: 400, color: "var(--t3)", marginLeft: 8 }}>{hint}</span>}
       </div>
@@ -543,7 +543,7 @@ function HealthPanel() {
               {row.install && (
                 <button
                   className="hs-refresh-btn"
-                  style={{ padding: "2px 8px", fontSize: 10 }}
+                  style={{ padding: "2px 8px", fontSize: "var(--fs-10)" }}
                   disabled={!!installing}
                   // Always offer this, even when detected as installed: a broken /
                   // incompatible build (e.g. an old GBrain v0.35) reports "ok" yet
@@ -665,8 +665,8 @@ function SelfCheckPanel() {
     <div className="card" style={{ padding: 14, marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--t)" }}>一键全部自检</div>
-          <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 2 }}>
+          <div style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--t)" }}>一键全部自检</div>
+          <div style={{ fontSize: "var(--fs-11)", color: "var(--t3)", marginTop: 2 }}>
             对每个已配置项做一次真实在线测试，一眼看清"配了但用不了"的项。
           </div>
         </div>
@@ -677,12 +677,12 @@ function SelfCheckPanel() {
       {err && <div className="hs-test-result err" style={{ marginTop: 8 }}>✗ {err}</div>}
       {res && (
         <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 6 }}>
+          <div style={{ fontSize: "var(--fs-11)", color: "var(--t3)", marginBottom: 6 }}>
             通过 {res.ok} · 失败 {res.err} · 未配置 {res.skip} · 共 {res.total}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {res.results.map((r) => (
-              <div key={r.key} style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 11 }}>
+              <div key={r.key} style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: "var(--fs-11)" }}>
                 <span style={{ width: 14, color: r.status === "ok" ? "var(--ok,#16a34a)" : r.status === "err" ? "var(--err,#dc2626)" : "var(--t3)" }}>
                   {r.status === "ok" ? "✓" : r.status === "err" ? "✗" : "—"}
                 </span>
@@ -760,7 +760,7 @@ function AgentUpdateRow() {
   return (
     <div className="hs-agent-card">
       <div className="hs-agent-card-title">版本与更新
-        {hasUpd && <span style={{ marginLeft: 8, fontSize: 10, color: "#fff", background: "#dc2626", borderRadius: 8, padding: "1px 7px" }}>有新版</span>}
+        {hasUpd && <span style={{ marginLeft: 8, fontSize: "var(--fs-10)", color: "#fff", background: "#dc2626", borderRadius: 8, padding: "1px 7px" }}>有新版</span>}
       </div>
       <div className="hs-agent-card-desc">
         当前 IvyeaAgent 版本 <b style={{ color: "var(--t)" }}>{ver || "未知/未运行"}</b>
@@ -779,7 +779,7 @@ function AgentUpdateRow() {
           <div style={{ height: 6, borderRadius: 3, background: "var(--line,#e5e7eb)", overflow: "hidden" }}>
             <div style={{ height: "100%", width: `${Math.max(percent, 8)}%`, background: "var(--acc,#16a34a)", transition: "width .4s ease" }} />
           </div>
-          <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 4 }}>{_PHASE_LABEL[phase] || "更新中…"}（{percent}%）</div>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginTop: 4 }}>{_PHASE_LABEL[phase] || "更新中…"}（{percent}%）</div>
         </div>
       )}
       <div className="hs-test-row" style={{ marginTop: 6 }}>
@@ -822,6 +822,7 @@ const EMPTY: HubSettings = {
   skill_market_enabled: false,
   skill_market_url: "",
   skill_market_pubkey: "",
+  skill_market_allow_class_b: false,
   notify_webhook: "",
   notify_events: "",
   ai_budget_monthly_usd: 0,
@@ -911,7 +912,7 @@ function NotifySection({
           </button>
         </div>
         {result && (
-          <div className="ms" style={{ marginTop: 6, color: result.ok ? "var(--ok)" : "var(--err)" }}>
+          <div className="ms" style={{ marginTop: 6, color: result.ok ? "var(--acc)" : "var(--red)" }}>
             {result.ok ? "✓ " : "× "}{result.detail}
           </div>
         )}
@@ -944,7 +945,7 @@ function NotifySection({
           <div className="ms" style={{ marginTop: 6 }}>
             {budget.month} 已用 <b>${budget.spend_usd.toFixed(2)}</b> / ${budget.limit_usd.toFixed(2)}
             （{Math.round(budget.ratio * 100)}%）
-            {budget.exceeded && <span style={{ color: "var(--err)" }}> · 已超</span>}
+            {budget.exceeded && <span style={{ color: "var(--red)" }}> · 已超</span>}
           </div>
         )}
       </Field>
@@ -1071,7 +1072,7 @@ function McpSection() {
             粘进 Claude Desktop 的 <code>claude_desktop_config.json</code> 或 Cursor 的 <code>mcp.json</code>，重启客户端即可。
             对方机器要能访问到这个地址；<b>暴露到公网时务必套 HTTPS</b> —— 令牌是明文放在请求头里的。
           </div>
-          <pre style={{ overflowX: "auto", fontSize: 12, margin: "8px 0" }}>{snippet}</pre>
+          <pre style={{ overflowX: "auto", fontSize: "var(--fs-12)", margin: "8px 0" }}>{snippet}</pre>
           <button className="hs-test-btn" onClick={() => copy(snippet, "cfg")}>
             {copied === "cfg" ? "✓ 已复制" : "复制配置"}
           </button>
@@ -1084,7 +1085,7 @@ function McpSection() {
           ) : tokens.length === 0 ? (
             <div className="hs-agent-card-desc">还没有发过令牌。</div>
           ) : (
-            <table className="hs-table" style={{ width: "100%", fontSize: 13 }}>
+            <table className="hs-table" style={{ width: "100%", fontSize: "var(--fs-13)" }}>
               <thead>
                 <tr>
                   <th style={{ textAlign: "left" }}>备注</th>
@@ -1182,7 +1183,7 @@ function AppearanceSection() {
 
           <div className="hs-agent-card" style={{ gridColumn: "1 / -1" }}>
             <div className="hs-agent-card-title">预览</div>
-            <div style={{ marginTop: 6, fontSize: 14, lineHeight: 1.8, color: "var(--t)" }}>
+            <div style={{ marginTop: 6, fontSize: "var(--fs-14)", lineHeight: 1.8, color: "var(--t)" }}>
               IvyeaOps 广告优化 · Listing 诊断 · 知识库检索 — The quick brown fox 0123456789
             </div>
           </div>
@@ -1406,10 +1407,10 @@ export default function HubSettings() {
         </div>
 
         <div style={{ borderTop: "1px solid var(--b)", margin: "6px 0 2px", paddingTop: 10 }}>
-          <div style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600, marginBottom: 2 }}>
+          <div style={{ fontSize: "var(--fs-11)", color: "var(--t2)", fontWeight: 600, marginBottom: 2 }}>
             自定义生图接口（填了就用它，不再走 Apimart）
           </div>
-          <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 8 }}>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginBottom: 8 }}>
             任意兼容 OpenAI <code>/images/generations</code> 的平台均可：同步返回（b64/url）或 Apimart 式异步任务都支持。换平台时记得把上面的「模型名称」也改成该平台的模型名。
           </div>
         </div>
@@ -1468,10 +1469,10 @@ export default function HubSettings() {
         </Field>
 
         <div style={{ borderTop: "1px solid var(--b)", margin: "4px 0 2px", paddingTop: 10 }}>
-          <div style={{ fontSize: 11, color: "var(--t2)", fontWeight: 600, marginBottom: 2 }}>
+          <div style={{ fontSize: "var(--fs-11)", color: "var(--t2)", fontWeight: 600, marginBottom: 2 }}>
             知识库语义检索（Embedding）
           </div>
-          <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 8 }}>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginBottom: 8 }}>
             配置后知识库支持语义检索；留空则仅关键词检索。
           </div>
         </div>
@@ -1530,6 +1531,20 @@ export default function HubSettings() {
                 <TxtInput value={vals.skill_market_url} onChange={v => set("skill_market_url", v)}
                   placeholder="https://mendao.ivyea.com/api/market" />
               </Field>
+              <label className="hs-toggle-line">
+                <input type="checkbox" checked={!!vals.skill_market_allow_class_b}
+                  onChange={e => set("skill_market_allow_class_b", e.target.checked)} />
+                <span>
+                  允许一键安装<b>含可执行脚本</b>的技能（B 类）——
+                  {vals.skill_market_allow_class_b ? "已开启" : "默认关闭"}
+                </span>
+              </label>
+              <div className="hs-hint" style={{ marginTop: -4, marginBottom: 10 }}>
+                关着的时候<b>不是不能用</b>：安装包随时可以下载下来自己审、自己放进技能库。
+                打开只是省掉手动那步 —— 每次安装仍会把脚本清单逐条列出来让你确认。
+                这类技能里的代码会在 Agent 用到它时在你机器上运行，
+                而社区内容<b>未经官方审计</b>。
+              </div>
               <Field label={<><Tag kind="opt">可选</Tag>市场公钥</>}
                 hint={<>用于校验安装包签名。留空则只校验 sha256（能证明"没传坏"，但证明不了"是那边发布的那份"）。</>}>
                 <TxtInput value={vals.skill_market_pubkey} onChange={v => set("skill_market_pubkey", v)}
@@ -1600,7 +1615,7 @@ export default function HubSettings() {
           style={{
             display: "flex", alignItems: "center", gap: 6, marginBottom: 4,
             background: "transparent", border: "1px solid var(--b)", borderRadius: 4,
-            padding: "5px 12px", color: "var(--t3)", fontSize: 11,
+            padding: "5px 12px", color: "var(--t3)", fontSize: "var(--fs-11)",
             cursor: "pointer", fontFamily: "var(--font)",
           }}
         >

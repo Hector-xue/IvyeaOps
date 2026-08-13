@@ -6,7 +6,7 @@ import { errText } from "../../lib/errText";
 
 export const inputStyle: React.CSSProperties = {
   background: "var(--bg1)", border: "1px solid var(--b)", borderRadius: 3,
-  padding: "5px 7px", fontSize: 11, color: "var(--t)", outline: "none",
+  padding: "5px 7px", fontSize: "var(--fs-11)", color: "var(--t)", outline: "none",
   fontFamily: "inherit", boxSizing: "border-box",
 };
 
@@ -16,20 +16,20 @@ export function Btn({ onClick, children, primary, danger, disabled, title }: any
       background: danger ? "var(--red)" : primary ? "var(--acc)" : "var(--bg2)",
       color: danger || primary ? "#000" : "var(--t)",
       border: danger || primary ? "none" : "1px solid var(--b)",
-      borderRadius: 4, padding: "5px 12px", fontSize: 11,
+      borderRadius: 4, padding: "5px 12px", fontSize: "var(--fs-11)",
       cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.55 : 1,
     }}>{children}</button>
   );
 }
 
 export function L({ t, children }: { t: string; children: any }) {
-  return <div style={{ display: "grid", gap: 3, fontSize: 10, color: "var(--t3)" }}><span>{t}</span>{children}</div>;
+  return <div style={{ display: "grid", gap: 3, fontSize: "var(--fs-10)", color: "var(--t3)" }}><span>{t}</span>{children}</div>;
 }
 
 export function Section({ title, children }: any) {
   return (
     <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--b)" }}>
-      <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 4 }}>{title}</div>{children}
+      <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginBottom: 4 }}>{title}</div>{children}
     </div>
   );
 }
@@ -37,7 +37,7 @@ export function Section({ title, children }: any) {
 export function Chip({ on, label, warn }: { on: boolean; label: string; warn?: boolean }) {
   const color = warn ? "var(--amber)" : on ? "var(--acc)" : "var(--t3)";
   return (
-    <span style={{ fontSize: 11, color, display: "inline-flex", alignItems: "center", gap: 5 }}>
+    <span style={{ fontSize: "var(--fs-11)", color, display: "inline-flex", alignItems: "center", gap: 5 }}>
       <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, display: "inline-block" }} />{label}
     </span>
   );
@@ -53,7 +53,7 @@ const TICKET_STATUS_COLOR: Record<string, string> = {
 };
 export function TicketStatus({ s }: { s: string }) {
   return (
-    <span style={{ fontSize: 10, color: TICKET_STATUS_COLOR[s] || "var(--t3)", whiteSpace: "nowrap" }}>
+    <span style={{ fontSize: "var(--fs-10)", color: TICKET_STATUS_COLOR[s] || "var(--t3)", whiteSpace: "nowrap" }}>
       {s === "reviewing" && <span className="lx-spin-dot" />}{TICKET_STATUS_ZH[s] || s}
     </span>
   );
@@ -133,7 +133,7 @@ export function LxTable({ rows, cols, pageSize = 50, filterable = true, empty = 
   };
 
   if (!rows.length) {
-    return <div style={{ padding: 30, textAlign: "center", color: "var(--t3)", fontSize: 11 }}>{empty}</div>;
+    return <div style={{ padding: 30, textAlign: "center", color: "var(--t3)", fontSize: "var(--fs-11)" }}>{empty}</div>;
   }
   return (
     <div>
@@ -141,11 +141,11 @@ export function LxTable({ rows, cols, pageSize = 50, filterable = true, empty = 
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid var(--b)" }}>
           <input value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} placeholder="筛选…"
             style={{ ...inputStyle, width: 160 }} />
-          <span style={{ fontSize: 10, color: "var(--t3)" }}>{q ? `${sorted.length}/${rows.length}` : `${rows.length}`} 条 · 点表头排序</span>
+          <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>{q ? `${sorted.length}/${rows.length}` : `${rows.length}`} 条 · 点表头排序</span>
         </div>
       )}
       <div style={{ overflowX: "auto" }}>
-        <table className="lx-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+        <table className="lx-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--fs-11)" }}>
           <thead>
             <tr>{cols.map((c) => (
               <th key={c.key} onClick={() => toggleSort(c.key)} style={{
@@ -170,7 +170,7 @@ export function LxTable({ rows, cols, pageSize = 50, filterable = true, empty = 
         </table>
       </div>
       {pages > 1 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderTop: "1px solid var(--b)", fontSize: 10, color: "var(--t3)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderTop: "1px solid var(--b)", fontSize: "var(--fs-10)", color: "var(--t3)" }}>
           <Btn onClick={() => setPage(Math.max(0, p - 1))} disabled={p === 0}>‹ 上一页</Btn>
           <span>第 {p + 1} / {pages} 页 · 共 {sorted.length} 条</span>
           <Btn onClick={() => setPage(Math.min(pages - 1, p + 1))} disabled={p >= pages - 1}>下一页 ›</Btn>
@@ -211,7 +211,7 @@ export function LxProgress({ phase, done, total }: { phase?: string; done?: numb
       <div style={{ flex: 1, height: 6, borderRadius: 3, background: "var(--bg2)", overflow: "hidden" }}>
         <div style={{ width: `${p}%`, height: "100%", background: "var(--acc)", transition: "width .4s ease" }} />
       </div>
-      <span style={{ fontSize: 10, color: "var(--t3)", whiteSpace: "nowrap" }}>
+      <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)", whiteSpace: "nowrap" }}>
         {phase || "运行中"} {total ? `${done}/${total}` : ""}（{p}%）
       </span>
     </div>

@@ -252,8 +252,8 @@ export default function AdAuditPanel() {
     <div className="card" style={{ padding: "14px 16px", marginTop: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
         <span className="tag tb-tag">主力工具</span>
-        <span style={{ fontSize: 13, color: "var(--t)" }}>广告搜索词诊断</span>
-        <span style={{ fontSize: 10, color: "var(--t3)" }}>
+        <span style={{ fontSize: "var(--fs-13)", color: "var(--t)" }}>广告搜索词诊断</span>
+        <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>
           · SP / SB / SD search term report 根因分析
         </span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
@@ -304,15 +304,15 @@ export default function AdAuditPanel() {
           {uploading ? (
             <>
               <span className="spin" style={{ marginRight: 6 }} />
-              <span style={{ fontSize: 11, color: "var(--t2)" }}>解析中，自动识别广告类型…</span>
+              <span style={{ fontSize: "var(--fs-11)", color: "var(--t2)" }}>解析中，自动识别广告类型…</span>
             </>
           ) : (
             <>
               <div style={{ fontSize: 20, marginBottom: 6 }}>📊</div>
-              <div style={{ fontSize: 12, color: "var(--t)", marginBottom: 4 }}>
+              <div style={{ fontSize: "var(--fs-12)", color: "var(--t)", marginBottom: 4 }}>
                 拖拽 SP / SB / SD search term report 到此处，或点击选择文件
               </div>
-              <div style={{ fontSize: 10, color: "var(--t3)" }}>
+              <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>
                 支持 .xlsx / .xls / .csv / .tsv，≤ 20MB · 广告类型自动识别
               </div>
               <div style={{ marginTop: 10 }}>
@@ -363,14 +363,14 @@ export default function AdAuditPanel() {
             borderRadius: "var(--r)",
           }}
         >
-          <div style={{ fontSize: 11, color: "var(--t2)", marginBottom: 4 }}>
+          <div style={{ fontSize: "var(--fs-11)", color: "var(--t2)", marginBottom: 4 }}>
             <span className="spin" style={{ marginRight: 6 }} />
             {state.kind === "starting"
               ? "正在启动…"
               : state.data?.progress || "分析中…（预计 3-8 分钟）"}
           </div>
           {state.kind === "polling" && state.data?.started_at && (
-            <div style={{ fontSize: 10, color: "var(--t3)" }}>
+            <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>
               启动时间：{new Date(state.data.started_at).toLocaleTimeString("zh-CN")}
             </div>
           )}
@@ -405,7 +405,7 @@ export default function AdAuditPanel() {
             border: "1px solid rgba(248,113,113,.25)",
             borderRadius: "var(--r)",
             color: "var(--red)",
-            fontSize: 11,
+            fontSize: "var(--fs-11)",
           }}
         >
           ✗ {state.error}
@@ -476,7 +476,7 @@ function UploadedForm({
             background: "rgba(59,130,246,.08)",
             border: "1px solid rgba(59,130,246,.25)",
             borderRadius: "var(--r)",
-            fontSize: 10,
+            fontSize: "var(--fs-10)",
             color: "var(--t2)",
           }}
         >
@@ -486,7 +486,7 @@ function UploadedForm({
         </div>
       )}
 
-      <div style={{ fontSize: 11, color: "var(--t2)", marginBottom: 6 }}>📝 任务上下文</div>
+      <div style={{ fontSize: "var(--fs-11)", color: "var(--t2)", marginBottom: 6 }}>📝 任务上下文</div>
 
       {/* Goal selector */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, marginBottom: 10 }}>
@@ -511,24 +511,24 @@ function UploadedForm({
                 checked={goal === g.value}
                 onChange={() => setGoal(g.value)}
               />
-              <span style={{ fontSize: 11, color: "var(--t)" }}>{g.label}</span>
+              <span style={{ fontSize: "var(--fs-11)", color: "var(--t)" }}>{g.label}</span>
             </div>
-            <span style={{ fontSize: 10, color: "var(--t3)", paddingLeft: 20 }}>{g.hint}</span>
+            <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)", paddingLeft: 20 }}>{g.hint}</span>
           </label>
         ))}
       </div>
 
       {/* Output mode selector */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-        <span style={{ fontSize: 10, color: "var(--t3)" }}>输出模式</span>
+        <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>输出模式</span>
         <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
           <input type="radio" name="ad-output-mode" checked={outputMode === "report"} onChange={() => setOutputMode("report")} />
-          <span style={{ fontSize: 11, color: "var(--t)" }}>分析报告</span>
+          <span style={{ fontSize: "var(--fs-11)", color: "var(--t)" }}>分析报告</span>
         </label>
         <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
           <input type="radio" name="ad-output-mode" checked={outputMode === "xlsx_plan"} onChange={() => setOutputMode("xlsx_plan")} />
-          <span style={{ fontSize: 11, color: "var(--t)" }}>📊 8-Sheet 优化方案 xlsx</span>
-          <span className="tag" style={{ fontSize: 8, background: "var(--acc)", color: "#fff", marginLeft: 4 }}>NEW</span>
+          <span style={{ fontSize: "var(--fs-11)", color: "var(--t)" }}>📊 8-Sheet 优化方案 xlsx</span>
+          <span className="tag" style={{ fontSize: "var(--fs-8)", background: "var(--acc)", color: "#fff", marginLeft: 4 }}>NEW</span>
         </label>
       </div>
 
@@ -577,7 +577,7 @@ function UploadedForm({
           }
         />
         <button className="tbtn" onClick={onStart}>🚀 开始分析</button>
-        <span style={{ fontSize: 10, color: "var(--t3)" }}>预计 3-8 分钟</span>
+        <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>预计 3-8 分钟</span>
       </div>
     </>
   );
@@ -613,7 +613,7 @@ function SourcesPanel({
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
         <span className="tag tg">已上传 {sources.length} 份</span>
-        <span style={{ fontSize: 10, color: "var(--t3)" }}>
+        <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>
           站点 {marketplace} · 同一 ASIN 的多个活动可分别上传（Auto / Exact / Phrase / SP / SB / SD）
         </span>
         <button
@@ -685,7 +685,7 @@ function SourcesPanel({
             <>➕ 添加另一份报告</>
           )}
         </button>
-        <span style={{ marginLeft: 8, fontSize: 10, color: "var(--t3)" }}>
+        <span style={{ marginLeft: 8, fontSize: "var(--fs-10)", color: "var(--t3)" }}>
           留空活动名时默认使用文件名；建议填写为 "SP-Exact-Core" / "SP-Auto" 等便于对比
         </span>
       </div>
@@ -715,21 +715,21 @@ function SourceRow({
 
   return (
     <tr>
-      <td style={{ fontSize: 10, color: "var(--t3)" }}>{idx}</td>
-      <td style={{ fontSize: 10 }}>
+      <td style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>{idx}</td>
+      <td style={{ fontSize: "var(--fs-10)" }}>
         <div>{src.file_name}</div>
-        <div style={{ fontSize: 9, color: "var(--t3)" }}>
+        <div style={{ fontSize: "var(--fs-9)", color: "var(--t3)" }}>
           {src.date_range || "日期未识别"}
         </div>
       </td>
       <td>
         <span className="tag ta">{src.ad_type || "?"}</span>
       </td>
-      <td style={{ fontSize: 10 }}>{src.row_count}</td>
+      <td style={{ fontSize: "var(--fs-10)" }}>{src.row_count}</td>
       <td>
         <input
           className="inp"
-          style={{ width: "100%", fontSize: 10 }}
+          style={{ width: "100%", fontSize: "var(--fs-10)" }}
           value={nameDraft}
           onChange={(e) => setNameDraft(e.target.value)}
           onBlur={() => {
@@ -745,7 +745,7 @@ function SourceRow({
           type="number"
           min={0}
           step={1}
-          style={{ width: "100%", fontSize: 10 }}
+          style={{ width: "100%", fontSize: "var(--fs-10)" }}
           value={budgetDraft}
           onChange={(e) => setBudgetDraft(e.target.value)}
           onBlur={() => {
@@ -793,7 +793,7 @@ function HistoryList({
       }}
     >
       {items.length === 0 ? (
-        <div style={{ padding: 12, fontSize: 10, color: "var(--t3)" }}>暂无历史任务</div>
+        <div style={{ padding: 12, fontSize: "var(--fs-10)", color: "var(--t3)" }}>暂无历史任务</div>
       ) : (
         <>
           <div
@@ -808,7 +808,7 @@ function HistoryList({
               zIndex: 1,
             }}
           >
-            <span style={{ fontSize: 10, color: "var(--t3)" }}>
+            <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>
               共 {items.length} 条，失败 {items.filter((h) => h.status === "failed" || h.status === "cancelled").length} 条
             </span>
             <button
@@ -832,11 +832,11 @@ function HistoryList({
             <tbody>
               {items.map((h) => (
                 <tr key={h.job_id}>
-                  <td style={{ fontSize: 10 }}>{h.file_name}</td>
+                  <td style={{ fontSize: "var(--fs-10)" }}>{h.file_name}</td>
                   <td>{h.ad_type || "—"}</td>
-                  <td style={{ fontSize: 10, color: "var(--t3)" }}>{h.goal || "—"}</td>
+                  <td style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>{h.goal || "—"}</td>
                   <td><AdStatusTag status={h.status} /></td>
-                  <td style={{ fontSize: 10, color: "var(--t3)" }}>
+                  <td style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>
                     {new Date(h.created_at).toLocaleString("zh-CN")}
                   </td>
                   <td>
@@ -937,11 +937,11 @@ function AdResultPanel({ data, onReset }: { data: AdAuditFull; onReset: () => vo
         }}
       >
         <span className="tag tg">✓ 完成</span>
-        <span style={{ fontSize: 11, color: "var(--t)" }}>
+        <span style={{ fontSize: "var(--fs-11)", color: "var(--t)" }}>
           {data.file_name} · {data.ad_type} · {data.marketplace}
         </span>
         {data.finished_at && (
-          <span style={{ fontSize: 10, color: "var(--t3)" }}>
+          <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>
             · {new Date(data.finished_at).toLocaleString("zh-CN")}
           </span>
         )}
@@ -972,7 +972,7 @@ function AdResultPanel({ data, onReset }: { data: AdAuditFull; onReset: () => vo
           <div
             style={{
               padding: 14,
-              fontSize: 11,
+              fontSize: "var(--fs-11)",
               color: "var(--t2)",
               background: "rgba(34,197,94,.06)",
               border: "1px solid rgba(34,197,94,.25)",
@@ -984,7 +984,7 @@ function AdResultPanel({ data, onReset }: { data: AdAuditFull; onReset: () => vo
           <div
             style={{
               padding: 10,
-              fontSize: 10,
+              fontSize: "var(--fs-10)",
               color: "var(--t3)",
               background: "var(--bg3)",
               border: "1px solid var(--b)",
@@ -1031,7 +1031,7 @@ function AdResultPanel({ data, onReset }: { data: AdAuditFull; onReset: () => vo
                 background: "var(--bg3)",
                 border: "1px solid var(--b)",
                 borderRadius: "var(--r)",
-                fontSize: 10,
+                fontSize: "var(--fs-10)",
                 color: "var(--t3)",
               }}
             >
@@ -1043,13 +1043,13 @@ function AdResultPanel({ data, onReset }: { data: AdAuditFull; onReset: () => vo
 
       {data.raw_md && (
         <details style={{ marginTop: 14 }}>
-          <summary style={{ fontSize: 10, color: "var(--t3)", cursor: "pointer" }}>查看原始 Markdown</summary>
+          <summary style={{ fontSize: "var(--fs-10)", color: "var(--t3)", cursor: "pointer" }}>查看原始 Markdown</summary>
           <pre
             style={{
               marginTop: 6,
               maxHeight: 500,
               overflow: "auto",
-              fontSize: 10,
+              fontSize: "var(--fs-10)",
               padding: 10,
               background: "var(--bg3)",
               border: "1px solid var(--b)",
@@ -1065,7 +1065,7 @@ function AdResultPanel({ data, onReset }: { data: AdAuditFull; onReset: () => vo
 
 function SectionHeader({ icon, text }: { icon: string; text: string }) {
   return (
-    <div style={{ fontSize: 11, color: "var(--t)", margin: "12px 0 6px", display: "flex", gap: 6 }}>
+    <div style={{ fontSize: "var(--fs-11)", color: "var(--t)", margin: "12px 0 6px", display: "flex", gap: 6 }}>
       <span>{icon}</span><span>{text}</span>
     </div>
   );
@@ -1084,7 +1084,7 @@ function AdOverview({ ov, verdict }: {
             padding: 8,
             background: "rgba(34,197,94,.06)",
             borderLeft: "3px solid var(--acc)",
-            fontSize: 11,
+            fontSize: "var(--fs-11)",
             color: "var(--t)",
             marginBottom: 8,
             borderRadius: 3,
@@ -1137,26 +1137,26 @@ function AdCrossCampaignPanel({ items }: { items: AdCrossCampaignInsight[] }) {
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 12 }}>{meta.icon}</span>
-                <span style={{ fontSize: 10, color: meta.color, fontWeight: 600 }}>{meta.label}</span>
+                <span style={{ fontSize: "var(--fs-12)" }}>{meta.icon}</span>
+                <span style={{ fontSize: "var(--fs-10)", color: meta.color, fontWeight: 600 }}>{meta.label}</span>
                 {it.from_campaign && (
-                  <span style={{ fontSize: 10, color: "var(--t3)" }}>
+                  <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>
                     {it.from_campaign}
                     {it.to_campaign && ` → ${it.to_campaign}`}
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: 11, color: "var(--t)", marginBottom: 4 }}>{it.summary}</div>
+              <div style={{ fontSize: "var(--fs-11)", color: "var(--t)", marginBottom: 4 }}>{it.summary}</div>
               {it.detail && (
-                <div style={{ fontSize: 10, color: "var(--t2)", marginBottom: 4 }}>{it.detail}</div>
+                <div style={{ fontSize: "var(--fs-10)", color: "var(--t2)", marginBottom: 4 }}>{it.detail}</div>
               )}
               {it.evidence && (
-                <div style={{ fontSize: 10, color: "var(--t3)" }}>
+                <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>
                   <b>证据：</b>{it.evidence}
                 </div>
               )}
               {it.suggested_action && (
-                <div style={{ fontSize: 10, color: "var(--acc)", marginTop: 3 }}>
+                <div style={{ fontSize: "var(--fs-10)", color: "var(--acc)", marginTop: 3 }}>
                   <b>建议：</b>{it.suggested_action}
                 </div>
               )}
@@ -1186,8 +1186,8 @@ function AdActionTable({ items }: { items: NonNullable<AdAuditStructured["action
             <tr key={i}>
               <td><span className={"tag prio-" + String(a.level).toLowerCase()}>{a.level}</span></td>
               <td>{a.action}</td>
-              <td style={{ fontSize: 10, color: "var(--t3)" }}>{a.evidence}</td>
-              <td style={{ fontSize: 10 }}>{a.expected_impact}</td>
+              <td style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>{a.evidence}</td>
+              <td style={{ fontSize: "var(--fs-10)" }}>{a.expected_impact}</td>
             </tr>
           ))}
         </tbody>
@@ -1216,14 +1216,14 @@ function AdProtectedTable({ items }: { items: NonNullable<AdAuditStructured["pro
         <tbody>
           {items.map((p, i) => (
             <tr key={i}>
-              <td style={{ fontFamily: "monospace", fontSize: 10 }}>{p.keyword}</td>
+              <td style={{ fontFamily: "monospace", fontSize: "var(--fs-10)" }}>{p.keyword}</td>
               <td><span className={"cell-" + p.status}>{p.status}</span></td>
               <td>{p.impressions ?? "—"}</td>
               <td>{p.clicks ?? "—"}</td>
               <td>{p.spend ?? "—"}</td>
               <td>{p.orders ?? "—"}</td>
               <td>{p.acos ?? "—"}</td>
-              <td style={{ fontSize: 10, color: "var(--t3)" }}>{p.note}</td>
+              <td style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>{p.note}</td>
             </tr>
           ))}
         </tbody>
@@ -1257,7 +1257,7 @@ function AdKwTable({ title, items }: {
         <tbody>
           {items.map((k, i) => (
             <tr key={i}>
-              <td style={{ fontFamily: "monospace", fontSize: 10 }}>{k.keyword}</td>
+              <td style={{ fontFamily: "monospace", fontSize: "var(--fs-10)" }}>{k.keyword}</td>
               <td>{k.match_type}</td>
               <td>{k.impressions}</td>
               <td>{k.clicks}</td>
@@ -1266,7 +1266,7 @@ function AdKwTable({ title, items }: {
               <td>{k.acos}</td>
               <td><span className={"act-" + String(k.action || "")}>{k.action}</span></td>
               <td>{k.suggested_bid}</td>
-              <td style={{ fontSize: 10, color: "var(--t3)" }}>{k.reason}</td>
+              <td style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>{k.reason}</td>
             </tr>
           ))}
         </tbody>
@@ -1293,12 +1293,12 @@ function AdNewKwTable({ items }: { items: NonNullable<AdAuditStructured["new_key
         <tbody>
           {items.map((k, i) => (
             <tr key={i}>
-              <td style={{ fontFamily: "monospace", fontSize: 10 }}>{k.keyword}</td>
-              <td style={{ fontSize: 10, color: "var(--t3)" }}>{k.source_search_term}</td>
+              <td style={{ fontFamily: "monospace", fontSize: "var(--fs-10)" }}>{k.keyword}</td>
+              <td style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>{k.source_search_term}</td>
               <td>{k.impressions}</td>
               <td>{k.orders}</td>
               <td>{k.suggested_bid}</td>
-              <td style={{ fontSize: 10, color: "var(--t3)" }}>{k.reason}</td>
+              <td style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>{k.reason}</td>
             </tr>
           ))}
         </tbody>
@@ -1322,13 +1322,13 @@ function AdNegTable({ items }: { items: NonNullable<AdAuditStructured["negative_
         <tbody>
           {items.map((n, i) => (
             <tr key={i}>
-              <td style={{ fontFamily: "monospace", fontSize: 10 }}>{n.term}</td>
+              <td style={{ fontFamily: "monospace", fontSize: "var(--fs-10)" }}>{n.term}</td>
               <td>
                 <span className={n.type === "immediate" ? "act-cut" : "act-watch"}>
                   {n.type === "immediate" ? "立即否定" : "观察后否定"}
                 </span>
               </td>
-              <td style={{ fontSize: 10, color: "var(--t3)" }}>{n.reason}</td>
+              <td style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>{n.reason}</td>
             </tr>
           ))}
         </tbody>
@@ -1366,7 +1366,7 @@ function AdPlacementTable({ items }: { items: NonNullable<AdAuditStructured["pla
               <td>{p.acos}</td>
               <td>{p.ctr}</td>
               <td>{p.cvr}</td>
-              <td style={{ fontSize: 10, color: "var(--t2)" }}>{p.action}</td>
+              <td style={{ fontSize: "var(--fs-10)", color: "var(--t2)" }}>{p.action}</td>
             </tr>
           ))}
         </tbody>

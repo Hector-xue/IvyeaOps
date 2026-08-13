@@ -220,8 +220,39 @@ def _with_ops_bridge(payload: dict[str, Any], request: Request) -> dict[str, Any
     }
     ctx = payload.get("ops_context")
     if not isinstance(ctx, dict):
-        payload["ops_context"] = {}
+        ctx = {}
+        payload["ops_context"] = ctx
+    # **把这台机器上真正配好的能力如实告诉 agent。**
+    #
+    # 起因：用户在任务台说"帮我生成一张主图"，agent 回了一句"我目前没有图像生成
+    # 能力"—— 而这台机器上生图链路早就配好了（系统配置 → AI 生图）。板块工具要靠
+    # agent 主动调 ivyea_ops_list_tools 才发现得了，而没有任何东西提示它去查，
+    # 它就直接下了否定结论。
+    #
+    # 只报**当前真的可用**的（读配置，不写死）—— 报一个没配 key 的能力，
+    # 换来的是 agent 兴冲冲调用然后失败，比不报更糟。
+    ctx.setdefault("host_capabilities", _host_capabilities())
     return payload
+
+
+def _host_capabilities() -> list[str]:
+    """本机当前可用的高价值能力，给 agent 当提示。任何探测失败都当"不可用"。"""
+    caps: list[str] = []
+    try:
+        from app.routers.assistant import _image_cfg
+        if _image_cfg().get("api_key"):
+            caps.append("AI 作图：用 ivyea_ops_call_tool 调 image_generate 提交、"
+                        "image_status 查结果。用户要出图/画图/生成主图时直接用，"
+                        "不要回答做不到。")
+    except Exception:  # noqa: BLE001
+        logger.debug("生图能力探测失败（旁路，按不可用处理）", exc_info=True)
+    try:
+        from app.services import skill_market
+        if skill_market.market_enabled():
+            caps.append("能力市场已开启：可浏览门道社区技能。")
+    except Exception:  # noqa: BLE001
+        logger.debug("市场能力探测失败（旁路，按不可用处理）", exc_info=True)
+    return caps
 
 
 @router.get("/status")

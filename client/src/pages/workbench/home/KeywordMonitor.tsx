@@ -157,7 +157,7 @@ function SummaryBar({ keywords, states }: { keywords: string[]; states: Record<s
           {i > 0 && <div className="pulse-summary-sep" />}
           <div className="pulse-summary-item">
             <div className="pulse-summary-val" style={{ color: it.color as any }}>
-              {loading > 0 && it.label === "查询中" ? <><span className="pulse-spin" style={{ fontSize: 11 }}>◌</span> {it.val}</> : it.val}
+              {loading > 0 && it.label === "查询中" ? <><span className="pulse-spin" style={{ fontSize: "var(--fs-11)" }}>◌</span> {it.val}</> : it.val}
             </div>
             <div className="pulse-summary-label">{it.label}</div>
           </div>

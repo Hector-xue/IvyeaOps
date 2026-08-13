@@ -40,16 +40,16 @@ export default function LingXingAudit() {
   return (
     <div>
       <div className="card" style={{ padding: 12, marginBottom: 10, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11, color: "var(--t3)" }}>全部调用审计（读/写/探针）· 每 8 秒自动刷新</span>
+        <span style={{ fontSize: "var(--fs-11)", color: "var(--t3)" }}>全部调用审计（读/写/探针）· 每 8 秒自动刷新</span>
         {["ok", "denied", "blocked", "error"].map((s) => (
           <span key={s} onClick={() => setFilter(filter === s ? "" : s)} style={{
-            fontSize: 11, cursor: "pointer", padding: "2px 8px", borderRadius: 10,
+            fontSize: "var(--fs-11)", cursor: "pointer", padding: "2px 8px", borderRadius: 10,
             background: filter === s ? "var(--bg2)" : "transparent", border: "1px solid var(--b)",
             color: STATUS_COLOR[s] || "var(--t2)",
           }}>{s} {counts[s] || 0}</span>
         ))}
         <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-          {filter && <span style={{ fontSize: 10, color: "var(--t3)" }}>筛选: {filter}（点击取消）</span>}
+          {filter && <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>筛选: {filter}（点击取消）</span>}
           <Btn onClick={load}>刷新</Btn>
         </span>
       </div>

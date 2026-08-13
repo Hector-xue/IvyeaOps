@@ -107,7 +107,7 @@ function Stat({ label, value, tone }: { label: string; value: string | number; t
 
 function MiniAlert({ kind, children }: { kind: "ok" | "warn" | "bad" | "info"; children: React.ReactNode }) {
   const color = kind === "ok" ? "var(--acc)" : kind === "bad" ? "var(--red)" : kind === "warn" ? "var(--amber)" : "var(--blue)";
-  return <div style={{ border: `1px solid ${color}55`, background: `${color}10`, color, padding: "8px 10px", borderRadius: 4, fontSize: 10, lineHeight: 1.6 }}>{children}</div>;
+  return <div style={{ border: `1px solid ${color}55`, background: `${color}10`, color, padding: "8px 10px", borderRadius: 4, fontSize: "var(--fs-10)", lineHeight: 1.6 }}>{children}</div>;
 }
 
 function ResultCard({ item, onOpen }: { item: BrainSearchItem; onOpen: (slug: string) => void }) {
@@ -115,9 +115,9 @@ function ResultCard({ item, onOpen }: { item: BrainSearchItem; onOpen: (slug: st
     <div className="card" style={{ padding: "10px 12px", cursor: "pointer" }} onClick={() => onOpen(item.slug)}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
         <span className="tag tg">{Number(item.score || 0).toFixed(3)}</span>
-        <span style={{ color: "var(--t)", fontSize: 12 }}>{item.slug}</span>
+        <span style={{ color: "var(--t)", fontSize: "var(--fs-12)" }}>{item.slug}</span>
       </div>
-      <pre style={{ whiteSpace: "pre-wrap", color: "var(--t2)", fontSize: 10.5, lineHeight: 1.6, fontFamily: "var(--font)" }}>{item.snippet}</pre>
+      <pre style={{ whiteSpace: "pre-wrap", color: "var(--t2)", fontSize: "var(--fs-105)", lineHeight: 1.6, fontFamily: "var(--font)" }}>{item.snippet}</pre>
     </div>
   );
 }
@@ -594,7 +594,7 @@ export default function Brain() {
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
         <span className="tag tg">IVYEA KNOWLEDGE</span>
-        {!isMobile && <span style={{ color: "var(--t2)", fontSize: 11 }}>{tab === "governance" ? "官方来源审核、覆盖、时效、质量和冲突治理" : "对话 / 搜索 / 上传均由 IvyeaAgent 内置知识库承载；仍有旧 ~/brain 内容可在右下角 IvyeaAgent 一键迁移进来"}</span>}
+        {!isMobile && <span style={{ color: "var(--t2)", fontSize: "var(--fs-11)" }}>{tab === "governance" ? "官方来源审核、覆盖、时效、质量和冲突治理" : "对话 / 搜索 / 上传均由 IvyeaAgent 内置知识库承载；仍有旧 ~/brain 内容可在右下角 IvyeaAgent 一键迁移进来"}</span>}
         {tab !== "governance" && <button className="tbtn" onClick={() => { loadOverview(); loadFiles(); loadUploads(); loadChat(); }} style={{ marginLeft: "auto" }}>刷新</button>}
       </div>
 
@@ -660,7 +660,7 @@ export default function Brain() {
                 <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--b2)" }} />
               </div>
               <div style={{ display: "flex", alignItems: "center", padding: "2px 16px 10px", flexShrink: 0, borderBottom: "1px solid var(--b)" }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: "var(--t)", flex: 1 }}>会话列表</span>
+                <span style={{ fontSize: "var(--fs-14)", fontWeight: 600, color: "var(--t)", flex: 1 }}>会话列表</span>
                 <button className="tbtn" onClick={newChat} disabled={sending} style={{ marginRight: 8 }}>＋ 新建</button>
                 <button onClick={() => setSessionSheetOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", fontSize: 18, padding: "0 2px", lineHeight: 1 }}>✕</button>
               </div>
@@ -675,8 +675,8 @@ export default function Brain() {
                       display: "flex", alignItems: "center", gap: 10, transition: "background .12s",
                     }}
                   >
-                    <span style={{ flex: 1, fontSize: 13, color: s.id === activeSession?.id ? "var(--acc)" : "var(--t)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: s.id === activeSession?.id ? 600 : 400 }}>{s.title || "新对话"}</span>
-                    <button onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", fontSize: 11, padding: "2px 6px", flexShrink: 0 }}>删除</button>
+                    <span style={{ flex: 1, fontSize: "var(--fs-13)", color: s.id === activeSession?.id ? "var(--acc)" : "var(--t)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: s.id === activeSession?.id ? 600 : 400 }}>{s.title || "新对话"}</span>
+                    <button onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", fontSize: "var(--fs-11)", padding: "2px 6px", flexShrink: 0 }}>删除</button>
                   </div>
                 ))}
               </div>
@@ -691,18 +691,18 @@ export default function Brain() {
                   <div className="ct" style={{ margin: 0, flex: 1 }}>SESSIONS</div>
                   <button className="tbtn" onClick={newChat} disabled={sending}>新建</button>
                 </div>
-                <input className="inp" value={sessionFilter} onChange={(e) => setSessionFilter(e.target.value)} placeholder="搜索会话..." style={{ marginBottom: 8, padding: "4px 8px", fontSize: 10 }} />
+                <input className="inp" value={sessionFilter} onChange={(e) => setSessionFilter(e.target.value)} placeholder="搜索会话..." style={{ marginBottom: 8, padding: "4px 8px", fontSize: "var(--fs-10)" }} />
                 <div style={{ display: "grid", gap: 4 }}>
                   {sessions.filter((s) => !sessionFilter.trim() || (s.title || "新对话").toLowerCase().includes(sessionFilter.trim().toLowerCase())).map((s) => (
                     <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 2, border: "1px solid " + (s.id === activeSession?.id ? "var(--acc)" : "var(--b)"), borderRadius: 5, overflow: "hidden" }}>
-                      <button className="tbtn" onClick={() => loadSession(s.id, s.title)} title={s.title || "新对话"} style={{ flex: 1, minWidth: 0, textAlign: "left", border: "none", color: s.id === activeSession?.id ? "var(--acc)" : "var(--t2)", padding: "5px 8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10 }}>
+                      <button className="tbtn" onClick={() => loadSession(s.id, s.title)} title={s.title || "新对话"} style={{ flex: 1, minWidth: 0, textAlign: "left", border: "none", color: s.id === activeSession?.id ? "var(--acc)" : "var(--t2)", padding: "5px 8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "var(--fs-10)" }}>
                         {s.title || "新对话"}
                       </button>
-                      <button onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }} title="删除会话" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", fontSize: 11, padding: "2px 6px", flexShrink: 0 }}>✕</button>
+                      <button onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }} title="删除会话" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--t3)", fontSize: "var(--fs-11)", padding: "2px 6px", flexShrink: 0 }}>✕</button>
                     </div>
                   ))}
                   {sessions.length > 0 && sessions.filter((s) => !sessionFilter.trim() || (s.title || "新对话").toLowerCase().includes(sessionFilter.trim().toLowerCase())).length === 0 && (
-                    <div style={{ color: "var(--t3)", fontSize: 10, padding: "4px 2px" }}>无匹配会话</div>
+                    <div style={{ color: "var(--t3)", fontSize: "var(--fs-10)", padding: "4px 2px" }}>无匹配会话</div>
                   )}
                 </div>
               </div>
@@ -711,7 +711,7 @@ export default function Brain() {
             {/* Chat panel */}
             <div className="card" style={{ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderBottom: "1px solid var(--b)", flexWrap: "wrap", flexShrink: 0 }}>
-                <span style={{ color: "var(--t)", fontSize: 12, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{activeSession?.title || "知识库对话"}</span>
+                <span style={{ color: "var(--t)", fontSize: "var(--fs-12)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{activeSession?.title || "知识库对话"}</span>
                 {isMobile && (
                   <button className="tbtn" onClick={() => setSessionSheetOpen(true)}>≡ 会话</button>
                 )}
@@ -720,10 +720,10 @@ export default function Brain() {
               <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 12, display: "grid", gap: 10, alignContent: "start" }}>
                 {!messages.length && (
                   <div style={{ display: "grid", gap: 10 }}>
-                    <div style={{ color: "var(--t3)", fontSize: 12 }}>直接提问，IvyeaAgent 会结合内置知识库作答。这里和右下角浮标是同一套对话历史，可互相续聊。或从下面的常用问题开始：</div>
+                    <div style={{ color: "var(--t3)", fontSize: "var(--fs-12)" }}>直接提问，IvyeaAgent 会结合内置知识库作答。这里和右下角浮标是同一套对话历史，可互相续聊。或从下面的常用问题开始：</div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                       {QUICK_PROMPTS.map((p, i) => (
-                        <button key={i} className="tbtn" onClick={() => quickAsk(p)} disabled={sending} style={{ textAlign: "left", padding: "6px 10px", fontSize: 11, maxWidth: 360, whiteSpace: "normal", lineHeight: 1.5 }}>
+                        <button key={i} className="tbtn" onClick={() => quickAsk(p)} disabled={sending} style={{ textAlign: "left", padding: "6px 10px", fontSize: "var(--fs-11)", maxWidth: 360, whiteSpace: "normal", lineHeight: 1.5 }}>
                           {p}
                         </button>
                       ))}
@@ -732,15 +732,15 @@ export default function Brain() {
                 )}
                 {messages.map((m) => (
                   <div key={m.id} style={{ justifySelf: m.role === "user" ? "end" : "start", maxWidth: m.role === "user" ? "88%" : "94%" }}>
-                    <div style={{ border: "1px solid var(--b)", background: m.role === "user" ? "rgba(47,129,247,.13)" : "rgba(255,255,255,.03)", color: "var(--t)", padding: "9px 11px", borderRadius: 8, fontSize: 12, lineHeight: 1.65 }}>
+                    <div style={{ border: "1px solid var(--b)", background: m.role === "user" ? "rgba(47,129,247,.13)" : "rgba(255,255,255,.03)", color: "var(--t)", padding: "9px 11px", borderRadius: 8, fontSize: "var(--fs-12)", lineHeight: 1.65 }}>
                       {m.role === "assistant"
                         ? (m.content ? <BrainMarkdown>{m.content}</BrainMarkdown> : <span style={{ color: "var(--t3)" }}>{sending ? (liveStatus || "生成中…") : "（空回答）"}</span>)
                         : <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>}
                     </div>
                     {m.role === "assistant" && m.content && !m.id.startsWith("local-") && (
                       <div style={{ display: "flex", gap: 6, marginTop: 5, flexWrap: "wrap" }}>
-                        <button className="tbtn" onClick={() => copyMessage(m)} style={{ padding: "1px 8px", fontSize: 10 }}>{copiedId === m.id ? "已复制" : "复制"}</button>
-                        <button className="tbtn" onClick={() => saveAsKnowledge(m)} disabled={savingKb === m.id} style={{ padding: "1px 8px", fontSize: 10 }}>{savingKb === m.id ? "存入中..." : "存为知识"}</button>
+                        <button className="tbtn" onClick={() => copyMessage(m)} style={{ padding: "1px 8px", fontSize: "var(--fs-10)" }}>{copiedId === m.id ? "已复制" : "复制"}</button>
+                        <button className="tbtn" onClick={() => saveAsKnowledge(m)} disabled={savingKb === m.id} style={{ padding: "1px 8px", fontSize: "var(--fs-10)" }}>{savingKb === m.id ? "存入中..." : "存为知识"}</button>
                       </div>
                     )}
                   </div>
@@ -769,7 +769,7 @@ export default function Brain() {
                 <MiniAlert kind="info">直接粘贴正文即可。后端会自动识别标题、目录、标签和摘要，目录不存在会在知识库根目录下安全新建；前端不传目录，避免路径误写。</MiniAlert>
                 <textarea className="inp" value={pasteText} onChange={(e) => setPasteText(e.target.value)} placeholder="粘贴运营笔记、售后模板、供应商信息、广告复盘等正文..." style={{ minHeight: 260, resize: "vertical", lineHeight: 1.65 }} />
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <span style={{ color: "var(--t3)", fontSize: 10 }}>{pasteText.trim().length.toLocaleString()} chars</span>
+                  <span style={{ color: "var(--t3)", fontSize: "var(--fs-10)" }}>{pasteText.trim().length.toLocaleString()} chars</span>
                   <button className="tbtn" onClick={doIngestText} disabled={saving || !pasteText.trim()}>{saving ? "分析入库中..." : "自动分析并入库"}</button>
                 </div>
               </div>
@@ -797,18 +797,18 @@ export default function Brain() {
                 <MiniAlert kind={uploadResult.import_status === "ok" ? "ok" : "warn"}>保存路径：{uploadResult.saved_path}<br />导入状态：{uploadResult.import_status}</MiniAlert>
                 {uploadResult.analysis && (
                   <div className="card" style={{ padding: 10, background: "rgba(255,255,255,.025)" }}>
-                    <div style={{ color: "var(--t)", fontSize: 12, marginBottom: 6 }}>{uploadResult.analysis.title}</div>
-                    <div style={{ color: "var(--t2)", fontSize: 10, lineHeight: 1.7 }}>
+                    <div style={{ color: "var(--t)", fontSize: "var(--fs-12)", marginBottom: 6 }}>{uploadResult.analysis.title}</div>
+                    <div style={{ color: "var(--t2)", fontSize: "var(--fs-10)", lineHeight: 1.7 }}>
                       目录：{uploadResult.analysis.directory} · 类型：{uploadResult.analysis.content_type} · 来源：{uploadResult.analysis.source} · 置信度：{Math.round((uploadResult.analysis.confidence || 0) * 100)}%
                     </div>
                     <div style={{ marginTop: 6, display: "flex", gap: 5, flexWrap: "wrap" }}>{uploadResult.analysis.tags?.map((tag) => <span key={tag} className="tag tg">{tag}</span>)}</div>
-                    <div style={{ color: "var(--t2)", fontSize: 11, lineHeight: 1.7, marginTop: 8 }}>{uploadResult.analysis.summary}</div>
+                    <div style={{ color: "var(--t2)", fontSize: "var(--fs-11)", lineHeight: 1.7, marginTop: 8 }}>{uploadResult.analysis.summary}</div>
                   </div>
                 )}
                 {(uploadResult.warnings?.length ?? 0) > 0 && <MiniAlert kind="warn">{uploadResult.warnings!.join("\n")}</MiniAlert>}
-                {uploadResult.markdown_preview && <pre style={{ whiteSpace: "pre-wrap", color: "var(--t2)", fontSize: 11, lineHeight: 1.7, maxHeight: 360, overflow: "auto" }}>{uploadResult.markdown_preview}</pre>}
+                {uploadResult.markdown_preview && <pre style={{ whiteSpace: "pre-wrap", color: "var(--t2)", fontSize: "var(--fs-11)", lineHeight: 1.7, maxHeight: 360, overflow: "auto" }}>{uploadResult.markdown_preview}</pre>}
               </div>
-            ) : <div style={{ color: "var(--t3)", fontSize: 11 }}>入库后这里显示自动识别结果和 Markdown 预览。</div>}
+            ) : <div style={{ color: "var(--t3)", fontSize: "var(--fs-11)" }}>入库后这里显示自动识别结果和 Markdown 预览。</div>}
             <div style={{ marginTop: 12, display: "grid", gap: 5 }}>
               {uploadHistory.slice(0, 8).map((u) => <button key={u.id} className="tbtn" onClick={() => openFile(u.saved_path)} style={{ textAlign: "left" }}>{u.saved_path} <span style={{ color: "var(--t3)" }}>· {fmtBytes(u.size)} · {u.import_status}</span></button>)}
             </div>
@@ -836,7 +836,7 @@ export default function Brain() {
                     <tr><td>对话 / 检索模型</td><td>{chatStatus?.model || "-"}</td></tr>
                     <tr><td>治理</td><td><a onClick={() => setTab("governance")} style={{ color: "var(--acc)", cursor: "pointer" }}>治理中心 →</a></td></tr>
                   </tbody></table></div>
-                  <div className="card"><div className="ct">按分类</div>{cats.length ? <table className="tbl"><tbody>{cats.map(([k, v]) => <tr key={k}><td>{k}</td><td>{v}</td></tr>)}</tbody></table> : <div style={{ color: "var(--t3)", fontSize: 11 }}>暂无卡片</div>}</div>
+                  <div className="card"><div className="ct">按分类</div>{cats.length ? <table className="tbl"><tbody>{cats.map(([k, v]) => <tr key={k}><td>{k}</td><td>{v}</td></tr>)}</tbody></table> : <div style={{ color: "var(--t3)", fontSize: "var(--fs-11)" }}>暂无卡片</div>}</div>
                 </div>
               </>
             );
@@ -854,8 +854,8 @@ export default function Brain() {
           </div></div>
           <div style={{ display: "grid", gap: 10 }}>
             {results.map((r, i) => <ResultCard key={`${r.slug}-${i}`} item={r} onOpen={openSlug} />)}
-            {!results.length && rawResult && <pre className="card" style={{ whiteSpace: "pre-wrap", color: "var(--t2)", fontSize: 11, lineHeight: 1.7 }}>{rawResult}</pre>}
-            {!results.length && !rawResult && <div className="card" style={{ color: "var(--t3)", fontSize: 11 }}>输入关键词后开始搜索。</div>}
+            {!results.length && rawResult && <pre className="card" style={{ whiteSpace: "pre-wrap", color: "var(--t2)", fontSize: "var(--fs-11)", lineHeight: 1.7 }}>{rawResult}</pre>}
+            {!results.length && !rawResult && <div className="card" style={{ color: "var(--t3)", fontSize: "var(--fs-11)" }}>输入关键词后开始搜索。</div>}
           </div>
         </div>
       )}
@@ -873,7 +873,7 @@ export default function Brain() {
                   <div className="ct" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <span>FILES ({files.length})</span>
                     {cats.length > 1 && (
-                      <button className="tbtn" style={{ fontSize: 9, padding: "2px 6px" }}
+                      <button className="tbtn" style={{ fontSize: "var(--fs-9)", padding: "2px 6px" }}
                         onClick={() => {
                           const next: Record<string, boolean> = {};
                           if (!allCollapsed) cats.forEach((c) => { next[c] = true; });
@@ -891,8 +891,8 @@ export default function Brain() {
                 <div key={cat} style={{ marginBottom: 10 }}>
                   <div
                     onClick={() => setCollapsedCats((m) => ({ ...m, [cat]: !m[cat] }))}
-                    style={{ fontSize: 9, color: "var(--t3)", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 4, paddingBottom: 3, borderBottom: "1px solid var(--b)", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, userSelect: "none" }}>
-                    <span style={{ display: "inline-block", transition: "transform .12s", transform: collapsed ? "rotate(-90deg)" : "none", fontSize: 8 }}>▼</span>
+                    style={{ fontSize: "var(--fs-9)", color: "var(--t3)", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 4, paddingBottom: 3, borderBottom: "1px solid var(--b)", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, userSelect: "none" }}>
+                    <span style={{ display: "inline-block", transition: "transform .12s", transform: collapsed ? "rotate(-90deg)" : "none", fontSize: "var(--fs-8)" }}>▼</span>
                     <span style={{ flex: 1 }}>{cat} ({items.length})</span>
                   </div>
                   {!collapsed && (
@@ -900,10 +900,10 @@ export default function Brain() {
                     {items.map((f) => (
                       <div key={f.path} data-file={f.path + " " + f.name} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                         <button className="tbtn" onClick={() => openFile(f.path)} style={{ flex: 1, textAlign: "left", color: f.path === (selectedFile?.path) ? "var(--acc)" : "var(--t2)", padding: "4px 8px", overflow: "hidden" }}>
-                          <div style={{ fontSize: 10, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.name}</div>
-                          {f.summary && <div style={{ fontSize: 9, color: "var(--t3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.summary}</div>}
+                          <div style={{ fontSize: "var(--fs-10)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.name}</div>
+                          {f.summary && <div style={{ fontSize: "var(--fs-9)", color: "var(--t3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.summary}</div>}
                         </button>
-                        <button className="tbtn" onClick={async () => { if (!await confirm({ title: "删除文件", message: `确定删除 ${f.path}？\n此操作不可恢复。`, confirmText: "删除", danger: true })) return; try { await brainFileDelete(f.path); await loadFiles(); setFlash("已删除"); if (selectedFile?.path === f.path) { setContent(""); setSelectedPath(""); } } catch (e: any) { setErr(errText(e, "删除失败")); } }} style={{ color: "var(--red)", padding: "4px 6px", fontSize: 9, flexShrink: 0 }}>✕</button>
+                        <button className="tbtn" onClick={async () => { if (!await confirm({ title: "删除文件", message: `确定删除 ${f.path}？\n此操作不可恢复。`, confirmText: "删除", danger: true })) return; try { await brainFileDelete(f.path); await loadFiles(); setFlash("已删除"); if (selectedFile?.path === f.path) { setContent(""); setSelectedPath(""); } } catch (e: any) { setErr(errText(e, "删除失败")); } }} style={{ color: "var(--red)", padding: "4px 6px", fontSize: "var(--fs-9)", flexShrink: 0 }}>✕</button>
                       </div>
                     ))}
                   </div>
@@ -917,17 +917,17 @@ export default function Brain() {
           </div>
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderBottom: "1px solid var(--b)", flexWrap: "wrap" }}>
-              <span style={{ color: "var(--t)", fontSize: 11, flex: 1, minWidth: 180 }}>{selectedFile?.path ?? (selectedPath || "未选择文件")}</span>
+              <span style={{ color: "var(--t)", fontSize: "var(--fs-11)", flex: 1, minWidth: 180 }}>{selectedFile?.path ?? (selectedPath || "未选择文件")}</span>
               <button className="tbtn" onClick={() => save(false)} disabled={saving}>{saving ? "保存中..." : "保存"}</button>
               <button className="tbtn" onClick={() => save(true)} disabled={saving}>{saving ? "导入中..." : "保存并导入"}</button>
             </div>
-            <textarea className="inp" value={content} onChange={(e) => setContent(e.target.value)} placeholder="# Markdown 内容" style={{ minHeight: 360, border: "none", borderRadius: 0, resize: "vertical", fontSize: 12, lineHeight: 1.65 }} />
-            <div style={{ borderTop: "1px solid var(--b)", padding: 10 }}><div className="ct">PREVIEW</div><pre style={{ whiteSpace: "pre-wrap", color: "var(--t2)", fontSize: 11, lineHeight: 1.7, maxHeight: 240, overflow: "auto" }}>{content || "暂无内容"}</pre></div>
+            <textarea className="inp" value={content} onChange={(e) => setContent(e.target.value)} placeholder="# Markdown 内容" style={{ minHeight: 360, border: "none", borderRadius: 0, resize: "vertical", fontSize: "var(--fs-12)", lineHeight: 1.65 }} />
+            <div style={{ borderTop: "1px solid var(--b)", padding: 10 }}><div className="ct">PREVIEW</div><pre style={{ whiteSpace: "pre-wrap", color: "var(--t2)", fontSize: "var(--fs-11)", lineHeight: 1.7, maxHeight: 240, overflow: "auto" }}>{content || "暂无内容"}</pre></div>
           </div>
         </div>
       )}
 
-      {tab === "templates" && <div className="g3">{TEMPLATES.map((tpl) => <div key={tpl.key} className="card"><div style={{ fontSize: 13, color: "var(--t)", marginBottom: 8 }}>{tpl.label}</div><div style={{ color: "var(--t3)", fontSize: 10, lineHeight: 1.6, marginBottom: 10 }}>{tpl.path}</div><button className="tbtn" onClick={() => createTemplate(tpl)}>使用模板</button></div>)}</div>}
+      {tab === "templates" && <div className="g3">{TEMPLATES.map((tpl) => <div key={tpl.key} className="card"><div style={{ fontSize: "var(--fs-13)", color: "var(--t)", marginBottom: 8 }}>{tpl.label}</div><div style={{ color: "var(--t3)", fontSize: "var(--fs-10)", lineHeight: 1.6, marginBottom: 10 }}>{tpl.path}</div><button className="tbtn" onClick={() => createTemplate(tpl)}>使用模板</button></div>)}</div>}
 
       {tab === "settings" && (
         <div className="g2">
@@ -940,7 +940,7 @@ export default function Brain() {
             <tr><td>状态</td><td>{chatStatus?.configured ? <span className="cell-good">已接入</span> : <span className="cell-warn">不可用</span>}</td></tr>
           </tbody></table></div>
           <div className="card"><div className="ct">治理与迁移</div>
-            <div style={{ color: "var(--t3)", fontSize: 11, lineHeight: 1.8, marginBottom: 10 }}>
+            <div style={{ color: "var(--t3)", fontSize: "var(--fs-11)", lineHeight: 1.8, marginBottom: 10 }}>
               知识卡的审核、覆盖、时效与冲突治理请到「治理中心」。旧 <code>~/brain</code> 内容可在右下角 IvyeaAgent 面板一键迁移进统一知识库。
             </div>
             <button className="tbtn" onClick={() => setTab("governance")}>前往治理中心</button>

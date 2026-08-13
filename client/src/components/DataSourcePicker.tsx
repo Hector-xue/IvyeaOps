@@ -53,7 +53,7 @@ export default function DataSourcePicker({
               >
                 <span className="market-mkt-option-name">{s.name}</span>
                 {!s.ready && (
-                  <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--amber, #fbbf24)" }}>
+                  <span style={{ marginLeft: "auto", fontSize: "var(--fs-10)", color: "var(--amber, #fbbf24)" }}>
                     {s.note || "当前页面暂不支持"}
                   </span>
                 )}

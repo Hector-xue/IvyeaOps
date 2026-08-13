@@ -77,7 +77,7 @@ export default function ListingRewrite() {
 
   return (
     <div>
-      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>⊡ Listing 批量改写</div>
+      <div style={{ fontSize: "var(--fs-14)", fontWeight: 600, marginBottom: 12 }}>⊡ Listing 批量改写</div>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
         <textarea
@@ -108,7 +108,7 @@ export default function ListingRewrite() {
             className="tbtn"
             onClick={() => toggleField(f.value)}
             style={{
-              fontSize: 10,
+              fontSize: "var(--fs-10)",
               background: fields.includes(f.value) ? "var(--acc)" : undefined,
               color: fields.includes(f.value) ? "var(--bg)" : undefined,
             }}
@@ -123,7 +123,7 @@ export default function ListingRewrite() {
           {loading ? "改写中…" : "开始改写"}
         </button>
         {loading && (
-          <button className="tbtn" onClick={() => abortRef.current?.abort()} style={{ fontSize: 10 }}>
+          <button className="tbtn" onClick={() => abortRef.current?.abort()} style={{ fontSize: "var(--fs-10)" }}>
             停止
           </button>
         )}
@@ -135,11 +135,11 @@ export default function ListingRewrite() {
       {output && (
         <div className="wb-enter" style={{ marginTop: 14 }}>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
-            {provider && <span style={{ fontSize: 9, color: "var(--t3)" }}>via {provider}</span>}
+            {provider && <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)" }}>via {provider}</span>}
             {!loading && (
               <button
                 className="tbtn"
-                style={{ fontSize: 10, marginLeft: "auto" }}
+                style={{ fontSize: "var(--fs-10)", marginLeft: "auto" }}
                 onClick={() => triggerDownload(output, `listing-rewrite-${marketplace}.md`, "text/markdown")}
               >
                 ⬇ 下载 Markdown

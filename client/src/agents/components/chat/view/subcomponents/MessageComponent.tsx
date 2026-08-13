@@ -405,7 +405,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
                   <Markdown className="prose prose-sm prose-gray max-w-none dark:prose-invert">
                     {message.content}
                   </Markdown>
-                  <div className="mt-3 flex items-center text-[11px]">
+                  <div className="mt-3 flex items-center text-[length:var(--fs-11)]">
                     <MessageCopyControl content={String(message.content || '')} messageType="assistant" />
                   </div>
                 </ReasoningContent>
@@ -472,7 +472,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
             )}
 
             {(shouldShowAssistantCopyControl || !isGrouped) && (
-              <div className="mt-1 flex w-full items-center gap-2 text-[11px] text-gray-400 dark:text-gray-500">
+              <div className="mt-1 flex w-full items-center gap-2 text-[length:var(--fs-11)] text-gray-400 dark:text-gray-500">
                 {shouldShowAssistantCopyControl && (
                   <MessageCopyControl content={assistantCopyContent} messageType="assistant" />
                 )}

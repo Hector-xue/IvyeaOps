@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api, logout } from "../api/client";
 import { useAuth } from "../App";
 import { resetBodyScrollLock } from "../lib/scrollLock";
+import { DEFAULT_THEME, THEMES, applyThemeAttrs, isThemeId, themeLabel } from "../lib/themes";
 import {
   CONSOLE_NEW_EVENT,
   KEEP_ALIVE_PATHS,
@@ -29,7 +30,7 @@ const Tools = lazy(() => import("../pages/workbench/Tools"));
 const ImageGen = lazy(() => import("../pages/workbench/ImageGen"));
 
 function BoardFallback() {
-  return <div style={{ padding: 40, textAlign: "center", color: "var(--t3)", fontSize: 13 }}>加载中…</div>;
+  return <div style={{ padding: 40, textAlign: "center", color: "var(--t3)", fontSize: "var(--fs-13)" }}>加载中…</div>;
 }
 import ManualModal from "../components/ManualModal";
 import UpdateModal from "../components/UpdateModal";
@@ -116,70 +117,23 @@ export default function MainLayout() {
   const [appVersion, setAppVersion] = useState("dev");
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updating, setUpdating] = useState(false);
-  const THEMES = [
-    "dark", "deep-space", "smoke-gold", "catppuccin", "hermes", "light",
-    "klein", "mars", "hermes-orange", "burgundy", "mummy",
-    "prussian", "tiffany", "titian", "schonbrunn", "bordeaux",
-  ] as const;
-  type Theme = typeof THEMES[number];
-  const THEME_LABELS: Record<Theme, string> = {
-    "dark":         "🌲 暗夜",
-    "deep-space":   "🌌 星渊",
-    "smoke-gold":   "✦ 烟金",
-    "catppuccin":   "🔮 紫幕",
-    "hermes":       "◆ 幽林",
-    "light":        "☀ 月岩",
-    "klein":        "◈ 克莱蓝",
-    "mars":         "⬡ 马尔绿",
-    "hermes-orange":"◉ 爱马橙",
-    "burgundy":     "⊕ 勃艮红",
-    "mummy":        "△ 木乃棕",
-    "prussian":     "▣ 普鲁蓝",
-    "tiffany":      "◇ 蒂芙蓝",
-    "titian":       "✦ 提香红",
-    "schonbrunn":   "⊙ 申布黄",
-    "bordeaux":     "⊗ 波尔红",
-  };
-  const THEME_ICONS: Record<Theme, string> = {
-    "dark": "🌲", "deep-space": "🌌", "smoke-gold": "✦",
-    "catppuccin": "🔮", "hermes": "◆", "light": "☀",
-    "klein": "◈", "mars": "⬡", "hermes-orange": "◉",
-    "burgundy": "⊕", "mummy": "△", "prussian": "▣",
-    "tiffany": "◇", "titian": "✦", "schonbrunn": "⊙", "bordeaux": "⊗",
-  };
-  const THEME_NAMES: Record<Theme, string> = {
-    "dark": "暗夜", "deep-space": "星渊", "smoke-gold": "烟金",
-    "catppuccin": "紫幕", "hermes": "幽林", "light": "月岩",
-    "klein": "克莱蓝", "mars": "马尔绿", "hermes-orange": "爱马橙",
-    "burgundy": "勃艮红", "mummy": "木乃棕", "prussian": "普鲁蓝",
-    "tiffany": "蒂芙蓝", "titian": "提香红", "schonbrunn": "申布黄", "bordeaux": "波尔红",
-  };
-  const THEME_ACCENTS: Record<Theme, string> = {
-    "dark":         "#4ade80",
-    "deep-space":   "#60a5fa",
-    "smoke-gold":   "#fbbf24",
-    "catppuccin":   "#a78bfa",
-    "hermes":       "#34d399",
-    "light":        "#16a34a",
-    "klein":        "#4d7fff",
-    "mars":         "#8aad3c",
-    "hermes-orange":"#f46020",
-    "burgundy":     "#c03060",
-    "mummy":        "#c87838",
-    "prussian":     "#2d8ab5",
-    "tiffany":      "#50c0b8",
-    "titian":       "#c86030",
-    "schonbrunn":   "#e8b01a",
-    "bordeaux":     "#b03280",
-  };
-  const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem("ivyea-ops.theme") as Theme | null;
-    return THEMES.includes(saved as any) ? saved! : "dark";
+  // 主题清单、图标、中文名、圆点色全部来自 lib/themes —— 这里曾经是五张手抄表，
+  // 其中四套主题的强调色和 CSS 里的 --acc 已经对不上（选择器圆点和真实界面两个色）。
+  const [theme, setTheme] = useState<string>(() => {
+    const saved = localStorage.getItem("ivyea-ops.theme");
+    return isThemeId(saved) ? saved : DEFAULT_THEME;
   });
   const [themePicker, setThemePicker] = useState(false);
+  // main.tsx 在挂载前跑完迁移，用全局标记传进来 —— 那时候还没有 React，
+  // 发事件会在监听器注册之前就丢掉。
+  const [themeMigrated, setThemeMigrated] = useState(
+    () => !!(window as unknown as { __ivyeaThemeMigrated?: boolean }).__ivyeaThemeMigrated,
+  );
 
+  // 主题的两个维度（配色 data-theme + 形状 data-skin）一次打上，
+  // 走和 main.tsx 同一个函数 —— 分开写就会出现只改了一半的状态。
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
+    applyThemeAttrs(theme);
   }, [theme]);
   const themePickerRef = useRef<HTMLDivElement>(null);
 
@@ -348,9 +302,9 @@ export default function MainLayout() {
     return () => clearInterval(t);
   }, []);
 
-  const selectTheme = (t: Theme) => {
+  const selectTheme = (t: string) => {
     setTheme(t);
-    document.documentElement.setAttribute("data-theme", t);
+    applyThemeAttrs(t);
     localStorage.setItem("ivyea-ops.theme", t);
     setThemePicker(false);
     window.dispatchEvent(new CustomEvent("ivyea-ops:theme-changed", { detail: t }));
@@ -418,7 +372,7 @@ export default function MainLayout() {
   const pinnedGroup = pinnedTools.length > 0 && (
     <div>
       {divider}
-      {!railCollapsed && <div style={{ fontSize: 9, color: "var(--t3)", padding: "4px 16px 2px", letterSpacing: ".08em" }}>我的工具</div>}
+      {!railCollapsed && <div style={{ fontSize: "var(--fs-9)", color: "var(--t3)", padding: "4px 16px 2px", letterSpacing: ".08em" }}>我的工具</div>}
       {pinnedTools.map((pt) => {
         const to = `/skill-tools?tool=${encodeURIComponent(pt.name)}`;
         const active = location.pathname === "/skill-tools" &&
@@ -614,19 +568,19 @@ export default function MainLayout() {
                 style={{ minWidth: 72 }}
                 title="切换主题"
               >
-                {THEME_LABELS[theme]}
+                {themeLabel(theme)}
               </button>
               {themePicker && (
                 <div className="theme-picker">
                   {THEMES.map((t) => (
                     <button
-                      key={t}
-                      className={"theme-picker-card" + (t === theme ? " active" : "")}
-                      onClick={() => selectTheme(t)}
+                      key={t.id}
+                      className={"theme-picker-card" + (t.id === theme ? " active" : "")}
+                      onClick={() => selectTheme(t.id)}
                     >
-                      <span className="theme-picker-dot" style={{ background: THEME_ACCENTS[t] }} />
-                      <span className="theme-picker-icon">{THEME_ICONS[t]}</span>
-                      <span className="theme-picker-name">{THEME_NAMES[t]}</span>
+                      <span className="theme-picker-dot" style={{ background: t.accent }} />
+                      <span className="theme-picker-icon">{t.icon}</span>
+                      <span className="theme-picker-name">{t.name}</span>
                     </button>
                   ))}
                 </div>
@@ -670,6 +624,23 @@ export default function MainLayout() {
       {tourOn && hasTour(location.pathname) && (
         <Tour steps={TOURS[location.pathname]} onClose={() => setTourOn(false)} />
       )}
+      {/* 默认主题换成门道之后，给老用户的一次性告知。
+          不用 toast：ToastProvider 是各页面自己挂的，外壳这一层拿不到。 */}
+      {themeMigrated && (
+        <div className="wb-toast" role="status"
+             style={{ position: "fixed", right: 16, bottom: 16, zIndex: 200,
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "10px 12px", maxWidth: 420,
+                      border: "1px solid var(--b)", background: "var(--bg1)",
+                      color: "var(--t)", fontSize: "var(--fs-12)" }}>
+            <span>已切换到新的默认主题「门道」。右上角可以随时换回原来的。</span>
+            <button className="tbtn" onClick={() => { selectTheme("dark"); setThemeMigrated(false); }}>
+              换回暗夜
+            </button>
+            <button className="tbtn" onClick={() => setThemeMigrated(false)}>知道了</button>
+        </div>
+      )}
+
       {/* 任务台本身就是 Agent 的主入口，右下角再挂一个悬浮球等于同一件事摆两遍。
           其余板块保留 —— 在那儿它是"随手问一句"的快捷方式，仍然有用。 */}
       {location.pathname !== "/console" && <IvyeaAgentDock />}

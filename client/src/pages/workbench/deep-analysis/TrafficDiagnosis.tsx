@@ -36,7 +36,7 @@ export default function TrafficDiagnosis() {
 
   return (
     <div>
-      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>⊘ 流量异动诊断</div>
+      <div style={{ fontSize: "var(--fs-14)", fontWeight: 600, marginBottom: 12 }}>⊘ 流量异动诊断</div>
 
       <div className="market-input-row" style={{ flexWrap: "wrap" }}>
         <input
@@ -53,7 +53,7 @@ export default function TrafficDiagnosis() {
           {loading ? "诊断中…" : "开始诊断"}
         </button>
         {loading && (
-          <button className="tbtn" onClick={() => abortRef.current?.abort()} style={{ fontSize: 10 }}>
+          <button className="tbtn" onClick={() => abortRef.current?.abort()} style={{ fontSize: "var(--fs-10)" }}>
             停止
           </button>
         )}
@@ -67,7 +67,7 @@ export default function TrafficDiagnosis() {
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
             <button
               className="tbtn"
-              style={{ fontSize: 10 }}
+              style={{ fontSize: "var(--fs-10)" }}
               onClick={() => triggerDownload(JSON.stringify(result, null, 2), `traffic-${asin.trim()}-${country}.json`, "application/json")}
             >
               ⬇ 下载 JSON

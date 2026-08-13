@@ -140,6 +140,10 @@ export default function App() {
             <Route path="console" element={<Console />} />
             <Route path="capabilities" element={<Capabilities />} />
             <Route path="approvals" element={<Approvals />} />
+            {/* 社区市场已并入「能力市场」的第一个 tab。这条老路径保留，
+                指过去即可 —— 已经发出去的链接不该 404。 */}
+            <Route path="community-market"
+                   element={<Navigate to="/capabilities?tab=community" replace />} />
             <Route path="schedules" element={<Schedules />} />
             <Route path="dashboard" element={<Home />} />
             <Route path="tools" element={<Tools />} />
