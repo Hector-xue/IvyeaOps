@@ -124,6 +124,11 @@ export default function MainLayout() {
     return isThemeId(saved) ? saved : DEFAULT_THEME;
   });
   const [themePicker, setThemePicker] = useState(false);
+  // main.tsx 在挂载前跑完迁移，用全局标记传进来 —— 那时候还没有 React，
+  // 发事件会在监听器注册之前就丢掉。
+  const [themeMigrated, setThemeMigrated] = useState(
+    () => !!(window as unknown as { __ivyeaThemeMigrated?: boolean }).__ivyeaThemeMigrated,
+  );
 
   // 主题的两个维度（配色 data-theme + 形状 data-skin）一次打上，
   // 走和 main.tsx 同一个函数 —— 分开写就会出现只改了一半的状态。
@@ -619,6 +624,23 @@ export default function MainLayout() {
       {tourOn && hasTour(location.pathname) && (
         <Tour steps={TOURS[location.pathname]} onClose={() => setTourOn(false)} />
       )}
+      {/* 默认主题换成门道之后，给老用户的一次性告知。
+          不用 toast：ToastProvider 是各页面自己挂的，外壳这一层拿不到。 */}
+      {themeMigrated && (
+        <div className="wb-toast" role="status"
+             style={{ position: "fixed", right: 16, bottom: 16, zIndex: 200,
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "10px 12px", maxWidth: 420,
+                      border: "1px solid var(--b)", background: "var(--bg1)",
+                      color: "var(--t)", fontSize: "var(--fs-12)" }}>
+            <span>已切换到新的默认主题「门道」。右上角可以随时换回原来的。</span>
+            <button className="tbtn" onClick={() => { selectTheme("dark"); setThemeMigrated(false); }}>
+              换回暗夜
+            </button>
+            <button className="tbtn" onClick={() => setThemeMigrated(false)}>知道了</button>
+        </div>
+      )}
+
       {/* 任务台本身就是 Agent 的主入口，右下角再挂一个悬浮球等于同一件事摆两遍。
           其余板块保留 —— 在那儿它是"随手问一句"的快捷方式，仍然有用。 */}
       {location.pathname !== "/console" && <IvyeaAgentDock />}

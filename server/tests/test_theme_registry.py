@@ -151,3 +151,42 @@ def test_declared_mode_matches_actual_luminance(theme_id: str):
         f"{theme_id} 注册表标成 {declared}，但 CSS 里 --bg 亮度 {bg_l:.0f}、"
         f"--t 亮度 {fg_l:.0f} → 实际是 {actual}"
     )
+
+
+# ── 默认主题与一次性迁移 ────────────────────────────────────────────────
+
+def _ts_source() -> str:
+    return _TS.read_text(encoding="utf-8")
+
+
+def test_default_theme_is_registered():
+    """DEFAULT_THEME 必须是注册表里真实存在的一项。
+
+    它是**所有启动路径的兜底**（main.tsx、MainLayout、getTheme），拼错的话
+    每个新用户和每个 localStorage 被清过的浏览器都会落到一个不存在的主题上，
+    而 getTheme 又会把它兜回 DEFAULT_THEME —— 死循环般地一直是错的，且不报错。
+    """
+    m = re.search(r'export const DEFAULT_THEME\s*=\s*"([^"]+)"', _ts_source())
+    assert m, "没找到 DEFAULT_THEME"
+    assert m.group(1) in _ts_themes(), f"DEFAULT_THEME = {m.group(1)}，但注册表里没有这一项"
+
+
+def test_default_theme_exists_in_css():
+    """默认主题必须在 CSS 里有对应的变量块，否则全站会回落到 :root（暗夜）。"""
+    m = re.search(r'export const DEFAULT_THEME\s*=\s*"([^"]+)"', _ts_source())
+    assert m.group(1) in _css_themes()
+
+
+def test_migration_only_runs_once():
+    """迁移必须先写版本号、且只在版本号缺席时改用户已存的主题。
+
+    顺序写反（先改主题后写版本号）在写 localStorage 抛异常时会变成每次刷新
+    都强改一遍 —— 用户手动选的主题永远存不住，而且没有任何报错。
+    """
+    src = _ts_source()
+    body = src[src.index("export function migrateTheme"):]
+    body = body[: body.index("\n}")]
+    set_v = body.index("MIGRATION_KEY, MIGRATION")
+    set_theme = body.index("THEME_KEY, DEFAULT_THEME")
+    assert set_v < set_theme, "必须先写迁移版本号，再改主题"
+    assert "startsWith(\"mendao-\")" in body, "已经在门道主题上的用户不该被再迁一次"

@@ -60,7 +60,43 @@ export const THEMES: readonly ThemeDef[] = [
   { id: "bordeaux",      name: "波尔红", icon: "⊗",  accent: "#b03280", mode: "dark"  },
 ];
 
-export const DEFAULT_THEME = "dark";
+export const DEFAULT_THEME = "mendao-light";
+
+/** localStorage 键。写在这里，免得四个启动路径各拼一遍字符串。 */
+export const THEME_KEY = "ivyea-ops.theme";
+/**
+ * 迁移版本号。**只有它缺席时才动用户已存的主题**，所以这次迁移一辈子只跑一次；
+ * 用户之后手动选的任何主题都不会再被覆盖。
+ */
+const MIGRATION_KEY = "ivyea-ops.theme.v";
+const MIGRATION = "2";
+
+/**
+ * 把默认主题换成门道，同时不粗暴对待存量用户。
+ *
+ * 直接改 DEFAULT_THEME 是不够的：老用户的 localStorage 里已经存着 `dark`，
+ * 他们永远不会知道有新主题。而无条件改写又太横 —— 那等于把手动选过主题的人
+ * 也一起改了。
+ *
+ * 折中：只在**这台浏览器从没跑过这次迁移**时切一次，并返回 true 让调用方
+ * 提示一句"可以换回去"。
+ *
+ * @returns 是否发生了迁移（调用方据此决定要不要提示）
+ */
+export function migrateTheme(): boolean {
+  try {
+    if (localStorage.getItem(MIGRATION_KEY) === MIGRATION) return false;
+    localStorage.setItem(MIGRATION_KEY, MIGRATION);
+    const current = localStorage.getItem(THEME_KEY);
+    // 没存过 = 新用户，直接吃默认值，不必提示
+    if (!isThemeId(current)) return false;
+    if (current.startsWith("mendao-")) return false;
+    localStorage.setItem(THEME_KEY, DEFAULT_THEME);
+    return true;
+  } catch {
+    return false;   // 隐私模式下 localStorage 会抛，静默放弃即可
+  }
+}
 
 const BY_ID = new Map(THEMES.map((t) => [t.id, t]));
 

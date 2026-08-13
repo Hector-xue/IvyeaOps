@@ -14,7 +14,7 @@ import "./styles/workbench.css";
 // 形状层最后引入：它靠 !important 压过一切，放最后只是让阅读顺序和生效顺序一致。
 import "./styles/mendao-skin.css";
 import { applyAppearance } from "./lib/appearance";
-import { DEFAULT_THEME, applyThemeAttrs, isThemeId } from "./lib/themes";
+import { DEFAULT_THEME, THEME_KEY, applyThemeAttrs, isThemeId, migrateTheme } from "./lib/themes";
 
 // 挂载前先把主题打上，避免先画错一帧再翻过来。
 //
@@ -24,9 +24,17 @@ import { DEFAULT_THEME, applyThemeAttrs, isThemeId } from "./lib/themes";
 // 现在两边都从 lib/themes 读，这类漂移不可能再发生。
 // data-skin 也必须在这里同步写 —— 只写 data-theme 的话，门道主题会先按
 // 圆角+背景画画一帧，再被 React 挂载后的 useEffect 抹平，肉眼能看见那一闪。
-const THEME_KEY = "ivyea-ops.theme";
+// 一次性迁移必须在读取之前跑：默认主题从「暗夜」换成了「门道·浅」，
+// 而老用户的 localStorage 里存着旧值，不迁的话他们永远看不到新默认。
+// 迁移只在这台浏览器第一次跑到这行时发生一次，之后手动选的主题不会被碰。
+const migrated = migrateTheme();
 const saved = localStorage.getItem(THEME_KEY);
 applyThemeAttrs(isThemeId(saved) ? saved : DEFAULT_THEME);
+if (migrated) {
+  // 提示交给 React 那边渲染（此刻还没挂载）。用全局标记而不是事件：
+  // 事件在监听器注册之前发出去就丢了。
+  (window as unknown as { __ivyeaThemeMigrated?: boolean }).__ivyeaThemeMigrated = true;
+}
 
 // Apply persisted appearance (user font override + global zoom) before mount,
 // same reason as theme — avoid a flash of the wrong font/size.
