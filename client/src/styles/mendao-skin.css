@@ -1,0 +1,109 @@
+/* 门道皮肤 —— 形状层
+ * ============================================================================
+ *
+ * `data-theme` 管配色，`data-skin` 管形状。门道两套 = 门道调色板 + flat 皮肤。
+ *
+ * ⚠️ **flat 只给门道两套用，不要试图套到旧 16 套上。**
+ * 那 16 套的 --bg/--bg1/--bg2/--bg3 是半透明 rgba，四级之间的颜色差极小，
+ * 层次本来就是靠底下那张 /art/bg.png 叠出来的。flat 关掉背景画之后，
+ * 四级表面会塌成几乎同色 —— 要真支持，得为 16 套各补 4 个不透明值再逐套调。
+ * 写在这里是因为这个开关看起来很像"可以随便组合"，但它不是。
+ *
+ * ── 为什么是一条 `*` 上的 !important ─────────────────────────────────────
+ * 全站有 1219 处圆角、182 处阴影，散在 CSS、内联 style 和 agents 的 Tailwind
+ * 类里（`rounded-lg`、`shadow-sm`）。逐处改既改不完也守不住 —— 下次谁加一个
+ * `rounded-md` 就破功了。门道自己就是这么做的（mendao.css:109）。
+ *
+ * 代价是会误伤三类**功能性**的圆和阴影，所以下面有白名单。这不是偷懒，是
+ * 门道那套语汇里本来就没考虑过的东西（门道全站零 spinner、零开关）。
+ */
+
+/* ── ① 归零 ──────────────────────────────────────────────────────────── */
+html[data-skin="flat"] * {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  /* 表面已经全不透明，19 处 backdrop-filter 变成纯开销（还会强制合成层） */
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* 背景画三件套。**必须 content:none 而不是把 opacity 调 0** ——
+   那两个伪元素是 position:fixed + z-index:99/101 + mix-blend-mode，
+   留着就是两个覆盖全屏、强制整页 GPU 合成的空层。 */
+html[data-skin="flat"] body { background-image: none !important; }
+html[data-skin="flat"] body::before,
+html[data-skin="flat"] body::after { content: none !important; }
+
+/* ── ② 结构线：被 ① 删掉的那几条得用真 border 换回来 ─────────────────── */
+
+/* 侧栏与内容区的分界。原本是 `box-shadow: inset -1px 0 0 0 var(--b)`。
+   **这条不补，浅色下侧栏会和内容区融成一片** —— 门道浅色的 paper 是纯白，
+   canvas 也只差 5 个灰阶，那道线是唯一的分界。 */
+html[data-skin="flat"] .sb { border-right: 1px solid var(--b); }
+
+/* 开关轨道：原本靠 inset ring 描边 */
+html[data-skin="flat"] .vs-switch > span { border: 1px solid var(--b); }
+
+/* 选中/激活态：原本是 0 0 0 1px 的 ring */
+html[data-skin="flat"] .terminal-session-item.active,
+html[data-skin="flat"] .listing-workflow-tabs button.active,
+html[data-skin="flat"] .vs-shot-card.selected,
+html[data-skin="flat"] .vs-source-assets button.selected {
+  outline: 1px solid var(--acc);
+  outline-offset: -1px;   /* 画在盒子内侧，不占额外空间、不撑破网格 */
+}
+
+/* .cc-menu 是唯一一个没有自带 border 的浮层，去掉阴影后会没有边界 */
+html[data-skin="flat"] .cc-menu { border: 1px solid var(--b); }
+
+/* ── ③ 焦点：发光圈 → 门道式偏移方框 ─────────────────────────────────── */
+/*
+ * ops 侧原本是 `box-shadow: 0 0 0 2px var(--ring)`，被 ① 一起删了。
+ * 门道的做法是 `outline: 1px solid ink; outline-offset: 2px`——和整体的
+ * 线条语汇一致，而且 outline 不参与布局。
+ */
+html[data-skin="flat"] :focus-visible {
+  outline: 1px solid var(--t);
+  outline-offset: 2px;
+}
+
+/*
+ * agents 子树要单独写，而且**必须带 !important**。
+ *
+ * 那边有 64 处 `focus:ring-*`，Tailwind 把 ring 编译进 box-shadow —— 被 ①
+ * 全灭，键盘可达性直接归零。补的时候压不过它自己的 `focus:outline-none`：
+ * 那条被 `important: '#agents-root'` 提权成
+ * `#agents-root .focus\:outline-none:focus` (0,1,1,1)，
+ * 而裸 `:focus-visible` 只有 (0,1,0,0)。
+ *
+ * 这是那种不测键盘就永远发现不了的回归，所以宁可用 !important。
+ */
+html[data-skin="flat"] #agents-root :focus-visible {
+  outline: 1px solid var(--t) !important;
+  outline-offset: 2px !important;
+}
+
+/* ── ④ 白名单：这些圆是功能，不是装饰 ───────────────────────────────── */
+/*
+ * **转圈的 loading 是全站最高频的动效**（24 个文件用 animate-spin，
+ * 外加 CSS 里的 .spin / .lx-spin-dot）。它们的原理是"一个圆环缺一个口在转"，
+ * 变成方块之后是"一个缺角的方块在转" —— 门道自己全站零 spinner，
+ * 所以这套语汇里没有它的答案；这里按功能保留。
+ */
+html[data-skin="flat"] .animate-spin,
+html[data-skin="flat"] .spin,
+html[data-skin="flat"] .lx-spin-dot,
+html[data-skin="flat"] .cs-run,
+html[data-skin="flat"] .cc-run {
+  border-radius: 9999px !important;
+}
+
+/* 开关滑钮。轨道 26×14、钮 10×10，全直角后两者只差 2px 内缩，
+   开/关两态在视觉上分不出来 —— 那不是风格问题，是控件失效。 */
+html[data-skin="flat"] .vs-switch > span,
+html[data-skin="flat"] .vs-switch > span::after {
+  border-radius: 999px !important;
+}
+
+/* 确认弹窗顶部那个 40px 图标环：方了之后像个色块，不像图标容器 */
+html[data-skin="flat"] .confirm-icon-ring { border-radius: 50% !important; }

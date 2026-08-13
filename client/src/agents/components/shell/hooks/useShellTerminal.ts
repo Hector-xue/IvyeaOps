@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal } from '@xterm/xterm';
+import { xtermAnsi, xtermTheme } from '../../../../lib/termTheme';
 import type { Project } from '../../../types/app';
 import {
   CODEX_DEVICE_AUTH_URL,
@@ -84,7 +85,15 @@ export function useShellTerminal({
       return;
     }
 
-    const nextTerminal = new Terminal(TERMINAL_OPTIONS);
+    // 终端配色跟着 ops 主题走。xterm 把字符画在 canvas 上，CSS 变量进不来，
+    // 所以只能在构造时把当前主题读成对象。旧 16 套主题下 xtermAnsi() 返回
+    // null，TERMINAL_OPTIONS 原样生效 —— 那份 VSCode Dark 一个字节不变。
+    const ansi = xtermAnsi();
+    const nextTerminal = new Terminal(
+      ansi
+        ? { ...TERMINAL_OPTIONS, theme: { ...TERMINAL_OPTIONS.theme, ...xtermTheme(), ...ansi } }
+        : TERMINAL_OPTIONS,
+    );
     terminalRef.current = nextTerminal;
 
     const nextFitAddon = new FitAddon();

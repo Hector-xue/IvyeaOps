@@ -82,3 +82,24 @@ export function themeLabel(id: string): string {
   const t = getTheme(id);
   return `${t.icon} ${t.name}`;
 }
+
+/**
+ * 形状皮肤。`data-theme` 管配色，`data-skin` 管形状（圆角/阴影/背景画）。
+ *
+ * **只有门道两套用 flat，这不是一个可以自由组合的开关** —— 旧 16 套的四级
+ * 表面是半透明的、层次靠背景画叠出来，关掉画之后会塌成同色。理由和白名单
+ * 都写在 styles/mendao-skin.css 顶部。
+ */
+export function themeSkin(id: string | null | undefined): "flat" | "classic" {
+  return getTheme(id).id.startsWith("mendao-") ? "flat" : "classic";
+}
+
+/** 把主题的两个维度一次打到 <html> 上。启动路径和切换路径共用，避免只改一半。 */
+export function applyThemeAttrs(id: string): void {
+  const root = document.documentElement;
+  root.setAttribute("data-theme", id);
+  root.setAttribute("data-skin", themeSkin(id));
+  // 让浏览器自带控件（滚动条、表单、日期选择器）也跟着走。少了它，
+  // 浅色主题上会冒出一条深色滚动条。
+  root.style.colorScheme = themeMode(id);
+}

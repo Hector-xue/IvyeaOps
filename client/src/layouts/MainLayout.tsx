@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api, logout } from "../api/client";
 import { useAuth } from "../App";
 import { resetBodyScrollLock } from "../lib/scrollLock";
-import { DEFAULT_THEME, THEMES, isThemeId, themeLabel } from "../lib/themes";
+import { DEFAULT_THEME, THEMES, applyThemeAttrs, isThemeId, themeLabel } from "../lib/themes";
 import {
   CONSOLE_NEW_EVENT,
   KEEP_ALIVE_PATHS,
@@ -125,8 +125,10 @@ export default function MainLayout() {
   });
   const [themePicker, setThemePicker] = useState(false);
 
+  // 主题的两个维度（配色 data-theme + 形状 data-skin）一次打上，
+  // 走和 main.tsx 同一个函数 —— 分开写就会出现只改了一半的状态。
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
+    applyThemeAttrs(theme);
   }, [theme]);
   const themePickerRef = useRef<HTMLDivElement>(null);
 
@@ -297,7 +299,7 @@ export default function MainLayout() {
 
   const selectTheme = (t: string) => {
     setTheme(t);
-    document.documentElement.setAttribute("data-theme", t);
+    applyThemeAttrs(t);
     localStorage.setItem("ivyea-ops.theme", t);
     setThemePicker(false);
     window.dispatchEvent(new CustomEvent("ivyea-ops:theme-changed", { detail: t }));

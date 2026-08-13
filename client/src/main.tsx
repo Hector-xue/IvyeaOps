@@ -11,8 +11,10 @@ import App from "./App";
 // 让它与引入顺序无关。这行注释是给下一个想调换顺序的人看的。
 import "./styles/mendao-tokens.css";
 import "./styles/workbench.css";
+// 形状层最后引入：它靠 !important 压过一切，放最后只是让阅读顺序和生效顺序一致。
+import "./styles/mendao-skin.css";
 import { applyAppearance } from "./lib/appearance";
-import { DEFAULT_THEME, isThemeId } from "./lib/themes";
+import { DEFAULT_THEME, applyThemeAttrs, isThemeId } from "./lib/themes";
 
 // 挂载前先把主题打上，避免先画错一帧再翻过来。
 //
@@ -20,10 +22,11 @@ import { DEFAULT_THEME, isThemeId } from "./lib/themes";
 // 有 16 个：选了后 10 套中任意一套的用户，每次刷新都会先看到一下暗夜绿
 // （校验失败 → 回落 dark），再被 MainLayout 的 useEffect 纠正回去。
 // 现在两边都从 lib/themes 读，这类漂移不可能再发生。
+// data-skin 也必须在这里同步写 —— 只写 data-theme 的话，门道主题会先按
+// 圆角+背景画画一帧，再被 React 挂载后的 useEffect 抹平，肉眼能看见那一闪。
 const THEME_KEY = "ivyea-ops.theme";
 const saved = localStorage.getItem(THEME_KEY);
-const theme = isThemeId(saved) ? saved : DEFAULT_THEME;
-document.documentElement.setAttribute("data-theme", theme);
+applyThemeAttrs(isThemeId(saved) ? saved : DEFAULT_THEME);
 
 // Apply persisted appearance (user font override + global zoom) before mount,
 // same reason as theme — avoid a flash of the wrong font/size.

@@ -32,10 +32,10 @@ type TraceResult = {
 };
 
 const SEVERITY: Record<string, { label: string; color: string; bg: string }> = {
-  critical: { label: "紧急", color: "#a8382c", bg: "#fdecea" },
-  high: { label: "高", color: "#8a5410", bg: "#fdf3e3" },
-  medium: { label: "中", color: "#1d4e5a", bg: "#e6f0f2" },
-  low: { label: "低", color: "#5b6560", bg: "#eef1ee" },
+  critical: { label: "紧急", color: "var(--red)", bg: "color-mix(in srgb, var(--red) 12%, transparent)" },
+  high: { label: "高", color: "var(--amber)", bg: "color-mix(in srgb, var(--amber) 12%, transparent)" },
+  medium: { label: "中", color: "var(--cyan)", bg: "color-mix(in srgb, var(--cyan) 12%, transparent)" },
+  low: { label: "低", color: "var(--t2)", bg: "var(--bg2)" },
 };
 
 function RawRows({ traceUrl, target }: { traceUrl: string; target: string }) {
@@ -67,12 +67,12 @@ function RawRows({ traceUrl, target }: { traceUrl: string; target: string }) {
   // **溯源失败和"没有证据"是两件事**，必须分开说。回一个空表格会让人以为
   // 这条结论本来就没依据。
   if (!res!.ok) {
-    return <span style={{ fontSize: 11, color: "#8a5410" }}>{res!.reason}</span>;
+    return <span style={{ fontSize: 11, color: "var(--amber)" }}>{res!.reason}</span>;
   }
 
   return (
     <div style={{ marginTop: 6, overflowX: "auto", border: "1px solid #e3e7e4", borderRadius: 6 }}>
-      <div style={{ fontSize: 11, color: "#78827e", padding: "5px 8px" }}>
+      <div style={{ fontSize: 11, color: "var(--t3)", padding: "5px 8px" }}>
         {res!.file} · 命中 {res!.total} 行
         {res!.truncated ? `（只显示前 ${res!.rows!.length} 行）` : ""}
       </div>
@@ -80,7 +80,7 @@ function RawRows({ traceUrl, target }: { traceUrl: string; target: string }) {
         <thead>
           <tr>
             {(res!.columns || []).map((c, i) => (
-              <th key={i} style={{ padding: "3px 8px", textAlign: "left", color: "#5b6560",
+              <th key={i} style={{ padding: "3px 8px", textAlign: "left", color: "var(--t2)",
                                    borderTop: "1px solid #e3e7e4", whiteSpace: "nowrap" }}>{c}</th>
             ))}
           </tr>
@@ -108,15 +108,15 @@ function EvidenceRow({ e, traceUrl }: {
   const value = typeof e.value === "object" ? JSON.stringify(e.value) : String(e.value ?? "");
   return (
     <tr>
-      <td style={{ padding: "4px 10px 4px 0", color: "#5b6560", whiteSpace: "nowrap" }}>
+      <td style={{ padding: "4px 10px 4px 0", color: "var(--t2)", whiteSpace: "nowrap" }}>
         {e.metric}
       </td>
       <td style={{ padding: "4px 10px 4px 0", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
         {value}
-        {e.unit ? <span style={{ color: "#78827e", fontWeight: 400 }}> {e.unit}</span> : null}
+        {e.unit ? <span style={{ color: "var(--t3)", fontWeight: 400 }}> {e.unit}</span> : null}
       </td>
-      <td style={{ padding: "4px 10px 4px 0", color: "#5b6560" }}>{e.target || "—"}</td>
-      <td style={{ padding: "4px 0", color: "#78827e", fontSize: 12 }}>
+      <td style={{ padding: "4px 10px 4px 0", color: "var(--t2)" }}>{e.target || "—"}</td>
+      <td style={{ padding: "4px 0", color: "var(--t3)", fontSize: 12 }}>
         {[e.source, e.as_of].filter(Boolean).join(" · ") || "—"}
         {traceUrl && e.target ? (
           <div style={{ marginTop: 3 }}>
@@ -143,7 +143,7 @@ function FindingCard({ item, unsupported, traceUrl }: {
         borderLeft: `3px solid ${sev.color}`,
         borderRadius: 2,
         padding: "12px 14px",
-        background: "#fff",
+        background: "var(--bg1)",
       }}
     >
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
@@ -157,7 +157,7 @@ function FindingCard({ item, unsupported, traceUrl }: {
         </span>
         <span style={{ fontWeight: 700, fontSize: 15 }}>{item.title}</span>
         {typeof item.priority_score === "number" && item.priority_score > 0 && (
-          <span style={{ fontSize: 12, color: "#78827e", fontVariantNumeric: "tabular-nums" }}>
+          <span style={{ fontSize: 12, color: "var(--t3)", fontVariantNumeric: "tabular-nums" }}>
             优先级 {item.priority_score}
           </span>
         )}
@@ -165,7 +165,7 @@ function FindingCard({ item, unsupported, traceUrl }: {
           <span
             title="这条结论没有附任何可核对的数据"
             style={{
-              fontSize: 11, color: "#8a5410", background: "#fdf3e3",
+              fontSize: 11, color: "var(--amber)", background: "color-mix(in srgb, var(--amber) 12%, transparent)",
               padding: "2px 7px", borderRadius: 2,
             }}
           >
@@ -175,7 +175,7 @@ function FindingCard({ item, unsupported, traceUrl }: {
       </div>
 
       {item.reasoning && (
-        <div style={{ marginTop: 6, fontSize: 13.5, color: "#47514d", lineHeight: 1.6 }}>
+        <div style={{ marginTop: 6, fontSize: 13.5, color: "var(--t)", lineHeight: 1.6 }}>
           {item.reasoning}
         </div>
       )}
@@ -184,7 +184,7 @@ function FindingCard({ item, unsupported, traceUrl }: {
         <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
           {actions.map((a, i) => (
             <div key={i} style={{ fontSize: 13.5, display: "flex", gap: 8, alignItems: "baseline" }}>
-              <span style={{ color: "#1d4e5a", fontWeight: 600, whiteSpace: "nowrap" }}>
+              <span style={{ color: "var(--cyan)", fontWeight: 600, whiteSpace: "nowrap" }}>
                 {a.type}
               </span>
               <span>
@@ -192,10 +192,10 @@ function FindingCard({ item, unsupported, traceUrl }: {
                 {a.target && a.detail ? " — " : ""}
                 {a.detail}
                 {a.guardrail && (
-                  <span style={{ color: "#78827e", fontSize: 12 }}>（前提：{a.guardrail}）</span>
+                  <span style={{ color: "var(--t3)", fontSize: 12 }}>（前提：{a.guardrail}）</span>
                 )}
                 {a.reversible === false && (
-                  <span style={{ color: "#a8382c", fontSize: 12 }}> · 不可回滚</span>
+                  <span style={{ color: "var(--red)", fontSize: 12 }}> · 不可回滚</span>
                 )}
               </span>
             </div>
@@ -243,7 +243,7 @@ export default function FindingCards({ data, traceUrl }: {
     <div style={{ marginTop: 16 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 8 }}>
         <h3 style={{ margin: 0, fontSize: 15 }}>结论</h3>
-        <span style={{ fontSize: 12, color: "#78827e" }}>
+        <span style={{ fontSize: 12, color: "var(--t3)" }}>
           {findings.length} 条
           {unsupported.size > 0 && ` · 其中 ${unsupported.size} 条无证据`}
         </span>
@@ -259,7 +259,7 @@ export default function FindingCards({ data, traceUrl }: {
         ))}
       </div>
       {data?.data_notes && (
-        <div style={{ marginTop: 8, fontSize: 12, color: "#78827e" }}>{data.data_notes}</div>
+        <div style={{ marginTop: 8, fontSize: 12, color: "var(--t3)" }}>{data.data_notes}</div>
       )}
     </div>
   );
