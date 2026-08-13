@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react
 import { useLocation, useNavigate } from "react-router-dom";
 import { streamChat, type ChatMsg } from "../../api/assistant";
 import {
+  answerResetDiscards,
   consoleSessionImport,
   consoleSessions,
   ivyeaAgentChatStream,
@@ -22,6 +23,7 @@ import {
 } from "../../api/ivyeaAgent";
 import { MarkdownReport } from "../../lib/reportFormat";
 import { stripInjected } from "../../lib/stripInjected";
+import { useStickToBottom } from "../../lib/useStickToBottom";
 
 const STORAGE = "ivyea-ops-assistant-chat";
 const SESSIONS_KEY = "ivyea-ops-assistant-sessions";
@@ -118,9 +120,9 @@ export default function Assistant() {
     return () => { alive = false; };
   }, [urlSession, currentId, navigate]);
 
-  useEffect(() => {
-    if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-  }, [turns, streaming]);
+  // 跟随滚动按用户意图判（wheel/touch/键），不按滚动位置判 —— 位置判据在流式
+  // 输出下必输，用户往上翻的那一下会被下一个 token 抢先拍回底部。见 lib/useStickToBottom。
+  useStickToBottom(bodyRef, [turns, streaming]);
 
   /** 老通道：agent 不在时的兜底，本轮不进会话库。 */
   const sendLegacy = async (base: Turn[], signal: AbortSignal) => {
@@ -157,6 +159,19 @@ export default function Assistant() {
       n[n.length - 1] = { role: "assistant", content: n[n.length - 1].content + t };
       return n;
     });
+    /**
+     * 正文分段边界：门禁打回 = 整篇重写、旧稿作废（不清就是同一段连出两遍）；
+     * 其余只是"这段还没说完"，断个段就行。判据见 answerResetDiscards。
+     */
+    const boundary = (reason?: string) => setTurns((prev) => {
+      const n = [...prev];
+      const cur = n[n.length - 1].content;
+      n[n.length - 1] = {
+        role: "assistant",
+        content: answerResetDiscards(reason) ? "" : (cur ? cur + "\n\n" : cur),
+      };
+      return n;
+    });
 
     let got = false;
     let newSession = "";
@@ -173,6 +188,7 @@ export default function Assistant() {
       }, {
         onStart: (d) => { if (d?.session_id) newSession = String(d.session_id); },
         onToken: (t) => { got = true; append(t); },
+        onAnswerReset: (d) => boundary(d?.reason),
         onError: (d) => { if (!got) throw new Error(d?.detail || "请求失败"); setErr(String(d?.detail || "")); },
       }, { signal: ctrl.signal });
       if (newSession && newSession !== currentId) {

@@ -25,6 +25,7 @@ import {
   stepFromEvent,
   type ConsoleStep,
 } from "../../lib/stepLabels";
+import { useStickToBottom } from "../../lib/useStickToBottom";
 import StepTimeline, { type MatchedSkill } from "../../components/console/StepTimeline";
 import ApprovalCard from "../../components/console/ApprovalCard";
 import Composer, { approvalPayload, type ApprovalMode, type ComposerRef, type ComposerValue } from "../../components/console/Composer";
@@ -36,6 +37,7 @@ import {
   consoleWorkspaceCreate,
   consoleSessionApprovals,
   consoleSessions,
+  answerResetDiscards,
   ivyeaAgentChat,
   ivyeaAgentStatus,
   ivyeaAgentChatStream,
@@ -58,6 +60,16 @@ import { errText } from "../../lib/errText";
 
 /** 老版本 agent 的自由文本叙述最多保留最近几行 —— 长任务的叙述能有几十条。 */
 const MAX_NOTES = 12;
+
+/**
+ * 正文被门禁打回重写时，在时间线上留一行 —— 气泡里那一稿被清掉了，
+ * 不说一声的话用户只会看到字突然消失。
+ */
+const GATE_NOTE: Record<string, string> = {
+  "gate:citation": "知识引用未通过校验，正在重写这段回答",
+  "gate:verify": "完成前自验证未通过，正在重写这段回答",
+  "gate:progress": "阶段汇报尚未闭环，正在重写这段回答",
+};
 
 const PREFS_KEY = "ivyea-ops.console.prefs";
 
@@ -199,28 +211,11 @@ function ConsoleInner() {
 
   // ── 跟随滚动 ─────────────────────────────────────────────────────────────
   //
-  // **只在用户本来就贴着底的时候才跟。** 原先是无条件 scrollTop = scrollHeight，
-  // 于是流式输出期间每来一个 token 就把滚动位置拽回底部 —— 用户想往上翻看前面
-  // 的问题或推理，手一松就被扯下来，根本读不了。
-  //
-  // 判据是"离底部还有多远"：用户一旦主动往上滚超过一屏的 20%，就认为他在读，
-  // 不再打断；他自己滚回底部，跟随自动恢复。
-  const stickRef = useRef(true);
-  useEffect(() => {
-    const el = bodyRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
-      stickRef.current = gap <= Math.max(40, el.clientHeight * 0.2);
-    };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, []);
-
-  useEffect(() => {
-    const el = bodyRef.current;
-    if (el && stickRef.current) el.scrollTop = el.scrollHeight;
-  }, [turns, followUps]);
+  // 判据在 lib/useStickToBottom：**按用户意图（wheel/touch/键）判，不按滚动位置判**。
+  // 位置判据在流式输出下必输 —— scroll 事件是异步派发的，每个 token 都会抢先把
+  // scrollTop 拍回底部，用户往上翻的那一下永远量不到，手一松就被扯下来。
+  const { atBottom, scrollToBottom, scrollTo, setFollow } =
+    useStickToBottom(bodyRef, [turns, followUps]);
 
   // 新一轮发出后，把那条问题滚到视野顶端（只做一次）。
   const pendingTopRef = useRef<string>("");
@@ -231,9 +226,11 @@ function ConsoleInner() {
     const node = el?.querySelector(`[data-turn="${id}"]`) as HTMLElement | null;
     if (!el || !node) return;
     pendingTopRef.current = "";
-    el.scrollTop = node.offsetTop - el.offsetTop - 8;
-    stickRef.current = true;      // 之后照常跟随，直到用户自己往上翻
-  }, [turns]);
+    // 走 scrollTo 而不是直接写 scrollTop：直接写会被 scroll 监听当成"用户翻上去了"，
+    // 跟随就此关掉，后面的回答一个字都不跟。
+    scrollTo(node.offsetTop - el.offsetTop - 8);
+    setFollow(true);              // 之后照常跟随，直到用户自己往上翻
+  }, [turns, scrollTo, setFollow]);
 
   // ── 新建工作区（从输入框那个下拉里进来）──────────────────────────────────
   //
@@ -483,6 +480,26 @@ function ConsoleInner() {
       250,
     );
 
+    // token 按帧批量落地。一个字一次 setState 时，长报告的 markdown 每秒被重解析
+    // 几十遍；合并到一帧一次，内容一模一样，但渲染成本掉一个数量级。
+    let pending = "";
+    let flushRaf = 0;
+    const flushTokens = () => {
+      flushRaf = 0;
+      const add = pending;
+      pending = "";
+      if (add) patchTurn(aiId, (t) => ({ text: t.text + add }));
+    };
+    const cancelFlush = () => {
+      if (flushRaf) { window.cancelAnimationFrame(flushRaf); flushRaf = 0; }
+      pending = "";
+    };
+    // 收尾：还没落地的那一帧要补上，否则回答会缺最后几个字。
+    const finishFlush = () => {
+      if (flushRaf) window.cancelAnimationFrame(flushRaf);
+      flushTokens();
+    };
+
     try {
       await ivyeaAgentChatStream(
         {
@@ -546,9 +563,29 @@ function ConsoleInner() {
           },
           onToken: (chunk) => {
             finalText += chunk;
-            patchTurn(aiId, (t) => ({ text: t.text + chunk }));
+            pending += chunk;
+            if (!flushRaf) flushRaf = window.requestAnimationFrame(flushTokens);
+          },
+          // 正文的分段边界。门禁打回 = 整篇重写，旧稿作废（不清就是"同一张表连出
+          // 三遍"）；去调工具 = 这段没说完，只断段不丢字。判据见 answerResetDiscards。
+          onAnswerReset: (d) => {
+            const reason = String(d?.reason || "");
+            if (!answerResetDiscards(reason)) {
+              pending += "\n\n";                 // 两段之间留个空行，别糊成一段
+              if (!flushRaf) flushRaf = window.requestAnimationFrame(flushTokens);
+              return;
+            }
+            cancelFlush();
+            finalText = "";
+            const note = GATE_NOTE[reason] || "正在重写这段回答";
+            patchTurn(aiId, (t) => ({
+              text: "",
+              // 字凭空少了，必须说一声 —— 否则用户只会看到回答突然被清空。
+              steps: mergeStep(t.steps || [], noteStep(note, noteSeq++)),
+            }));
           },
           onFinal: (d) => {
+            cancelFlush();
             if (d?.session_id) setSessionId(d.session_id);
             if (Array.isArray(d?.todos)) setTodos(d.todos);
             if (d?.usage) setUsage(d.usage);
@@ -565,6 +602,7 @@ function ConsoleInner() {
         { signal: ctrl.signal },
       );
     } catch (e: any) {
+      finishFlush();
       if (ctrl.signal.aborted) {
         patchTurn(aiId, (t) => ({ running: false, text: t.text || "（已停止）" }));
         window.clearInterval(tick);
@@ -586,6 +624,7 @@ function ConsoleInner() {
         patchTurn(aiId, { failed: true, running: false, text: String(e?.message || "请求失败") });
       }
     } finally {
+      finishFlush();
       window.clearInterval(tick);
       patchTurn(aiId, { running: false, elapsedMs: Date.now() - startedAt });
       setBusy(false);
@@ -693,49 +732,58 @@ function ConsoleInner() {
         ) : (
           /* ── 会话态 ────────────────────────────────────────────────── */
           <>
-            <div className="cc-thread scroll-thin" ref={bodyRef}>
-              {turns.map((t) =>
-                t.role === "user" ? (
-                  <div className="cc-user" key={t.id} data-turn={t.id}>
-                    <div className="cc-bubble">{t.text}</div>
-                  </div>
-                ) : (
-                  <div className="cc-ai wb-enter" key={t.id}>
-                    <StepTimeline
-                      steps={t.steps || []}
-                      skills={t.skills || []}
-                      elapsedMs={t.elapsedMs}
-                      running={t.running}
-                    />
-                    {t.text && (
-                      <div className={"cc-answer" + (t.failed ? " cc-answer-error" : "")}>
-                        {t.failed ? t.text : <MarkdownReport text={t.text} />}
-                      </div>
-                    )}
-                    {t.running && !t.text && (
-                      <div className="cc-thinking">
-                        <span className="spin" /> 正在处理{t.elapsedMs ? ` · ${formatMs(t.elapsedMs)}` : ""}
-                      </div>
-                    )}
-                    {(t.approvals || []).map(({ req, decision }) => (
-                      <ApprovalCard
-                        key={req.request_id}
-                        request={req}
-                        decided={decision}
-                        onDecide={(choice) => void decide(t.id, req, choice)}
+            <div className="cc-thread-wrap">
+              <div className="cc-thread scroll-thin" ref={bodyRef}>
+                {turns.map((t) =>
+                  t.role === "user" ? (
+                    <div className="cc-user" key={t.id} data-turn={t.id}>
+                      <div className="cc-bubble">{t.text}</div>
+                    </div>
+                  ) : (
+                    <div className="cc-ai wb-enter" key={t.id}>
+                      <StepTimeline
+                        steps={t.steps || []}
+                        skills={t.skills || []}
+                        elapsedMs={t.elapsedMs}
+                        running={t.running}
                       />
-                    ))}
-                  </div>
-                ),
-              )}
-              {!busy && (
-                <FollowUps
-                  items={followUps}
-                  loading={followLoading}
-                  enabled={followEnabled}
-                  onToggle={toggleFollowUps}
-                  onPick={(q) => void send(q)}
-                />
+                      {t.text && (
+                        <div className={"cc-answer" + (t.failed ? " cc-answer-error" : "")}>
+                          {t.failed ? t.text : <MarkdownReport text={t.text} />}
+                        </div>
+                      )}
+                      {t.running && !t.text && (
+                        <div className="cc-thinking">
+                          <span className="spin" /> 正在处理{t.elapsedMs ? ` · ${formatMs(t.elapsedMs)}` : ""}
+                        </div>
+                      )}
+                      {(t.approvals || []).map(({ req, decision }) => (
+                        <ApprovalCard
+                          key={req.request_id}
+                          request={req}
+                          decided={decision}
+                          onDecide={(choice) => void decide(t.id, req, choice)}
+                        />
+                      ))}
+                    </div>
+                  ),
+                )}
+                {!busy && (
+                  <FollowUps
+                    items={followUps}
+                    loading={followLoading}
+                    enabled={followEnabled}
+                    onToggle={toggleFollowUps}
+                    onPick={(q) => void send(q)}
+                  />
+                )}
+              </div>
+              {/* 脱离底部才出现 —— 跟随已经关掉了，得给一条回去的路。 */}
+              {!atBottom && (
+                <button type="button" className="cc-tobottom" onClick={scrollToBottom}
+                        title="回到最新内容">
+                  ↓ 回到底部
+                </button>
               )}
             </div>
             <div className="cc-dock">{composerNode(true)}</div>

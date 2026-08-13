@@ -409,6 +409,21 @@ export type IvyeaPermissionRequest = {
   expires_at?: number;
 };
 
+/**
+ * 这条 `answer_reset` 该不该把已经流出来的正文**丢掉**。
+ *
+ * 分两类，因为它们的性质完全不同：
+ *   - `gate:*`（引用校验/自验证/阶段汇报没过）：模型被明确要求**整篇重写**，
+ *     旧的那一稿作废。不丢就是"同一张表连出三遍"。
+ *   - `tool_call`（这一段之后模型又去调工具了）：这段话**没有被作废**，只是还没
+ *     说完。实测过一轮：模型在早轮写完了整篇答案、又去调了几个工具、最后只补
+ *     一句"上面已经给了完整回答，这里补一句收尾" —— 这时候丢掉早轮那段，用户
+ *     就只剩一句没头没尾的收尾。所以这类只断段，不丢字。
+ */
+export function answerResetDiscards(reason?: string): boolean {
+  return String(reason || "").startsWith("gate:");
+}
+
 export async function ivyeaAgentChatStream(
   payload: IvyeaChatPayload,
   handlers: {
@@ -427,6 +442,13 @@ export async function ivyeaAgentChatStream(
     onFileChange?: (data: IvyeaFileChange) => void;
     /** 审批超时被自动拒绝。 */
     onPermissionTimeout?: (data: { request_id: string }) => void;
+    /**
+     * 前面已经流出来的正文**作废**了，从下一个 token 起是新一稿（agent ≥ v1.10.2）。
+     * 一轮里模型会把正文吐好几遍——工具前的开场白、门禁打回后的整篇重写——
+     * 不接这条就会把三份草稿首尾拼在同一个气泡里（"同一张表连出三遍"）。
+     * reason: tool_call | gate:verify | gate:progress | gate:citation。
+     */
+    onAnswerReset?: (data: { reason?: string }) => void;
   },
   opts?: { signal?: AbortSignal },
 ) {
@@ -466,6 +488,9 @@ export async function ivyeaAgentChatStream(
     else if (event === "error") handlers.onError?.(data);
     // 结构化事件（agent serve ≥ v1.9）。老版本不发这些，走下面的自由文本兜底，
     // 所以升级前后前端都不会白屏。
+    // answer_reset 必须显式分流：落进下面的 onEvent 就会被当成自由文本叙述，
+    // 而它没有 text 字段，等于这条边界被静默丢掉，重复照旧。
+    else if (event === "answer_reset") handlers.onAnswerReset?.(typeof data === "string" ? {} : data || {});
     else if (event === "step") handlers.onStep?.(data);
     else if (event === "skill_match") handlers.onSkillMatch?.(data);
     else if (event === "file_change") handlers.onFileChange?.(data);

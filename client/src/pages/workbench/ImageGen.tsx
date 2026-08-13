@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type MouseEvent } from "react";
 import { submitImage, imageStatus } from "../../api/assistant";
+import { useStickToBottom } from "../../lib/useStickToBottom";
 
 // Datalist suggestions only — the size field is free-form, so any WxH works.
 const SIZES = ["1024x1024", "1024x1536", "1536x1024", "1200x1200", "1400x1400", "1600x1600", "2000x2000", "1200x800", "800x1200"];
@@ -128,9 +129,9 @@ export default function ImageGen() {
     } catch { /* ignore */ }
   }
 
-  useEffect(() => {
-    if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-  }, [turns]);
+  // 跟随滚动按用户意图判（wheel/touch/键），不按滚动位置判 —— 出图期间用户
+  // 想翻回去看前几张时，位置判据会被下一次内容更新拍回底部。
+  useStickToBottom(bodyRef, [turns]);
 
   // Auto-save session whenever turns change
   useEffect(() => {

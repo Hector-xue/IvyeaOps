@@ -28,6 +28,7 @@ import {
   type BrainUploadResponse,
 } from "../../api/client";
 import {
+  answerResetDiscards,
   ivyeaAgentChatStream,
   ivyeaAwaitSessionAnswer,
   ivyeaChatSession,
@@ -451,6 +452,14 @@ export default function Brain() {
           onToken: (chunk) => {
             setLiveStatus("");
             setMessages((prev) => prev.map((m) => (m.id === tmpAsst ? { ...m, content: m.content + chunk } : m)));
+          },
+          // 正文分段边界：门禁打回 = 整篇重写、旧稿作废；其余只是"这段还没说完"，
+          // 断个段就行（判据见 answerResetDiscards）。
+          onAnswerReset: (d) => {
+            const drop = answerResetDiscards(d?.reason);
+            setMessages((prev) => prev.map((m) => (m.id === tmpAsst
+              ? { ...m, content: drop ? "" : (m.content ? `${m.content}\n\n` : m.content) }
+              : m)));
           },
           onEvent: (data) => {
             // 工具叙事：正文没来之前展示在"生成中"位置，长工具链不再一动不动。
