@@ -63,7 +63,7 @@ export default function ConfirmDialog({
       }
     >
       {err && <div className="sks-error" style={{ marginBottom: 10 }}>⚠ {err}</div>}
-      <div style={{ fontSize: 12, color: "var(--t2)", lineHeight: 1.6 }}>{message}</div>
+      <div style={{ fontSize: "var(--fs-12)", color: "var(--t2)", lineHeight: 1.6 }}>{message}</div>
     </Modal>
   );
 }

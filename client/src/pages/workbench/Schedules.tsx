@@ -244,7 +244,7 @@ function SchedulesInner() {
     <div className="cap-page">
       <div className="home-topbar">
         <span className="home-title"><span style={{ color: "var(--acc)" }}>⏱</span> 定时任务</span>
-        <span style={{ fontSize: 11, color: "var(--t3)" }}>到点让 Agent 自己跑一轮</span>
+        <span style={{ fontSize: "var(--fs-11)", color: "var(--t3)" }}>到点让 Agent 自己跑一轮</span>
       </div>
 
       <div className="sch-notice">

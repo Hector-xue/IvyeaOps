@@ -172,8 +172,8 @@ function AsinAuditPanel() {
     <div className="card" style={{ padding: "14px 16px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
         <span className="tag tg">主力工具</span>
-        <span style={{ fontSize: 13, color: "var(--t)" }}>ASIN 深度审计</span>
-        <span style={{ fontSize: 10, color: "var(--t3)" }}>
+        <span style={{ fontSize: "var(--fs-13)", color: "var(--t)" }}>ASIN 深度审计</span>
+        <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>
           · 多维度分析 + 广告方案
         </span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
@@ -243,7 +243,7 @@ function AsinAuditPanel() {
         {(() => {
           const r = runners.find((x) => x.name === runner);
           if (r && r.available && r.data_source_ready === false && r.data_source_hint) {
-            return <span style={{ fontSize: 10, color: "var(--amber)", maxWidth: 260, lineHeight: 1.4 }}>⚠ {r.data_source_hint}</span>;
+            return <span style={{ fontSize: "var(--fs-10)", color: "var(--amber)", maxWidth: 260, lineHeight: 1.4 }}>⚠ {r.data_source_hint}</span>;
           }
           return null;
         })()}
@@ -254,7 +254,7 @@ function AsinAuditPanel() {
             "🚀 启动审计"
           )}
         </button>
-        <span style={{ fontSize: 10, color: "var(--t3)" }}>预计 5–15 分钟</span>
+        <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>预计 5–15 分钟</span>
       </div>
 
       {/* History dropdown */}
@@ -269,7 +269,7 @@ function AsinAuditPanel() {
           }}
         >
           {history.length === 0 ? (
-            <div style={{ padding: 12, fontSize: 10, color: "var(--t3)" }}>暂无历史任务</div>
+            <div style={{ padding: 12, fontSize: "var(--fs-10)", color: "var(--t3)" }}>暂无历史任务</div>
           ) : (
             <>
             <div
@@ -284,7 +284,7 @@ function AsinAuditPanel() {
                 zIndex: 1,
               }}
             >
-              <span style={{ fontSize: 10, color: "var(--t3)" }}>
+              <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>
                 共 {history.length} 条，失败 {history.filter((h) => h.status === "failed" || h.status === "cancelled").length} 条
               </span>
               <button
@@ -321,7 +321,7 @@ function AsinAuditPanel() {
                     <td style={{ fontFamily: "monospace" }}>{h.asin}</td>
                     <td>{h.marketplace}</td>
                     <td><StatusTag status={h.status} /></td>
-                    <td style={{ fontSize: 10, color: "var(--t3)" }}>
+                    <td style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>
                       {new Date(h.created_at).toLocaleString("zh-CN")}
                     </td>
                     <td>
@@ -353,11 +353,11 @@ function AsinAuditPanel() {
             borderRadius: "var(--r)",
           }}
         >
-          <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 4 }}>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginBottom: 4 }}>
             <span className="spin" style={{ marginRight: 6 }} />
             {state.kind === "starting" ? "正在启动…" : state.data?.progress || "分析中…"}
           </div>
-          <div style={{ fontSize: 10, color: "var(--t3)" }}>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>
             {state.kind === "polling" && state.data?.started_at && (
               <>启动时间：{new Date(state.data.started_at).toLocaleTimeString("zh-CN")}</>
             )}
@@ -375,7 +375,7 @@ function AsinAuditPanel() {
             border: "1px solid rgba(248,113,113,.25)",
             borderRadius: "var(--r)",
             color: "var(--red)",
-            fontSize: 11,
+            fontSize: "var(--fs-11)",
           }}
         >
           ✗ {state.error}
@@ -396,7 +396,7 @@ function AsinAuditPanel() {
             style={{
               maxHeight: 200,
               overflow: "auto",
-              fontSize: 10,
+              fontSize: "var(--fs-10)",
               padding: 10,
               background: "var(--bg3)",
               border: "1px solid var(--b)",
@@ -475,10 +475,10 @@ function ResultPanel({ data, onCollapse }: { data: AuditFull; onCollapse: () => 
         }}
       >
         <span className="tag tg">✓ 完成</span>
-        <span style={{ fontSize: 11, color: "var(--t)" }}>
+        <span style={{ fontSize: "var(--fs-11)", color: "var(--t)" }}>
           {data.asin} · {data.marketplace}
         </span>
-        <span style={{ fontSize: 10, color: "var(--t3)" }}>
+        <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>
           {data.finished_at && `· ${new Date(data.finished_at).toLocaleString("zh-CN")}`}
         </span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
@@ -524,7 +524,7 @@ function ResultPanel({ data, onCollapse }: { data: AuditFull; onCollapse: () => 
         <div
           style={{
             padding: 10,
-            fontSize: 10,
+            fontSize: "var(--fs-10)",
             color: "var(--t3)",
             background: "var(--bg3)",
             border: "1px solid var(--b)",
@@ -565,7 +565,7 @@ function ResultPanel({ data, onCollapse }: { data: AuditFull; onCollapse: () => 
       {/* Raw markdown collapsed */}
       {data.raw_md && (
         <details style={{ marginTop: 14 }}>
-          <summary style={{ fontSize: 10, color: "var(--t3)", cursor: "pointer" }}>
+          <summary style={{ fontSize: "var(--fs-10)", color: "var(--t3)", cursor: "pointer" }}>
             查看原始 Markdown 报告
           </summary>
           <pre
@@ -573,7 +573,7 @@ function ResultPanel({ data, onCollapse }: { data: AuditFull; onCollapse: () => 
               marginTop: 6,
               maxHeight: 500,
               overflow: "auto",
-              fontSize: 10,
+              fontSize: "var(--fs-10)",
               padding: 10,
               background: "var(--bg3)",
               border: "1px solid var(--b)",
@@ -591,7 +591,7 @@ function SectionTitle({ icon, children }: { icon: string; children: React.ReactN
   return (
     <div
       style={{
-        fontSize: 11,
+        fontSize: "var(--fs-11)",
         color: "var(--t)",
         margin: "12px 0 6px",
         display: "flex",
@@ -648,7 +648,7 @@ function Scorecard({ items }: { items: NonNullable<AuditStructured["scorecard"]>
               <td>
                 <ScoreBar score={it.score} />
               </td>
-              <td style={{ fontSize: 10, color: "var(--t3)" }}>{it.note || "—"}</td>
+              <td style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>{it.note || "—"}</td>
             </tr>
           ))}
         </tbody>
@@ -675,7 +675,7 @@ function ScoreBar({ score }: { score: number }) {
       >
         <div style={{ width: `${pct}%`, height: "100%", background: color }} />
       </div>
-      <span style={{ fontSize: 10, color, minWidth: 22 }}>{s.toFixed(1)}</span>
+      <span style={{ fontSize: "var(--fs-10)", color, minWidth: 22 }}>{s.toFixed(1)}</span>
     </div>
   );
 }
@@ -700,7 +700,7 @@ function PriorityTable({ items }: { items: NonNullable<AuditStructured["prioriti
             <tr key={i}>
               <td><span className={"tag " + tagCls(p.level)}>{p.level}</span></td>
               <td>{p.issue}</td>
-              <td style={{ fontSize: 10, color: "var(--t3)" }}>{p.evidence}</td>
+              <td style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>{p.evidence}</td>
               <td style={{ color: "var(--t)" }}>{p.action}</td>
             </tr>
           ))}
@@ -715,7 +715,7 @@ function AdPlanSection({ ad }: { ad: NonNullable<AuditStructured["ad_plan"]> }) 
     <>
       <SectionTitle icon="📣">广告搭建建议</SectionTitle>
       {ad.objective && (
-        <div style={{ fontSize: 11, color: "var(--t2)", marginBottom: 6 }}>
+        <div style={{ fontSize: "var(--fs-11)", color: "var(--t2)", marginBottom: 6 }}>
           <span style={{ color: "var(--t3)" }}>目标：</span>
           {ad.objective}
         </div>
@@ -738,10 +738,10 @@ function AdPlanSection({ ad }: { ad: NonNullable<AuditStructured["ad_plan"]> }) 
               <tr key={i}>
                 <td>{c.name}</td>
                 <td><span className="tag tb-tag">{c.type}</span></td>
-                <td style={{ fontSize: 10 }}>{c.targeting}</td>
+                <td style={{ fontSize: "var(--fs-10)" }}>{c.targeting}</td>
                 <td>{c.bid_range}</td>
                 <td>{c.budget}</td>
-                <td style={{ fontSize: 10, color: "var(--t3)" }}>{c.strategy}</td>
+                <td style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>{c.strategy}</td>
               </tr>
             ))}
           </tbody>
@@ -750,14 +750,14 @@ function AdPlanSection({ ad }: { ad: NonNullable<AuditStructured["ad_plan"]> }) 
 
       {ad.keywords_exact && ad.keywords_exact.length > 0 && (
         <>
-          <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 4 }}>精准关键词（Exact）</div>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginBottom: 4 }}>精准关键词（Exact）</div>
           <KeywordTable items={ad.keywords_exact} />
         </>
       )}
 
       {ad.keywords_phrase_broad && ad.keywords_phrase_broad.length > 0 && (
         <>
-          <div style={{ fontSize: 10, color: "var(--t3)", margin: "8px 0 4px" }}>扩量关键词（Phrase / Broad）</div>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", margin: "8px 0 4px" }}>扩量关键词（Phrase / Broad）</div>
           <KeywordTable items={ad.keywords_phrase_broad} />
         </>
       )}
@@ -774,7 +774,7 @@ function AdPlanSection({ ad }: { ad: NonNullable<AuditStructured["ad_plan"]> }) 
       )}
 
       {ad.rules && (
-        <div style={{ marginTop: 8, fontSize: 10, color: "var(--t3)", lineHeight: 1.6 }}>
+        <div style={{ marginTop: 8, fontSize: "var(--fs-10)", color: "var(--t3)", lineHeight: 1.6 }}>
           <b style={{ color: "var(--t2)" }}>调价规则：</b>
           {ad.rules}
         </div>
@@ -796,9 +796,9 @@ function KeywordTable({ items }: { items: { keyword: string; bid: string; reason
       <tbody>
         {items.map((k, i) => (
           <tr key={i}>
-            <td style={{ fontFamily: "monospace", fontSize: 10 }}>{k.keyword}</td>
+            <td style={{ fontFamily: "monospace", fontSize: "var(--fs-10)" }}>{k.keyword}</td>
             <td>{k.bid}</td>
-            <td style={{ fontSize: 10, color: "var(--t3)" }}>{k.reason}</td>
+            <td style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>{k.reason}</td>
           </tr>
         ))}
       </tbody>
@@ -831,7 +831,7 @@ function NegBox({ title, color, items }: { title: string; color: string; items: 
         borderRadius: "var(--r)",
       }}
     >
-      <div style={{ fontSize: 10, color, marginBottom: 4 }}>{title}</div>
+      <div style={{ fontSize: "var(--fs-10)", color, marginBottom: 4 }}>{title}</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
         {items.map((raw, i) => {
           const { label, tip } = normalize(raw);
@@ -840,7 +840,7 @@ function NegBox({ title, color, items }: { title: string; color: string; items: 
               key={i}
               title={tip}
               style={{
-                fontSize: 10,
+                fontSize: "var(--fs-10)",
                 padding: "1px 6px",
                 background: "var(--bg3)",
                 borderRadius: 3,
@@ -875,14 +875,14 @@ function RewriteSection({ rw }: { rw: NonNullable<AuditStructured["rewrites"]> }
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-            <span style={{ fontSize: 10, color: "var(--t3)" }}>TITLE</span>
+            <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>TITLE</span>
             <button
               className="tbtn"
               style={{ marginLeft: "auto", padding: "0 6px" }}
               onClick={() => copy(rw.title || "")}
             >复制</button>
           </div>
-          <div style={{ fontSize: 11, color: "var(--t)", lineHeight: 1.6 }}>{rw.title}</div>
+          <div style={{ fontSize: "var(--fs-11)", color: "var(--t)", lineHeight: 1.6 }}>{rw.title}</div>
         </div>
       )}
 
@@ -897,14 +897,14 @@ function RewriteSection({ rw }: { rw: NonNullable<AuditStructured["rewrites"]> }
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-            <span style={{ fontSize: 10, color: "var(--t3)" }}>BULLETS</span>
+            <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>BULLETS</span>
             <button
               className="tbtn"
               style={{ marginLeft: "auto", padding: "0 6px" }}
               onClick={() => copy((rw.bullets || []).join("\n"))}
             >复制</button>
           </div>
-          <ol style={{ margin: 0, paddingLeft: 20, fontSize: 11, lineHeight: 1.7 }}>
+          <ol style={{ margin: 0, paddingLeft: 20, fontSize: "var(--fs-11)", lineHeight: 1.7 }}>
             {rw.bullets.map((b, i) => (
               <li key={i}>{b}</li>
             ))}
@@ -914,7 +914,7 @@ function RewriteSection({ rw }: { rw: NonNullable<AuditStructured["rewrites"]> }
 
       {rw.qa && rw.qa.length > 0 && (
         <>
-          <div style={{ fontSize: 10, color: "var(--t3)", margin: "8px 0 4px" }}>Q&A</div>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", margin: "8px 0 4px" }}>Q&A</div>
           <table className="tbl">
             <tbody>
               {rw.qa.map((q, i) => (
@@ -922,7 +922,7 @@ function RewriteSection({ rw }: { rw: NonNullable<AuditStructured["rewrites"]> }
                   <td style={{ width: 30, color: "var(--t3)" }}>Q{i + 1}</td>
                   <td>
                     <div style={{ color: "var(--t2)" }}>{q.q}</div>
-                    <div style={{ color: "var(--t3)", fontSize: 10, marginTop: 2 }}>{q.a}</div>
+                    <div style={{ color: "var(--t3)", fontSize: "var(--fs-10)", marginTop: 2 }}>{q.a}</div>
                   </td>
                 </tr>
               ))}
@@ -933,14 +933,14 @@ function RewriteSection({ rw }: { rw: NonNullable<AuditStructured["rewrites"]> }
 
       {rw.backend_terms && (
         <div style={{ marginTop: 8 }}>
-          <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 4 }}>BACKEND SEARCH TERMS</div>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginBottom: 4 }}>BACKEND SEARCH TERMS</div>
           <div
             style={{
               padding: 8,
               background: "var(--bg3)",
               border: "1px solid var(--b)",
               borderRadius: "var(--r)",
-              fontSize: 10,
+              fontSize: "var(--fs-10)",
               fontFamily: "monospace",
               color: "var(--t2)",
               wordBreak: "break-all",
@@ -972,7 +972,7 @@ function ImagePlanBlock({ plan }: { plan: NonNullable<NonNullable<AuditStructure
   ];
   return (
     <>
-      <div style={{ fontSize: 10, color: "var(--t3)", margin: "10px 0 4px" }}>图片卖点</div>
+      <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", margin: "10px 0 4px" }}>图片卖点</div>
       {groups.map(([title, items]) =>
         items && items.length > 0 ? (
           <ListBlock key={title} title={title} items={items} />
@@ -993,12 +993,12 @@ function ListBlock({
 }) {
   return (
     <div style={{ marginTop: 6 }}>
-      <div style={{ fontSize: 10, color: accent || "var(--t3)", marginBottom: 3 }}>{title}</div>
+      <div style={{ fontSize: "var(--fs-10)", color: accent || "var(--t3)", marginBottom: 3 }}>{title}</div>
       <ol
         style={{
           margin: 0,
           paddingLeft: 20,
-          fontSize: 10,
+          fontSize: "var(--fs-10)",
           lineHeight: 1.7,
           color: "var(--t2)",
         }}
@@ -1045,7 +1045,7 @@ function ListingProfile({
 }) {
   return (
     <div className="card" style={{ padding: "12px 14px", marginBottom: 12 }}>
-      <div style={{ fontSize: 12, color: "var(--t)", marginBottom: 10, fontWeight: 600 }}>
+      <div style={{ fontSize: "var(--fs-12)", color: "var(--t)", marginBottom: 10, fontWeight: 600 }}>
         📋 Listing 全景画像
       </div>
 
@@ -1065,15 +1065,15 @@ function ListingProfile({
       {/* Scorecard */}
       {scorecard && scorecard.length > 0 && (
         <>
-          <div style={{ fontSize: 10, color: "var(--t2)", marginBottom: 4 }}>评分卡</div>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t2)", marginBottom: 4 }}>评分卡</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 6, marginBottom: 10 }}>
             {scorecard.map((it) => (
               <div key={it.dimension} style={{ padding: "6px 8px", background: "var(--bg3)", borderRadius: "var(--r)", border: "1px solid var(--b)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
-                  <span style={{ fontSize: 10, color: "var(--t)" }}>{it.dimension}</span>
+                  <span style={{ fontSize: "var(--fs-10)", color: "var(--t)" }}>{it.dimension}</span>
                   <ScoreBar score={it.score} />
                 </div>
-                <div style={{ fontSize: 9, color: "var(--t3)", lineHeight: 1.4 }}>{it.note}</div>
+                <div style={{ fontSize: "var(--fs-9)", color: "var(--t3)", lineHeight: 1.4 }}>{it.note}</div>
               </div>
             ))}
           </div>
@@ -1088,13 +1088,13 @@ function ListingProfile({
       {/* COSMO nodes (板块④ A+内容) */}
       {cosmoNodes && cosmoNodes.length > 0 && (
         <>
-          <div style={{ fontSize: 10, color: "var(--t2)", margin: "8px 0 4px" }}>🧠 COSMO 知识图谱</div>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t2)", margin: "8px 0 4px" }}>🧠 COSMO 知识图谱</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 6, marginBottom: 8 }}>
             {cosmoNodes.map((n) => (
               <div key={n.node} style={{ padding: "6px 8px", background: "var(--bg3)", borderRadius: "var(--r)", border: "1px solid var(--b)" }}>
-                <div style={{ fontSize: 10, color: "var(--acc)", marginBottom: 3 }}>{n.node} · {n.label_cn}</div>
+                <div style={{ fontSize: "var(--fs-10)", color: "var(--acc)", marginBottom: 3 }}>{n.node} · {n.label_cn}</div>
                 {n.bullets.map((b, i) => (
-                  <div key={i} style={{ fontSize: 9, color: b.label === "推断建议" ? "var(--amber)" : "var(--t3)", marginBottom: 2 }}>
+                  <div key={i} style={{ fontSize: "var(--fs-9)", color: b.label === "推断建议" ? "var(--amber)" : "var(--t3)", marginBottom: 2 }}>
                     <span style={{ opacity: 0.7 }}>[{b.label}]</span> {b.text}
                   </div>
                 ))}
@@ -1107,15 +1107,15 @@ function ListingProfile({
       {/* Rufus Q&A (板块⑤) */}
       {rufusQa && rufusQa.length > 0 && (
         <>
-          <div style={{ fontSize: 10, color: "var(--t2)", margin: "8px 0 4px" }}>🤖 Rufus 问答能力</div>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t2)", margin: "8px 0 4px" }}>🤖 Rufus 问答能力</div>
           <table className="tbl" style={{ marginBottom: 8 }}>
             <thead><tr><th>问题</th><th style={{ width: 50 }}>判定</th><th>证据</th></tr></thead>
             <tbody>
               {rufusQa.map((r, i) => (
                 <tr key={i}>
-                  <td style={{ fontSize: 10 }}>{r.question}</td>
+                  <td style={{ fontSize: "var(--fs-10)" }}>{r.question}</td>
                   <td><span className={`tag ${r.verdict === "能" ? "tg" : r.verdict === "不能" ? "tr" : "ta"}`}>{r.verdict}</span></td>
-                  <td style={{ fontSize: 9, color: "var(--t3)" }}>{r.evidence}</td>
+                  <td style={{ fontSize: "var(--fs-9)", color: "var(--t3)" }}>{r.evidence}</td>
                 </tr>
               ))}
             </tbody>
@@ -1136,8 +1136,8 @@ function ListingProfile({
       {/* Rewrites preview */}
       {rewrites && (
         <details style={{ marginTop: 8 }}>
-          <summary style={{ fontSize: 10, color: "var(--t3)", cursor: "pointer" }}>✍️ 改写建议（标题 / 五点 / A+ / 后台词）</summary>
-          <div style={{ marginTop: 6, padding: 8, background: "var(--bg3)", borderRadius: "var(--r)", fontSize: 10 }}>
+          <summary style={{ fontSize: "var(--fs-10)", color: "var(--t3)", cursor: "pointer" }}>✍️ 改写建议（标题 / 五点 / A+ / 后台词）</summary>
+          <div style={{ marginTop: 6, padding: 8, background: "var(--bg3)", borderRadius: "var(--r)", fontSize: "var(--fs-10)" }}>
             {rewrites.title && <div style={{ marginBottom: 4 }}><b>标题：</b>{rewrites.title}</div>}
             {rewrites.bullets && rewrites.bullets.length > 0 && (
               <div style={{ marginBottom: 4 }}><b>五点：</b><ul style={{ margin: "2px 0", paddingLeft: 16 }}>{rewrites.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul></div>
@@ -1156,7 +1156,7 @@ function ListingProfile({
 function VisualReport({ imagePlan }: { imagePlan: NonNullable<NonNullable<AuditStructured["rewrites"]>["image_plan"]> }) {
   return (
     <div className="card" style={{ padding: "12px 14px", marginBottom: 12 }}>
-      <div style={{ fontSize: 12, color: "var(--t)", marginBottom: 8, fontWeight: 600 }}>
+      <div style={{ fontSize: "var(--fs-12)", color: "var(--t)", marginBottom: 8, fontWeight: 600 }}>
         🖼️ 视觉与图片方案
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 10 }}>
@@ -1177,10 +1177,10 @@ function VisualReport({ imagePlan }: { imagePlan: NonNullable<NonNullable<AuditS
 function ImageColumn({ title, icon, items }: { title: string; icon: string; items: string[] }) {
   return (
     <div style={{ padding: "8px 10px", background: "var(--bg3)", borderRadius: "var(--r)", border: "1px solid var(--b)" }}>
-      <div style={{ fontSize: 10, color: "var(--t2)", marginBottom: 4 }}>{icon} {title}</div>
+      <div style={{ fontSize: "var(--fs-10)", color: "var(--t2)", marginBottom: 4 }}>{icon} {title}</div>
       <ol style={{ margin: 0, paddingLeft: 16 }}>
         {items.map((it, i) => (
-          <li key={i} style={{ fontSize: 9, color: "var(--t3)", marginBottom: 3, lineHeight: 1.4 }}>{it}</li>
+          <li key={i} style={{ fontSize: "var(--fs-9)", color: "var(--t3)", marginBottom: 3, lineHeight: 1.4 }}>{it}</li>
         ))}
       </ol>
     </div>
@@ -1192,7 +1192,7 @@ function TrafficStructureChart({ scorecard }: { scorecard: NonNullable<AuditStru
   const max = 10;
   return (
     <div className="card" style={{ padding: "12px 14px", marginBottom: 12 }}>
-      <div style={{ fontSize: 12, color: "var(--t)", marginBottom: 8, fontWeight: 600 }}>
+      <div style={{ fontSize: "var(--fs-12)", color: "var(--t)", marginBottom: 8, fontWeight: 600 }}>
         📈 流量结构 · 7 维雷达
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -1201,10 +1201,10 @@ function TrafficStructureChart({ scorecard }: { scorecard: NonNullable<AuditStru
           const color = it.score >= 8 ? "var(--acc)" : it.score >= 5 ? "var(--amber)" : "var(--red)";
           return (
             <div key={it.dimension} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 9, color: "var(--t3)", width: 90, textAlign: "right", flexShrink: 0 }}>{it.dimension}</span>
+              <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)", width: 90, textAlign: "right", flexShrink: 0 }}>{it.dimension}</span>
               <div style={{ flex: 1, height: 12, background: "var(--bg3)", borderRadius: 3, overflow: "hidden", position: "relative" }}>
                 <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 3, transition: "width .3s" }} />
-                <span style={{ position: "absolute", right: 4, top: 0, fontSize: 8, lineHeight: "12px", color: "var(--t3)" }}>{it.score.toFixed(1)}</span>
+                <span style={{ position: "absolute", right: 4, top: 0, fontSize: "var(--fs-8)", lineHeight: "12px", color: "var(--t3)" }}>{it.score.toFixed(1)}</span>
               </div>
             </div>
           );
@@ -1224,18 +1224,18 @@ function KeywordPositionMatrix({ adPlan }: { adPlan: NonNullable<AuditStructured
 
   return (
     <div className="card" style={{ padding: "12px 14px", marginBottom: 12 }}>
-      <div style={{ fontSize: 12, color: "var(--t)", marginBottom: 8, fontWeight: 600 }}>
+      <div style={{ fontSize: "var(--fs-12)", color: "var(--t)", marginBottom: 8, fontWeight: 600 }}>
         🎯 关键词阵地矩阵
       </div>
-      {adPlan.objective && <div style={{ fontSize: 10, color: "var(--t2)", marginBottom: 8 }}>目标：{adPlan.objective}</div>}
+      {adPlan.objective && <div style={{ fontSize: "var(--fs-10)", color: "var(--t2)", marginBottom: 8 }}>目标：{adPlan.objective}</div>}
 
       {/* Campaigns */}
       {adPlan.campaigns && adPlan.campaigns.length > 0 && (
         <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 10, color: "var(--t3)", marginBottom: 4 }}>广告活动</div>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginBottom: 4 }}>广告活动</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 6 }}>
             {adPlan.campaigns.map((c, i) => (
-              <div key={i} style={{ padding: "6px 8px", background: "var(--bg3)", borderRadius: "var(--r)", border: "1px solid var(--b)", fontSize: 9 }}>
+              <div key={i} style={{ padding: "6px 8px", background: "var(--bg3)", borderRadius: "var(--r)", border: "1px solid var(--b)", fontSize: "var(--fs-9)" }}>
                 <div style={{ color: "var(--t)", marginBottom: 2 }}>{c.name}</div>
                 <div style={{ color: "var(--t3)" }}>{c.type} · {c.targeting} · {c.bid_range} · {c.budget}</div>
               </div>
@@ -1250,10 +1250,10 @@ function KeywordPositionMatrix({ adPlan }: { adPlan: NonNullable<AuditStructured
           <thead><tr><th>关键词</th><th style={{ width: 60 }}>出价</th><th style={{ width: 50 }}>类型</th><th>理由</th></tr></thead>
           <tbody>
             {exact.map((k, i) => (
-              <tr key={`e${i}`}><td style={{ fontSize: 10 }}>{k.keyword}</td><td>{k.bid}</td><td><span className="tag tg" style={{ fontSize: 8 }}>精准</span></td><td style={{ fontSize: 9, color: "var(--t3)" }}>{k.reason}</td></tr>
+              <tr key={`e${i}`}><td style={{ fontSize: "var(--fs-10)" }}>{k.keyword}</td><td>{k.bid}</td><td><span className="tag tg" style={{ fontSize: "var(--fs-8)" }}>精准</span></td><td style={{ fontSize: "var(--fs-9)", color: "var(--t3)" }}>{k.reason}</td></tr>
             ))}
             {broad.map((k, i) => (
-              <tr key={`b${i}`}><td style={{ fontSize: 10 }}>{k.keyword}</td><td>{k.bid}</td><td><span className="tag tp" style={{ fontSize: 8 }}>扩量</span></td><td style={{ fontSize: 9, color: "var(--t3)" }}>{k.reason}</td></tr>
+              <tr key={`b${i}`}><td style={{ fontSize: "var(--fs-10)" }}>{k.keyword}</td><td>{k.bid}</td><td><span className="tag tp" style={{ fontSize: "var(--fs-8)" }}>扩量</span></td><td style={{ fontSize: "var(--fs-9)", color: "var(--t3)" }}>{k.reason}</td></tr>
             ))}
           </tbody>
         </table>
@@ -1263,10 +1263,10 @@ function KeywordPositionMatrix({ adPlan }: { adPlan: NonNullable<AuditStructured
       {(negImm.length > 0 || negWatch.length > 0) && (
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {negImm.length > 0 && (
-            <div><span style={{ fontSize: 9, color: "var(--red)" }}>🚫 立即否定：</span><span style={{ fontSize: 9, color: "var(--t3)" }}>{negImm.join("、")}</span></div>
+            <div><span style={{ fontSize: "var(--fs-9)", color: "var(--red)" }}>🚫 立即否定：</span><span style={{ fontSize: "var(--fs-9)", color: "var(--t3)" }}>{negImm.join("、")}</span></div>
           )}
           {negWatch.length > 0 && (
-            <div><span style={{ fontSize: 9, color: "var(--amber)" }}>👁 观察否定：</span><span style={{ fontSize: 9, color: "var(--t3)" }}>{negWatch.join("、")}</span></div>
+            <div><span style={{ fontSize: "var(--fs-9)", color: "var(--amber)" }}>👁 观察否定：</span><span style={{ fontSize: "var(--fs-9)", color: "var(--t3)" }}>{negWatch.join("、")}</span></div>
           )}
         </div>
       )}
@@ -1281,7 +1281,7 @@ function RiskSignalBoard({ priorities }: { priorities: NonNullable<AuditStructur
 
   return (
     <div className="card" style={{ padding: "12px 14px", marginBottom: 12 }}>
-      <div style={{ fontSize: 12, color: "var(--t)", marginBottom: 8, fontWeight: 600 }}>
+      <div style={{ fontSize: "var(--fs-12)", color: "var(--t)", marginBottom: 8, fontWeight: 600 }}>
         ⚠️ 风险信号看板
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 8 }}>
@@ -1296,12 +1296,12 @@ function RiskSignalBoard({ priorities }: { priorities: NonNullable<AuditStructur
 function RiskColumn({ level, color, items }: { level: string; color: string; items: NonNullable<AuditStructured["priorities"]> }) {
   return (
     <div style={{ padding: "8px 10px", background: "var(--bg3)", borderRadius: "var(--r)", border: `1px solid ${color}22` }}>
-      <div style={{ fontSize: 10, color, fontWeight: 600, marginBottom: 6 }}>{level} · {items.length} 项</div>
+      <div style={{ fontSize: "var(--fs-10)", color, fontWeight: 600, marginBottom: 6 }}>{level} · {items.length} 项</div>
       {items.map((it, i) => (
         <div key={i} style={{ marginBottom: 6, paddingBottom: 6, borderBottom: i < items.length - 1 ? "1px solid var(--b)" : "none" }}>
-          <div style={{ fontSize: 10, color: "var(--t)", marginBottom: 2 }}>{it.issue}</div>
-          <div style={{ fontSize: 9, color: "var(--t3)", marginBottom: 2 }}>{it.evidence}</div>
-          <div style={{ fontSize: 9, color: "var(--acc)" }}>→ {it.action}</div>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t)", marginBottom: 2 }}>{it.issue}</div>
+          <div style={{ fontSize: "var(--fs-9)", color: "var(--t3)", marginBottom: 2 }}>{it.evidence}</div>
+          <div style={{ fontSize: "var(--fs-9)", color: "var(--acc)" }}>→ {it.action}</div>
         </div>
       ))}
     </div>
@@ -1311,14 +1311,14 @@ function RiskColumn({ level, color, items }: { level: string; color: string; ite
 function EvidenceSection({ title, groups, groupKey }: { title: string; groups: EvidenceGroup[]; groupKey: string }) {
   return (
     <>
-      <div style={{ fontSize: 10, color: "var(--t2)", margin: "8px 0 4px" }}>{title}</div>
+      <div style={{ fontSize: "var(--fs-10)", color: "var(--t2)", margin: "8px 0 4px" }}>{title}</div>
       {groups.map((g, gi) => {
         const label = (g as any)[groupKey] || `#${gi + 1}`;
         return (
           <div key={gi} style={{ marginBottom: 6, paddingLeft: 8, borderLeft: "2px solid var(--b)" }}>
-            <div style={{ fontSize: 10, color: "var(--t)", marginBottom: 2 }}>{label}</div>
+            <div style={{ fontSize: "var(--fs-10)", color: "var(--t)", marginBottom: 2 }}>{label}</div>
             {g.bullets.map((b, bi) => (
-              <div key={bi} style={{ fontSize: 9, color: b.label === "推断建议" ? "var(--amber)" : "var(--t3)", marginBottom: 1 }}>
+              <div key={bi} style={{ fontSize: "var(--fs-9)", color: b.label === "推断建议" ? "var(--amber)" : "var(--t3)", marginBottom: 1 }}>
                 <span style={{ opacity: 0.6 }}>[{b.label}]</span> {b.text}
               </div>
             ))}
@@ -1349,20 +1349,20 @@ function ComingSoonCard({
       title="即将上线"
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 16 }}>{icon}</span>
-        <span style={{ fontSize: 11, color: "var(--t)" }}>{title}</span>
+        <span style={{ fontSize: "var(--fs-16)" }}>{icon}</span>
+        <span style={{ fontSize: "var(--fs-11)", color: "var(--t)" }}>{title}</span>
         <span
           className="tag"
           style={{
             marginLeft: "auto",
-            fontSize: 8,
+            fontSize: "var(--fs-8)",
             background: "var(--bg3)",
             color: "var(--t3)",
             border: "1px solid var(--b)",
           }}
         >WIP</span>
       </div>
-      <div style={{ fontSize: 10, color: "var(--t3)", lineHeight: 1.5 }}>{desc}</div>
+      <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", lineHeight: 1.5 }}>{desc}</div>
     </div>
   );
 }

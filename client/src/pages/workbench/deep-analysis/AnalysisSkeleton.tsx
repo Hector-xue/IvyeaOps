@@ -15,8 +15,8 @@ export default function AnalysisSkeleton({
       aria-live="polite"
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <span className="pulse-spin" style={{ fontSize: 12, color: "var(--acc)" }}>◌</span>
-        <span style={{ fontSize: 11, color: "var(--t2)" }}>{label}</span>
+        <span className="pulse-spin" style={{ fontSize: "var(--fs-12)", color: "var(--acc)" }}>◌</span>
+        <span style={{ fontSize: "var(--fs-11)", color: "var(--t2)" }}>{label}</span>
       </div>
       {Array.from({ length: Math.max(1, sections) }).map((_, s) => (
         <div key={s} style={{ marginBottom: 14 }}>

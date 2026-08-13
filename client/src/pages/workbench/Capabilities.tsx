@@ -571,7 +571,7 @@ function CapabilitiesInner() {
     <div className="cap-page">
       <div className="home-topbar">
         <span className="home-title"><span style={{ color: "var(--acc)" }}>◈</span> 能力市场</span>
-        <span style={{ fontSize: 11, color: "var(--t3)" }}>{hint}</span>
+        <span style={{ fontSize: "var(--fs-11)", color: "var(--t3)" }}>{hint}</span>
       </div>
 
       <div className="home-tabs">

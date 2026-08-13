@@ -790,7 +790,7 @@ export default function Terminal() {
             <span className="terminal-page-count" style={{ color: "var(--t3)" }}>
               {loading ? "加载中..." : `${sessions.length} 个终端${showArchived ? "（含归档）" : ""}`}
             </span>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, color: "var(--t3)", cursor: "pointer" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--fs-10)", color: "var(--t3)", cursor: "pointer" }}>
               <input
                 type="checkbox"
                 checked={showArchived}
@@ -879,7 +879,7 @@ export default function Terminal() {
         >
           <span>✅ 已上传：</span>
           <code>{uploadedPath}</code>
-          <span style={{ fontSize: 9, color: "var(--t3)" }}>（点击复制）</span>
+          <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)" }}>（点击复制）</span>
           <button className="th-del" onClick={(e) => { e.stopPropagation(); setUploadedPath(null); }}>✕</button>
         </div>
       )}
@@ -1030,7 +1030,7 @@ export default function Terminal() {
               <aside className={`terminal-history-panel card${isMobileLayout ? " terminal-mobile-sheet terminal-mobile-sheet-history" : ""}`}>
               <div className="terminal-section-title">
                 会话内容
-                <span style={{ marginLeft: 8, color: "var(--t3)", fontSize: 10 }}>
+                <span style={{ marginLeft: 8, color: "var(--t3)", fontSize: "var(--fs-10)" }}>
                   {activeIsLegacy ? "主终端快照" : current ? "会话快照" : ""}
                 </span>
               </div>

@@ -63,13 +63,13 @@ export default function LingXingDashboard({ storeSid }: { storeSid?: string }) {
     <div>
       {/* scope */}
       <div className="card" style={{ padding: 12, marginBottom: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11, color: "var(--t3)" }}>店铺：{sellers.find((s) => String(s.sid) === sid)?.name || sid || "（上方选择）"}</span>
-        <span style={{ fontSize: 11, color: "var(--t3)" }}>窗口</span>
+        <span style={{ fontSize: "var(--fs-11)", color: "var(--t3)" }}>店铺：{sellers.find((s) => String(s.sid) === sid)?.name || sid || "（上方选择）"}</span>
+        <span style={{ fontSize: "var(--fs-11)", color: "var(--t3)" }}>窗口</span>
         <SheetSelect value={String(days)} onChange={(v) => setDays(Number(v))} title="时间窗口" style={{ ...inputStyle, width: 100 }}
           options={[7, 14, 30, 60].map((d) => ({ value: String(d), label: `近 ${d} 天` }))} />
         <Btn onClick={load} disabled={loading}>{loading ? "聚合中…" : "刷新"}</Btn>
-        {err && <span style={{ fontSize: 11, color: "var(--red)" }}>{err}</span>}
-        <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--t3)" }}>环比 = 上一个 {days} 天 · 币种随店铺（{cur?.code || "—"}）</span>
+        {err && <span style={{ fontSize: "var(--fs-11)", color: "var(--red)" }}>{err}</span>}
+        <span style={{ marginLeft: "auto", fontSize: "var(--fs-10)", color: "var(--t3)" }}>环比 = 上一个 {days} 天 · 币种随店铺（{cur?.code || "—"}）</span>
       </div>
 
       {/* KPI cards (single store, native currency, period-over-period) */}
@@ -87,7 +87,7 @@ export default function LingXingDashboard({ storeSid }: { storeSid?: string }) {
 
       {/* trend */}
       <div className="card" style={{ padding: 12, marginBottom: 10 }}>
-        <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 4 }}>花费 / 销售额 / ACOS 趋势（近 {days} 天）</div>
+        <div style={{ fontSize: "var(--fs-11)", color: "var(--t3)", marginBottom: 4 }}>花费 / 销售额 / ACOS 趋势（近 {days} 天）</div>
         <TrendChart series={trendSeries} height={200} />
       </div>
 
@@ -99,15 +99,15 @@ export default function LingXingDashboard({ storeSid }: { storeSid?: string }) {
       {/* all-store comparison (opt-in but remembered; each native currency) */}
       <div className="card" style={{ padding: 0, marginTop: 10 }}>
         <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--b)", display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 11, color: "var(--t3)" }}>全部店铺对比（各店本币，不跨币种汇总）</span>
-          <label style={{ display: "inline-flex", gap: 4, alignItems: "center", cursor: "pointer", fontSize: 10, color: "var(--t3)" }}>
+          <span style={{ fontSize: "var(--fs-11)", color: "var(--t3)" }}>全部店铺对比（各店本币，不跨币种汇总）</span>
+          <label style={{ display: "inline-flex", gap: 4, alignItems: "center", cursor: "pointer", fontSize: "var(--fs-10)", color: "var(--t3)" }}>
             <input type="checkbox" checked={cmpOn} onChange={toggleCmp} />进入时自动加载
           </label>
           <Btn onClick={loadCmp} disabled={cmpLoading}>{cmpLoading ? "加载中…(首次较慢)" : cmp ? "刷新对比" : "加载全部店铺对比"}</Btn>
         </div>
         {cmpOn && cmp && (
           <div style={{ overflowX: "auto" }}>
-            <table className="lx-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+            <table className="lx-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--fs-11)" }}>
               <thead><tr>{["店铺", "花费", "销售额", "ACOS", "ROAS", "订单"].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
               <tbody>
                 {(cmp.by_store || []).map((s: any) => (
@@ -141,21 +141,21 @@ function Kpi({ label, value, hint, delta: d, invert }: { label: string; value: a
   const color = d == null || Math.abs(d) < 0.05 ? "var(--t3)" : good ? "var(--acc)" : "var(--amber)";
   return (
     <div className="card" style={{ padding: "10px 12px" }}>
-      <div style={{ fontSize: 10, color: "var(--t3)" }}>{label}</div>
-      <div style={{ fontSize: 17, fontWeight: 600, marginTop: 2 }}>{value}{hint && <span style={{ fontSize: 10, color: "var(--amber)", marginLeft: 4 }}>{hint}</span>}</div>
-      {d != null && <div style={{ fontSize: 10, color, marginTop: 1 }}>{d > 0 ? "▲" : d < 0 ? "▼" : "＝"} {Math.abs(d).toFixed(1)}% 环比</div>}
+      <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>{label}</div>
+      <div style={{ fontSize: 17, fontWeight: 600, marginTop: 2 }}>{value}{hint && <span style={{ fontSize: "var(--fs-10)", color: "var(--amber)", marginLeft: 4 }}>{hint}</span>}</div>
+      {d != null && <div style={{ fontSize: "var(--fs-10)", color, marginTop: 1 }}>{d > 0 ? "▲" : d < 0 ? "▼" : "＝"} {Math.abs(d).toFixed(1)}% 环比</div>}
     </div>
   );
 }
 function Card({ title, children }: any) {
-  return <div className="card" style={{ padding: 0 }}><div style={{ padding: "8px 12px", borderBottom: "1px solid var(--b)", fontSize: 11, color: "var(--t3)" }}>{title}</div>{children}</div>;
+  return <div className="card" style={{ padding: 0 }}><div style={{ padding: "8px 12px", borderBottom: "1px solid var(--b)", fontSize: "var(--fs-11)", color: "var(--t3)" }}>{title}</div>{children}</div>;
 }
 function CampTable({ rows, cur, loading }: { rows: any[]; cur?: Cur; loading: boolean }) {
-  if (loading) return <div style={{ padding: 20, textAlign: "center", color: "var(--t3)", fontSize: 11 }}>聚合中…</div>;
-  if (!rows.length) return <div style={{ padding: 20, textAlign: "center", color: "var(--t3)", fontSize: 11 }}>窗口内无广告数据</div>;
+  if (loading) return <div style={{ padding: 20, textAlign: "center", color: "var(--t3)", fontSize: "var(--fs-11)" }}>聚合中…</div>;
+  if (!rows.length) return <div style={{ padding: 20, textAlign: "center", color: "var(--t3)", fontSize: "var(--fs-11)" }}>窗口内无广告数据</div>;
   return (
     <div style={{ overflowX: "auto" }}>
-      <table className="lx-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+      <table className="lx-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--fs-11)" }}>
         <thead><tr>{["活动", "花费", "销售额", "ACOS", "ROAS", "订单", "CTR", "CVR"].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
         <tbody>
           {rows.map((r, i) => (

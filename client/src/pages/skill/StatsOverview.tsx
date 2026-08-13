@@ -67,7 +67,7 @@ export default function StatsOverview() {
       <div className="card mb14">
         <div className="ct">分类分布</div>
         {categories.length === 0 ? (
-          <div style={{ color: "var(--t3)", fontSize: 11 }}>尚无分类</div>
+          <div style={{ color: "var(--t3)", fontSize: "var(--fs-11)" }}>尚无分类</div>
         ) : (
           <div className="sks-cat-grid">
             {categories.map(([name, count]) => (
@@ -89,7 +89,7 @@ export default function StatsOverview() {
       <div className="card">
         <div className="ct">最近编辑</div>
         {data.recently_edited.length === 0 ? (
-          <div style={{ color: "var(--t3)", fontSize: 11 }}>空</div>
+          <div style={{ color: "var(--t3)", fontSize: "var(--fs-11)" }}>空</div>
         ) : (
           data.recently_edited.map((s) => (
             <Link

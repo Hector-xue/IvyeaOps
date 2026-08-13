@@ -92,10 +92,10 @@ export default function Tour({ steps, onClose }: { steps: TourStep[]; onClose: (
         }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--t)" }}>{step.title}</div>
-          <span style={{ fontSize: 11, color: "var(--t3)" }}>{i + 1} / {steps.length}</span>
+          <div style={{ fontSize: "var(--fs-135)", fontWeight: 700, color: "var(--t)" }}>{step.title}</div>
+          <span style={{ fontSize: "var(--fs-11)", color: "var(--t3)" }}>{i + 1} / {steps.length}</span>
         </div>
-        <div style={{ fontSize: 12.5, lineHeight: 1.7, color: "var(--t2)", whiteSpace: "pre-line" }}>{step.body}</div>
+        <div style={{ fontSize: "var(--fs-125)", lineHeight: 1.7, color: "var(--t2)", whiteSpace: "pre-line" }}>{step.body}</div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 13 }}>
           <button onClick={onClose} style={btn("ghost")}>跳过</button>
           <div style={{ display: "flex", gap: 8 }}>
@@ -110,7 +110,7 @@ export default function Tour({ steps, onClose }: { steps: TourStep[]; onClose: (
 
 function btn(kind: "primary" | "ghost"): React.CSSProperties {
   const base: React.CSSProperties = {
-    fontFamily: "var(--sans)", fontSize: 12, padding: "5px 12px", borderRadius: 5, cursor: "pointer",
+    fontFamily: "var(--sans)", fontSize: "var(--fs-12)", padding: "5px 12px", borderRadius: 5, cursor: "pointer",
     border: "1px solid var(--b2)", transition: "all .12s",
   };
   return kind === "primary"

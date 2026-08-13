@@ -224,6 +224,8 @@ export default function TerminalLivePane({ session, onExit, onLiveOutput }: Prop
 
       term = new xterm.Terminal({
         fontFamily: "'JetBrains Mono','Fira Code','SF Mono',Menlo,Consolas,monospace",
+        // 这是 xterm 的构造参数，**不是 CSS 样式** —— 它要 number，
+        // 而且字号会参与终端的行列计算，不能塞 CSS 变量。
         fontSize: 12,
         // xterm 把字符画在 canvas 上，CSS 变量进不来 —— 这里在运行时把当前主题
         // 读成对象喂给它，并在主题切换时重算（见下面的 onThemeChange）。

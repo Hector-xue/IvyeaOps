@@ -30,7 +30,7 @@ const Tools = lazy(() => import("../pages/workbench/Tools"));
 const ImageGen = lazy(() => import("../pages/workbench/ImageGen"));
 
 function BoardFallback() {
-  return <div style={{ padding: 40, textAlign: "center", color: "var(--t3)", fontSize: 13 }}>加载中…</div>;
+  return <div style={{ padding: 40, textAlign: "center", color: "var(--t3)", fontSize: "var(--fs-13)" }}>加载中…</div>;
 }
 import ManualModal from "../components/ManualModal";
 import UpdateModal from "../components/UpdateModal";
@@ -372,7 +372,7 @@ export default function MainLayout() {
   const pinnedGroup = pinnedTools.length > 0 && (
     <div>
       {divider}
-      {!railCollapsed && <div style={{ fontSize: 9, color: "var(--t3)", padding: "4px 16px 2px", letterSpacing: ".08em" }}>我的工具</div>}
+      {!railCollapsed && <div style={{ fontSize: "var(--fs-9)", color: "var(--t3)", padding: "4px 16px 2px", letterSpacing: ".08em" }}>我的工具</div>}
       {pinnedTools.map((pt) => {
         const to = `/skill-tools?tool=${encodeURIComponent(pt.name)}`;
         const active = location.pathname === "/skill-tools" &&

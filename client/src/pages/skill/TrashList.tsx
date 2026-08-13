@@ -92,7 +92,7 @@ export default function TrashList() {
   return (
     <div className="sks-browse">
       <div className="sks-list-toolbar">
-        <span style={{ fontSize: 11, color: "var(--t2)" }}>
+        <span style={{ fontSize: "var(--fs-11)", color: "var(--t2)" }}>
           已删除的 skill（保留 7 天）
         </span>
         <button

@@ -169,7 +169,7 @@ export default function ServerMonitor() {
     return (
       <div>
         <div className="ptitle">/ 服务器监控</div>
-        <div className="card" style={{ color: "var(--red)", fontSize: 11 }}>
+        <div className="card" style={{ color: "var(--red)", fontSize: "var(--fs-11)" }}>
           ✗ {err}
         </div>
       </div>
@@ -217,7 +217,7 @@ export default function ServerMonitor() {
         style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
       >
         <span>/ 服务器监控 · localhost</span>
-        <span style={{ fontSize: 9, color: "var(--t3)", textTransform: "none" }}>
+        <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)", textTransform: "none" }}>
           ● live · 3s
         </span>
       </div>
@@ -255,7 +255,7 @@ export default function ServerMonitor() {
           <Gauge label="网络出" pct={netOutPct} color="var(--acc)" display={netOutStr} />
           <div
             style={{
-              fontSize: 9,
+              fontSize: "var(--fs-9)",
               color: "var(--t3)",
               marginTop: 6,
               textAlign: "right",
@@ -269,12 +269,12 @@ export default function ServerMonitor() {
         <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column", marginBottom: 0, minHeight: 0 }}>
           <div className="ct" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>最近 AI 调用</span>
-            <span style={{ color: "var(--t3)", fontSize: 9, textTransform: "none" }}>
+            <span style={{ color: "var(--t3)", fontSize: "var(--fs-9)", textTransform: "none" }}>
               降级链 IvyeaAgent→全局兜底→DeepSeek→Codex/Claude
             </span>
           </div>
           {aiLog.length === 0 ? (
-            <div style={{ color: "var(--t3)", fontSize: 10, padding: "4px 0" }}>
+            <div style={{ color: "var(--t3)", fontSize: "var(--fs-10)", padding: "4px 0" }}>
               暂无记录（启动后还没有 AI 文本调用）
             </div>
           ) : (
@@ -282,7 +282,7 @@ export default function ServerMonitor() {
               {aiLog.map((c, i) => (
                 <div
                   key={i}
-                  style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11, flexWrap: "wrap" }}
+                  style={{ display: "flex", alignItems: "center", gap: 10, fontSize: "var(--fs-11)", flexWrap: "wrap" }}
                   title={c.failures?.length ? "之前失败：\n" + c.failures.join("\n") : ""}
                 >
                   <span style={{ color: c.ok ? "var(--acc)" : "var(--red)", width: 12 }}>{c.ok ? "✓" : "✗"}</span>
@@ -305,12 +305,12 @@ export default function ServerMonitor() {
             style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
           >
             <span>服务状态</span>
-            <span style={{ color: "var(--t3)", fontSize: 9, textTransform: "none" }}>
+            <span style={{ color: "var(--t3)", fontSize: "var(--fs-9)", textTransform: "none" }}>
               {services.length} 个监控
             </span>
           </div>
           {services.length === 0 ? (
-            <div style={{ color: "var(--t3)", fontSize: 10 }}>加载中...</div>
+            <div style={{ color: "var(--t3)", fontSize: "var(--fs-10)" }}>加载中...</div>
           ) : (
             <div className="service-list">
               {services.map((s) => (
@@ -376,7 +376,7 @@ export default function ServerMonitor() {
             border: "1px solid var(--b)",
             borderRadius: 4,
             padding: "3px 8px",
-            fontSize: 10,
+            fontSize: "var(--fs-10)",
             color: "var(--t)",
             width: 180,
           }}
@@ -391,8 +391,8 @@ export default function ServerMonitor() {
         const onDemandMem = onDemand.reduce((s, p) => s + p.memory_mb, 0);
         return (
           <div className="card" style={{ marginBottom: 10, padding: "10px 12px", borderLeft: "3px solid var(--acc)" }}>
-            <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>💡 内存优化建议</div>
-            <div style={{ fontSize: 10, color: "var(--t2)", lineHeight: 1.8 }}>
+            <div style={{ fontSize: "var(--fs-11)", fontWeight: 600, marginBottom: 6 }}>💡 内存优化建议</div>
+            <div style={{ fontSize: "var(--fs-10)", color: "var(--t2)", lineHeight: 1.8 }}>
               <div>🟢 <b>可安全关闭</b>：{optional.length} 个进程，共占 <span style={{ color: "var(--acc)" }}>{optionalMem.toFixed(0)} MB</span> — 关闭无风险</div>
               <div>🟡 <b>按需运行</b>：{onDemand.length} 个进程，共占 <span style={{ color: "var(--amber)" }}>{onDemandMem.toFixed(0)} MB</span> — 不用时可关，用时再开</div>
               <div>🔴 <b>必须运行</b>：关闭会导致服务器/网站不可用，请勿操作</div>
@@ -410,7 +410,7 @@ export default function ServerMonitor() {
 
       <div className="card proc-card">
         {processes.length === 0 ? (
-          <div style={{ color: "var(--t3)", fontSize: 10 }}>
+          <div style={{ color: "var(--t3)", fontSize: "var(--fs-10)" }}>
             <span className="spin" /> 加载进程列表...
           </div>
         ) : (
@@ -489,7 +489,7 @@ export default function ServerMonitor() {
           maxHeight: 220,
           overflowY: "auto",
           fontFamily: "var(--font)",
-          fontSize: 10,
+          fontSize: "var(--fs-10)",
         }}
       >
         {logs.length === 0 ? (
@@ -658,7 +658,7 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
                   key={t}
                   onClick={() => setTab(t)}
                   className={`tab${tab === t ? " active" : ""}`}
-                  style={{ padding: "3px 10px", fontSize: 9, borderBottom: "none" }}
+                  style={{ padding: "3px 10px", fontSize: "var(--fs-9)", borderBottom: "none" }}
                 >
                   {t === "daily" ? "日" : t === "weekly" ? "周" : "月"}
                 </button>
@@ -677,7 +677,7 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
               />
             ))}
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--t3)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--fs-9)", color: "var(--t3)" }}>
             <span>{chartData[0]?.[labelKey] || ""}</span>
             <span>{chartData[chartData.length - 1]?.[labelKey] || ""}</span>
           </div>
@@ -747,7 +747,7 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
               </div>
             </>
           ) : (
-            <div style={{ color: "var(--t3)", fontSize: 10 }}>暂无数据</div>
+            <div style={{ color: "var(--t3)", fontSize: "var(--fs-10)" }}>暂无数据</div>
           )}
         </div>
       </div>
@@ -770,7 +770,7 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
                     <div className="gauge-val" style={{ color: c, width: 72 }}>{fmtTokens(a.total_tokens)}</div>
                   </div>
                   {a.credits > 0 && (
-                    <div style={{ color: "var(--t3)", fontSize: 10, margin: "-2px 0 5px 90px" }}>
+                    <div style={{ color: "var(--t3)", fontSize: "var(--fs-10)", margin: "-2px 0 5px 90px" }}>
                       {fmtCredits(a.credits)} credits
                     </div>
                   )}
@@ -778,9 +778,9 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
               );
             })
           ) : (
-            <div style={{ color: "var(--t3)", fontSize: 10 }}>今日暂无可统计 token</div>
+            <div style={{ color: "var(--t3)", fontSize: "var(--fs-10)" }}>今日暂无可统计 token</div>
           )}
-          <div style={{ marginTop: 8, color: "var(--t3)", fontSize: 10 }}>
+          <div style={{ marginTop: 8, color: "var(--t3)", fontSize: "var(--fs-10)" }}>
             按服务器本地日期统计，时区：{data.timezone || "Asia/Shanghai"}
           </div>
         </div>
@@ -802,7 +802,7 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
                     <div className="gauge-val" style={{ color: c, width: 72 }}>{fmtTokens(a.total_tokens)}</div>
                   </div>
                   {a.credits > 0 && (
-                    <div style={{ color: "var(--t3)", fontSize: 10, margin: "-2px 0 5px 90px" }}>
+                    <div style={{ color: "var(--t3)", fontSize: "var(--fs-10)", margin: "-2px 0 5px 90px" }}>
                       {fmtCredits(a.credits)} credits
                     </div>
                   )}
@@ -810,7 +810,7 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
               );
             })
           ) : (
-            <div style={{ color: "var(--t3)", fontSize: 10 }}>暂无数据</div>
+            <div style={{ color: "var(--t3)", fontSize: "var(--fs-10)" }}>暂无数据</div>
           )}
         </div>
       </div>

@@ -36,10 +36,10 @@ import {
 function Attribution({ item }: { item: MarketAttribution }) {
   if (item.origin !== "shared") return null;
   return (
-    <div style={{ marginTop: 8, fontSize: 12.5, color: "var(--t2)", lineHeight: 1.6 }}>
+    <div style={{ marginTop: 8, fontSize: "var(--fs-125)", color: "var(--t2)", lineHeight: 1.6 }}>
       <span
         style={{
-          fontSize: 11, background: "var(--bg2)", color: "var(--t2)",
+          fontSize: "var(--fs-11)", background: "var(--bg2)", color: "var(--t2)",
           padding: "1px 6px", borderRadius: 2, marginRight: 6,
         }}
       >
@@ -88,13 +88,13 @@ function CapabilityDialog({
           width: "min(560px, 92vw)", maxHeight: "84vh", overflowY: "auto",
         }}
       >
-        <h3 style={{ margin: 0, fontSize: 16 }}>
+        <h3 style={{ margin: 0, fontSize: "var(--fs-16)" }}>
           安装 {preview.slug} <span style={{ color: "var(--t3)", fontWeight: 400 }}>v{preview.version}</span>
         </h3>
 
         <div
           style={{
-            marginTop: 12, padding: "10px 12px", borderRadius: 2, fontSize: 13.5, lineHeight: 1.65,
+            marginTop: 12, padding: "10px 12px", borderRadius: 2, fontSize: "var(--fs-135)", lineHeight: 1.65,
             background: blocked ? "color-mix(in srgb, var(--red) 12%, transparent)" : risky.length ? "color-mix(in srgb, var(--amber) 12%, transparent)" : "color-mix(in srgb, var(--cyan) 12%, transparent)",
             color: blocked ? "var(--red)" : risky.length ? "var(--amber)" : "var(--cyan)",
           }}
@@ -103,7 +103,7 @@ function CapabilityDialog({
         </div>
 
         {risky.length > 0 && (
-          <ul style={{ marginTop: 12, paddingLeft: 18, fontSize: 13, display: "grid", gap: 5 }}>
+          <ul style={{ marginTop: 12, paddingLeft: 18, fontSize: "var(--fs-13)", display: "grid", gap: 5 }}>
             {risky.map((c, i) => (
               <li key={i}>
                 {c.detail}
@@ -116,16 +116,16 @@ function CapabilityDialog({
         <Attribution item={preview.attribution || {}} />
 
         {!preview.integrity.ok && (
-          <div style={{ marginTop: 12, color: "var(--red)", fontSize: 13 }}>
+          <div style={{ marginTop: 12, color: "var(--red)", fontSize: "var(--fs-13)" }}>
             完整性校验没通过：{preview.integrity.problems.join("；")}
           </div>
         )}
 
         <details style={{ marginTop: 12 }}>
-          <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--t2)" }}>
+          <summary style={{ cursor: "pointer", fontSize: "var(--fs-13)", color: "var(--t2)" }}>
             包含 {m.files.length} 个文件
           </summary>
-          <div style={{ marginTop: 6, fontSize: 12.5, color: "var(--t2)", lineHeight: 1.7 }}>
+          <div style={{ marginTop: 6, fontSize: "var(--fs-125)", color: "var(--t2)", lineHeight: 1.7 }}>
             {m.files.join("、")}
           </div>
         </details>
@@ -198,15 +198,15 @@ export default function SkillMarket() {
     return (
       <div style={{ padding: "18px 4px", maxWidth: 640 }}>
         <h3 style={{ marginTop: 0 }}>社区市场未开启</h3>
-        <p style={{ fontSize: 14, lineHeight: 1.75, color: "var(--t)" }}>
+        <p style={{ fontSize: "var(--fs-14)", lineHeight: 1.75, color: "var(--t)" }}>
           能力市场会向门道社区发起请求，而 IvyeaOps 的默认立场是<b>数据不出你的机器</b>，
           所以它默认关着。
         </p>
-        <p style={{ fontSize: 14, lineHeight: 1.75, color: "var(--t)" }}>
+        <p style={{ fontSize: "var(--fs-14)", lineHeight: 1.75, color: "var(--t)" }}>
           开启后也只在你主动浏览或安装时联网：请求匿名、不带机器标识、不回传任何使用统计；
           装过的 Skill 落在本地，断网照常用。你也可以把地址换成自建镜像。
         </p>
-        <p style={{ fontSize: 13.5, color: "var(--t3)" }}>
+        <p style={{ fontSize: "var(--fs-135)", color: "var(--t3)" }}>
           去「系统配置 → 能力市场」打开。
         </p>
       </div>
@@ -227,14 +227,14 @@ export default function SkillMarket() {
         <button className="tbtn" onClick={() => void search()} disabled={loading}>
           {loading ? "搜索中…" : "搜索"}
         </button>
-        <span style={{ fontSize: 12, color: "var(--t3)" }}>
+        <span style={{ fontSize: "var(--fs-12)", color: "var(--t3)" }}>
           来源 {status?.url} · 当前只提供纯提示词（A 类）Skill
         </span>
       </div>
 
       {error && (
         <div style={{ marginTop: 12, padding: "10px 12px", background: "color-mix(in srgb, var(--amber) 12%, transparent)",
-                      color: "var(--amber)", fontSize: 13.5, borderRadius: 2 }}>
+                      color: "var(--amber)", fontSize: "var(--fs-135)", borderRadius: 2 }}>
           {error}
         </div>
       )}
@@ -246,17 +246,17 @@ export default function SkillMarket() {
             <div key={it.slug}
                  style={{ border: "1px solid #d2d8d3", borderRadius: 2, padding: "12px 14px" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                <b style={{ fontSize: 15 }}>{it.title}</b>
-                <code style={{ fontSize: 12, color: "var(--t3)" }}>{it.slug}</code>
+                <b style={{ fontSize: "var(--fs-15)" }}>{it.title}</b>
+                <code style={{ fontSize: "var(--fs-12)", color: "var(--t3)" }}>{it.slug}</code>
                 {has && (
-                  <span style={{ fontSize: 11, background: "color-mix(in srgb, var(--cyan) 12%, transparent)", color: "var(--cyan)",
+                  <span style={{ fontSize: "var(--fs-11)", background: "color-mix(in srgb, var(--cyan) 12%, transparent)", color: "var(--cyan)",
                                  padding: "2px 7px", borderRadius: 2 }}>
                     已安装 v{has.version}
                   </span>
                 )}
               </div>
               {it.summary && (
-                <div style={{ marginTop: 5, fontSize: 13.5, color: "var(--t)" }}>{it.summary}</div>
+                <div style={{ marginTop: 5, fontSize: "var(--fs-135)", color: "var(--t)" }}>{it.summary}</div>
               )}
               <Attribution item={it} />
               <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
@@ -292,7 +292,7 @@ export default function SkillMarket() {
           );
         })}
         {!loading && !error && items.length === 0 && (
-          <div style={{ color: "var(--t3)", fontSize: 13.5 }}>没有匹配的 Skill。</div>
+          <div style={{ color: "var(--t3)", fontSize: "var(--fs-135)" }}>没有匹配的 Skill。</div>
         )}
       </div>
 

@@ -57,7 +57,7 @@ export default function SkillHub() {
               onClick={() => switchTab(t.key)}
               style={{
                 padding: "5px 14px",
-                fontSize: 11,
+                fontSize: "var(--fs-11)",
                 border: "none",
                 borderRadius: 3,
                 cursor: "pointer",
@@ -80,7 +80,7 @@ export default function SkillHub() {
             <button
               className="tbtn"
               onClick={() => setShowGithubImport(true)}
-              style={{ fontSize: 10 }}
+              style={{ fontSize: "var(--fs-10)" }}
             >
               ⬇ 从 GitHub 导入 Skill
             </button>

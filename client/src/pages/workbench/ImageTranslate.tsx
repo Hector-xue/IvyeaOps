@@ -173,7 +173,7 @@ export default function ImageTranslate() {
     return (
       <div key={key} onClick={() => setActiveFolder(key)}
         {...(opts?.droppable ? dropProps(key, opts.f ? opts.f.id : "") : {})}
-        style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, padding: "3px 8px", borderRadius: 13, cursor: "pointer",
+        style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "var(--fs-11)", padding: "3px 8px", borderRadius: 13, cursor: "pointer",
           border: hot ? "1px dashed var(--acc)" : on ? "1px solid var(--acc)" : "1px solid var(--b)",
           background: hot ? "var(--acc)" : on ? "var(--acc)" : "var(--bg1)", color: (hot || on) ? "#fff" : "var(--t)", whiteSpace: "nowrap" }}>
         <span>{label}</span><span style={{ opacity: .7 }}>{count}</span>
@@ -191,7 +191,7 @@ export default function ImageTranslate() {
     <div className="image-translate-page" style={{ padding: 16, height: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
       <div>
         <div style={{ fontSize: 18, fontWeight: 700, color: "var(--t)", fontFamily: "var(--font)" }}>一键图片翻译</div>
-        <div style={{ fontSize: 12, color: "var(--t3)", marginTop: 4 }}>
+        <div style={{ fontSize: "var(--fs-12)", color: "var(--t3)", marginTop: 4 }}>
           多站点卖家：一套图 → 多语言 → 多站点。上传或从图片工作区选图（可多选批量），选目标站点语言，一键翻译图上文字（产品/版式/配色不变）。
         </div>
       </div>
@@ -200,8 +200,8 @@ export default function ImageTranslate() {
         {/* ── 图片工作区 ── */}
         <div className="image-translate-panel image-translate-workspace" style={{ display: "flex", flexDirection: "column", border: "1px solid var(--b)", borderRadius: 8, overflow: "hidden", minHeight: 0 }}>
           <div className="image-translate-panel-head" style={{ padding: "8px 12px", borderBottom: "1px solid var(--b)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg2)" }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--t)" }}>图片工作区</span>
-            <button className="tbtn" style={{ fontSize: 11 }} disabled={uploading} onClick={() => fileRef.current?.click()}>
+            <span style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--t)" }}>图片工作区</span>
+            <button className="tbtn" style={{ fontSize: "var(--fs-11)" }} disabled={uploading} onClick={() => fileRef.current?.click()}>
               {uploading ? "上传中…" : "＋ 上传图片"}
             </button>
             <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => onUpload(e.target.files)} />
@@ -213,13 +213,13 @@ export default function ImageTranslate() {
             {folderChip(UNFILED, "未分类", unfiledCount, { droppable: true })}
             {folders.map((f) => folderChip(f.id, f.name, f.count, { f, droppable: true }))}
             <button onClick={onNewFolder} title="新建文件夹"
-              style={{ fontSize: 11, padding: "3px 8px", borderRadius: 13, border: "1px dashed var(--b)", background: "transparent", color: "var(--t3)", cursor: "pointer" }}>＋文件夹</button>
-            <span className="image-translate-drag-hint" style={{ marginLeft: "auto", fontSize: 10, color: "var(--t3)" }}>拖图到文件夹可移动</span>
+              style={{ fontSize: "var(--fs-11)", padding: "3px 8px", borderRadius: 13, border: "1px dashed var(--b)", background: "transparent", color: "var(--t3)", cursor: "pointer" }}>＋文件夹</button>
+            <span className="image-translate-drag-hint" style={{ marginLeft: "auto", fontSize: "var(--fs-10)", color: "var(--t3)" }}>拖图到文件夹可移动</span>
           </div>
 
           <div className="image-translate-scroll" style={{ flex: 1, overflowY: "auto", padding: 10 }}>
             {visible.length === 0 ? (
-              <div style={{ color: "var(--t3)", fontSize: 12, textAlign: "center", padding: "32px 8px", lineHeight: 1.7 }}>
+              <div style={{ color: "var(--t3)", fontSize: "var(--fs-12)", textAlign: "center", padding: "32px 8px", lineHeight: 1.7 }}>
                 这里还没有图片。<br />上传图片，或在 Listing 工作台生成图片（会自动入库）。
               </div>
             ) : (
@@ -233,14 +233,14 @@ export default function ImageTranslate() {
                       style={{ position: "relative", cursor: "pointer", borderRadius: 6, overflow: "hidden",
                         border: isSel ? "2px solid var(--acc)" : "1px solid var(--b)", aspectRatio: "1", background: "var(--bg2)" }}>
                       <img src={img.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                      <span style={{ position: "absolute", top: 3, left: 3, fontSize: 9, color: "#fff", background: badge.bg, padding: "1px 5px", borderRadius: 4 }}>
+                      <span style={{ position: "absolute", top: 3, left: 3, fontSize: "var(--fs-9)", color: "#fff", background: badge.bg, padding: "1px 5px", borderRadius: 4 }}>
                         {badge.text}{img.source === "translation" && img.lang ? ` ${img.lang}` : ""}
                       </span>
-                      {isSel && <span style={{ position: "absolute", bottom: 3, left: 3, fontSize: 11, color: "#fff", background: "var(--acc)", borderRadius: 10, width: 16, height: 16, lineHeight: "16px", textAlign: "center" }}>✓</span>}
+                      {isSel && <span style={{ position: "absolute", bottom: 3, left: 3, fontSize: "var(--fs-11)", color: "#fff", background: "var(--acc)", borderRadius: 10, width: 16, height: 16, lineHeight: "16px", textAlign: "center" }}>✓</span>}
                       <button onClick={(e) => { e.stopPropagation(); setPreview(img.url); }} title="预览"
-                        style={{ position: "absolute", bottom: 2, right: 2, width: 18, height: 18, lineHeight: "16px", textAlign: "center", fontSize: 11, color: "#fff", background: "rgba(0,0,0,.55)", border: "none", borderRadius: 4, cursor: "pointer" }}>⤢</button>
+                        style={{ position: "absolute", bottom: 2, right: 2, width: 18, height: 18, lineHeight: "16px", textAlign: "center", fontSize: "var(--fs-11)", color: "#fff", background: "rgba(0,0,0,.55)", border: "none", borderRadius: 4, cursor: "pointer" }}>⤢</button>
                       <button onClick={(e) => onDelete(img.id, e)} title="删除"
-                        style={{ position: "absolute", top: 2, right: 2, width: 18, height: 18, lineHeight: "16px", textAlign: "center", fontSize: 12, color: "#fff", background: "rgba(0,0,0,.55)", border: "none", borderRadius: 4, cursor: "pointer" }}>×</button>
+                        style={{ position: "absolute", top: 2, right: 2, width: 18, height: 18, lineHeight: "16px", textAlign: "center", fontSize: "var(--fs-12)", color: "#fff", background: "rgba(0,0,0,.55)", border: "none", borderRadius: 4, cursor: "pointer" }}>×</button>
                     </div>
                   );
                 })}
@@ -251,16 +251,16 @@ export default function ImageTranslate() {
 
         {/* ── 翻译面板 ── */}
         <div className="image-translate-panel image-translate-controls" style={{ display: "flex", flexDirection: "column", border: "1px solid var(--b)", borderRadius: 8, overflow: "hidden", minHeight: 0 }}>
-          <div className="image-translate-panel-head" style={{ padding: "8px 12px", borderBottom: "1px solid var(--b)", fontSize: 13, fontWeight: 600, color: "var(--t)", background: "var(--bg2)", display: "flex", justifyContent: "space-between" }}>
+          <div className="image-translate-panel-head" style={{ padding: "8px 12px", borderBottom: "1px solid var(--b)", fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--t)", background: "var(--bg2)", display: "flex", justifyContent: "space-between" }}>
             <span>翻译</span>
-            <span style={{ fontSize: 11, color: "var(--t3)", fontWeight: 400 }}>已选 {selectedIds.size} 张源图</span>
+            <span style={{ fontSize: "var(--fs-11)", color: "var(--t3)", fontWeight: 400 }}>已选 {selectedIds.size} 张源图</span>
           </div>
           <div className="image-translate-scroll" style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 12 }}>
             {/* selected sources strip */}
             <div>
-              <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 6 }}>源图（点选可多选批量）</div>
+              <div style={{ fontSize: "var(--fs-11)", color: "var(--t3)", marginBottom: 6 }}>源图（点选可多选批量）</div>
               {selectedIds.size === 0 ? (
-                <div style={{ fontSize: 12, color: "var(--t3)", padding: "12px 0" }}>从图片工作区点选一张或多张图</div>
+                <div style={{ fontSize: "var(--fs-12)", color: "var(--t3)", padding: "12px 0" }}>从图片工作区点选一张或多张图</div>
               ) : (
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {Array.from(selectedIds).map((id) => {
@@ -273,13 +273,13 @@ export default function ImageTranslate() {
 
             {/* target langs */}
             <div>
-              <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 6 }}>目标站点 / 语言（可多选）</div>
+              <div style={{ fontSize: "var(--fs-11)", color: "var(--t3)", marginBottom: 6 }}>目标站点 / 语言（可多选）</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {langs.map((l) => {
                   const on = picked.has(l.code);
                   return (
                     <button key={l.code} onClick={() => toggleLang(l.code)}
-                      style={{ fontSize: 11, padding: "4px 10px", borderRadius: 14, cursor: "pointer", fontFamily: "var(--font)",
+                      style={{ fontSize: "var(--fs-11)", padding: "4px 10px", borderRadius: 14, cursor: "pointer", fontFamily: "var(--font)",
                         border: on ? "1px solid var(--acc)" : "1px solid var(--b)", background: on ? "var(--acc)" : "var(--bg1)", color: on ? "#fff" : "var(--t)" }}>
                       {l.label}
                     </button>
@@ -289,7 +289,7 @@ export default function ImageTranslate() {
             </div>
 
             <button className="tbtn image-translate-primary-action" disabled={selectedIds.size === 0 || picked.size === 0 || translating}
-              style={{ fontSize: 13, padding: "8px 0", fontWeight: 600,
+              style={{ fontSize: "var(--fs-13)", padding: "8px 0", fontWeight: 600,
                 background: (selectedIds.size === 0 || picked.size === 0) ? "var(--bg2)" : "var(--acc)",
                 color: (selectedIds.size === 0 || picked.size === 0) ? "var(--t3)" : "#fff",
                 cursor: (selectedIds.size === 0 || picked.size === 0 || translating) ? "not-allowed" : "pointer" }}
@@ -298,27 +298,27 @@ export default function ImageTranslate() {
                 ? `翻译中… ${progress ? `${progress.done}/${progress.total} 张` : ""}`
                 : `一键翻译 → ${selectedIds.size} 张 × ${picked.size} 语言 = ${selectedIds.size * picked.size} 张`}
             </button>
-            {translating && <div style={{ fontSize: 10, color: "var(--t3)" }}>每张图约 1-3 分钟，逐张处理中，请勿关闭页面。</div>}
-            {msg && <div style={{ fontSize: 11, color: "var(--t3)" }}>{msg}</div>}
+            {translating && <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>每张图约 1-3 分钟，逐张处理中，请勿关闭页面。</div>}
+            {msg && <div style={{ fontSize: "var(--fs-11)", color: "var(--t3)" }}>{msg}</div>}
 
             {/* results grouped by source */}
             {batches.map((g) => (
               <div key={g.sourceId} style={{ borderTop: "1px solid var(--b)", paddingTop: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   {g.sourceUrl && <img src={g.sourceUrl} alt="" onClick={() => setPreview(g.sourceUrl)} style={{ width: 32, height: 32, objectFit: "cover", borderRadius: 4, border: "1px solid var(--b)", cursor: "zoom-in" }} />}
-                  <span style={{ fontSize: 11, color: "var(--t3)" }}>翻译结果（已自动存入工作区）</span>
+                  <span style={{ fontSize: "var(--fs-11)", color: "var(--t3)" }}>翻译结果（已自动存入工作区）</span>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 8 }}>
                   {g.results.map((r) => (
                     <div key={r.code} style={{ border: "1px solid var(--b)", borderRadius: 6, overflow: "hidden", background: "var(--bg2)" }}>
-                      <div style={{ fontSize: 10, padding: "4px 6px", color: "var(--t)", borderBottom: "1px solid var(--b)" }}>{langOf(r.code)?.label || r.code}</div>
+                      <div style={{ fontSize: "var(--fs-10)", padding: "4px 6px", color: "var(--t)", borderBottom: "1px solid var(--b)" }}>{langOf(r.code)?.label || r.code}</div>
                       {r.url ? (
                         <>
                           <img src={r.url} alt="" onClick={() => setPreview(r.url!)} style={{ width: "100%", display: "block", aspectRatio: "1", objectFit: "cover", cursor: "zoom-in" }} />
-                          <a href={r.url} download style={{ display: "block", fontSize: 10, textAlign: "center", padding: "4px 0", color: "var(--acc)", textDecoration: "none" }}>下载</a>
+                          <a href={r.url} download style={{ display: "block", fontSize: "var(--fs-10)", textAlign: "center", padding: "4px 0", color: "var(--acc)", textDecoration: "none" }}>下载</a>
                         </>
                       ) : (
-                        <div style={{ fontSize: 10, color: "#dc2626", padding: 8 }}>{r.error || "失败"}</div>
+                        <div style={{ fontSize: "var(--fs-10)", color: "#dc2626", padding: 8 }}>{r.error || "失败"}</div>
                       )}
                     </div>
                   ))}

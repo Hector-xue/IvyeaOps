@@ -59,12 +59,12 @@ export default function DeepHistory() {
     return (
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-          <button className="tbtn" style={{ fontSize: 11 }} onClick={() => setActive(null)}>
+          <button className="tbtn" style={{ fontSize: "var(--fs-11)" }} onClick={() => setActive(null)}>
             ← 返回历史
           </button>
           <button
             className="tbtn"
-            style={{ fontSize: 10, marginLeft: "auto" }}
+            style={{ fontSize: "var(--fs-10)", marginLeft: "auto" }}
             onClick={() =>
               structured
                 ? triggerDownload(JSON.stringify(structured, null, 2), `${slug}.json`, "application/json")
@@ -73,7 +73,7 @@ export default function DeepHistory() {
             ⬇ 下载 {structured ? "JSON" : "Markdown"}
           </button>
         </div>
-        <div style={{ fontSize: 11, color: "var(--t3)", marginBottom: 8 }}>
+        <div style={{ fontSize: "var(--fs-11)", color: "var(--t3)", marginBottom: 8 }}>
           {active.title} · {active.query} · {active.country} · {relativeTime(active.ts * 1000)}
         </div>
         {structured ? (
@@ -87,10 +87,10 @@ export default function DeepHistory() {
     );
   }
 
-  if (loading) return <div style={{ color: "var(--t3)", fontSize: 11 }}>加载中…</div>;
+  if (loading) return <div style={{ color: "var(--t3)", fontSize: "var(--fs-11)" }}>加载中…</div>;
   if (rows.length === 0)
     return (
-      <div style={{ color: "var(--t3)", fontSize: 11, lineHeight: 1.7 }}>
+      <div style={{ color: "var(--t3)", fontSize: "var(--fs-11)", lineHeight: 1.7 }}>
         暂无分析历史。在本页任一分析工具跑出的结果、或右下角 IvyeaAgent
         生成的分析报告，都会自动保存到这里。
       </div>
@@ -106,16 +106,16 @@ export default function DeepHistory() {
           onClick={() => setActive(e)}
         >
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--t)" }}>
+            <div style={{ fontSize: "var(--fs-12)", fontWeight: 600, color: "var(--t)" }}>
               {e.title} · {e.query}
             </div>
-            <div style={{ fontSize: 10, color: "var(--t3)" }}>
+            <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>
               {e.country} · {relativeTime(e.ts * 1000)} · {e.provider || "ivyea-agent"}
             </div>
           </div>
           <button
             className="tbtn"
-            style={{ fontSize: 10 }}
+            style={{ fontSize: "var(--fs-10)" }}
             onClick={(ev) => {
               ev.stopPropagation();
               del(e.id);

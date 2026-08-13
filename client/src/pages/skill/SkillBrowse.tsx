@@ -130,7 +130,7 @@ export default function SkillBrowse() {
             ...categories.map((c) => ({ value: c, label: c || "(顶层)" })),
           ]}
         />
-        <span style={{ color: "var(--t3)", fontSize: 10, marginLeft: "auto" }}>
+        <span style={{ color: "var(--t3)", fontSize: "var(--fs-10)", marginLeft: "auto" }}>
           {loading ? "加载中…" : `共 ${skills.length} 项`}
         </span>
       </div>

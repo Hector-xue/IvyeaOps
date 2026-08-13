@@ -106,7 +106,7 @@ export default function NewSkillDialog({ onClose }: NewSkillDialogProps) {
           placeholder="SKILL.md 的正文，留空后再进编辑器填。"
           rows={6}
           disabled={submitting}
-          style={{ fontFamily: "var(--font, ui-monospace, monospace)", fontSize: 12 }}
+          style={{ fontFamily: "var(--font, ui-monospace, monospace)", fontSize: "var(--fs-12)" }}
         />
       </div>
     </Modal>

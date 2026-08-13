@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 export default function NotFound() {
   return (
-    <div style={{ padding: 40, textAlign: "center", fontSize: 12, color: "var(--t2)" }}>
+    <div style={{ padding: 40, textAlign: "center", fontSize: "var(--fs-12)", color: "var(--t2)" }}>
       <div
         style={{
           fontSize: 48,

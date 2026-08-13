@@ -17,7 +17,7 @@ class CcuiBoundary extends Component<{ children: ReactNode }, { err: Error | nul
   render() {
     if (this.state.err) {
       return (
-        <pre style={{ padding: 16, margin: 0, color: '#ff9090', whiteSpace: 'pre-wrap', fontSize: 12, lineHeight: 1.5, overflow: 'auto', height: '100%', fontFamily: 'monospace' }}>
+        <pre style={{ padding: 16, margin: 0, color: '#ff9090', whiteSpace: 'pre-wrap', fontSize: "var(--fs-12)", lineHeight: 1.5, overflow: 'auto', height: '100%', fontFamily: 'monospace' }}>
           {'Agents 渲染错误:\n\n' + this.state.err.message + '\n\n' + (this.state.err.stack || '')}
         </pre>
       );

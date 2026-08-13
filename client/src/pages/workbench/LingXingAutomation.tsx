@@ -101,7 +101,7 @@ export default function LingXingAutomation({ onGoTickets }: { onGoTickets?: (fir
     <div>
       {/* config */}
       <div className="card" style={{ padding: 12, marginBottom: 10 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 8 }}>定时建议（仅分析+建议，不写入领星）</div>
+        <div style={{ fontSize: "var(--fs-11)", fontWeight: 600, marginBottom: 8 }}>定时建议（仅分析+建议，不写入领星）</div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
           <L t="启用定时">
             <SheetSelect value={String(!!cfg.lingxing_auto_enabled)} onChange={(v) => setCfg((c) => ({ ...c, lingxing_auto_enabled: v === "true" }))} title="启用定时" style={{ ...inputStyle, width: 90 }}
@@ -125,17 +125,17 @@ export default function LingXingAutomation({ onGoTickets }: { onGoTickets?: (fir
       <div className="lx-split">
         {/* runs list */}
         <div style={{ width: 220 }} className="card lx-side">
-          <div style={{ padding: "8px 10px", fontSize: 10, color: "var(--t3)", borderBottom: "1px solid var(--b)" }}>运行记录</div>
-          {runs.length === 0 && <div style={{ padding: 16, fontSize: 11, color: "var(--t3)" }}>暂无</div>}
+          <div style={{ padding: "8px 10px", fontSize: "var(--fs-10)", color: "var(--t3)", borderBottom: "1px solid var(--b)" }}>运行记录</div>
+          {runs.length === 0 && <div style={{ padding: 16, fontSize: "var(--fs-11)", color: "var(--t3)" }}>暂无</div>}
           {runs.map((r) => (
             <div key={r.id} onClick={() => openRun(r.id)} style={{
               padding: "7px 10px", cursor: "pointer", borderBottom: "1px solid var(--b)",
               background: sel?.id === r.id ? "var(--bg2)" : "transparent",
             }}>
-              <div style={{ fontSize: 11, display: "flex", justifyContent: "space-between" }}>
+              <div style={{ fontSize: "var(--fs-11)", display: "flex", justifyContent: "space-between" }}>
                 <span>{fmtTs(r.started_at)}</span><StatusTag s={r.status} />
               </div>
-              <div style={{ fontSize: 10, color: "var(--t3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {r.trigger === "scheduled" ? "定时" : "手动"} · {r.summary || r.error || "—"}
               </div>
             </div>
@@ -145,14 +145,14 @@ export default function LingXingAutomation({ onGoTickets }: { onGoTickets?: (fir
         {/* run detail */}
         <div className="card lx-main">
           {!sel ? (
-            <div style={{ padding: 30, textAlign: "center", color: "var(--t3)", fontSize: 11 }}>选择左侧运行记录查看建议</div>
+            <div style={{ padding: 30, textAlign: "center", color: "var(--t3)", fontSize: "var(--fs-11)" }}>选择左侧运行记录查看建议</div>
           ) : (
             <div style={{ padding: 12 }} className="wb-enter" key={sel.id}>
-              <div style={{ fontSize: 12, marginBottom: 8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ fontSize: "var(--fs-12)", marginBottom: 8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <span>{sel.summary || "（无总结）"}</span>
                 {actionable.length > 0 && (
                   <span style={{ marginLeft: "auto", display: "inline-flex", gap: 8, alignItems: "center" }}>
-                    <label style={{ display: "inline-flex", gap: 4, alignItems: "center", cursor: "pointer", fontSize: 10, color: "var(--t3)" }}>
+                    <label style={{ display: "inline-flex", gap: 4, alignItems: "center", cursor: "pointer", fontSize: "var(--fs-10)", color: "var(--t3)" }}>
                       <input type="checkbox" checked={chosen.length === actionable.length && actionable.length > 0}
                         onChange={(e) => { const n: Record<number, boolean> = {}; if (e.target.checked) actionable.forEach((i) => { n[i] = true; }); setPicked(n); }} />
                       全选可落地建议
@@ -161,12 +161,12 @@ export default function LingXingAutomation({ onGoTickets }: { onGoTickets?: (fir
                   </span>
                 )}
               </div>
-              {sel.error && <div style={{ color: "var(--red)", fontSize: 11, marginBottom: 8 }}>错误：{sel.error}</div>}
+              {sel.error && <div style={{ color: "var(--red)", fontSize: "var(--fs-11)", marginBottom: 8 }}>错误：{sel.error}</div>}
               {(!proposals || proposals.length === 0) ? (
-                <div style={{ color: "var(--t3)", fontSize: 11 }}>无建议（数据不足或无明显信号）。</div>
+                <div style={{ color: "var(--t3)", fontSize: "var(--fs-11)" }}>无建议（数据不足或无明显信号）。</div>
               ) : (
                 <div style={{ overflowX: "auto" }}>
-                  <table className="lx-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                  <table className="lx-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--fs-11)" }}>
                     <thead><tr>{["", "活动", "动作", "当前", "建议", "幅度", "依据", "预期", "置信", "风险"].map((h) => (
                       <th key={h} style={th}>{h}</th>))}</tr></thead>
                     <tbody>
@@ -188,7 +188,7 @@ export default function LingXingAutomation({ onGoTickets }: { onGoTickets?: (fir
                       ))}
                     </tbody>
                   </table>
-                  <div style={{ marginTop: 8, fontSize: 10, color: "var(--t3)" }}>
+                  <div style={{ marginTop: 8, fontSize: "var(--fs-10)", color: "var(--t3)" }}>
                     ⓘ 勾选建议 → 生成工单：进入 三重复核 + 护栏 + 人工确认，确认前不会写入领星。
                   </div>
                 </div>
@@ -206,7 +206,7 @@ const td: React.CSSProperties = { padding: "6px 8px", color: "var(--t2)", vertic
 
 function StatusTag({ s }: { s: string }) {
   const c = s === "done" ? "var(--acc)" : s === "failed" ? "var(--red)" : "var(--amber)";
-  return <span style={{ color: c, fontSize: 10 }}>{s}</span>;
+  return <span style={{ color: c, fontSize: "var(--fs-10)" }}>{s}</span>;
 }
 function RiskTag({ r }: { r: string }) {
   const c = r === "high" ? "var(--red)" : r === "medium" ? "var(--amber)" : "var(--acc)";
