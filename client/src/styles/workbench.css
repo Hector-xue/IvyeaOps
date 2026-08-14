@@ -407,10 +407,14 @@ body::after{
 .app{display:flex;height:100%}
 
 /* --- SIDEBAR --- */
-.sb{width:196px;min-width:196px;background:var(--bg1);box-shadow:inset -1px 0 0 0 var(--b);display:flex;flex-direction:column;transition:width .22s ease,min-width .22s ease}
+.sb{position:relative;width:196px;min-width:196px;background:var(--bg1);box-shadow:inset -1px 0 0 0 var(--b);display:flex;flex-direction:column;transition:width .22s ease,min-width .22s ease}
+/* 拖宽时关掉宽度过渡，否则每一帧都在追一个 220ms 的缓动，手感变成"面条" */
+.sb.sb-dragging{transition:none}
 .sb-logo{height:40px;padding:0 10px 0 14px;border-bottom:1px solid var(--b);display:flex;align-items:center;gap:8px;flex-shrink:0}
 .sb-logo-name{flex:1;display:flex;align-items:center;gap:8px;font-size:var(--fs-12);color:var(--t);min-width:0;overflow:hidden}
 .sb-logo-icon{color:var(--acc);font-size:var(--fs-12);flex-shrink:0;width:14px;text-align:center}
+/* 左上角品牌位：原来是一个字符 ◆，换成真的 logo（参考图里左上角同样是品牌标） */
+.sb-logo-img{width:18px;height:18px;object-fit:contain;flex-shrink:0;display:block}
 .sb-logo-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sb-toggle{background:transparent;border:1px solid var(--b);border-radius:var(--r);color:var(--t3);cursor:pointer;font-size:var(--fs-9);padding:2px 6px;font-family:var(--font);flex-shrink:0;transition:all .1s}
 .sb-toggle:hover{color:var(--t);border-color:var(--b2)}
@@ -438,7 +442,11 @@ body::after{
 .ni{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;color:var(--t2);border-left:2px solid transparent;font-size:var(--fs-11);transition:all .1s;white-space:nowrap;text-decoration:none}
 .ni:hover{color:var(--t);background:var(--bg2)}
 .ni.active{color:var(--acc);border-left-color:var(--acc);background:color-mix(in srgb, var(--acc) 5%, transparent)}
-.ni .ic{width:13px;text-align:center;flex-shrink:0;font-style:normal}
+/* 图标位。改用 lucide SVG 之后它装的不再是一个字符，而是一个 16px 的方块 ——
+   必须 flex 居中，靠 text-align 对不齐 SVG。 */
+.ni .ic{width:17px;height:17px;flex-shrink:0;font-style:normal;
+  display:inline-flex;align-items:center;justify-content:center}
+.ni .ic svg{display:block}
 .ni-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .nb{margin-left:auto;font-size:var(--fs-9);padding:1px 5px;background:color-mix(in srgb, var(--acc) 12%, transparent);color:var(--acc);border-radius:8px}
 .dot{width:5px;height:5px;border-radius:50%;background:var(--acc);flex-shrink:0;animation:pulse 2s infinite}
@@ -3008,7 +3016,7 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
   background-color var(--dur) var(--ease),transform var(--dur) var(--ease)}
 .cc-scene:hover{color:var(--t);border-color:color-mix(in srgb,var(--acc) 45%,var(--b));
   background:color-mix(in srgb,var(--acc) 7%,transparent);transform:translateY(-1px)}
-.cc-scene i{font-style:normal;color:var(--acc)}
+.cc-scene svg{color:var(--acc);flex-shrink:0}
 
 /* ── 会话态 ──────────────────────────────────────────────────────────────── */
 /* 会话区外面套一层，只为了给「回到底部」一个定位参照。 */
@@ -3198,7 +3206,8 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .cc-rail{flex-shrink:0;display:flex;border-left:1px solid var(--b);background:var(--bg1)}
 .cc-rail-tabs{display:flex;flex-direction:column;gap:2px;padding:8px 5px;width:40px;flex-shrink:0}
 .cc-rail-tab{position:relative;width:30px;height:30px;border:1px solid transparent;border-radius:var(--r);
-  background:transparent;color:var(--t3);font-size:var(--fs-13);cursor:pointer;
+  background:transparent;color:var(--t3);cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
   transition:all var(--dur) var(--ease)}
 .cc-rail-tab:hover{color:var(--t2);background:var(--bg2)}
 .cc-rail-tab.active{color:var(--acc);border-color:color-mix(in srgb,var(--acc) 35%,transparent);
@@ -3658,10 +3667,11 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
   color:var(--t2);font-family:var(--font);cursor:pointer;text-align:left;
   transition:background-color var(--dur,.14s) var(--ease,ease),border-color var(--dur,.14s) var(--ease,ease)}
 .sb-acct:hover,.sb-acct.open{background:var(--bg2);color:var(--t)}
-.sb-acct-avatar{position:relative;flex-shrink:0;width:26px;height:26px;border-radius:50%;
-  display:inline-flex;align-items:center;justify-content:center;
-  background:color-mix(in srgb,var(--acc) 18%,var(--bg3));color:var(--acc);
-  font-size:var(--fs-10);font-weight:600;letter-spacing:.02em}
+/* 头像位装的是 Ivyea logo（见 AccountMenu 里的说明：这个位置点不出上传头像，
+   就不该摆一个看起来能换、其实换不了的首字母占位符）。 */
+.sb-acct-avatar{position:relative;flex-shrink:0;width:26px;height:26px;border-radius:8px;
+  display:inline-flex;align-items:center;justify-content:center;overflow:visible}
+.sb-acct-avatar img{width:26px;height:26px;border-radius:8px;object-fit:contain;display:block}
 /* 有新版本时头像挂红点 —— 用户不需要认识这个点，就知道该点进去看看。 */
 .sb-acct-dot{position:absolute;top:-1px;right:-1px;width:8px;height:8px;border-radius:50%;
   background:var(--red);box-shadow:0 0 0 2px var(--bg1)}
@@ -3672,7 +3682,7 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .sb-acct-sub{font-size:var(--fs-9);color:var(--t3);white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;font-variant-numeric:tabular-nums}
 .sb-acct-cost{font-variant-numeric:tabular-nums}
-.sb-acct-gear{font-style:normal;flex-shrink:0;color:var(--t3);font-size:var(--fs-11)}
+.sb-acct-gear{font-style:normal;flex-shrink:0;color:var(--t3);display:inline-flex;align-items:center}
 .sb-acct:hover .sb-acct-gear{color:var(--t2)}
 
 /* 收起态（52px）：只剩头像和红点。收起侧栏的人恰恰最不想看见文字，
@@ -3683,14 +3693,18 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 
 /* ── 弹出菜单 ─────────────────────────────────────────────────────────────
    向**上**弹（bottom:100%）：它钉在窗口最底，向下没有空间。 */
-.sb-menu{position:absolute;left:8px;right:8px;bottom:calc(100% - 2px);z-index:600;
+/* 宽度**不跟着侧栏走**：侧栏可以被拖到 180px，而菜单里「版本 v1.1.116  有新版本 →」
+   这一行本身就要 220px 才放得下 —— 跟着缩的结果是版本号被截成"版本 v…"，
+   而这一项存在的全部意义就是让人看见版本号。 */
+.sb-menu{position:absolute;left:8px;bottom:calc(100% - 2px);z-index:600;
+  min-width:248px;width:max-content;max-width:min(320px,calc(100vw - 24px));
   background:var(--bg1);border:1px solid var(--b2);border-radius:10px;padding:5px;
   display:flex;flex-direction:column;gap:1px;
   box-shadow:0 10px 34px rgba(0,0,0,.28);
   animation:sb-menu-in .14s var(--ease,ease)}
 @keyframes sb-menu-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 /* 收起态下菜单不能跟着缩到 52px —— 那样一行字都放不下。脱离侧栏宽度自己撑开。 */
-.sb.collapsed .sb-menu{left:6px;right:auto;width:216px}
+.sb.collapsed .sb-menu{left:6px}
 .sb-menu-item{display:flex;align-items:center;gap:8px;width:100%;padding:6px 9px;
   border:none;border-radius:7px;background:transparent;color:var(--t2);
   font-family:var(--font);font-size:var(--fs-11);line-height:1.6;cursor:pointer;text-align:left;
@@ -3699,8 +3713,8 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .sb-menu-item:disabled{cursor:default;opacity:.75}
 .sb-menu-item.active{color:var(--acc)}
 .sb-menu-item.has-update{color:var(--red)}
-.sb-menu-ic{font-style:normal;flex-shrink:0;width:17px;text-align:center;color:var(--t3);
-  font-size:var(--fs-11)}
+.sb-menu-ic{font-style:normal;flex-shrink:0;width:17px;height:17px;color:var(--t3);
+  display:inline-flex;align-items:center;justify-content:center}
 .sb-menu-item:hover .sb-menu-ic{color:var(--t2)}
 .sb-menu-item.has-update .sb-menu-ic{color:var(--red)}
 .sb-menu-label{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -3731,7 +3745,7 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 
 .tv-head{display:flex;align-items:center;gap:9px;padding:12px 14px;border-bottom:1px solid var(--b);
   flex-shrink:0}
-.tv-search-ic{font-style:normal;color:var(--t3);flex-shrink:0;font-size:var(--fs-12)}
+.tv-search-ic{font-style:normal;color:var(--t3);flex-shrink:0;display:inline-flex;align-items:center}
 .tv-search{flex:1;min-width:0;border:none;background:transparent;outline:none;
   color:var(--t);font-family:var(--font);font-size:var(--fs-13)}
 .tv-search::placeholder{color:var(--t3)}
@@ -3763,7 +3777,8 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 /* 键盘和鼠标共用同一个高亮 —— 两套视觉会让人分不清"现在按回车会打开哪个" */
 .tv-card.cursor{background:var(--bg3);color:var(--t);
   border-color:color-mix(in srgb,var(--acc) 40%,transparent)}
-.tv-card-ic{font-style:normal;flex-shrink:0;width:18px;text-align:center;color:var(--acc)}
+.tv-card-ic{font-style:normal;flex-shrink:0;width:18px;height:18px;color:var(--acc);
+  display:inline-flex;align-items:center;justify-content:center}
 .tv-card-label{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tv-pin{flex-shrink:0;color:var(--t3);opacity:0;font-size:var(--fs-11);padding:0 2px;
   transition:opacity var(--dur,.14s) var(--ease,ease),color var(--dur,.14s) var(--ease,ease)}
@@ -3820,3 +3835,21 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
   font-weight:600;white-space:nowrap}
 .md-tr{border-bottom:1px solid var(--b)}
 .md-td{padding:6px 12px;color:var(--t2);vertical-align:top}
+
+
+/* ── 侧栏拖宽把手 ────────────────────────────────────────────────────────
+   196px 下会话标题几乎条条被截断（"广告怎么优化…"），光看列表分不出哪条是哪条。
+   把手是一条 5px 的透明热区贴在右缘：**平时完全看不见**（一条常驻竖线正是
+   这套皮肤要去掉的东西），指针悬上去或正在拖时才显出一条强调色细线。 */
+.sb-resizer{position:absolute;top:0;right:-2px;width:5px;height:100%;z-index:5;
+  cursor:col-resize;background:transparent;
+  transition:background-color var(--dur,.14s) var(--ease,ease)}
+.sb-resizer:hover{background:color-mix(in srgb,var(--acc) 55%,transparent)}
+.sb.sb-dragging .sb-resizer{background:var(--acc)}
+/* 触摸设备没有 hover，热区放宽到 12px 才点得中 */
+@media (pointer:coarse){ .sb-resizer{width:12px;right:-6px} }
+
+/* ── Hero 品牌行（对标 DeepSeek Harness）───────────────────────────────── */
+.cc-hero-brand{display:flex;align-items:center;gap:12px}
+.cc-hero-logo{width:38px;height:38px;object-fit:contain;flex-shrink:0}
+@media (max-width:640px){ .cc-hero-logo{width:30px;height:30px} }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { lockBodyScroll } from "../lib/scrollLock";
+import Icon from "./Icon";
 import { boardPath, toolSections, type BoardEntry, type NavSection } from "../lib/navRegistry";
 import { getPinnedBoards, getRecentBoards, toggleBoardPin } from "../lib/boardPrefs";
 
@@ -135,7 +136,7 @@ export default function ToolsOverlay({ open, onClose, visibility }: ToolsOverlay
     <div className="tv-backdrop" onMouseDown={onClose} role="dialog" aria-modal="true" aria-label="全部工具">
       <div className="tv-panel" onMouseDown={(e) => e.stopPropagation()}>
         <div className="tv-head">
-          <i className="tv-search-ic">🔍</i>
+          <i className="tv-search-ic"><Icon name="search" size={16} /></i>
           <input
             ref={inputRef}
             className="tv-search"
@@ -145,7 +146,7 @@ export default function ToolsOverlay({ open, onClose, visibility }: ToolsOverlay
             aria-label="搜索板块"
           />
           <kbd className="tv-kbd">Esc</kbd>
-          <button className="tv-close" onClick={onClose} aria-label="关闭">✕</button>
+          <button className="tv-close" onClick={onClose} aria-label="关闭"><Icon name="close" size={15} /></button>
         </div>
 
         <div className="tv-body">
@@ -184,7 +185,7 @@ export default function ToolsOverlay({ open, onClose, visibility }: ToolsOverlay
                         onMouseEnter={() => setCursor(mine)}
                         title={boardPath(b)}
                       >
-                        <i className="tv-card-ic">{b.icon}</i>
+                        <i className="tv-card-ic"><Icon name={b.icon} size={17} /></i>
                         <span className="tv-card-label">{b.label}</span>
                         <span
                           className={"tv-pin" + (isPinned ? " on" : "")}
@@ -199,7 +200,7 @@ export default function ToolsOverlay({ open, onClose, visibility }: ToolsOverlay
                             setPinTick((n) => n + 1);
                           }}
                         >
-                          ⌖
+                          <Icon name="pin" size={13} />
                         </span>
                       </button>
                     );
@@ -213,7 +214,7 @@ export default function ToolsOverlay({ open, onClose, visibility }: ToolsOverlay
         <div className="tv-foot">
           <span><kbd className="tv-kbd">↑↓</kbd> 选择</span>
           <span><kbd className="tv-kbd">↵</kbd> 打开</span>
-          <span><kbd className="tv-kbd">⌖</kbd> 钉到侧栏</span>
+          <span><Icon name="pin" size={12} /> 钉到侧栏</span>
           <span className="tv-foot-spacer" />
           <span>共 {allBoards.length} 个板块</span>
         </div>

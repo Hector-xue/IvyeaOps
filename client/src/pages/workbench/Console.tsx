@@ -17,7 +17,7 @@ import { MarkdownReport } from "../../lib/reportFormat";
 import { restoreSession } from "../../lib/sessionRestore";
 import { ToastProvider, useToast } from "../../components/toast";
 import { CONSOLE_NEW_EVENT, sceneChips } from "../../lib/navRegistry";
-import TopbarActions from "../../components/TopbarActions";
+import Icon from "../../components/Icon";
 import {
   formatMs,
   mergeStep,
@@ -784,14 +784,6 @@ function ConsoleInner() {
 
   return (
     <div className="cc-page">
-      {/* 顶栏右侧只在会话开起来之后挂一个「新建任务」——
-          它是这一页唯一称得上"主动作"的东西，而在此之前满屏都是新建入口，
-          再挂一个就是重复。Hero 态不挂，顶栏就保持空的。 */}
-      {started && (
-        <TopbarActions>
-          <button className="tbtn" onClick={resetSession} title="开一轮新任务">⊕ 新建任务</button>
-        </TopbarActions>
-      )}
       <div className="cc-main">
         {loadingSession ? (
           <div className="cc-hero">
@@ -799,11 +791,15 @@ function ConsoleInner() {
           </div>
         ) : !started ? (
           /* ── Hero 态 ───────────────────────────────────────────────── */
+          /* Hero 版式对标 DeepSeek Harness：**只有 logo + 一行标题**。
+             原来那两行副标题（"说一句需求就行 —— Ivyea 会挑技能、调板块能力…"）
+             是写给第一次来的人看的，但首页是每天都要经过的地方 —— 一句每天都
+             要读一遍、读完什么也不用做的话，就是噪音。它的内容已经在使用手册里。 */
           <div className="cc-hero">
-            <h1 className="cc-hero-title">今天要做点什么？</h1>
-            <p className="cc-hero-sub">
-              说一句需求就行 —— Ivyea 会挑技能、调板块能力拿真实数据，需要动线上数据时会先问你。
-            </p>
+            <div className="cc-hero-brand">
+              <img src="/ivyea-logo.png" alt="Ivyea" className="cc-hero-logo" />
+              <h1 className="cc-hero-title">今天要做点什么？</h1>
+            </div>
             <div className="cc-hero-composer">{composerNode(false)}</div>
             {scenes.length > 0 && (
               <div className="cc-scenes">
@@ -815,7 +811,7 @@ function ConsoleInner() {
                     onClick={() => { patch({ text: s.prompt }); }}
                     title={s.prompt}
                   >
-                    <i>{s.icon}</i>{s.label}
+                    <Icon name={s.icon} size={15} />{s.label}
                   </button>
                 ))}
               </div>

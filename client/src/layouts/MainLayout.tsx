@@ -37,10 +37,10 @@ import UpdateModal from "../components/UpdateModal";
 import Tour from "../components/Tour";
 import IvyeaAgentDock from "../components/IvyeaAgentDock";
 import AccountMenu from "../components/AccountMenu";
+import Icon from "../components/Icon";
 import ToolsOverlay from "../components/ToolsOverlay";
 import SessionRail from "../components/console/SessionRail";
 import { BOARD_PREFS_EVENT, getPinnedBoards, pushRecentBoard } from "../lib/boardPrefs";
-import { TOPBAR_SLOT_ID } from "../lib/topbarSlot";
 import { TOURS, hasTour } from "../lib/tours";
 
 // Boards with long-running tasks (research / generation / audit). These are kept
@@ -159,6 +159,48 @@ export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("ivyea-ops.sidebar.collapsed") === "1" || window.innerWidth <= 680,
   );
+
+  // ── 侧栏拖宽 ──────────────────────────────────────────────────────────
+  // 会话标题动辄十几个字，196px 下几乎每一条都被截成"广告怎么优化…"，
+  // 光看列表分不出哪条是哪条。宽度是每个人自己的取舍（屏幕宽度、会话命名习惯
+  // 都不一样），所以做成可拖 + 记住，而不是我替所有人挑一个数。
+  const SB_MIN = 180;
+  const SB_MAX = 420;
+  const [sbWidth, setSbWidth] = useState(() => {
+    const v = parseInt(localStorage.getItem("ivyea-ops.sidebar.width") || "", 10);
+    return Number.isFinite(v) && v >= SB_MIN && v <= SB_MAX ? v : 196;
+  });
+  const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    if (!dragging) return;
+    // 监听挂在 window 上而不是把手上：鼠标拖快了会甩出把手，
+    // 挂在把手上的话指针一离开元素就断，表现为"拖着拖着自己停了"。
+    const onMove = (e: MouseEvent) => {
+      const w = Math.min(SB_MAX, Math.max(SB_MIN, e.clientX));
+      setSbWidth(w);
+    };
+    const onUp = () => {
+      setDragging(false);
+      // 结束时才落盘：拖动过程中每一帧都写 localStorage 是同步 I/O。
+      setSbWidth((w) => {
+        try { localStorage.setItem("ivyea-ops.sidebar.width", String(w)); } catch { /* ignore */ }
+        return w;
+      });
+    };
+    // 拖动时全局禁选，否则会把整页文字刷成蓝色选区。
+    const prevUserSelect = document.body.style.userSelect;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.userSelect = prevUserSelect;
+      document.body.style.cursor = "";
+    };
+  }, [dragging]);
   const [mobileMenu, setMobileMenu] = useState(false);
   // **实际**是不是收起态。移动端 collapsed 默认就是 true（宽度 ≤680），但抽屉一打开
   // 侧边栏是按展开呈现的 —— 内容却还在按 collapsed 渲染，于是会话列表直接 return
@@ -354,7 +396,7 @@ export default function MainLayout() {
       title={railCollapsed ? b.label : undefined}
       onClick={() => isMobile && setMobileMenu(false)}
     >
-      <i className="ic">{b.icon}</i>
+      <i className="ic"><Icon name={b.icon} /></i>
       <span className="ni-label">{b.label}</span>
     </NavLink>
   );
@@ -392,10 +434,17 @@ export default function MainLayout() {
     <div className="app">
       {/* SIDEBAR */}
       {isMobile && mobileMenu && <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 998 }} onClick={() => setMobileMenu(false)} />}
-      <aside className={"sb" + (collapsed && !mobileMenu ? " collapsed" : "")} style={isMobile ? { position: "fixed", zIndex: 999, height: "100%", width: 196, minWidth: 196, overflow: "auto", left: 0, transform: mobileMenu ? "translateX(0)" : "translateX(-200px)", transition: "transform .22s cubic-bezier(.4,0,.2,1)", willChange: "transform" } : undefined}>
+      <aside
+        className={"sb" + (collapsed && !mobileMenu ? " collapsed" : "") + (dragging ? " sb-dragging" : "")}
+        style={isMobile
+          ? { position: "fixed", zIndex: 999, height: "100%", width: 196, minWidth: 196, overflow: "auto", left: 0, transform: mobileMenu ? "translateX(0)" : "translateX(-200px)", transition: "transform .22s cubic-bezier(.4,0,.2,1)", willChange: "transform" }
+          // 收起态的宽度归 CSS 的 .collapsed 管，这里只在展开时给宽度，
+          // 否则拖过的宽度会把 52px 的收起态顶开。
+          : (railCollapsed ? undefined : { width: sbWidth, minWidth: sbWidth })}
+      >
         <div className="sb-logo">
           <div className="sb-logo-name" title="个人工作台">
-            <span className="sb-logo-icon">◆</span>
+            <img src="/ivyea-logo.png" alt="" className="sb-logo-img" />
             <span className="sb-logo-text">个人工作台</span>
           </div>
           <button
@@ -404,7 +453,7 @@ export default function MainLayout() {
             title={collapsed ? "展开侧边栏" : "收起侧边栏"}
             aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
           >
-            {collapsed ? "▶" : "◀"}
+            <Icon name={collapsed ? "panel-open" : "panel-close"} size={15} />
           </button>
         </div>
         <nav data-tour="sidebar" className={isConsoleShell ? "sb-nav-console" : undefined}>
@@ -425,7 +474,7 @@ export default function MainLayout() {
                   title={railCollapsed ? "新建任务" : undefined}
                   data-tour="console-new"
                 >
-                  <i className="ic">⊕</i>
+                  <i className="ic"><Icon name="new-task" /></i>
                   <span className="ni-label">新建任务</span>
                 </button>
                 {primary.map(renderNavItem)}
@@ -456,7 +505,7 @@ export default function MainLayout() {
                       onClick={() => { if (isMobile) setMobileMenu(false); setToolsOverlay(true); }}
                       title={railCollapsed ? `全部工具（${toolCount}）` : "全部工具　⌘K"}
                     >
-                      <i className="ic">⊞</i>
+                      <i className="ic"><Icon name="all-tools" /></i>
                       <span className="ni-label">全部工具</span>
                       {/* 数量是"板块一个都没丢"的凭据 */}
                       {!railCollapsed && <span className="ni-count">{toolCount}</span>}
@@ -498,6 +547,21 @@ export default function MainLayout() {
           onLogout={handleLogout}
           onNavigated={() => isMobile && setMobileMenu(false)}
         />
+        {/* 拖宽把手。只在展开态出现 —— 收起态是固定的 52px 图标条，拖它没有意义。
+            双击回默认宽度：拖歪了不用一点点试回去。 */}
+        {!railCollapsed && !isMobile && (
+          <div
+            className="sb-resizer"
+            onMouseDown={(e) => { e.preventDefault(); setDragging(true); }}
+            onDoubleClick={() => {
+              setSbWidth(196);
+              try { localStorage.setItem("ivyea-ops.sidebar.width", "196"); } catch { /* ignore */ }
+            }}
+            title="拖动调整宽度，双击恢复默认"
+            role="separator"
+            aria-orientation="vertical"
+          />
+        )}
       </aside>
 
       {/* MAIN */}
@@ -516,7 +580,6 @@ export default function MainLayout() {
           <div className="tb-path">
             <b>{path}</b>
           </div>
-          <div className="tb-r" id={TOPBAR_SLOT_ID} />
         </div>
         <div className={"content" + (isFullPage(location.pathname) ? " content-fullpage" : "")}>
           {/* Persistent boards (terminal / agents) are always mounted after their

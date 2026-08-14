@@ -1123,11 +1123,24 @@ function AppearanceSection() {
   const [fontId, setFontId] = useState(getFontId());
   const [zoom, setZoom] = useState(getZoom());
   const [weight, setWeight] = useState(getWeight());
+
+  // 账户菜单里的「字体与字号」深链到这里（/hub-settings#appearance）。
+  // 只 navigate 到设置首页的话，用户还得在十几个分区里自己找 —— 那等于没做。
+  // 用 requestAnimationFrame 等这一帧画完再滚：挂载当帧元素还没有布局高度，
+  // 直接 scrollIntoView 会滚到一个错的位置。
+  useEffect(() => {
+    if (window.location.hash !== "#appearance") return;
+    const id = requestAnimationFrame(() => {
+      document.getElementById("appearance")?.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   const onFont = (id: string) => { setFontId(id); applyFont(id); };
   const onZoom = (v: number) => { setZoom(v); applyZoom(v); };
   const onWeight = (v: number) => { setWeight(v); applyWeight(v); };
   return (
-    <div className="hs-section">
+    <div className="hs-section" id="appearance">
       <div className="hs-section-hd">
         <div>
           <div className="hs-section-title">外观 / 显示</div>

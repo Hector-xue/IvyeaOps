@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import CostChip from "./CostChip";
+import Icon from "./Icon";
 import { THEMES, themeLabel } from "../lib/themes";
 
 /**
@@ -48,13 +48,6 @@ export type AccountMenuProps = {
   /** 移动端点任意菜单项后要把抽屉收掉 */
   onNavigated?: () => void;
 };
-
-/** 头像里的字母：中文取首字，英文取前两位。 */
-function initials(name: string): string {
-  const n = (name || "?").trim();
-  if (!n) return "?";
-  return /[一-龥]/.test(n[0]) ? n[0] : n.slice(0, 2).toUpperCase();
-}
 
 export default function AccountMenu(props: AccountMenuProps) {
   const {
@@ -120,54 +113,39 @@ export default function AccountMenu(props: AccountMenuProps) {
           ) : (
             <>
               <button className="sb-menu-item" onClick={() => setThemesOpen(true)}>
-                <i className="sb-menu-ic">◐</i>
+                <i className="sb-menu-ic"><Icon name="theme" size={15} /></i>
                 <span className="sb-menu-label">主题</span>
                 <span className="sb-menu-tail">{themeLabel(theme)} ›</span>
               </button>
-              <button className="sb-menu-item" onClick={run(() => navigate("/hub-settings"))}>
-                <i className="sb-menu-ic">Aa</i>
+              {/* 深链到外观区。只 navigate 到 /hub-settings 会落在设置首页，
+                  用户还得自己在十几个分区里找 —— 那等于这一项没做。 */}
+              <button className="sb-menu-item" onClick={run(() => navigate("/hub-settings#appearance"))}>
+                <i className="sb-menu-ic"><Icon name="font" size={15} /></i>
                 <span className="sb-menu-label">字体与字号</span>
               </button>
               <div className="sb-menu-sep" />
               <button className="sb-menu-item" onClick={run(onToggleShell)}>
-                <i className="sb-menu-ic">▤</i>
+                <i className="sb-menu-ic"><Icon name="layout" size={15} /></i>
                 <span className="sb-menu-label">布局</span>
                 <span className="sb-menu-tail">{isConsoleShell ? "任务台" : "经典"} ⇄</span>
               </button>
               {isAdmin && (
                 <button className="sb-menu-item" onClick={run(() => navigate("/hub-settings"))}>
-                  <i className="sb-menu-ic">⚙</i>
+                  <i className="sb-menu-ic"><Icon name="settings" size={15} /></i>
                   <span className="sb-menu-label">系统配置</span>
                 </button>
               )}
               <button className="sb-menu-item" onClick={run(onManual)}>
-                <i className="sb-menu-ic">📖</i>
+                <i className="sb-menu-ic"><Icon name="manual" size={15} /></i>
                 <span className="sb-menu-label">使用手册</span>
               </button>
               {onTour && (
                 <button className="sb-menu-item" onClick={run(onTour)}>
-                  <i className="sb-menu-ic">?</i>
+                  <i className="sb-menu-ic"><Icon name="help" size={15} /></i>
                   <span className="sb-menu-label">本页引导</span>
                 </button>
               )}
-              <button
-                className="sb-menu-item"
-                onClick={run(() => {
-                  const app = (window as unknown as { OpsApp?: { reload?: () => void } }).OpsApp;
-                  if (app?.reload) app.reload(); else window.location.reload();
-                })}
-              >
-                <i className="sb-menu-ic">↻</i>
-                <span className="sb-menu-label">刷新界面</span>
-              </button>
               <div className="sb-menu-sep" />
-              {/* 用量：完整的那张芯片放在这里，账户行副标题只放一个数。 */}
-              {isAdmin && (
-                <div className="sb-menu-cost">
-                  <span className="sb-menu-label">本月 AI 用量</span>
-                  <CostChip />
-                </div>
-              )}
               {/* 版本与更新。非管理员没有更新权限，只看版本号。 */}
               <button
                 className={"sb-menu-item" + (hasUpdate ? " has-update" : "")}
@@ -175,7 +153,7 @@ export default function AccountMenu(props: AccountMenuProps) {
                 disabled={!isAdmin || updating}
                 title={updateTitle}
               >
-                <i className="sb-menu-ic">{hasUpdate ? "↑" : "◇"}</i>
+                <i className="sb-menu-ic"><Icon name="version" size={15} /></i>
                 <span className="sb-menu-label">版本 {versionLabel}</span>
                 <span className="sb-menu-tail">
                   {updating ? "更新中…" : hasUpdate ? "有新版本 →" : isAdmin ? "检查更新" : ""}
@@ -183,7 +161,7 @@ export default function AccountMenu(props: AccountMenuProps) {
               </button>
               <div className="sb-menu-sep" />
               <button className="sb-menu-item" onClick={run(onLogout)}>
-                <i className="sb-menu-ic">↩</i>
+                <i className="sb-menu-ic"><Icon name="logout" size={15} /></i>
                 <span className="sb-menu-label">退出登录</span>
               </button>
             </>
@@ -198,18 +176,17 @@ export default function AccountMenu(props: AccountMenuProps) {
         aria-haspopup="menu"
         aria-expanded={open}
       >
+        {/* 头像位放 Ivyea logo 而不是姓名首字母：这个位置**点不出上传头像**，
+            那就不该摆一个看起来可以换、其实换不了的占位符。 */}
         <span className="sb-acct-avatar">
-          {initials(username)}
+          <img src="/ivyea-logo.png" alt="Ivyea" />
           {hasUpdate && <span className="sb-acct-dot" aria-label="发现新版本" />}
         </span>
         <span className="sb-acct-text">
           <span className="sb-acct-name">{username || "账户"}</span>
-          <span className="sb-acct-sub">
-            {versionLabel}
-            {isAdmin && <> · <CostChip variant="inline" /></>}
-          </span>
+          <span className="sb-acct-sub">{versionLabel}</span>
         </span>
-        <i className="sb-acct-gear">⚙</i>
+        <i className="sb-acct-gear"><Icon name="settings" size={15} /></i>
       </button>
     </div>
   );

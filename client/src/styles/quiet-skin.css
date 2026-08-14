@@ -28,6 +28,22 @@
  * "最后一道形状裁决"，用 !important 表达它本来就该赢。
  * ============================================================================ */
 
+/* ── ⓪ 圆角档位 ──────────────────────────────────────────────────────────
+   静谧的参照系是 ChatGPT / DeepSeek / iOS，它们"软"的观感有一半来自**半径**，
+   不是来自没有边框。--r 是全站通用半径（1219 处引用），在这里抬到 14px；
+   几个大面自己再加大一档。 */
+html[data-skin="quiet"] { --r: 14px; }
+/* 输入区是整屏视觉重心，半径要最大 —— 参考图里它接近胶囊。 */
+html[data-skin="quiet"] .cc-composer { border-radius: 22px !important; }
+html[data-skin="quiet"] .cc-bubble { border-radius: 18px !important; }
+html[data-skin="quiet"] .tv-panel { border-radius: 18px !important; }
+html[data-skin="quiet"] .tv-card { border-radius: 12px !important; }
+html[data-skin="quiet"] .sb-menu { border-radius: 14px !important; }
+html[data-skin="quiet"] .sb-menu-item,
+html[data-skin="quiet"] .sb-acct,
+html[data-skin="quiet"] .ni,
+html[data-skin="quiet"] .sb-sess { border-radius: 10px !important; }
+
 /* ── ① 背景画三件套：关掉 ─────────────────────────────────────────────────
    表面已经全不透明，那两个 position:fixed + mix-blend-mode 的伪元素留着就是
    两个覆盖全屏、强制整页 GPU 合成的空层。**必须 content:none 而不是 opacity:0**。 */
@@ -166,7 +182,10 @@ html[data-skin="quiet"] .hs-input {
    `.xsel-wrap` 一刀切，否则输入器上那几个芯片会把边框长回来。 */
 /* 输入器内部那块 textarea 例外 —— 它的边界由外面的 .cc-composer 承担，
    再套一层就成了框中框。 */
-html[data-skin="quiet"] .cc-input {
+html[data-skin="quiet"] .cc-input,
+/* 「全部工具」浮层的搜索框同理：整条 header 就是搜索区，外面还有面板自己的
+   边框，再给 input 套一个就成了框中框 —— 而且它没有圆角，看着就是个直角条。 */
+html[data-skin="quiet"] .tv-search {
   border: none !important;
   background: transparent !important;
 }
@@ -182,10 +201,35 @@ html[data-skin="quiet"] .cc-chip-warn { border: 1px solid var(--amber) !importan
 /* 「有新版本」现在是账户行头像上那颗红点 + 菜单里那一行变红（见 .sb-acct-dot /
    .sb-menu-item.has-update），不再是一个带框按钮 —— 它们本身就没有边框可留。 */
 
-/* 4.4 焦点圈。键盘可达性不参与简约。 */
+/* 4.4 焦点圈。键盘可达性不参与简约。
+   **但不能无差别套。** outline 是矩形的，元素自己没有圆角时画出来就是个直角框；
+   而任务台的输入框恰恰是 border-radius:0 的裸 textarea（它的焦点由外层
+   .cc-composer 换边框色来表达，基础样式里写的是 outline:none）。无差别加上去
+   的结果，就是一进页面输入框里凭空多出一个直角矩形 —— 这条规则上一版就是
+   这么把"简约"变成"多了个框"的。
+   所以：**只给自己有圆角的元素画焦点圈**，并显式排掉那些由容器代为表达焦点的。 */
 html[data-skin="quiet"] :focus-visible {
   outline: 2px solid color-mix(in srgb, var(--acc) 60%, transparent) !important;
   outline-offset: 1px;
+}
+html[data-skin="quiet"] .cc-input:focus-visible,
+html[data-skin="quiet"] .cc-input:focus,
+html[data-skin="quiet"] .tv-search:focus-visible,
+html[data-skin="quiet"] .tv-search:focus {
+  outline: none !important;
+}
+
+/* 4.5 **凡是保留了边框的，都必须有圆角。**
+   白名单是按"这块要不要被看见"选的，选完就忘了形状 —— 于是留下来的那几个框
+   全是直角，在一套圆角语汇里格外扎眼。这条兜住它们。 */
+html[data-skin="quiet"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-skin="quiet"] select,
+html[data-skin="quiet"] textarea:not(.cc-input),
+html[data-skin="quiet"] .hs-input,
+html[data-skin="quiet"] .cs-approval,
+html[data-skin="quiet"] .sb-sess-more,
+html[data-skin="quiet"] .tv-kbd {
+  border-radius: 10px !important;
 }
 
 
@@ -235,7 +279,6 @@ html[data-skin="quiet"] .cc-dock > * { max-width: 720px; margin-left: auto; marg
        只留一层极淡的强调色底。 */
 html[data-skin="quiet"] .cc-bubble {
   border: none !important;
-  border-radius: 16px !important;
   padding: 10px 15px;
   background: color-mix(in srgb, var(--acc) 9%, var(--bg2)) !important;
   font-size: 15px;
@@ -267,10 +310,36 @@ html[data-skin="quiet"] .cc-followup:hover {
 html[data-skin="quiet"] .cc-stat + .cc-stat { border-left: none !important; padding-left: 0; }
 html[data-skin="quiet"] .cc-stats { gap: 4px 18px; opacity: .8; }
 
-/* 6.7 Hero 态：标题再大一档，场景芯片变成轻底片。 */
-html[data-skin="quiet"] .cc-hero-title { font-size: 30px; letter-spacing: -.01em; }
-html[data-skin="quiet"] .cc-scene { background: var(--bg2) !important; }
-html[data-skin="quiet"] .cc-scene:hover { background: var(--bg3) !important; transform: none !important; }
+/* 6.7 Hero 态。
+   删掉副标题之后，标题和输入框之间的关系变成"一句话 + 一个动作"，参考图里
+   就是这么干净。标题再大一档撑住这块留白；场景入口从"带框胶囊"改成**无框
+   文字行**（ChatGPT 的「撰写或编辑 / 搜索网页」就是这个形态）—— 一排五个
+   描边胶囊等于把刚去掉的框又摆回首屏正中。 */
+html[data-skin="quiet"] .cc-hero { gap: 20px; }
+html[data-skin="quiet"] .cc-hero-title { font-size: 32px; letter-spacing: -.015em; }
+html[data-skin="quiet"] .cc-hero-composer { max-width: 760px; }
+html[data-skin="quiet"] .cc-scenes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(190px, 1fr));
+  gap: 2px 28px;
+  max-width: 560px;
+}
+html[data-skin="quiet"] .cc-scene {
+  justify-content: flex-start;
+  gap: 9px;
+  padding: 9px 12px;
+  border-radius: 10px !important;
+  background: transparent !important;
+  color: var(--t2) !important;
+}
+html[data-skin="quiet"] .cc-scene:hover {
+  background: var(--bg2) !important;
+  color: var(--t) !important;
+  transform: none !important;
+}
+@media (max-width: 640px) {
+  html[data-skin="quiet"] .cc-scenes { grid-template-columns: 1fr; max-width: 100%; }
+}
 
 
 /* ── ⑦ Markdown 正文：让层级由字重和留白表达，不由线条 ────────────────────
