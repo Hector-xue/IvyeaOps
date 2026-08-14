@@ -17,8 +17,56 @@ permissions:
   contents: write
 
 jobs:
+  # 三个包（Linux/通用 zip、Windows exe、macOS .app）必须捆绑**同一个** IvyeaAgent 版本。
+  #
+  # 此前每个作业各自去问一次 GitHub API，各自带一句 `|| AGENT_REF=main` 的静默兜底。
+  # v1.6.0 那次发版就露了馅：Linux 和 Windows 解析到 v1.10.3，macOS 的 curl 没成、
+  # 悄悄回退到了 main。那次 main 恰好等于 v1.10.3，没造成差异 —— 但只要 main 领先于
+  # 最新 tag 一步，同一个版本号的三个包里就会装着不同的 agent，且没有任何报错。
+  #
+  # 所以：解析一次，输出给所有人用；解析不出来就让发版失败，不猜。
+  agent-ref:
+    name: 确定要捆绑的 IvyeaAgent 版本
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.pick.outputs.ref }}
+    steps:
+      - name: 解析 ivyea-agent 的最新 release tag
+        id: pick
+        env:
+          # 带上 token：匿名调 api.github.com 走的是**按 IP** 的限流，GitHub 托管 runner
+          # 的出口 IP 是共享的，撞额度只是时间问题 —— macOS 那次多半就是这么失败的。
+          GH_TOKEN: ${{ github.token }}
+          OVERRIDE: ${{ vars.IVYEA_AGENT_REF }}
+        run: |
+          set -euo pipefail
+          ref="${OVERRIDE:-}"
+          if [ -n "$ref" ]; then
+            echo "使用仓库变量 IVYEA_AGENT_REF 指定的版本：$ref"
+          else
+            for attempt in 1 2 3; do
+              ref=$(curl -fsSL \
+                      -H "Authorization: Bearer $GH_TOKEN" \
+                      -H "Accept: application/vnd.github+json" \
+                      "https://api.github.com/repos/Hector-xue/ivyea-agent/releases/latest" \
+                    | python3 -c "import json,sys;print(json.load(sys.stdin).get('tag_name') or '')" 2>/dev/null) || ref=""
+              [ -n "$ref" ] && break
+              echo "第 $attempt 次没取到，5 秒后重试"
+              sleep 5
+            done
+          fi
+          if [ -z "$ref" ]; then
+            echo "::error::取不到 ivyea-agent 的最新 release tag。这里**故意不回退到 main** ——"
+            echo "::error::悄悄换成 main 会让发行包装上未发布的 agent 代码，而且三个平台的包可能各装各的。"
+            echo "::error::要临时指定版本，请设仓库变量 IVYEA_AGENT_REF（如 v1.10.3）后重跑。"
+            exit 1
+          fi
+          echo "bundling ivyea-agent ref: $ref"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
   build-and-release:
     runs-on: ubuntu-latest
+    needs: agent-ref
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -117,18 +165,20 @@ jobs:
           test -f "$STAGE/client/dist/index.html"   # 确保预构建前端进了包
           # Ship IvyeaAgent source so install.sh / install-components.ps1 install it
           # OFFLINE from the bundle (no git/proxy failures at the user's end).
-          AGENT_REF="${IVYEA_AGENT_REF:-}"
-          if [ -z "$AGENT_REF" ]; then
-            # 默认打包 ivyea-agent 的**最新 release tag**(可复现、总是已发布版本),
-            # 而非 main HEAD(可能含未发布 WIP)。API 拿不到则回退 main。
-            AGENT_REF=$(curl -fsSL "https://api.github.com/repos/Hector-xue/ivyea-agent/releases/latest" 2>/dev/null | python3 -c "import json,sys;print(json.load(sys.stdin).get('tag_name') or '')" 2>/dev/null || true)
-            [ -z "$AGENT_REF" ] && AGENT_REF="main"
-          fi
+          # 版本由 agent-ref 作业统一解析（见文件顶部那段注释），三个平台的包共用同一个。
+          AGENT_REF="${{ needs.agent-ref.outputs.ref }}"
           echo "bundling ivyea-agent ref: $AGENT_REF"
-          git clone --depth 1 --branch "$AGENT_REF" https://github.com/Hector-xue/ivyea-agent.git "$STAGE/agent" \
-            || git clone --depth 1 https://github.com/Hector-xue/ivyea-agent.git "$STAGE/agent"
+          # 克隆失败不再回退默认分支：那是同一个"悄悄换个版本"的坑，
+          # 用户拿到的包会和版本号说的不是一回事。
+          git clone --depth 1 --branch "$AGENT_REF" https://github.com/Hector-xue/ivyea-agent.git "$STAGE/agent"
           rm -rf "$STAGE/agent/.git"
           test -f "$STAGE/agent/pyproject.toml"   # bundled agent source present
+          # 包里的 agent 自报版本必须和捆绑的 tag 一致。对不上时用户那边的表现是
+          # 「有更新」徽标一直亮着且消不掉（agent 仓库为此吃过两次亏），这里挡住。
+          BUNDLED=$(python3 -c "import re,pathlib;print(re.search(r'__version__ = \"([^\"]+)\"', pathlib.Path('$STAGE/agent/ivyea_agent/__init__.py').read_text(encoding='utf-8')).group(1))")
+          echo "bundled IvyeaAgent $BUNDLED"
+          [ "v$BUNDLED" = "$AGENT_REF" ] || {
+            echo "::error::捆绑的 agent 自报 $BUNDLED，与 tag $AGENT_REF 不一致"; exit 1; }
           ( cd staging && zip -rq "../IvyeaOps-${TAG}.zip" IvyeaOps )
           cp "IvyeaOps-${TAG}.zip" "IvyeaOps.zip"   # 版本无关的稳定名，供 releases/latest/download 一键下载
           ls -lh "IvyeaOps-${TAG}.zip" "IvyeaOps.zip"
@@ -165,7 +215,7 @@ jobs:
   build-windows-x64:
     name: Build Windows x64 exe bundle
     runs-on: windows-latest
-    needs: build-and-release
+    needs: [agent-ref, build-and-release]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -196,14 +246,18 @@ jobs:
           python -m pip install -r server/requirements.txt
           # Bundle IvyeaAgent INTO the exe so the 免-Python package needs no
           # separate pip/Python/git install — the #1 deploy-failure source.
-          # 默认打包 ivyea-agent 的最新 release tag(可复现、总是已发布版本);API 失败回退 main。
-          $agentRef = if ($env:IVYEA_AGENT_REF) { $env:IVYEA_AGENT_REF } else {
-            try { (Invoke-RestMethod -UseBasicParsing "https://api.github.com/repos/Hector-xue/ivyea-agent/releases/latest").tag_name } catch { "main" }
-          }
-          if (-not $agentRef) { $agentRef = "main" }
+          # 版本由 agent-ref 作业统一解析（见文件顶部那段注释），三个平台的包共用同一个。
+          $agentRef = "${{ needs.agent-ref.outputs.ref }}"
           Write-Host "bundling ivyea-agent ref: $agentRef"
           python -m pip install "git+https://github.com/Hector-xue/ivyea-agent.git@$agentRef"
-          python -c "import ivyea_agent; print('bundling IvyeaAgent', ivyea_agent.__version__)"
+          $bundled = python -c "import ivyea_agent; print(ivyea_agent.__version__)"
+          Write-Host "bundling IvyeaAgent $bundled"
+          # 自报版本必须和 tag 一致 —— 对不上时用户那边的表现是「有更新」徽标一直亮着
+          # 且怎么更新都消不掉（agent 仓库为此吃过两次亏）。
+          if ("v$bundled" -ne $agentRef) {
+            Write-Host "::error::捆绑的 agent 自报 $bundled，与 tag $agentRef 不一致"
+            exit 1
+          }
           # Build the PyInstaller arg list. --collect-all winpty bundles pywinpty's
           # native ConPTY DLLs so the server-terminal board works in the frozen exe.
           # Best-effort: if winpty isn't importable, build without it (the terminal
@@ -285,7 +339,7 @@ jobs:
   build-macos-app:
     name: Build macOS self-contained .app
     runs-on: macos-latest
-    needs: build-and-release
+    needs: [agent-ref, build-and-release]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -314,15 +368,16 @@ jobs:
           python -m pip install --upgrade pip wheel pyinstaller
           python -m pip install -r server/requirements.txt
           # Bundle IvyeaAgent into the .app so it needs no separate install.
-          AGENT_REF="${IVYEA_AGENT_REF:-}"
-          if [ -z "$AGENT_REF" ]; then
-            # 默认打包 ivyea-agent 的**最新 release tag**(可复现、总是已发布版本),
-            # 而非 main HEAD(可能含未发布 WIP)。API 拿不到则回退 main。
-            AGENT_REF=$(curl -fsSL "https://api.github.com/repos/Hector-xue/ivyea-agent/releases/latest" 2>/dev/null | python3 -c "import json,sys;print(json.load(sys.stdin).get('tag_name') or '')" 2>/dev/null || true)
-            [ -z "$AGENT_REF" ] && AGENT_REF="main"
-          fi
+          # 版本由 agent-ref 作业统一解析（见文件顶部那段注释），三个平台的包共用同一个。
+          # **这个作业就是 v1.6.0 那次悄悄回退到 main 的当事人**：它自己去问 API、
+          # 失败了不吭声。现在它没有自己的解析逻辑，也就没有自己的兜底。
+          AGENT_REF="${{ needs.agent-ref.outputs.ref }}"
           echo "bundling ivyea-agent ref: $AGENT_REF"
           python -m pip install "git+https://github.com/Hector-xue/ivyea-agent.git@${AGENT_REF}"
+          BUNDLED=$(python -c "import ivyea_agent; print(ivyea_agent.__version__)")
+          echo "bundling IvyeaAgent $BUNDLED"
+          [ "v$BUNDLED" = "$AGENT_REF" ] || {
+            echo "::error::捆绑的 agent 自报 $BUNDLED，与 tag $AGENT_REF 不一致"; exit 1; }
           python -c "import ivyea_agent; print('bundling IvyeaAgent', ivyea_agent.__version__)"
           # --windowed → a self-contained IvyeaOps.app (Python embedded, no install
           # needed). --onedir keeps deps in Contents/Frameworks (no per-launch extract,

@@ -57,13 +57,28 @@ jobs:
       # 跟 release.yml 一样默认取最新 release tag，取不到回退 main。
       - name: Install IvyeaAgent (bundled in the Windows exe)
         shell: bash
+        env:
+          # GITHUB_TOKEN 不会自动出现在步骤环境里，得显式给 —— 不给的话下面那个
+          # Authorization 头就是空的，等于又退回匿名限流那条路。
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           ref="${IVYEA_AGENT_REF:-}"
           if [ -z "$ref" ]; then
-            ref=$(curl -fsSL https://api.github.com/repos/Hector-xue/ivyea-agent/releases/latest \
+            # 带 token：匿名调 api.github.com 是按 IP 限流的，托管 runner 出口 IP 共享，
+            # 撞额度只是时间问题（release 那边的 macOS 作业就这么静默回退过一次）。
+            ref=$(curl -fsSL \
+                    -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+                    -H "Accept: application/vnd.github+json" \
+                    https://api.github.com/repos/Hector-xue/ivyea-agent/releases/latest \
                   | python -c "import json,sys; print(json.load(sys.stdin).get('tag_name',''))" 2>/dev/null || true)
           fi
-          [ -z "$ref" ] && ref=main
+          # CI 里回退 main 是可以接受的（测的是本仓库的代码，agent 只是依赖），
+          # 但**必须说出来** —— 否则"这次测的到底是哪个 agent"只能靠猜。
+          # release.yml 那边不一样：那里回退会让用户拿到装着未发布代码的包，所以直接失败。
+          if [ -z "$ref" ]; then
+            echo "::warning::取不到 ivyea-agent 最新 release，本次改用 main 跑测试"
+            ref=main
+          fi
           echo "installing ivyea-agent@$ref"
           pip install "git+https://github.com/Hector-xue/ivyea-agent.git@$ref"
       # --timeout 而不是任由它挂：挂起在 CI 上表现为"作业转 6 小时然后被杀"，
