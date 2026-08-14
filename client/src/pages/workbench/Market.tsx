@@ -9,6 +9,7 @@ import {
   type SseEvent,
   type HistoryEntry,
 } from "../../api/market";
+import { MarkdownReport } from "../../lib/reportFormat";
 import { FLAG_URL, MARKETPLACES } from "../../lib/marketplaces";
 import { getDataSource, setDataSource, dataSourceMeta, type DataSourceId } from "../../lib/dataSource";
 import DataSourcePicker from "../../components/DataSourcePicker";
@@ -666,128 +667,6 @@ export default function Market() {
   );
 }
 
-// ─── React Markdown Renderer ──────────────────────────────────────────────────
-
-function MarkdownReport({ text }: { text: string }) {
-  if (!text) return null;
-  const lines = text.split("\n");
-  const elements: React.ReactNode[] = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    // Code fence
-    if (line.startsWith("```")) {
-      const lang = line.slice(3).trim();
-      const codeLines: string[] = [];
-      i++;
-      while (i < lines.length && !lines[i].startsWith("```")) {
-        codeLines.push(lines[i]);
-        i++;
-      }
-      elements.push(
-        <pre key={i} style={{ background: "var(--bg3)", border: "1px solid var(--b)", borderRadius: 6, padding: "10px 14px", overflowX: "auto", fontSize: "0.88em", lineHeight: 1.65, margin: "10px 0" }}>
-          {lang && <div style={{ fontSize: "0.8em", color: "var(--t3)", marginBottom: 6, letterSpacing: ".06em" }}>{lang}</div>}
-          <code style={{ whiteSpace: "pre", display: "block" }}>{codeLines.join("\n")}</code>
-        </pre>
-      );
-      i++;
-      continue;
-    }
-
-    // Table
-    if (line.startsWith("|") && i + 1 < lines.length && lines[i + 1].match(/^\|[\s\-|:]+\|$/)) {
-      const headers = parseCells(line);
-      i += 2;
-      const rows: string[][] = [];
-      while (i < lines.length && lines[i].startsWith("|")) {
-        rows.push(parseCells(lines[i]));
-        i++;
-      }
-      elements.push(
-        <div key={i} style={{ overflowX: "auto", margin: "10px 0" }}>
-          <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.9em" }}>
-            <thead>
-              <tr>
-                {headers.map((h, hi) => (
-                  <th key={hi} style={{ textAlign: "left", padding: "6px 12px", borderBottom: "2px solid var(--acc)", color: "var(--t)", fontWeight: 600, whiteSpace: "nowrap" }}>
-                    {renderInline(h)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, ri) => (
-                <tr key={ri} style={{ borderBottom: "1px solid var(--b)" }}>
-                  {row.map((cell, ci) => (
-                    <td key={ci} style={{ padding: "6px 12px", color: "var(--t2)", verticalAlign: "top" }}>
-                      {renderInline(cell)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
-      continue;
-    }
-
-    if (line.startsWith("# ")) {
-      elements.push(<h1 key={i} style={{ fontSize: 17, fontWeight: 700, margin: "0 0 12px", color: "var(--t)", borderBottom: "2px solid var(--acc)", paddingBottom: 8 }}>{line.slice(2)}</h1>);
-    } else if (line.startsWith("## ")) {
-      elements.push(<h2 key={i} style={{ fontSize: "var(--fs-14)", fontWeight: 600, margin: "18px 0 8px", color: "var(--t)" }}>{line.slice(3)}</h2>);
-    } else if (line.startsWith("### ")) {
-      elements.push(<h3 key={i} style={{ fontSize: "var(--fs-13)", fontWeight: 600, margin: "12px 0 6px", color: "var(--t2)" }}>{line.slice(4)}</h3>);
-    } else if (line.startsWith("> ")) {
-      elements.push(
-        <div key={i} style={{ borderLeft: "3px solid var(--acc)", paddingLeft: 12, margin: "6px 0", color: "var(--t2)", fontStyle: "italic", lineHeight: 1.7 }}>
-          {renderInline(line.slice(2))}
-        </div>
-      );
-    } else if (line.startsWith("- ") || line.startsWith("* ")) {
-      elements.push(<div key={i} style={{ paddingLeft: 16, lineHeight: 1.7, display: "flex", gap: 8 }}><span style={{ color: "var(--acc)", flexShrink: 0 }}>•</span><span>{renderInline(line.slice(2))}</span></div>);
-    } else if (/^\d+\. /.test(line)) {
-      const num = line.match(/^(\d+)\. /)?.[1] ?? "";
-      elements.push(<div key={i} style={{ paddingLeft: 16, lineHeight: 1.7, display: "flex", gap: 8 }}><span style={{ color: "var(--t3)", flexShrink: 0, minWidth: 18 }}>{num}.</span><span>{renderInline(line.replace(/^\d+\. /, ""))}</span></div>);
-    } else if (line.startsWith("---") || line.startsWith("===")) {
-      elements.push(<hr key={i} style={{ border: "none", borderTop: "1px solid var(--b)", margin: "14px 0" }} />);
-    } else if (line.trim() === "") {
-      elements.push(<div key={i} style={{ height: 6 }} />);
-    } else {
-      elements.push(<div key={i} style={{ lineHeight: 1.8 }}>{renderInline(line)}</div>);
-    }
-
-    i++;
-  }
-
-  return <>{elements}</>;
-}
-
-function parseCells(line: string): string[] {
-  return line.split("|").slice(1, -1).map((c) => c.trim());
-}
-
-function renderInline(text: string): React.ReactNode {
-  const parts: React.ReactNode[] = [];
-  const re = /\*\*(.+?)\*\*|`(.+?)`|\*(.+?)\*/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) parts.push(text.slice(last, m.index));
-    if (m[1] !== undefined) {
-      parts.push(<strong key={m.index} style={{ color: "var(--t)", fontWeight: 600 }}>{m[1]}</strong>);
-    } else if (m[2] !== undefined) {
-      parts.push(<code key={m.index} style={{ background: "var(--bg3)", padding: "1px 5px", borderRadius: 3, fontSize: "0.88em", border: "1px solid var(--b)" }}>{m[2]}</code>);
-    } else if (m[3] !== undefined) {
-      parts.push(<em key={m.index} style={{ color: "var(--t2)", fontStyle: "italic" }}>{m[3]}</em>);
-    }
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) parts.push(text.slice(last));
-  return parts.length === 1 ? parts[0] : <>{parts}</>;
-}
 
 // ─── Download Utilities ───────────────────────────────────────────────────────
 
@@ -1228,4 +1107,10 @@ function relativeTime(ts: number): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}天前`;
   return new Date(ts).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+}
+
+/* Markdown 表格行 → 单元格。MarkdownReport 已改为复用 lib/reportFormat 的共享版，
+   但本页另有三处表格解析（导出 CSV / 图表取数）还在用它，所以这个帮手留在这里。 */
+function parseCells(line: string): string[] {
+  return line.split("|").slice(1, -1).map((c) => c.trim());
 }

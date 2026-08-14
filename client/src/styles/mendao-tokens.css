@@ -27,7 +27,8 @@
  * 再深/浅一档，不违背这套语汇（canvas→paper→wash→sink 本来就是连续灰阶）。
  */
 
-:root[data-theme="mendao-light"] {
+:root[data-theme="mendao-light"],
+:root[data-theme="quiet-light"] {
   /* --- 浅色：One Light 血统 --- */
   --md-c-canvas: 250 250 249;   /* 页面底。**门道原版是纯白 255**，这里压暗一档 ——
                                    门道的 canvas 和 paper 同为纯白，靠 .sb 那条
@@ -59,7 +60,8 @@
   --md-c-syn-comment:  160 161 167;
 }
 
-:root[data-theme="mendao-dark"] {
+:root[data-theme="mendao-dark"],
+:root[data-theme="quiet-dark"] {
   /* --- 深色：One Dark 血统 --- */
   --md-c-canvas:  23  25  31;
   --md-c-paper:   30  33  40;
@@ -100,7 +102,8 @@
  * 50~200 当文字，浅色模式反过来 —— 同一条单调阶同时服务两边，这正是
  * agents 那些 `dark:` 配对成立的前提，不能因为是深色主题就把阶倒过来。
  */
-:root[data-theme="mendao-light"] {
+:root[data-theme="mendao-light"],
+:root[data-theme="quiet-light"] {
   --ag-n50:  255 255 255;   /* paper */
   --ag-n100: 250 250 249;   /* canvas */
   --ag-n200: 237 237 235;   /* hair */
@@ -113,7 +116,8 @@
   --ag-n900:  34  34  32;
   --ag-n950:  17  17  17;   /* ink */
 }
-:root[data-theme="mendao-dark"] {
+:root[data-theme="mendao-dark"],
+:root[data-theme="quiet-dark"] {
   --ag-n50:  215 218 224;   /* ink */
   --ag-n100: 197 202 210;
   --ag-n200: 175 181 191;
@@ -127,10 +131,47 @@
   --ag-n950:  23  25  31;   /* canvas */
 }
 
-/* 可直接使用的 rgb() 别名。两套主题共用这一份 —— 它们引用的是 --md-c-*，
-   所以自动跟着深浅走，不需要写两遍。 */
+/* ── 静谧的三处偏移 ──────────────────────────────────────────────────────
+ *
+ * 静谧（quiet-*）整套调色板继承上面的门道 —— One Light / One Dark 那两支
+ * 血统本身没有问题，杂乱的来源是**线条和盒子**，不是颜色。所以这里只偏移
+ * 三处，且每一处都直接对应"去线之后还要分得清层次"这个约束：
+ *
+ * ① **浅色画布改纯白，侧栏靠 wash 站住。** 门道当初把 canvas 压暗一档
+ *    (250)、paper 用纯白，是因为它要靠**颜色差**把侧栏（paper）从内容区
+ *    （canvas）里分出来。静谧反过来：内容区纯白当纸，侧栏用 wash 微灰 ——
+ *    这正是参考图里 ChatGPT / Apple 的做法，也是去掉侧栏那条边框之后
+ *    唯一还能分开两块的手段。深色不动：One Dark 的 canvas 已经够沉。
+ *
+ * ② **rule 收到 hair 附近。** 门道是"线条直角风"，rule 是它的骨架；静谧
+ *    几乎不画线，仅剩的那几条（输入框、审批卡）应该是发丝而不是结构线。
+ *    留一点点差是有意的 —— 不是把两者设成同一个值，否则 --b/--b2 的分级
+ *    在静谧下会彻底失效，focus ring 和 hover 也就没了落点。
+ *
+ * ③ **深色的 paper 抬到和 canvas 更近。** 深色下侧栏与内容的关系和浅色相反
+ *    （侧栏更深），但差值要收窄，否则去框之后侧栏会像一块贴上去的板子。
+ * ─────────────────────────────────────────────────────────────────────── */
+:root[data-theme="quiet-light"] {
+  --md-c-canvas: 255 255 255;   /* 内容区：纸 */
+  --md-c-paper:  247 247 245;   /* 侧栏 / 浮层：微灰，见 ① */
+  --md-c-wash:   242 242 240;
+  --md-c-sink:   234 234 231;
+  --md-c-rule:   228 228 225;   /* 见 ② */
+}
+:root[data-theme="quiet-dark"] {
+  --md-c-canvas:  24  26  32;
+  --md-c-paper:   28  31  38;   /* 见 ③ */
+  --md-c-wash:    36  40  48;
+  --md-c-sink:    44  49  58;
+  --md-c-rule:    52  57  67;   /* 见 ② */
+}
+
+/* 可直接使用的 rgb() 别名。四套主题共用这一份 —— 它们引用的是 --md-c-*，
+   所以自动跟着深浅走，不需要写四遍。 */
 :root[data-theme="mendao-light"],
-:root[data-theme="mendao-dark"] {
+:root[data-theme="mendao-dark"],
+:root[data-theme="quiet-light"],
+:root[data-theme="quiet-dark"] {
   --md-canvas: rgb(var(--md-c-canvas));
   --md-paper:  rgb(var(--md-c-paper));
   --md-wash:   rgb(var(--md-c-wash));

@@ -17,6 +17,7 @@ import { MarkdownReport } from "../../lib/reportFormat";
 import { restoreSession } from "../../lib/sessionRestore";
 import { ToastProvider, useToast } from "../../components/toast";
 import { CONSOLE_NEW_EVENT, sceneChips } from "../../lib/navRegistry";
+import TopbarActions from "../../components/TopbarActions";
 import {
   formatMs,
   mergeStep,
@@ -783,6 +784,14 @@ function ConsoleInner() {
 
   return (
     <div className="cc-page">
+      {/* 顶栏右侧只在会话开起来之后挂一个「新建任务」——
+          它是这一页唯一称得上"主动作"的东西，而在此之前满屏都是新建入口，
+          再挂一个就是重复。Hero 态不挂，顶栏就保持空的。 */}
+      {started && (
+        <TopbarActions>
+          <button className="tbtn" onClick={resetSession} title="开一轮新任务">⊕ 新建任务</button>
+        </TopbarActions>
+      )}
       <div className="cc-main">
         {loadingSession ? (
           <div className="cc-hero">

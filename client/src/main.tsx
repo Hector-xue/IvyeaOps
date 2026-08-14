@@ -11,8 +11,10 @@ import App from "./App";
 // 让它与引入顺序无关。这行注释是给下一个想调换顺序的人看的。
 import "./styles/mendao-tokens.css";
 import "./styles/workbench.css";
-// 形状层最后引入：它靠 !important 压过一切，放最后只是让阅读顺序和生效顺序一致。
+// 形状层最后引入：它们靠 !important 压过一切，放最后只是让阅读顺序和生效顺序一致。
+// 两张皮肤各自绑死在自己的主题上（data-skin=flat / quiet），互不相干，谁先谁后无所谓。
 import "./styles/mendao-skin.css";
+import "./styles/quiet-skin.css";
 import { applyAppearance } from "./lib/appearance";
 import { DEFAULT_THEME, THEME_KEY, applyThemeAttrs, isThemeId, migrateTheme } from "./lib/themes";
 
@@ -24,7 +26,7 @@ import { DEFAULT_THEME, THEME_KEY, applyThemeAttrs, isThemeId, migrateTheme } fr
 // 现在两边都从 lib/themes 读，这类漂移不可能再发生。
 // data-skin 也必须在这里同步写 —— 只写 data-theme 的话，门道主题会先按
 // 圆角+背景画画一帧，再被 React 挂载后的 useEffect 抹平，肉眼能看见那一闪。
-// 一次性迁移必须在读取之前跑：默认主题从「暗夜」换成了「门道·浅」，
+// 一次性迁移必须在读取之前跑：默认主题现在是「静谧·浅」（上一轮是「门道·浅」），
 // 而老用户的 localStorage 里存着旧值，不迁的话他们永远看不到新默认。
 // 迁移只在这台浏览器第一次跑到这行时发生一次，之后手动选的主题不会被碰。
 const migrated = migrateTheme();

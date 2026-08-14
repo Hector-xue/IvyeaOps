@@ -1,9 +1,9 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type CSSProperties, type ReactElement } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api, logout } from "../api/client";
 import { useAuth } from "../App";
 import { resetBodyScrollLock } from "../lib/scrollLock";
-import { DEFAULT_THEME, THEMES, applyThemeAttrs, isThemeId, themeLabel } from "../lib/themes";
+import { DEFAULT_THEME, applyThemeAttrs, isThemeId } from "../lib/themes";
 import {
   CONSOLE_NEW_EVENT,
   KEEP_ALIVE_PATHS,
@@ -36,8 +36,11 @@ import ManualModal from "../components/ManualModal";
 import UpdateModal from "../components/UpdateModal";
 import Tour from "../components/Tour";
 import IvyeaAgentDock from "../components/IvyeaAgentDock";
-import CostChip from "../components/CostChip";
+import AccountMenu from "../components/AccountMenu";
+import ToolsOverlay from "../components/ToolsOverlay";
 import SessionRail from "../components/console/SessionRail";
+import { BOARD_PREFS_EVENT, getPinnedBoards, pushRecentBoard } from "../lib/boardPrefs";
+import { TOPBAR_SLOT_ID } from "../lib/topbarSlot";
 import { TOURS, hasTour } from "../lib/tours";
 
 // Boards with long-running tasks (research / generation / audit). These are kept
@@ -74,12 +77,10 @@ type UpdateInfo = {
   detail: string;
 };
 
-const TOOLS_OPEN_KEY = "ivyea-ops.sidebar.tools-open";
-
 export default function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { role, permissions } = useAuth();
+  const { role, username, permissions } = useAuth();
   const isAdmin = role === "admin";
   const visibility = useMemo(() => ({ isAdmin, permissions }), [isAdmin, permissions]);
 
@@ -91,6 +92,24 @@ export default function MainLayout() {
   const legacySections = useMemo(() => classicSections(visibility), [visibility]);
   const primary = useMemo(() => primaryItems(visibility), [visibility]);
   const toolGroups = useMemo(() => toolSections(visibility), [visibility]);
+
+  // 「全部工具」浮层 —— 18 个板块的目录从侧栏搬进了它，见 components/ToolsOverlay。
+  const [toolsOverlay, setToolsOverlay] = useState(false);
+
+  // 钉在侧栏的板块（本机偏好，lib/boardPrefs）。和下面的 pinnedTools 不是一回事：
+  // 那个钉的是技能工具、有后端、跨设备。两者并排显示在「我的工具」下。
+  const [pinnedBoards, setPinnedBoards] = useState<string[]>(() => getPinnedBoards());
+  useEffect(() => {
+    const sync = () => setPinnedBoards(getPinnedBoards());
+    window.addEventListener(BOARD_PREFS_EVENT, sync);
+    return () => window.removeEventListener(BOARD_PREFS_EVENT, sync);
+  }, []);
+  const pinnedBoardItems = useMemo(
+    () => pinnedBoards
+      .map((to) => toolGroups.flatMap((s) => s.items).find((b) => b.to === to))
+      .filter((b): b is BoardEntry => !!b),
+    [pinnedBoards, toolGroups],
+  );
 
   // Pinned skill tools → dynamic sidebar entries. Refreshed on mount and when
   // a tool is pinned/unpinned (SkillTools dispatches 'ivyea-ops:pinned-changed').
@@ -123,7 +142,8 @@ export default function MainLayout() {
     const saved = localStorage.getItem("ivyea-ops.theme");
     return isThemeId(saved) ? saved : DEFAULT_THEME;
   });
-  const [themePicker, setThemePicker] = useState(false);
+  // 主题选择器整块搬进了左下角的账户菜单（components/AccountMenu），
+  // 它的开合状态和点外面收起也一并归那边管 —— 这里只留"当前是哪套"。
   // main.tsx 在挂载前跑完迁移，用全局标记传进来 —— 那时候还没有 React，
   // 发事件会在监听器注册之前就丢掉。
   const [themeMigrated, setThemeMigrated] = useState(
@@ -135,17 +155,7 @@ export default function MainLayout() {
   useEffect(() => {
     applyThemeAttrs(theme);
   }, [theme]);
-  const themePickerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!themePicker) return;
-    const handler = (e: MouseEvent) => {
-      if (themePickerRef.current && !themePickerRef.current.contains(e.target as Node))
-        setThemePicker(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [themePicker]);
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("ivyea-ops.sidebar.collapsed") === "1" || window.innerWidth <= 680,
   );
@@ -162,38 +172,34 @@ export default function MainLayout() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // 「更多工具」默认**收起**。
-  //
-  // 原本默认展开，理由是"升级后别让人以为板块没了"。但实测代价太大：18 个板块一次
-  // 铺开占 774px，把会话整个挤到折叠线以下 —— 1440×900 下首屏一条会话都看不见，
-  // 而会话恰恰是这个外壳的主角。
-  //
-  // "板块没了"的担心改由两件事兜住：芯片上带**数量**（更多工具 18），以及当前路由
-  // 落在其中时**自动展开**（下面的 activeIsTool）。手动开过一次就记住。
-  const [toolsOpen, setToolsOpen] = useState(() => {
-    try { return localStorage.getItem(TOOLS_OPEN_KEY) === "1"; } catch { return false; }
-  });
-  // 收起时显示的板块数 —— 让"更多工具"看着像个装了东西的抽屉，而不是一个空按钮。
+  // 板块总数 —— 「全部工具」按钮上带着它，是"板块一个都没丢"的凭据。
   const toolCount = useMemo(
     () => toolGroups.reduce((n, s) => n + s.items.length, 0),
     [toolGroups],
   );
-  const activeIsTool = useMemo(
-    () => toolGroups.some((s) => s.items.some((b) => boardPath(b) === location.pathname)),
-    [toolGroups, location.pathname],
-  );
-  useEffect(() => {
-    if (activeIsTool && !toolsOpen) setToolsOpen(true);
-    // Only reacts to the route landing inside the group — never fights a manual close.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIsTool]);
   const railCollapsed = collapsed && !mobileMenu;
 
-  const toggleTools = () => {
-    const next = !toolsOpen;
-    setToolsOpen(next);
-    try { localStorage.setItem(TOOLS_OPEN_KEY, next ? "1" : "0"); } catch { /* ignore */ }
-  };
+  // 去过的板块记一笔，供「全部工具」浮层的「最近」用。
+  useEffect(() => {
+    const hit = toolGroups.flatMap((s) => s.items).find((b) => boardPath(b) === location.pathname);
+    if (hit) pushRecentBoard(hit.to);
+  }, [location.pathname, toolGroups]);
+
+  // ⌘K / Ctrl+K 唤起「全部工具」。**输入框里不抢** —— 用户正在打字时按下
+  // ⌘K 的意图几乎不可能是"我要换个板块"。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "k" && e.key !== "K") return;
+      if (!e.metaKey && !e.ctrlKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || el?.isContentEditable) return;
+      e.preventDefault();
+      setToolsOverlay((v) => !v);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Persistent boards (terminal / agents): once visited, stay mounted forever.
   const [persistentVisited, setPersistentVisited] = useState<Set<string>>(() => new Set());
@@ -268,7 +274,6 @@ export default function MainLayout() {
     // health until the new version answers. No external WinForms window.
     setUpdating(true);
   };
-  const [clock, setClock] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
 
   // Interactive tour: auto-run a board's tour on first visit (remembered per
@@ -287,26 +292,13 @@ export default function MainLayout() {
     return () => clearTimeout(t);
   }, [location.pathname]);
 
-  // Clock
-  useEffect(() => {
-    const tick = () =>
-      setClock(
-        new Date().toLocaleTimeString("zh-CN", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        }),
-      );
-    tick();
-    const t = setInterval(tick, 1000);
-    return () => clearInterval(t);
-  }, []);
+  // 顶栏那个秒级时钟已经删掉：系统托盘本来就有时间，而它每秒一次 setState
+  // 会把整个外壳重渲染一遍 —— 拿一次全树重绘换一个谁都不看的信息。
 
   const selectTheme = (t: string) => {
     setTheme(t);
     applyThemeAttrs(t);
     localStorage.setItem("ivyea-ops.theme", t);
-    setThemePicker(false);
     window.dispatchEvent(new CustomEvent("ivyea-ops:theme-changed", { detail: t }));
   };
 
@@ -369,10 +361,13 @@ export default function MainLayout() {
 
   const divider = <div style={{ height: 1, background: "var(--b)", margin: "4px 12px" }} />;
 
-  const pinnedGroup = pinnedTools.length > 0 && (
+  // 「我的工具」= 钉住的板块（本机偏好）+ 钉住的技能工具（有后端）。两者来源
+  // 不同但对用户是同一件事：我自己挑出来常用的那几个。
+  const pinnedGroup = (pinnedTools.length > 0 || pinnedBoardItems.length > 0) && (
     <div>
       {divider}
       {!railCollapsed && <div style={{ fontSize: "var(--fs-9)", color: "var(--t3)", padding: "4px 16px 2px", letterSpacing: ".08em" }}>我的工具</div>}
+      {pinnedBoardItems.map(renderNavItem)}
       {pinnedTools.map((pt) => {
         const to = `/skill-tools?tool=${encodeURIComponent(pt.name)}`;
         const active = location.pathname === "/skill-tools" &&
@@ -445,37 +440,29 @@ export default function MainLayout() {
                 />
               </div>
 
-              {/* ── 收纳区：更多工具 + 我的工具 ─────────────────────────── */}
+              {/* ── 收纳区：我的工具 + 全部工具入口 ───────────────────────
+               *
+               * 这里原本是「更多工具」折叠组：展开 18 个板块占 774px，把上面
+               * 那块会话区整个挤到折叠线以下。现在整份目录搬进了浮层
+               * （components/ToolsOverlay），侧栏只留一个入口和一个数量。
+               */}
               <div className="sb-nav-dock">
+                {pinnedGroup}
                 {toolGroups.length > 0 && (
                   <>
                     {divider}
                     <button
-                      className={"ni ni-group" + (toolsOpen ? " open" : "")}
-                      onClick={toggleTools}
-                      title={railCollapsed ? `更多工具（${toolCount}）` : undefined}
-                      aria-expanded={toolsOpen}
+                      className="ni ni-group"
+                      onClick={() => { if (isMobile) setMobileMenu(false); setToolsOverlay(true); }}
+                      title={railCollapsed ? `全部工具（${toolCount}）` : "全部工具　⌘K"}
                     >
-                      <i className="ic">⋯</i>
-                      <span className="ni-label">更多工具</span>
-                      {/* 数量是"板块没丢"的凭据 —— 收起状态下唯一能说明这件事的东西 */}
-                      {!railCollapsed && !toolsOpen && <span className="ni-count">{toolCount}</span>}
-                      <span className="ni-caret">{toolsOpen ? "▾" : "▸"}</span>
+                      <i className="ic">⊞</i>
+                      <span className="ni-label">全部工具</span>
+                      {/* 数量是"板块一个都没丢"的凭据 */}
+                      {!railCollapsed && <span className="ni-count">{toolCount}</span>}
                     </button>
-                    {toolsOpen && (
-                      <div className="sb-tools-open scroll-thin">
-                        {toolGroups.map((sec, si) => (
-                          <div key={sec.title} className="ni-sub">
-                            {si > 0 && divider}
-                            {!railCollapsed && <div className="ns">{sec.title}</div>}
-                            {sec.items.map(renderNavItem)}
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </>
                 )}
-                {pinnedGroup}
               </div>
             </>
           ) : (
@@ -491,105 +478,45 @@ export default function MainLayout() {
             </>
           )}
         </nav>
-        <div className="sb-bot">
-          <div className="sb-status">
-            <div className="dot" />
-            <span className="sb-version-wrap" title={updateTitle}>
-              <span className="sb-bot-text">{versionLabel}</span>
-              {hasUpdate && <span className="sb-update-dot" aria-label="发现新版本" />}
-            </span>
-          </div>
-          {isAdmin && (
-            <button
-              className={"sb-update-btn" + (hasUpdate ? " has-update" : "")}
-              onClick={startUpdate}
-              disabled={updating}
-              title={updateTitle}
-            >
-              ↻
-              <span className="sb-update-label">{updating ? "更新中" : hasUpdate ? "更新" : "检查"}</span>
-            </button>
-          )}
-        </div>
+        {/* 左下角账户区 —— 顶栏那 8 个常驻按钮和原来的版本行都收进了它的菜单。
+            版本号在副标题里常驻，有更新时头像挂红点。 */}
+        <AccountMenu
+          collapsed={railCollapsed}
+          username={username}
+          isAdmin={isAdmin}
+          theme={theme}
+          onSelectTheme={selectTheme}
+          versionLabel={versionLabel}
+          hasUpdate={hasUpdate}
+          updateTitle={updateTitle}
+          updating={updating}
+          onUpdate={startUpdate}
+          isConsoleShell={isConsoleShell}
+          onToggleShell={toggleShell}
+          onManual={() => setManualOpen(true)}
+          onTour={hasTour(location.pathname) ? () => setTourOn(true) : null}
+          onLogout={handleLogout}
+          onNavigated={() => isMobile && setMobileMenu(false)}
+        />
       </aside>
 
       {/* MAIN */}
       <div className="main">
+        {/* 顶栏只回答一件事：我在哪儿。
+         *
+         * 这里原本常驻 8 个带框按钮（用量 / 时钟 / 外壳切换 / 手册 / 引导 /
+         * 刷新 / 主题 / 退出），每天占着视野换一个月一次的使用频率。它们全部
+         * 搬进了左下角的账户菜单。右侧留一个挂位给**属于当前这一页**的动作
+         * （lib/topbarSlot），没有板块挂东西时它不占任何位置。 */}
         <div className="topbar">
-          {isMobile && <button className="tbtn" onClick={() => setMobileMenu(!mobileMenu)} style={{ marginRight: 4 }}>☰</button>}
+          {isMobile && (
+            <button className="tbtn" onClick={() => setMobileMenu(!mobileMenu)}
+                    style={{ marginRight: 4 }} aria-label="打开侧边栏">☰</button>
+          )}
           <div className="tb-path">
             <b>{path}</b>
           </div>
-          <div className="tb-r">
-            {/* AI 花费是唯一会在你不看的时候持续增长的东西，所以它常驻顶栏 */}
-            <CostChip />
-            <div className="tb-time">{clock}</div>
-            <button
-              className="tbtn"
-              onClick={toggleShell}
-              title={isConsoleShell ? "切回经典侧边栏布局" : "切换到任务台布局"}
-            >
-              {isConsoleShell ? "▤ 经典" : "◆ 任务台"}
-            </button>
-            <button
-              className="tbtn"
-              data-tour="tour-help"
-              onClick={() => setManualOpen(true)}
-              title="使用手册"
-            >
-              📖
-            </button>
-            {hasTour(location.pathname) && (
-              <button
-                className="tbtn"
-                onClick={() => setTourOn(true)}
-                title="本板块使用引导"
-              >
-                ?
-              </button>
-            )}
-            <button
-              className="tbtn"
-              onClick={() => {
-                if ((window as any).OpsApp?.reload) {
-                  (window as any).OpsApp.reload();
-                } else {
-                  window.location.reload();
-                }
-              }}
-              title="刷新页面"
-            >
-              ↻
-            </button>
-            <div ref={themePickerRef} style={{ position: "relative", display: "flex", alignItems: "center" }}>
-              <button
-                className="tbtn"
-                onClick={() => setThemePicker(!themePicker)}
-                style={{ minWidth: 72 }}
-                title="切换主题"
-              >
-                {themeLabel(theme)}
-              </button>
-              {themePicker && (
-                <div className="theme-picker">
-                  {THEMES.map((t) => (
-                    <button
-                      key={t.id}
-                      className={"theme-picker-card" + (t.id === theme ? " active" : "")}
-                      onClick={() => selectTheme(t.id)}
-                    >
-                      <span className="theme-picker-dot" style={{ background: t.accent }} />
-                      <span className="theme-picker-icon">{t.icon}</span>
-                      <span className="theme-picker-name">{t.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <button className="tbtn" onClick={handleLogout} title="退出登录">
-              ↩ 退出
-            </button>
-          </div>
+          <div className="tb-r" id={TOPBAR_SLOT_ID} />
         </div>
         <div className={"content" + (isFullPage(location.pathname) ? " content-fullpage" : "")}>
           {/* Persistent boards (terminal / agents) are always mounted after their
@@ -619,6 +546,11 @@ export default function MainLayout() {
             )}
         </div>
       </div>
+      <ToolsOverlay
+        open={toolsOverlay}
+        onClose={() => setToolsOverlay(false)}
+        visibility={visibility}
+      />
       {manualOpen && <ManualModal onClose={() => setManualOpen(false)} />}
       {updating && <UpdateModal currentVersion={appVersion} onClose={() => setUpdating(false)} />}
       {tourOn && hasTour(location.pathname) && (

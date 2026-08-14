@@ -302,6 +302,62 @@
   --fs-135:15px;--fs-14:15px;--fs-15:15px;--fs-16:15px;
 }
 
+/* ══ 静谧 · 无边框阅读风 ═══════════════════════════════════════════════════
+ *
+ * 调色板继承门道（见 mendao-tokens.css 里"静谧的三处偏移"）。这一块只做接线，
+ * 和门道那一块逐行对应，**只有三处不同**，其余照抄：
+ *
+ * ① **字号刻度是阅读尺度，不是控制台尺度。** 门道压成 10.5/12/13.5/15 四档，
+ *    对一个"看一眼数据就走"的控制台成立；但这个产品现在主体是**任务台的长
+ *    对话**，正文 13.5px 读一屏就累，观感上也就是用户说的"不大气"。这里抬成
+ *    12/13/15/17，正文落在 15、聊天正文再由 quiet-skin 单独提到 16。
+ *    ——"杂乱"有一半是排版尺度问题，不是线条问题，这一条单独治那一半。
+ *
+ * ② **保留圆角（--r:10px）。** 门道的 flat 皮肤把全站圆角归零，那是它"线条
+ *    直角"语汇的一部分；静谧的参照系是 ChatGPT / iOS，形状语言是**软角 + 无边框**。
+ *    所以静谧走自己的 quiet 皮肤（styles/quiet-skin.css），不复用 flat。
+ *
+ * ③ **--b 与 --b2 的角色对调着用。** 静谧里绝大多数边框会被 quiet 皮肤删掉，
+ *    活下来的几条（输入框、审批卡、表单控件）应该是**能看见但不抢眼**的那档，
+ *    所以 --b 走 rule（已经收窄到接近发丝）、--b2 用 faint 的淡混合当 hover/focus
+ *    的那一档，而不是像门道那样 --b2 更细。
+ * ═══════════════════════════════════════════════════════════════════════ */
+[data-theme="quiet-light"],
+[data-theme="quiet-dark"]{
+  /* 四级表面：全部不透明 */
+  --bg:var(--md-canvas);--bg1:var(--md-paper);--bg2:var(--md-wash);--bg3:var(--md-sink);
+  /* 线：见 ③ */
+  --b:var(--md-rule);--b2:var(--md-faint);--brd:var(--b);
+  /* 三级文字 */
+  --t:var(--md-ink);--t2:var(--md-muted);--t3:var(--md-faint);
+  /* 强调色同门道：info 蓝 = "可点 / 进行中 / 选中"，用朱红会像一直在报警 */
+  --acc:var(--md-info);
+  --acc-ink:var(--md-ink);
+  /* 语义色一一对应 */
+  --blue:var(--md-info);--amber:var(--md-warn);--red:var(--md-accent);
+  --purple:var(--md-hint);--cyan:var(--md-calm);
+  /* 系统黑体（等宽留给数字、代码和元信息） */
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+  --sans:var(--font);
+  /* 背景画三件套：关掉 */
+  --grain-opacity:0;
+  --warm-glow:transparent;
+  --bg-cover:var(--md-canvas);
+  /* 终端与"压在强调色上的前景" */
+  --term-bg:var(--md-sink);
+  --term-bar:var(--md-rule);
+  --term-fg:rgb(var(--md-c-syn-str));
+  --on-acc:var(--md-canvas);
+  --on-acc-ink:var(--md-canvas);
+  /* 圆角，见 ② */
+  --r:10px;
+  /* 字号刻度重排为阅读尺度，见 ① */
+  --fs-7:12px;--fs-75:12px;--fs-8:12px;--fs-85:12px;--fs-9:12px;--fs-95:12px;
+  --fs-10:13px;--fs-105:13px;--fs-11:13px;
+  --fs-115:15px;--fs-12:15px;--fs-125:15px;--fs-13:15px;
+  --fs-135:17px;--fs-14:17px;--fs-15:17px;--fs-16:17px;
+}
+
 /* ─────────────────────────────────────────────────────────────────
    GLOBAL BASE — painting faintly visible under theme color overlay
    Layer stack (back → front):
@@ -373,14 +429,9 @@ body::after{
    overflow 永远不生效，三段式就退化回一条长滚动。 */
 .sb-nav-flex{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column}
 .sb-nav-dock{flex-shrink:0;border-top:1px solid var(--b)}
-/* 展开板块时给它自己的高度上限，别把会话区压没 */
-.sb-tools-open{max-height:46vh;overflow-y:auto}
-/* 收起时的板块数量：说明"东西还在里面" */
+/* 「全部工具」上的板块数量：说明"东西一个都没丢，都在里面" */
 .ni-count{margin-left:auto;font-size:var(--fs-9);color:var(--t3);background:var(--bg3);
   border-radius:99px;padding:0 5px;line-height:1.7}
-/* 相邻兄弟选择器：只有**存在数量徽标时**箭头才让出 auto 间距。
-   写成 .ni-group .ni-caret 的话，展开态（没有徽标）箭头会贴到标签旁边。 */
-.ni-count + .ni-caret{margin-left:4px}
 .sb.collapsed .ni-count{display:none}
 .sb nav::-webkit-scrollbar{width:0}
 .ns{padding:10px 12px 3px;font-size:var(--fs-9);color:var(--t3);letter-spacing:.12em;text-transform:uppercase}
@@ -390,16 +441,6 @@ body::after{
 .ni .ic{width:13px;text-align:center;flex-shrink:0;font-style:normal}
 .ni-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .nb{margin-left:auto;font-size:var(--fs-9);padding:1px 5px;background:color-mix(in srgb, var(--acc) 12%, transparent);color:var(--acc);border-radius:8px}
-.sb-bot{padding:9px 10px;border-top:1px solid var(--b);display:flex;align-items:center;gap:8px}
-.sb-status{display:flex;align-items:center;gap:7px;min-width:0;flex:1}
-.sb-version-wrap{display:inline-flex;align-items:center;gap:5px;min-width:0}
-.sb-bot-text{font-size:var(--fs-10);color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sb-update-dot{width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 0 3px rgba(248,113,113,.14);flex-shrink:0}
-.sb-update-btn{display:inline-flex;align-items:center;gap:4px;min-width:0;padding:3px 7px;border:1px solid var(--b);border-radius:4px;background:var(--bg2);color:var(--t2);font-family:var(--font);font-size:var(--fs-10);line-height:1.2;cursor:pointer;transition:all .12s;flex-shrink:0}
-.sb-update-btn:hover:not(:disabled){color:var(--acc);border-color:color-mix(in srgb,var(--acc) 45%,var(--b));background:color-mix(in srgb,var(--acc) 7%,transparent)}
-.sb-update-btn.has-update{color:var(--red);border-color:rgba(248,113,113,.45);background:rgba(248,113,113,.08)}
-.sb-update-btn.has-update:hover:not(:disabled){color:var(--red);border-color:rgba(248,113,113,.65);background:rgba(248,113,113,.12)}
-.sb-update-btn:disabled{opacity:.55;cursor:not-allowed}
 .dot{width:5px;height:5px;border-radius:50%;background:var(--acc);flex-shrink:0;animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
@@ -413,10 +454,6 @@ body::after{
 .sb.collapsed .ni.active{border-left-width:0;border-right-color:var(--acc)}
 .sb.collapsed .ni-label{display:none}
 .sb.collapsed .nb{display:none}
-.sb.collapsed .sb-bot{justify-content:center;padding:10px 0;flex-direction:column;gap:7px}
-.sb.collapsed .sb-status{display:none}
-.sb.collapsed .sb-bot-text,.sb.collapsed .sb-update-label{display:none}
-.sb.collapsed .sb-update-btn{padding:4px 7px}
 
 /* --- MAIN --- */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
@@ -2943,18 +2980,14 @@ body::after{
    **不进入 #agents-root** —— /agents 子树有自己的 Tailwind 作用域和重置。
    ============================================================================ */
 
-/* ── 新外壳的侧边栏增补（一级项 / 折叠组 / 工作区占位）───────────────────── */
+/* ── 新外壳的侧边栏增补（一级项 / 全部工具入口 / 工作区占位）─────────────── */
 /* .ni 原本只给 <a>，这里让 <button> 也能长成同一副样子。 */
 button.ni{width:100%;background:transparent;border:none;border-left:2px solid transparent;
   font-family:var(--font);font-size:var(--fs-11);text-align:left;line-height:inherit}
 .ni-action{color:var(--acc)}
 .ni-action:hover{background:color-mix(in srgb,var(--acc) 8%,transparent)}
 .ni-group{color:var(--t3)}
-.ni-caret{margin-left:auto;font-size:var(--fs-9);color:var(--t3);flex-shrink:0}
-.sb.collapsed .ni-caret{display:none}
 .sb.collapsed .ns{display:none}
-.ni-sub .ni{padding-left:18px}
-.sb.collapsed .ni-sub .ni{padding-left:0}
 .sb-workspace{padding-bottom:4px}
 .sb-ws-empty{padding:2px 16px 6px;font-size:var(--fs-10);color:var(--t3);line-height:1.5}
 
@@ -3428,7 +3461,6 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 @media (pointer: coarse) {
   .tbtn,
   .sb-toggle,
-  .sb-update-btn,
   .sb-ws-add,
   .sb-src-chip,
   .sb-sess-more,
@@ -3443,6 +3475,13 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
   }
   /* 输入框单行时也要够高，不然光标落点很难对准 */
   .cc-input { min-height: 32px; }
+  /* 账户行、账户菜单项、全部工具浮层里的分类和卡片：**只补高度，不动排布**。
+     上面那条规则带 justify-content:center，套到这几个"图标+标签+尾巴"的左对齐
+     行上会把内容挤到中间，inline-flex 还会让 width:100% 失效。 */
+  .sb-acct,
+  .sb-menu-item,
+  .tv-cat,
+  .tv-card { min-height: 34px; }
   /* AI 问答页的按钮是内联样式写的 —— 内联样式吃不到媒体查询，
      所以那两个图标按钮单挂了个类名，靶区在这里补。 */
   .asst-icon-btn { min-width: 32px; min-height: 32px; }
@@ -3605,3 +3644,179 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
    得让他一眼知道是筛选造成的、并且一键就能撤销。 */
 .sb-clear-filter{display:block;margin-top:6px;padding:0;background:none;border:0;
   color:var(--acc);font-size:var(--fs-105);cursor:pointer;text-align:left}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   侧栏左下角：账户行 + 向上弹出的设置菜单（components/AccountMenu.tsx）
+
+   顶栏原本常驻 8 个带框按钮、左下角另有版本行，一共 10 个控件。它们的实际
+   使用频率是"一个月一次"，却天天占着视野。这一块把它们全收进来：账户行只
+   露两行字（名字 / 版本·用量）+ 一个齿轮，其余全在菜单里。
+   ════════════════════════════════════════════════════════════════════════════ */
+.sb-acct-wrap{position:relative;padding:8px;flex-shrink:0}
+.sb-acct{display:flex;align-items:center;gap:9px;width:100%;padding:7px 8px;
+  border:1px solid transparent;border-radius:8px;background:transparent;
+  color:var(--t2);font-family:var(--font);cursor:pointer;text-align:left;
+  transition:background-color var(--dur,.14s) var(--ease,ease),border-color var(--dur,.14s) var(--ease,ease)}
+.sb-acct:hover,.sb-acct.open{background:var(--bg2);color:var(--t)}
+.sb-acct-avatar{position:relative;flex-shrink:0;width:26px;height:26px;border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb,var(--acc) 18%,var(--bg3));color:var(--acc);
+  font-size:var(--fs-10);font-weight:600;letter-spacing:.02em}
+/* 有新版本时头像挂红点 —— 用户不需要认识这个点，就知道该点进去看看。 */
+.sb-acct-dot{position:absolute;top:-1px;right:-1px;width:8px;height:8px;border-radius:50%;
+  background:var(--red);box-shadow:0 0 0 2px var(--bg1)}
+.sb-acct-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.sb-acct-name{font-size:var(--fs-11);color:var(--t);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+/* 副标题就是版本号的落点：顺眼扫到，不占一个独立控件位。 */
+.sb-acct-sub{font-size:var(--fs-9);color:var(--t3);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.sb-acct-cost{font-variant-numeric:tabular-nums}
+.sb-acct-gear{font-style:normal;flex-shrink:0;color:var(--t3);font-size:var(--fs-11)}
+.sb-acct:hover .sb-acct-gear{color:var(--t2)}
+
+/* 收起态（52px）：只剩头像和红点。收起侧栏的人恰恰最不想看见文字，
+   但一样要能换主题、要能看到有更新。 */
+.sb.collapsed .sb-acct-wrap{padding:8px 6px}
+.sb.collapsed .sb-acct{justify-content:center;padding:7px 0;gap:0}
+.sb.collapsed .sb-acct-text,.sb.collapsed .sb-acct-gear{display:none}
+
+/* ── 弹出菜单 ─────────────────────────────────────────────────────────────
+   向**上**弹（bottom:100%）：它钉在窗口最底，向下没有空间。 */
+.sb-menu{position:absolute;left:8px;right:8px;bottom:calc(100% - 2px);z-index:600;
+  background:var(--bg1);border:1px solid var(--b2);border-radius:10px;padding:5px;
+  display:flex;flex-direction:column;gap:1px;
+  box-shadow:0 10px 34px rgba(0,0,0,.28);
+  animation:sb-menu-in .14s var(--ease,ease)}
+@keyframes sb-menu-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+/* 收起态下菜单不能跟着缩到 52px —— 那样一行字都放不下。脱离侧栏宽度自己撑开。 */
+.sb.collapsed .sb-menu{left:6px;right:auto;width:216px}
+.sb-menu-item{display:flex;align-items:center;gap:8px;width:100%;padding:6px 9px;
+  border:none;border-radius:7px;background:transparent;color:var(--t2);
+  font-family:var(--font);font-size:var(--fs-11);line-height:1.6;cursor:pointer;text-align:left;
+  transition:background-color var(--dur,.14s) var(--ease,ease),color var(--dur,.14s) var(--ease,ease)}
+.sb-menu-item:hover:not(:disabled){background:var(--bg2);color:var(--t)}
+.sb-menu-item:disabled{cursor:default;opacity:.75}
+.sb-menu-item.active{color:var(--acc)}
+.sb-menu-item.has-update{color:var(--red)}
+.sb-menu-ic{font-style:normal;flex-shrink:0;width:17px;text-align:center;color:var(--t3);
+  font-size:var(--fs-11)}
+.sb-menu-item:hover .sb-menu-ic{color:var(--t2)}
+.sb-menu-item.has-update .sb-menu-ic{color:var(--red)}
+.sb-menu-label{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-menu-tail{flex-shrink:0;font-size:var(--fs-9);color:var(--t3);white-space:nowrap}
+.sb-menu-item.has-update .sb-menu-tail{color:var(--red)}
+.sb-menu-sep{height:1px;background:var(--b);margin:4px 6px}
+.sb-menu-back{color:var(--t3)}
+/* 20 套主题：给它自己的高度上限，别把菜单顶穿屏幕。 */
+.sb-menu-themes{max-height:46vh;overflow-y:auto;display:flex;flex-direction:column;gap:1px}
+.sb-menu-cost{display:flex;align-items:center;gap:8px;padding:4px 9px;
+  font-size:var(--fs-11);color:var(--t3)}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   「全部工具」浮层（components/ToolsOverlay.tsx）
+
+   18 个板块的目录。改造前它是侧栏底部的折叠组，展开占 774px、把会话列表整个
+   挤到折叠线以下 —— 一个 18 项的目录塞不进 196px 宽的竖栏，折不折叠都一样。
+   这里给它一块自己的地方：搜索在最上、分类在左、卡片在右，⌘K 直接唤起。
+   ════════════════════════════════════════════════════════════════════════════ */
+.tv-backdrop{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.42);
+  display:flex;align-items:flex-start;justify-content:center;padding:8vh 16px 16px;
+  animation:tv-fade .13s var(--ease,ease)}
+@keyframes tv-fade{from{opacity:0}to{opacity:1}}
+.tv-panel{width:min(880px,100%);max-height:76vh;display:flex;flex-direction:column;
+  background:var(--bg1);border:1px solid var(--b2);border-radius:12px;overflow:hidden;
+  box-shadow:0 18px 60px rgba(0,0,0,.42);animation:tv-rise .16s var(--ease,ease)}
+@keyframes tv-rise{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+
+.tv-head{display:flex;align-items:center;gap:9px;padding:12px 14px;border-bottom:1px solid var(--b);
+  flex-shrink:0}
+.tv-search-ic{font-style:normal;color:var(--t3);flex-shrink:0;font-size:var(--fs-12)}
+.tv-search{flex:1;min-width:0;border:none;background:transparent;outline:none;
+  color:var(--t);font-family:var(--font);font-size:var(--fs-13)}
+.tv-search::placeholder{color:var(--t3)}
+.tv-kbd{font-family:var(--font);font-size:var(--fs-9);color:var(--t3);padding:1px 5px;
+  border:1px solid var(--b);border-radius:4px;background:var(--bg2);white-space:nowrap}
+.tv-close{border:none;background:transparent;color:var(--t3);cursor:pointer;
+  font-size:var(--fs-12);padding:2px 4px;font-family:var(--font)}
+.tv-close:hover{color:var(--t)}
+
+.tv-body{flex:1;min-height:0;display:flex}
+.tv-cats{width:126px;flex-shrink:0;border-right:1px solid var(--b);padding:8px 6px;
+  overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.tv-cat{border:none;background:transparent;color:var(--t3);font-family:var(--font);
+  font-size:var(--fs-11);text-align:left;padding:6px 9px;border-radius:7px;cursor:pointer;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  transition:background-color var(--dur,.14s) var(--ease,ease),color var(--dur,.14s) var(--ease,ease)}
+.tv-cat:hover{background:var(--bg2);color:var(--t2)}
+.tv-cat.active{background:var(--bg3);color:var(--t)}
+
+.tv-list{flex:1;min-width:0;overflow-y:auto;padding:10px 12px 14px}
+.tv-sec + .tv-sec{margin-top:14px}
+.tv-sec-title{font-size:var(--fs-9);color:var(--t3);letter-spacing:.09em;padding:0 2px 6px}
+.tv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:6px}
+.tv-card{position:relative;display:flex;align-items:center;gap:9px;padding:9px 10px;
+  border:1px solid transparent;border-radius:9px;background:var(--bg2);color:var(--t2);
+  font-family:var(--font);font-size:var(--fs-11);cursor:pointer;text-align:left;min-width:0;
+  transition:background-color var(--dur,.14s) var(--ease,ease),color var(--dur,.14s) var(--ease,ease),
+    border-color var(--dur,.14s) var(--ease,ease)}
+/* 键盘和鼠标共用同一个高亮 —— 两套视觉会让人分不清"现在按回车会打开哪个" */
+.tv-card.cursor{background:var(--bg3);color:var(--t);
+  border-color:color-mix(in srgb,var(--acc) 40%,transparent)}
+.tv-card-ic{font-style:normal;flex-shrink:0;width:18px;text-align:center;color:var(--acc)}
+.tv-card-label{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tv-pin{flex-shrink:0;color:var(--t3);opacity:0;font-size:var(--fs-11);padding:0 2px;
+  transition:opacity var(--dur,.14s) var(--ease,ease),color var(--dur,.14s) var(--ease,ease)}
+.tv-card:hover .tv-pin{opacity:.65}
+.tv-pin:hover{color:var(--acc);opacity:1}
+/* 已钉住的常显 —— 它是状态，不是悬停才存在的动作 */
+.tv-pin.on{opacity:1;color:var(--acc)}
+.tv-empty{padding:26px 8px;color:var(--t3);font-size:var(--fs-11);line-height:1.8;text-align:center}
+
+.tv-foot{display:flex;align-items:center;gap:14px;padding:8px 14px;border-top:1px solid var(--b);
+  font-size:var(--fs-9);color:var(--t3);flex-shrink:0;flex-wrap:wrap}
+.tv-foot-spacer{flex:1}
+
+@media (max-width:640px){
+  .tv-backdrop{padding:4vh 8px 8px}
+  .tv-panel{max-height:88vh}
+  .tv-cats{width:96px}
+  .tv-grid{grid-template-columns:1fr}
+  .tv-foot span:not(.tv-foot-spacer):not(:last-child){display:none}
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Markdown 报告正文（lib/reportFormat.tsx 的 MarkdownReport）
+
+   这些样式原本是**内联 style**。内联样式的特异性压过任何选择器，也就是说
+   主题层、皮肤层一律改不动它 —— 任务台里每条回答的标题都顶着一条 2px 的
+   强调色下划线、每个表头也是，去不掉。搬成类名之后主题才能说得上话。
+
+   **取值和原来的内联样式逐条一致**，所以这一步对现有 18 套主题是零观感变化；
+   静谧的减法在 styles/quiet-skin.css 的 ⑦ 里单独做。
+   ════════════════════════════════════════════════════════════════════════════ */
+.md-p{line-height:1.8}
+.md-gap{height:6px}
+.md-h1{font-size:17px;font-weight:700;margin:0 0 12px;color:var(--t);
+  border-bottom:2px solid var(--acc);padding-bottom:8px}
+/* h2/h3 走主题字号刻度而不是写死 px：市场调研页那份重复实现（已删，改为复用
+   共享版）当初就是这么改的，是对的 —— 报告标题该跟着主题的排版尺度走。
+   16 套经典主题的 --fs-14/--fs-13 正是 14px/13px，取值一个都没变。 */
+.md-h2{font-size:var(--fs-14);font-weight:600;margin:18px 0 8px;color:var(--t)}
+.md-h3{font-size:var(--fs-13);font-weight:600;margin:12px 0 6px;color:var(--t2)}
+.md-quote{border-left:3px solid var(--acc);padding-left:12px;margin:6px 0;color:var(--t2);
+  font-style:italic;line-height:1.7}
+.md-li{padding-left:16px;line-height:1.7;display:flex;gap:8px}
+.md-bullet{color:var(--acc);flex-shrink:0}
+.md-num{color:var(--t3);flex-shrink:0;min-width:18px}
+.md-hr{border:none;border-top:1px solid var(--b);margin:14px 0}
+.md-pre{background:var(--bg3);border:1px solid var(--b);border-radius:6px;padding:10px 14px;
+  overflow-x:auto;font-size:.88em;line-height:1.65;margin:10px 0}
+.md-pre-lang{font-size:.8em;color:var(--t3);margin-bottom:6px;letter-spacing:.06em}
+.md-code{white-space:pre;display:block}
+.md-table-wrap{overflow-x:auto;margin:10px 0}
+.md-table{border-collapse:collapse;width:100%;font-size:.9em}
+.md-th{text-align:left;padding:6px 12px;border-bottom:2px solid var(--acc);color:var(--t);
+  font-weight:600;white-space:nowrap}
+.md-tr{border-bottom:1px solid var(--b)}
+.md-td{padding:6px 12px;color:var(--t2);vertical-align:top}

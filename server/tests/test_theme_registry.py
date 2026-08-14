@@ -73,8 +73,14 @@ def _css_themes() -> dict[str, dict[str, str]]:
     raw: dict[str, dict[str, str]] = {}
     _collect(_TOKENS.read_text(encoding="utf-8"), raw)
     css = _CSS.read_text(encoding="utf-8")
-    # 主题块全在文件开头的调色板区，正文样式里不会再出现 [data-theme=] 选择器
-    head = css[: css.index("html, body")] if "html, body" in css else css[:14000]
+    # 主题块全在文件开头的调色板区，正文样式里不会再出现 [data-theme=] 选择器。
+    #
+    # 切点用调色区结束处那条注释横幅，**不要用固定字节数**。这里原本写的是
+    # `css[:14000]`，而调色区当时已经涨到 12100 字符 —— 再加一套主题的接线块就
+    # 会把它自己截在外面，报出来是"注册表里有而 CSS 没有 quiet-*"，看起来像
+    # 谁写漏了一个变量块，实际是这条切片的锅。找不到横幅时才退回字节数兜底。
+    marker = "GLOBAL BASE"
+    head = css[: css.index(marker)] if marker in css else css[:14000]
     _collect(head, raw)
 
     shared = raw.pop("*", {})
@@ -189,4 +195,4 @@ def test_migration_only_runs_once():
     set_v = body.index("MIGRATION_KEY, MIGRATION")
     set_theme = body.index("THEME_KEY, DEFAULT_THEME")
     assert set_v < set_theme, "必须先写迁移版本号，再改主题"
-    assert "startsWith(\"mendao-\")" in body, "已经在门道主题上的用户不该被再迁一次"
+    assert "startsWith(\"quiet-\")" in body, "已经在静谧主题上的用户不该被再迁一次"

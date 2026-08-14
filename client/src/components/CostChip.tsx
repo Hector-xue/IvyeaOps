@@ -23,7 +23,15 @@ import { getBudgetSummary, type BudgetStatus } from "../api/notify";
  * * **非管理员不渲染**。花费接口是管理员专属，普通成员拿到 403，这时候整块不出现，
  *   而不是挂一个点了报错的东西在顶栏上。
  */
-export default function CostChip() {
+/**
+ * `chip`   顶栏那颗可点的芯片（原样保留，其余外壳/板块仍在用）。
+ * `inline` 一段纯文字，供侧栏左下角账户行的副标题用 —— 不带边框、不占独立位置。
+ *
+ * 顶栏瘦身时用量挪到了账户行，但**没有挪进二级菜单**：上面那段注释讲的
+ * "唯一会在你不看的时候持续增长、所以必须每天顺眼扫到"这条理由依然成立，
+ * 而账户行同样是每天都在视野里的位置。挪的是位置，不是这条设计意图。
+ */
+export default function CostChip({ variant = "chip" }: { variant?: "chip" | "inline" } = {}) {
   const navigate = useNavigate();
   const [st, setSt] = useState<BudgetStatus | null>(null);
   const [hidden, setHidden] = useState(false);
@@ -66,6 +74,14 @@ export default function CostChip() {
     // 数据新鲜度要说出来。一个不标时间的金额，用户没法判断该不该信它。
     st.known && st.age_seconds > 60 ? `数据更新于 ${Math.round(st.age_seconds / 60)} 分钟前` : "",
   ].filter(Boolean).join("\n");
+
+  if (variant === "inline") {
+    return (
+      <span className="sb-acct-cost" style={{ color }} title={title}>
+        {shown} tok
+      </span>
+    );
+  }
 
   return (
     <button
