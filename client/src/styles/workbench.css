@@ -3005,28 +3005,65 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 
 /* ── 步骤时间线 ──────────────────────────────────────────────────────────── */
 .cs-timeline{border:1px solid var(--b);border-radius:var(--r);background:var(--bg1);overflow:hidden}
-.cs-summary{display:flex;align-items:center;gap:7px;width:100%;padding:7px 11px;background:transparent;
-  border:none;color:var(--t3);font-family:var(--font);font-size:var(--fs-11);cursor:pointer;text-align:left;
-  transition:color var(--dur) var(--ease),background-color var(--dur) var(--ease)}
-.cs-summary:hover{color:var(--t2);background:var(--bg2)}
-.cs-summary .cs-caret{margin-left:auto}
-.cs-summary-icon{color:var(--acc);display:inline-block}
-.cs-summary-icon.spinning{animation:cs-spin 1.1s linear infinite}
+.cs-timeline.cs-open{border-color:var(--b2)}
 @keyframes cs-spin{to{transform:rotate(360deg)}}
-.cs-body{padding:2px 11px 10px;display:flex;flex-direction:column;gap:9px}
-.cs-phase{display:flex;flex-direction:column;gap:6px}
-.cs-phase-head{font-size:var(--fs-11);color:var(--t2);display:flex;align-items:center;gap:6px}
-.cs-chips{display:flex;flex-wrap:wrap;gap:6px}
 
-.cs-chip{display:inline-flex;flex-direction:column;border:1px solid var(--b);border-radius:7px;
-  background:var(--bg2);max-width:100%;overflow:hidden;
-  transition:border-color var(--dur) var(--ease),box-shadow var(--dur) var(--ease)}
-.cs-chip:hover{border-color:var(--b2)}
-.cs-chip-head{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;background:transparent;
-  border:none;color:var(--t2);font-family:var(--font);font-size:var(--fs-11);cursor:pointer;text-align:left;
-  max-width:100%}
+/* 活动行：整块常驻的**唯一一行**。高度必须钉死 —— 内容一长一短地跳会让
+   底下的回答跟着上下抖。 */
+.cs-live{display:flex;align-items:stretch;min-height:34px}
+.cs-live-main{flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:6px 11px;
+  background:transparent;border:none;color:var(--t3);font-family:var(--font);font-size:var(--fs-11);
+  cursor:pointer;text-align:left;overflow:hidden;
+  transition:color var(--dur) var(--ease),background-color var(--dur) var(--ease)}
+.cs-live-main:hover{color:var(--t2);background:var(--bg2)}
+.cs-live-icon{color:var(--acc);flex-shrink:0;display:inline-block}
+.cs-live-icon.spinning{animation:cs-spin 1.1s linear infinite}
+/* 新一行从下方滑入 = 上一行被"顶掉"。key 变了 React 会重挂载，动画自然重放。 */
+.cs-live-text{display:flex;align-items:center;gap:6px;min-width:0;flex:1;
+  animation:cs-live-in .18s var(--ease)}
+@keyframes cs-live-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.cs-live-label{color:var(--t2);white-space:nowrap;flex-shrink:0}
+.cs-live-detail{color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+/* 思考和"调了什么工具"是两回事，颜色上分开 */
+.cs-live-think .cs-icon,.cs-live-think .cs-live-label{color:var(--purple)}
+.cs-live-tail{margin-left:auto;padding-left:10px;color:var(--t3);white-space:nowrap;flex-shrink:0;
+  font-variant-numeric:tabular-nums}
+/* 折叠开关：上一版是行尾一个 9px 的 ▾，无边框无背景，用户根本看不出这块能收起。 */
+.cs-toggle{display:inline-flex;align-items:center;gap:4px;min-height:28px;padding:0 10px;margin:3px 4px 3px 0;
+  border:1px solid var(--b);border-radius:var(--r);background:var(--bg2);color:var(--t3);
+  font-family:var(--font);font-size:var(--fs-105);cursor:pointer;flex-shrink:0;
+  transition:all var(--dur) var(--ease)}
+.cs-toggle:hover{color:var(--t);border-color:var(--b2);background:var(--bg3)}
+.cs-toggle:focus-visible{outline:2px solid color-mix(in srgb,var(--acc) 60%,transparent);outline-offset:1px}
+.cs-toggle-caret{font-size:var(--fs-10);line-height:1}
+
+/* 展开的日志 */
+.cs-log-wrap{border-top:1px solid var(--b);padding:6px 6px 8px;display:flex;flex-direction:column;gap:5px}
+.cs-log-head{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:2px 6px;
+  font-size:var(--fs-11);color:var(--t2)}
+.cs-log{overflow-y:auto;display:flex;flex-direction:column}
+.cs-log-empty{padding:8px;color:var(--t3);font-size:var(--fs-11)}
+.cs-skills{display:flex;flex-wrap:wrap;gap:5px}
+.cs-skill-chip{padding:1px 7px;border-radius:9px;font-size:var(--fs-10);
+  border:1px solid color-mix(in srgb,var(--purple) 40%,var(--b));
+  background:color-mix(in srgb,var(--purple) 8%,var(--bg2));color:var(--purple)}
+.cs-plans{padding:0 6px}
+
+/* 日志行：一步一行，时刻/耗时用等宽数字对齐，扫一眼就能看出哪一步卡住了。 */
+.cs-row{display:flex;flex-direction:column;border-radius:5px}
+.cs-row:hover{background:var(--bg2)}
+.cs-row-head{display:flex;align-items:center;gap:7px;width:100%;padding:3px 7px;background:transparent;
+  border:none;color:var(--t2);font-family:var(--font);font-size:var(--fs-105);cursor:pointer;text-align:left;
+  line-height:1.7;min-width:0}
+.cs-time{color:var(--t3);font-size:var(--fs-10);font-variant-numeric:tabular-nums;flex-shrink:0}
 .cs-icon{font-style:normal;flex-shrink:0;color:var(--t3)}
-.cs-chip .cs-title{color:var(--t);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cs-row .cs-title{color:var(--t);white-space:nowrap;flex-shrink:0}
+.cs-row .cs-ms{margin-left:auto;padding-left:8px;font-variant-numeric:tabular-nums}
+.cs-row.cs-board .cs-icon{color:var(--acc)}
+.cs-row.cs-mcp .cs-icon{color:var(--cyan)}
+.cs-row.cs-subagent .cs-icon{color:var(--blue)}
+.cs-row.cs-note .cs-title{color:var(--t3)}
+.cs-row.cs-destructive .cs-icon{color:var(--amber)}
 .cs-detail{color:var(--t3);font-size:var(--fs-10);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   max-width:220px}
 .cs-ms{color:var(--t3);font-size:var(--fs-10);flex-shrink:0}
@@ -3043,16 +3080,19 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .cs-dim{color:var(--t3)}
 .cs-run{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--acc);border-top-color:transparent;
   display:inline-block;animation:cs-spin .7s linear infinite}
-/* 各类步骤的左侧色条：技能/板块/MCP/普通工具一眼可辨 */
-.cs-chip.cs-skill{border-color:color-mix(in srgb,var(--purple,var(--purple)) 40%,var(--b));
-  background:color-mix(in srgb,var(--purple,var(--purple)) 8%,var(--bg2))}
-.cs-chip.cs-skill .cs-icon{color:var(--purple,var(--purple))}
-.cs-chip.cs-board .cs-icon{color:var(--acc)}
-.cs-chip.cs-mcp .cs-icon{color:var(--cyan,var(--cyan))}
-.cs-chip.cs-subagent .cs-icon{color:var(--blue,var(--blue))}
-.cs-chip.cs-destructive{border-color:rgba(245,158,11,.4)}
-.cs-notes{gap:3px;padding-top:2px}
-.cs-note{display:flex;align-items:flex-start;gap:6px;font-size:var(--fs-105);color:var(--t3);line-height:1.6}
+/* 减少动效偏好：位移动画全关。这条流是持续在动的，晕动症用户尤其受不了。 */
+@media (prefers-reduced-motion: reduce){
+  .cs-live-text{animation:none}
+  .cs-live-icon.spinning{animation:none}
+}
+
+/* ── 会话统计条（钉在输入框下方）──────────────────────────────────────────── */
+.cc-stats{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:6px 2px 0;
+  font-size:var(--fs-10);color:var(--t3);font-variant-numeric:tabular-nums}
+.cc-stat{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;cursor:default}
+.cc-stat + .cc-stat{padding-left:12px;border-left:1px solid var(--b)}
+.cc-stat-k{color:var(--t3);opacity:.75}
+.cc-stat-v{color:var(--t2)}
 
 /* ── 审批卡 ──────────────────────────────────────────────────────────────── */
 .cc-ai .cs-approval{border:1px solid var(--b2);border-radius:var(--r);background:var(--bg1);padding:11px 13px;
@@ -3158,8 +3198,7 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 
 /* ── 任务台步骤流补充：拦截态 + 规划步折叠（P1 结构化事件）───────────────── */
 .cs-blocked{color:var(--amber)}
-.cs-chip.cs-plan{opacity:.85}
-.cs-chip.cs-plan .cs-icon{color:var(--t3)}
+.cs-row.cs-plan .cs-icon{color:var(--t3)}
 .cs-fold{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border:1px dashed var(--b);
   border-radius:7px;background:transparent;color:var(--t3);font-family:var(--font);font-size:var(--fs-105);
   cursor:pointer;align-self:flex-start;transition:all var(--dur) var(--ease)}
@@ -3441,17 +3480,12 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .cr-diff-cut{padding:4px 8px;font-size:var(--fs-95);color:var(--amber);background:var(--bg2)}
 
 /* ── 子 agent 调研 ────────────────────────────────────────────────────────
- * 不做成芯片：调研任务是一句话，芯片会把它挤成一小截，而那句话恰恰是这里
- * 唯一有信息量的东西。所以整行铺开，任务文字占主位。
+ * 调研任务是一句话，而那句话恰恰是这里唯一有信息量的东西 —— 所以它和别的步骤
+ * 一样占满一行、任务文字占主位，只靠左边那道紫条区分开"这块活是委派出去的"。
  */
-.cs-subs{display:flex;flex-direction:column;gap:4px}
-.cs-sub{display:flex;align-items:flex-start;gap:6px;padding:4px 8px;font-size:var(--fs-11);
-  border:1px solid var(--b);border-left:2px solid var(--purple);border-radius:var(--r);
-  background:var(--bg2);color:var(--t2);line-height:1.55}
-.cs-sub .cs-mark{margin-top:2px;flex-shrink:0}
-.cs-sub-task{flex:1;min-width:0;color:var(--t)}
-.cs-sub .cs-ms{flex-shrink:0;color:var(--t3);font-size:var(--fs-95);margin-top:2px}
-.cs-sub.cs-running{border-left-color:var(--amber)}
+.cs-row.cs-subagent{border-left:2px solid var(--purple);border-top-left-radius:0;
+  border-bottom-left-radius:0}
+.cs-row.cs-subagent .cs-title{white-space:normal}
 
 
 /* ── 待审批（手机优先）────────────────────────────────────────────────────

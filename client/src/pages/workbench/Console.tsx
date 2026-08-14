@@ -26,7 +26,9 @@ import {
   type ConsoleStep,
 } from "../../lib/stepLabels";
 import { useStickToBottom } from "../../lib/useStickToBottom";
+import { aggregateStats, type TurnMetrics } from "../../lib/turnStats";
 import StepTimeline, { type MatchedSkill } from "../../components/console/StepTimeline";
+import StatsBar from "../../components/console/StatsBar";
 import ApprovalCard from "../../components/console/ApprovalCard";
 import Composer, { approvalPayload, type ApprovalMode, type ComposerRef, type ComposerValue } from "../../components/console/Composer";
 import ArtifactRail, { type RailApproval, type RailTodo } from "../../components/console/ArtifactRail";
@@ -84,7 +86,18 @@ type Turn = {
   elapsedMs?: number;
   running?: boolean;
   failed?: boolean;
+  /**
+   * 模型思考流的最近一段（agent ≥ v1.10.3 且本轮要了 stream_reasoning）。
+   * 只喂活动行，不进气泡 —— 思考不是回答。只留尾部若干字符，
+   * 一轮思考几万字全存进 state 会让每次 patch 都拷一遍大字符串。
+   */
+  reasoning?: string;
+  /** 这一轮的计时与用量，喂给底部统计条。 */
+  metrics?: TurnMetrics;
 };
+
+/** 思考流只保留尾部这么多字符 —— 活动行只显示最后一句，多存无用。 */
+const REASONING_TAIL = 400;
 
 type Prefs = {
   workspace: string; approval: ApprovalMode; skill: string;
@@ -150,6 +163,12 @@ function ConsoleInner() {
   const abortRef = useRef<AbortController | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const started = turns.length > 0;
+  // 底部统计条的数。执行中每 250ms 会随 elapsedMs 重算一次 —— 只是遍历轮次求和，
+  // 比一次 markdown 重解析便宜好几个数量级。
+  const sessionStats = useMemo(
+    () => aggregateStats(turns.filter((t) => t.role === "assistant")),
+    [turns],
+  );
 
   // ── 偏好持久化 ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -423,7 +442,10 @@ function ConsoleInner() {
     setComposer((c) => ({ ...c, text: "" }));
     const userTurn: Turn = { id: uid(), role: "user", text };
     const aiId = uid();
-    const aiTurn: Turn = { id: aiId, role: "assistant", text: "", steps: [], skills: [], approvals: [], running: true };
+    const aiTurn: Turn = {
+      id: aiId, role: "assistant", text: "", steps: [], skills: [], approvals: [], running: true,
+      metrics: { startedAt: Date.now() },
+    };
     setTurns((prev) => [...prev, userTurn, aiTurn]);
     setBusy(true);
     // **把刚发出的问题顶到视野上方**，答案在它下面生长 —— 这是主流对话产品的
@@ -467,6 +489,11 @@ function ConsoleInner() {
     }
 
     const startedAt = Date.now();
+    // 计时只用局部变量，收尾时一次性写进 turn。**绝不能每个 token 都 setState** ——
+    // 这条流一秒钟能来上百个 token，那样等于把刚做完的"按帧批量落地"又拆回去。
+    let firstTokenAt = 0;
+    let lastTokenAt = 0;
+    let turnUsage: any = null;
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     let liveSid = sessionId;
@@ -483,12 +510,22 @@ function ConsoleInner() {
     // token 按帧批量落地。一个字一次 setState 时，长报告的 markdown 每秒被重解析
     // 几十遍；合并到一帧一次，内容一模一样，但渲染成本掉一个数量级。
     let pending = "";
+    let pendingThink = "";
     let flushRaf = 0;
     const flushTokens = () => {
       flushRaf = 0;
       const add = pending;
+      const think = pendingThink;
       pending = "";
+      pendingThink = "";
       if (add) patchTurn(aiId, (t) => ({ text: t.text + add }));
+      // 思考流走同一帧：它比正文更碎（模型逐字想），一条一次 setState 会把
+      // 活动行刷成每秒几十次重绘。只留尾部，活动行只看最后一句。
+      if (think) {
+        patchTurn(aiId, (t) => ({
+          reasoning: ((t.reasoning || "") + think).slice(-REASONING_TAIL),
+        }));
+      }
     };
     const cancelFlush = () => {
       if (flushRaf) { window.cancelAnimationFrame(flushRaf); flushRaf = 0; }
@@ -518,6 +555,9 @@ function ConsoleInner() {
           ].filter(Boolean).join("\n\n") || undefined,
           persist: true,
           inject_retrieval: true,
+          // 要模型的思考流：活动行上"它在想什么"比"它在调哪个工具"更贴近现在发生了什么。
+          // 老 agent 不认识这个字段会直接忽略，老前端根本不会发它 —— 两个方向都安全。
+          stream_reasoning: true,
           ops_context: { board: "console", pathname: "/console" },
         },
         {
@@ -564,6 +604,17 @@ function ConsoleInner() {
           onToken: (chunk) => {
             finalText += chunk;
             pending += chunk;
+            const now = Date.now();
+            if (!firstTokenAt) firstTokenAt = now;
+            lastTokenAt = now;
+            if (!flushRaf) flushRaf = window.requestAnimationFrame(flushTokens);
+          },
+          // 模型的思考流。没有会思考的模型时这条永远不来 —— 活动行退回显示工具步骤，
+          // 不伪造一句"正在思考"。
+          onReasoning: (d) => {
+            const t = String(d?.text || "");
+            if (!t) return;
+            pendingThink += t;
             if (!flushRaf) flushRaf = window.requestAnimationFrame(flushTokens);
           },
           // 正文的分段边界。门禁打回 = 整篇重写，旧稿作废（不清就是"同一张表连出
@@ -588,7 +639,7 @@ function ConsoleInner() {
             cancelFlush();
             if (d?.session_id) setSessionId(d.session_id);
             if (Array.isArray(d?.todos)) setTodos(d.todos);
-            if (d?.usage) setUsage(d.usage);
+            if (d?.usage) { setUsage(d.usage); turnUsage = d.usage; }
             // final.text 是引证门通过后的规范文本，整体替换 —— 流式期间的中间草稿
             // （引证重写前）不留脏文本。
             if (d?.text) { finalText = String(d.text); patchTurn(aiId, { text: finalText }); }
@@ -626,7 +677,18 @@ function ConsoleInner() {
     } finally {
       finishFlush();
       window.clearInterval(tick);
-      patchTurn(aiId, { running: false, elapsedMs: Date.now() - startedAt });
+      patchTurn(aiId, (t) => ({
+        running: false,
+        elapsedMs: Date.now() - startedAt,
+        // 断链/取消的轮次也把测到的部分留下 —— 半截数据仍然能说明"卡在哪"，
+        // 整轮丢弃反而让统计条在最需要解释的那一轮上变成空白。
+        metrics: {
+          ...(t.metrics || { startedAt }),
+          firstTokenAt: firstTokenAt || undefined,
+          lastTokenAt: lastTokenAt || undefined,
+          usage: turnUsage || t.metrics?.usage,
+        },
+      }));
       setBusy(false);
       abortRef.current = null;
     }
@@ -746,6 +808,7 @@ function ConsoleInner() {
                         skills={t.skills || []}
                         elapsedMs={t.elapsedMs}
                         running={t.running}
+                        reasoning={t.reasoning}
                       />
                       {t.text && (
                         <div className={"cc-answer" + (t.failed ? " cc-answer-error" : "")}>
@@ -786,7 +849,10 @@ function ConsoleInner() {
                 </button>
               )}
             </div>
-            <div className="cc-dock">{composerNode(true)}</div>
+            <div className="cc-dock">
+              {composerNode(true)}
+              <StatsBar stats={sessionStats} />
+            </div>
           </>
         )}
       </div>

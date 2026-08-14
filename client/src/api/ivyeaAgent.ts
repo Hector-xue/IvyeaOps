@@ -348,6 +348,11 @@ export type IvyeaChatPayload = {
   use_tools?: boolean;
   /** 追加到本轮系统提示的额外上下文（@ 引用的资料就走这里）。 */
   system?: string;
+  /**
+   * 要模型的思考流（agent ≥ v1.10.3）。默认不要 —— agent 侧同样默认关，
+   * 因为老前端会把未知事件当自由文本渲染。老 agent 收到这个多余字段直接忽略。
+   */
+  stream_reasoning?: boolean;
   /** 会话开在哪个板块。ops 自用（左栏来源标记），不会下发给 agent。 */
   source?: ConsoleSource;
 };
@@ -449,6 +454,12 @@ export async function ivyeaAgentChatStream(
      * reason: tool_call | gate:verify | gate:progress | gate:citation。
      */
     onAnswerReset?: (data: { reason?: string }) => void;
+    /**
+     * 模型的思考流（agent ≥ v1.10.3，且 payload 里带 stream_reasoning）。
+     * 只有会思考的模型（deepseek-reasoner / claude / codex / gemini）才有；
+     * 主脑不吐思考时这条永远不来，活动行退回显示工具步骤。
+     */
+    onReasoning?: (data: { text?: string }) => void;
   },
   opts?: { signal?: AbortSignal },
 ) {
@@ -491,6 +502,11 @@ export async function ivyeaAgentChatStream(
     // answer_reset 必须显式分流：落进下面的 onEvent 就会被当成自由文本叙述，
     // 而它没有 text 字段，等于这条边界被静默丢掉，重复照旧。
     else if (event === "answer_reset") handlers.onAnswerReset?.(typeof data === "string" ? {} : data || {});
+    // 思考流同样必须显式分流：落进 onEvent 就会被当成"老 agent 的自由文本叙述"，
+    // 一段思考几百个碎片，注记那条路只留最近 12 行，等于把真正的执行叙述挤没了。
+    else if (event === "reasoning") {
+      handlers.onReasoning?.(typeof data === "string" ? { text: data } : data || {});
+    }
     else if (event === "step") handlers.onStep?.(data);
     else if (event === "skill_match") handlers.onSkillMatch?.(data);
     else if (event === "file_change") handlers.onFileChange?.(data);

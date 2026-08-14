@@ -133,6 +133,17 @@ def test_opt_in_fields_reach_the_daemon_when_set():
     assert payload["plan_mode"] is False
 
 
+def test_stream_reasoning_is_opt_in_and_actually_reaches_the_daemon():
+    """思考流开关必须真的传下去 —— ChatBody 是白名单，漏一个字段的表现是
+    "前端明明发了，界面上却什么都没有"，而且没有任何报错指向这里。
+
+    默认关同样要钉死：agent 侧默认也关（老前端会把未知事件当自由文本刷满屏），
+    这里若变成默认开，等于替所有调用方做了这个决定。"""
+    assert "stream_reasoning" not in mod._chat_payload(mod.ChatBody(message="hi"))
+    payload = mod._chat_payload(mod.ChatBody(message="hi", stream_reasoning=True))
+    assert payload["stream_reasoning"] is True
+
+
 def test_duplicate_click_reads_as_already_handled_not_a_server_error(monkeypatch):
     """两个页签同时点同一条审批：一个成功，另一个必须收到**说人话的 409**。
 

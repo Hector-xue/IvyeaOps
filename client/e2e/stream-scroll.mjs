@@ -12,95 +12,13 @@
  * 跑：node e2e/stream-scroll.mjs
  */
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/**
- * CDP over WebSocket。
- *
- * 不用 knowledge-governance.mjs 那套 --remote-debugging-pipe：Chrome 147 起
- * 那条路会以 "Crashing due to FD ownership violation" 直接崩掉（本机实测，
- * 那条老 E2E 现在同样跑不起来）。调试端口 + WebSocket 走的是同一套协议。
- */
-class WsCDP {
-  constructor(ws, chrome) {
-    this.ws = ws;
-    this.nextId = 1;
-    this.pending = new Map();
-    this.listeners = new Map();
-    this.stderr = "";
-    chrome.stderr.on("data", (chunk) => { this.stderr += chunk.toString("utf8"); });
-    ws.addEventListener("message", (ev) => this.consume(String(ev.data)));
-    ws.addEventListener("close", () => {
-      for (const pending of this.pending.values()) pending.reject(new Error("CDP socket closed"));
-      this.pending.clear();
-    });
-  }
-
-  /** 起一个 headless Chrome 并连上它的浏览器级 CDP 端点。 */
-  static async launch(args) {
-    const chrome = spawn("google-chrome", args, { stdio: ["ignore", "ignore", "pipe"] });
-    let buf = "";
-    const url = await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(`Chrome never printed a DevTools URL: ${buf.slice(-2000)}`)), 20_000);
-      chrome.stderr.on("data", (chunk) => {
-        buf += chunk.toString("utf8");
-        const hit = buf.match(/ws:\/\/[^\s]+/);
-        if (hit) { clearTimeout(timer); resolve(hit[0]); }
-      });
-      chrome.on("exit", (code) => { clearTimeout(timer); reject(new Error(`Chrome exited early (${code}): ${buf.slice(-2000)}`)); });
-    });
-    const ws = new WebSocket(url);
-    await new Promise((resolve, reject) => {
-      ws.addEventListener("open", resolve, { once: true });
-      ws.addEventListener("error", () => reject(new Error("CDP socket failed")), { once: true });
-    });
-    return { cdp: new WsCDP(ws, chrome), chrome };
-  }
-
-  consume(raw) {
-    const message = JSON.parse(raw);
-    if (message.id) {
-      const pending = this.pending.get(message.id);
-      if (!pending) return;
-      this.pending.delete(message.id);
-      if (message.error) pending.reject(new Error(message.error.message));
-      else pending.resolve(message.result || {});
-      return;
-    }
-    for (const listener of this.listeners.get(message.method) || []) {
-      listener(message.params || {}, message.sessionId || "");
-    }
-  }
-
-  send(method, params = {}, sessionId = "", timeout = 15_000) {
-    const id = this.nextId++;
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        if (!this.pending.delete(id)) return;
-        reject(new Error(`CDP request timed out after ${timeout}ms (${method}): ${this.stderr.slice(-2000)}`));
-      }, timeout);
-      this.pending.set(id, {
-        resolve: (value) => { clearTimeout(timer); resolve(value); },
-        reject: (error) => { clearTimeout(timer); reject(error); },
-      });
-      const message = { id, method, params };
-      if (sessionId) message.sessionId = sessionId;
-      this.ws.send(JSON.stringify(message));
-    });
-  }
-
-  on(method, listener) {
-    const rows = this.listeners.get(method) || [];
-    rows.push(listener);
-    this.listeners.set(method, rows);
-  }
-}
+import { WsCDP, chromeArgs, delay, evaluate, waitFor, wheel } from "./cdp.mjs";
 
 /** harness：两个一模一样的流式面板，一个用新 hook，一个用旧写法。 */
 const HARNESS = `
@@ -170,33 +88,8 @@ createRoot(document.getElementById("root")).render(
 const PAGE = `<!doctype html><html><body style="margin:0"><div id="root"></div>
 <script type="module" src="./bundle.js"></script></body></html>`;
 
-async function evaluate(send, expression) {
-  const { result, exceptionDetails } = await send("Runtime.evaluate", {
-    expression, returnByValue: true, awaitPromise: true,
-  });
-  if (exceptionDetails) throw new Error(exceptionDetails.text || "evaluate failed");
-  return result.value;
-}
 
-async function waitFor(send, expression, label, timeout = 10_000) {
-  const deadline = Date.now() + timeout;
-  while (Date.now() < deadline) {
-    if (await evaluate(send, expression)) return;
-    await delay(50);
-  }
-  throw new Error(`timed out waiting for ${label}`);
-}
 
-/** 真·滚轮：走浏览器输入管线，和用户拨轮子走的是同一条路。 */
-async function wheel(send, selector, deltaY) {
-  const box = await evaluate(send, `(() => {
-    const r = document.querySelector("${selector}").getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-  })()`);
-  await send("Input.dispatchMouseEvent", {
-    type: "mouseWheel", x: box.x, y: box.y, deltaX: 0, deltaY, pointerType: "mouse",
-  });
-}
 
 const top = (send, id) => evaluate(send, `document.getElementById("${id}").scrollTop`);
 const maxTop = (send, id) => evaluate(send,
@@ -215,15 +108,7 @@ async function run() {
   await writeFile(path.join(work, "index.html"), PAGE, "utf8");
 
   const profile = await mkdtemp(path.join(os.tmpdir(), "ivyea-scroll-profile-"));
-  const { cdp, chrome } = await WsCDP.launch([
-    "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
-    // 别加 --disable-crashpad-for-testing：Chrome 147 上它会让网络服务以
-    // "Crashing due to FD ownership violation" 崩掉，页面永远加载不出来
-    // （knowledge-governance.mjs 现在跑不起来就是这个原因）。
-    "--disable-breakpad", "--disable-crash-reporter", "--noerrdialogs",
-    "--allow-file-access-from-files", "--disable-web-security", "--remote-debugging-port=0",
-    `--user-data-dir=${profile}`, "about:blank",
-  ]);
+  const { cdp, chrome } = await WsCDP.launch(chromeArgs(profile));
   try {
     const { targetId } = await cdp.send("Target.createTarget", { url: "about:blank" });
     const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });

@@ -44,6 +44,8 @@ export type ConsoleStep = {
    */
   parallel?: boolean;
   args?: Record<string, any>;
+  /** 这一步**开始**的本地时刻（毫秒）。展开日志里的时刻列。 */
+  at?: number;
 };
 
 // ── agent 自带工具的中文动词（对齐 ivyea_agent/ui.py:_TOOL_VERBS）──────────────
@@ -141,7 +143,11 @@ export function stepFromEvent(ev: IvyeaStepEvent): ConsoleStep {
   const args = ev.args || {};
   const status: StepStatus = ev.status || "running";
   const ms = typeof ev.ms === "number" ? ev.ms : undefined;
-  const base = { key: ev.id || `${ev.seq}`, seq: ev.seq ?? 0, status, ms, args, name: ev.name };
+  // at 取**收到这条事件的本地时刻**。agent 的 step 事件不带时间戳，而展开的日志
+  // 需要一列时刻（"卡在哪一步、卡了多久"靠它读）。用本地时钟是诚实的：它标的就是
+  // "浏览器在这一刻看到了这一步"，不冒充服务端时间。
+  const base = { key: ev.id || `${ev.seq}`, seq: ev.seq ?? 0, status, ms, args, name: ev.name,
+                 at: Date.now() };
 
   // 板块能力：serve 已把真实工具名提到 ev.tool；老事件里退回读 args.name。
   if (ev.name === "ivyea_ops_call_tool" || ev.phase === "board") {
@@ -220,6 +226,7 @@ export function noteStep(text: string, seq: number): ConsoleStep {
     icon: PHASE_ICONS.note,
     title: line.length > NOTE_MAX ? line.slice(0, NOTE_MAX) + "…" : line,
     status: "ok",
+    at: Date.now(),
   };
 }
 
@@ -257,6 +264,9 @@ export function mergeStep(list: ConsoleStep[], next: ConsoleStep): ConsoleStep[]
     destructive: next.destructive ?? prev.destructive,
     // 收尾事件不带这个标记，别把已经判定出来的并行关系擦掉
     parallel: next.parallel ?? prev.parallel,
+    // 时刻要留**开始**那一下。合并时被收尾事件覆盖的话，日志里每一行都会变成
+    // "它结束的时间"，一整列时刻就都往后挪了。
+    at: prev.at ?? next.at,
   };
   const out = [...list];
   out[idx] = merged;
