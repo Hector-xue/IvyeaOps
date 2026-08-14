@@ -9,7 +9,12 @@ import React from "react";
 
 // ─── Markdown → React ─────────────────────────────────────────────────────────
 
-export function MarkdownReport({ text }: { text: string }) {
+/**
+ * ⚠️ 导出的是 `React.memo` 包过的版本（见文件末尾的 `MarkdownReport`）。
+ * 流式对话里父组件每帧重渲染一次，不 memo 的话**每一轮**的整篇 markdown 都会
+ * 跟着重新解析 —— 长报告下这是每秒几十次的整页重排。text 没变就别重算。
+ */
+function MarkdownReportImpl({ text }: { text: string }) {
   if (!text) return null;
   const lines = text.split("\n");
   const elements: React.ReactNode[] = [];
@@ -103,6 +108,8 @@ export function MarkdownReport({ text }: { text: string }) {
 
   return <>{elements}</>;
 }
+
+export const MarkdownReport = React.memo(MarkdownReportImpl);
 
 function parseCells(line: string): string[] {
   return line.split("|").slice(1, -1).map((c) => c.trim());

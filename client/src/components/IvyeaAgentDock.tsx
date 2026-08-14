@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  answerResetDiscards,
   ivyeaAgentChat,
   ivyeaAgentChatStream,
   ivyeaAgentStatus,
@@ -47,6 +48,7 @@ import {
 } from "../api/ivyeaAgent";
 import "../styles/ivyea-agent-dock.css";
 import { errText } from "../lib/errText";
+import { useStickToBottom } from "../lib/useStickToBottom";
 
 type Tab = "chat" | "knowledge" | "status";
 type HistoryView = "chat" | "list" | "detail";
@@ -268,10 +270,9 @@ export default function IvyeaAgentDock() {
     if (tab === "knowledge") loadKnowledge();
   }, [open, tab]);
 
-  useEffect(() => {
-    if (!messagesRef.current) return;
-    messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
-  }, [messages, sending]);
+  // 跟随滚动按用户意图判（wheel/touch/键），不按滚动位置判 —— 位置判据在流式
+  // 输出下必输，用户往上翻的那一下会被下一个 token 抢先拍回底部。
+  useStickToBottom(messagesRef, [messages, sending]);
 
   useEffect(() => {
     const onResize = () => setFabPos((prev) => {
@@ -355,6 +356,24 @@ export default function IvyeaAgentDock() {
         return [...next, { role: "assistant", text: chunk }];
       });
     };
+    /**
+     * 正文分段边界：门禁打回 = 整篇重写、旧稿作废；其余只是"这段还没说完"，
+     * 断个段就行（判据见 answerResetDiscards）。
+     */
+    const answerBoundary = (reason?: string) => {
+      const drop = answerResetDiscards(reason);
+      setMessages((prev) => {
+        const next = [...prev];
+        for (let i = next.length - 1; i >= 0; i -= 1) {
+          if (next[i].role === "assistant") {
+            const cur = next[i].text;
+            next[i] = { ...next[i], text: drop ? "" : (cur ? `${cur}\n\n` : cur) };
+            return next;
+          }
+        }
+        return next;
+      });
+    };
     const replaceAssistantWithSystem = (message: string) => {
       setMessages((prev) => {
         const next = [...prev];
@@ -405,6 +424,10 @@ export default function IvyeaAgentDock() {
             if (!finalText) setLiveStatus("");
             finalText += chunk;
             appendAssistant(chunk);
+          },
+          onAnswerReset: (d) => {
+            if (answerResetDiscards(d?.reason)) finalText = "";
+            answerBoundary(d?.reason);
           },
           onEvent: (data) => {
             // 工具叙事（正在调研/检索/生成…）：流式正文没来之前展示在"处理中"位置，
