@@ -95,6 +95,9 @@ class ChatBody(BaseModel):
     task_id: str = Field(default="", max_length=120)
     system: str = Field(default="", max_length=20000)
     defer_citation_text: bool = False
+    # 要模型的思考流（agent ≥ v1.10.3）。默认关，且为 False 时从下发 payload 里剔除 ——
+    # 老 daemon 看到的 payload 与改动前逐字一致。
+    stream_reasoning: bool = False
     # "none" = 维持今天的只读语义；"remote" = 写操作弹前端审批卡（agent ≥ v1.9）。
     approval: str = Field(default="none", pattern="^(none|remote)$")
     # 会话来自哪个板块。**ops 自用**，_chat_payload 会把它剔掉再下发 ——
@@ -336,6 +339,7 @@ _CHAT_OPTIONAL_DEFAULTS: dict[str, Any] = {
     "task_id": "",
     "system": "",
     "defer_citation_text": False,
+    "stream_reasoning": False,
     "approval": "none",
     # source 是 ops 自己的记账字段（会话来自任务台/AI问答/知识库），agent 不认识它。
     # 放进 defaults 里只是为了默认值被剔除；非默认值另有 _pop_ops_only 兜底。
@@ -560,8 +564,16 @@ def chat_sessions(limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
 
 
 @router.get("/chat/sessions/{session_id}")
-def chat_session(session_id: str) -> dict[str, Any]:
-    return _call(svc.chat_session, session_id)
+def chat_session(session_id: str,
+                 turns: int = Query(8, ge=1, le=100),
+                 before: int | None = Query(None, ge=0)) -> dict[str, Any]:
+    """历史会话详情，**按轮**分页。
+
+    按条分页是这个板块吃过的亏：一次提问能产生几十条消息，按条切必然把用户自己
+    发的那句话挤出窗口（agent 侧此前固定末 30 条，413 条消息的会话刷新后 15 次
+    提问只剩 1 次）。before 是"从第几轮往前取"，翻更早的对话时传上一页的 from。
+    """
+    return _call(svc.chat_session, session_id, turns, before)
 
 
 @router.delete("/chat/sessions/{session_id}")

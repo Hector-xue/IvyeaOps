@@ -10,7 +10,10 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test:e2e:knowledge": "node e2e/knowledge-governance.mjs",
-    "test:e2e:scroll": "node e2e/stream-scroll.mjs"
+    "test:e2e:scroll": "node e2e/stream-scroll.mjs",
+    "test:e2e:activity": "node e2e/activity-line.mjs",
+    "test:stats": "node e2e/turn-stats.mjs",
+    "test:restore": "node e2e/session-restore.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",

@@ -32,8 +32,25 @@ export type IvyeaChatSessionDetail = {
   updated?: number;
   model?: string;
   usage?: any;
-  messages: { role: string; content: string }[];
+  /**
+   * 本页的消息。assistant 行带 `tool_calls`（id + 工具名）、tool 行带 `tool_call_id` ——
+   * 它们是把落盘的执行步骤挂回对应轮次的锚点（agent ≥ v1.10.3）。
+   */
+  messages: {
+    role: string;
+    content: string;
+    tool_calls?: { id: string; name: string }[];
+    tool_call_id?: string;
+  }[];
+  /** 本页涉及的执行步骤（agent ≥ v1.10.3；老版本没有这个字段）。 */
+  steps?: IvyeaStepEvent[];
+  /** 本页涉及的技能命中，anchor 是该轮第一个 call_id。 */
+  skill_matches?: { anchor: string; skills: MatchedSkillRow[] }[];
+  /** 按轮分页的游标。老 agent 不回这个字段 —— 那就当成"只有这一页"。 */
+  turns?: { total: number; from: number; to: number; has_more: boolean };
 };
+
+export type MatchedSkillRow = { id: string; title: string; domain?: string; score?: number };
 
 export type RetrievalStatus = {
   ok: boolean;
@@ -311,7 +328,8 @@ export async function ivyeaAwaitSessionAnswer(
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, interval));
     try {
-      const data = await ivyeaChatSession(sessionId);
+      // 只要最后一条回答，别每 5 秒把整页历史拖回来（最长要轮询 12 分钟）。
+      const data = await ivyeaChatSession(sessionId, { turns: 1 });
       const session = data?.session;
       if (!session) continue;
       if ((session.updated ?? 0) < sentAtEpochSeconds) continue; // 还没落盘
@@ -348,6 +366,11 @@ export type IvyeaChatPayload = {
   use_tools?: boolean;
   /** 追加到本轮系统提示的额外上下文（@ 引用的资料就走这里）。 */
   system?: string;
+  /**
+   * 要模型的思考流（agent ≥ v1.10.3）。默认不要 —— agent 侧同样默认关，
+   * 因为老前端会把未知事件当自由文本渲染。老 agent 收到这个多余字段直接忽略。
+   */
+  stream_reasoning?: boolean;
   /** 会话开在哪个板块。ops 自用（左栏来源标记），不会下发给 agent。 */
   source?: ConsoleSource;
 };
@@ -449,6 +472,12 @@ export async function ivyeaAgentChatStream(
      * reason: tool_call | gate:verify | gate:progress | gate:citation。
      */
     onAnswerReset?: (data: { reason?: string }) => void;
+    /**
+     * 模型的思考流（agent ≥ v1.10.3，且 payload 里带 stream_reasoning）。
+     * 只有会思考的模型（deepseek-reasoner / claude / codex / gemini）才有；
+     * 主脑不吐思考时这条永远不来，活动行退回显示工具步骤。
+     */
+    onReasoning?: (data: { text?: string }) => void;
   },
   opts?: { signal?: AbortSignal },
 ) {
@@ -491,6 +520,11 @@ export async function ivyeaAgentChatStream(
     // answer_reset 必须显式分流：落进下面的 onEvent 就会被当成自由文本叙述，
     // 而它没有 text 字段，等于这条边界被静默丢掉，重复照旧。
     else if (event === "answer_reset") handlers.onAnswerReset?.(typeof data === "string" ? {} : data || {});
+    // 思考流同样必须显式分流：落进 onEvent 就会被当成"老 agent 的自由文本叙述"，
+    // 一段思考几百个碎片，注记那条路只留最近 12 行，等于把真正的执行叙述挤没了。
+    else if (event === "reasoning") {
+      handlers.onReasoning?.(typeof data === "string" ? { text: data } : data || {});
+    }
     else if (event === "step") handlers.onStep?.(data);
     else if (event === "skill_match") handlers.onSkillMatch?.(data);
     else if (event === "file_change") handlers.onFileChange?.(data);
@@ -521,9 +555,19 @@ export async function ivyeaChatSessions(limit = 30) {
   return data;
 }
 
-export async function ivyeaChatSession(sessionId: string) {
+/**
+ * 历史会话详情，**按轮**分页。
+ *
+ * turns = 这一页要几轮；before = 从第几轮往前取（翻更早的对话时传上一页的 from）。
+ * 别改回按条数取：一次提问能产生几十条消息，按条切会把用户自己发的那句话挤出窗口 ——
+ * 这正是"刷新之后我发的指令不见了"的成因。
+ */
+export async function ivyeaChatSession(
+  sessionId: string, opts?: { turns?: number; before?: number },
+) {
   const { data } = await api.get<{ ok: boolean; session: IvyeaChatSessionDetail }>(
     `/ivyea-agent/chat/sessions/${encodeURIComponent(sessionId)}`,
+    { params: { turns: opts?.turns, before: opts?.before } },
   );
   return data;
 }

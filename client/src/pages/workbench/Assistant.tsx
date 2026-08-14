@@ -101,7 +101,9 @@ export default function Assistant() {
     if (!urlSession || urlSession === currentId) return;
     let alive = true;
     abortRef.current?.abort();
-    ivyeaChatSession(urlSession)
+    // 30 轮：这里是纯对话，没有任务台那种「加载更早」的交互，一次给足。
+    // 不给的话会退回默认 8 轮 —— 而这个板块同样吃过"历史被截掉"的亏。
+    ivyeaChatSession(urlSession, { turns: 30 })
       .then((d) => {
         if (!alive) return;
         const msgs = (d?.session?.messages || []) as { role: string; content: string }[];

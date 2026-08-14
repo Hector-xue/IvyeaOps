@@ -82,7 +82,10 @@ def test_chat_routes_forward_payload(ctx, monkeypatch):
 
     monkeypatch.setattr(svc, "chat", fake_chat)
     monkeypatch.setattr(svc, "chat_sessions", lambda limit=20: {"ok": True, "sessions": [{"id": "s1"}], "limit": limit})
-    monkeypatch.setattr(svc, "chat_session", lambda session_id: {"ok": True, "session": {"id": session_id}})
+    # 详情按轮分页（agent ≥ v1.10.3）：桩要跟着接住 turns / before，
+    # 顺手把它们记下来，下面断言路由确实把分页参数传下去了。
+    monkeypatch.setattr(svc, "chat_session", lambda session_id, turns=8, before=None: {
+        "ok": True, "session": {"id": session_id}, "turns": turns, "before": before})
     monkeypatch.setattr(svc, "chat_create", fake_create)
     monkeypatch.setattr(svc, "ensure_available", lambda: {"available": True})
     monkeypatch.setattr(svc, "chat_stream", lambda payload: iter([b"event: final\ndata: {\"ok\": true, \"text\": \"hi\"}\n\n"]))
@@ -96,6 +99,8 @@ def test_chat_routes_forward_payload(ctx, monkeypatch):
     assert seen["chat"]["ops_bridge"]["token"]
     assert router.chat_sessions(limit=3)["sessions"][0]["id"] == "s1"
     assert router.chat_session("s1")["session"]["id"] == "s1"
+    paged = router.chat_session("s1", turns=5, before=7)
+    assert (paged["turns"], paged["before"]) == (5, 7)
     assert router.chat_create(router.ChatSessionCreateBody(title="新会话"))["session"]["id"] == "new"
     assert seen["create"]["title"] == "新会话"
     streamed = router.chat_stream(router.ChatBody(message="stream"), FakeRequest())
