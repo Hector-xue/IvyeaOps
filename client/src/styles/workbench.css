@@ -3086,6 +3086,14 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
   .cs-live-icon.spinning{animation:none}
 }
 
+/* 「加载更早的对话」—— 长会话按轮分页，顶部的入口 */
+.cc-earlier{display:flex;justify-content:center;padding:2px 0 8px}
+.cc-earlier button{padding:4px 14px;border:1px solid var(--b);border-radius:999px;background:var(--bg1);
+  color:var(--t3);font-family:var(--font);font-size:var(--fs-105);cursor:pointer;
+  transition:all var(--dur) var(--ease)}
+.cc-earlier button:hover:not(:disabled){color:var(--t2);border-color:var(--b2);background:var(--bg2)}
+.cc-earlier button:disabled{cursor:default;opacity:.6}
+
 /* ── 会话统计条（钉在输入框下方）──────────────────────────────────────────── */
 .cc-stats{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:6px 2px 0;
   font-size:var(--fs-10);color:var(--t3);font-variant-numeric:tabular-nums}

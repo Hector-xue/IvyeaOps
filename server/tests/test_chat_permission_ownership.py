@@ -173,3 +173,38 @@ def test_real_gateway_errors_are_still_502(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         mod.chat_permission(_body(request_id="dup2"), user="alice@example.com")
     assert exc.value.status_code == 502
+
+
+def test_history_paging_params_reach_the_daemon(monkeypatch):
+    """历史详情按**轮**分页的参数必须传到 daemon。
+
+    按条分页正是这个板块吃过的亏：一次提问能产生几十条消息，末 N 条里全是工具调用，
+    用户自己发的那句话被挤出窗口（本机实测：413 条消息、15 次提问的会话刷新后只剩 1 条）。
+    """
+    seen: list[tuple] = []
+    monkeypatch.setattr(mod.svc, "chat_session",
+                        lambda sid, turns, before: seen.append((sid, turns, before)) or {"ok": True})
+    mod.chat_session("s1", turns=8, before=None)
+    mod.chat_session("s1", turns=5, before=7)
+    assert seen == [("s1", 8, None), ("s1", 5, 7)]
+
+
+def test_paging_params_are_clamped_at_the_service_boundary():
+    """钳制放在服务层，是因为路由的 Query(le=100) 只管 HTTP 那条路 ——
+    ops 内部直接调用同一个函数时不过校验。"""
+    from app.services import ivyea_agent_service as svc_mod
+
+    calls: list[str] = []
+    orig = svc_mod.request_json
+    try:
+        svc_mod.request_json = lambda method, path, *a, **k: calls.append(path) or {"ok": True}
+        svc_mod.chat_session("s1", turns=99999)
+        svc_mod.chat_session("s1", turns=0, before=-5)
+        svc_mod.chat_session("s1", turns=object())      # 直接调用时可能是 Query 默认对象
+    finally:
+        svc_mod.request_json = orig
+    # 越界是**钳到边界**，不是回落默认值：要一万轮就给上限那一页，要 0 轮给 1 轮。
+    assert calls[0].endswith("?turns=100")
+    assert calls[1].endswith("?turns=1&before=0")
+    # 转不成整数才回默认 —— 否则表现是"打开会话 500"（int(Query 对象) 抛 TypeError）
+    assert calls[2].endswith("?turns=8")

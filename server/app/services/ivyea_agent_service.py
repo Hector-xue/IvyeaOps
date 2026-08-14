@@ -612,9 +612,26 @@ def chat_sessions(limit: int = 20) -> dict[str, Any]:
     return request_json("GET", f"/v1/chat/sessions?limit={safe_limit}")
 
 
-def chat_session(session_id: str) -> dict[str, Any]:
+def _paging_int(value: Any, default: int) -> int:
+    """转不成整数就回默认值。
+
+    不是过度防御：这个函数既被 HTTP 路由调用（那条路 FastAPI 已经校验过），也被
+    ops 内部直接调用 —— 直接调用时拿到的是路由签名里的 `Query(...)` 默认对象，
+    int() 它会直接抛 TypeError，表现为"打开会话 500"。
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def chat_session(session_id: str, turns: Any = 8, before: Any = None) -> dict[str, Any]:
+    """历史会话详情，按**轮**分页（agent ≥ v1.10.3；老 agent 忽略这两个参数）。"""
     safe_id = urllib.parse.quote(session_id.strip(), safe="")
-    return request_json("GET", f"/v1/chat/sessions/{safe_id}")
+    query = f"?turns={max(1, min(_paging_int(turns, 8), 100))}"
+    if before is not None:
+        query += f"&before={max(0, _paging_int(before, 0))}"
+    return request_json("GET", f"/v1/chat/sessions/{safe_id}{query}")
 
 
 def chat_session_delete(session_id: str) -> dict[str, Any]:

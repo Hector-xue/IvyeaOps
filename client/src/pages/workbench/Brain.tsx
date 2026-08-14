@@ -233,7 +233,8 @@ export default function Brain() {
   }, []);
 
   const loadSession = useCallback(async (sessionId: string, title?: string) => {
-    const r = await ivyeaChatSession(sessionId);
+    // 30 轮：知识库对话同样只有一个滚动列表，没有翻页交互，一次给足（默认 8 轮）。
+    const r = await ivyeaChatSession(sessionId, { turns: 30 });
     const msgs = toChatMessages(sessionId, r.session?.messages || []);
     const firstUser = msgs.find((m) => m.role === "user")?.content;
     setActiveSession({ id: sessionId, title: title || sessionTitle(firstUser) });

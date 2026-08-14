@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../App";
 import { MarkdownReport } from "../../lib/reportFormat";
-import { stripInjected } from "../../lib/stripInjected";
+import { restoreSession } from "../../lib/sessionRestore";
 import { ToastProvider, useToast } from "../../components/toast";
 import { CONSOLE_NEW_EVENT, sceneChips } from "../../lib/navRegistry";
 import {
@@ -151,6 +151,9 @@ function ConsoleInner() {
   const [followLoading, setFollowLoading] = useState(false);
   const [followEnabled, setFollowEnabled] = useState(prefs.current.followUps !== false);
   const [attaching, setAttaching] = useState(false);
+  // 历史会话按轮分页：`from` 是本页最早的轮号，取更早一页时当游标传回去。
+  const [earlier, setEarlier] = useState<{ hasMore: boolean; from: number; loading: boolean }>(
+    { hasMore: false, from: 0, loading: false });
 
   const [skills, setSkills] = useState<IvyeaSkillInfo[]>([]);
   const [presets, setPresets] = useState<ConsolePreset[]>([]);
@@ -287,6 +290,7 @@ function ConsoleInner() {
     setFollowUps([]);
     setUsage(null);
     setBusy(false);
+    setEarlier({ hasMore: false, from: 0, loading: false });
     setComposer((c) => ({ ...c, text: "" }));
   }, []);
 
@@ -325,18 +329,10 @@ function ConsoleInner() {
     ivyeaChatSession(urlSession)
       .then((d) => {
         if (!alive) return;
-        const msgs = d?.session?.messages || [];
-        // system 轮次是每轮现算的运行时上下文，不是对话内容，别摆给用户看。
-        const restored: Turn[] = msgs
-          .filter((m) => m.role === "user" || m.role === "assistant")
-          .map((m) => ({
-            id: uid(),
-            role: m.role as "user" | "assistant",
-            // 注入给模型的技能/知识块存在同一条消息里，气泡里不该出现
-            text: stripInjected(String(m.content || "")),
-          }))
-          .filter((t) => t.text);
-        setTurns(restored);
+        // 消息 + 落盘的执行步骤重新缝成轮次（缝合靠 call_id，见 lib/sessionRestore）。
+        const page = restoreSession(d?.session);
+        setTurns(page.turns.map((t) => ({ ...t, id: uid() })));
+        setEarlier({ hasMore: page.hasMore, from: page.from, loading: false });
         setSessionId(urlSession);
         setFollowUps([]);
         setTodos([]);
@@ -366,6 +362,31 @@ function ConsoleInner() {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlSession]);
+
+  // ── 加载更早的对话 ───────────────────────────────────────────────────────
+  //
+  // 长会话按轮分页取回来。翻页时**必须补偿滚动位置**：往顶上插内容会把当前视野
+  // 整个推下去，用户刚读到的那一段就跑没了。补偿走 scrollTo 而不是直接写
+  // scrollTop —— 直接写会被当成"用户翻上去了"，把跟随关掉。
+  const loadEarlier = useCallback(async () => {
+    if (!sessionId || earlier.loading || !earlier.hasMore) return;
+    setEarlier((e) => ({ ...e, loading: true }));
+    const el = bodyRef.current;
+    const before = el ? el.scrollHeight - el.scrollTop : 0;
+    try {
+      const d = await ivyeaChatSession(sessionId, { before: earlier.from });
+      const page = restoreSession(d?.session);
+      setTurns((prev) => [...page.turns.map((t) => ({ ...t, id: uid() })), ...prev]);
+      setEarlier({ hasMore: page.hasMore, from: page.from, loading: false });
+      requestAnimationFrame(() => {
+        const node = bodyRef.current;
+        if (node) scrollTo(node.scrollHeight - before);
+      });
+    } catch (e) {
+      setEarlier((prev) => ({ ...prev, loading: false }));
+      notify("error", errText(e, "更早的对话没能取回来"));
+    }
+  }, [sessionId, earlier.hasMore, earlier.from, earlier.loading, scrollTo, notify]);
 
   // ── 单条 assistant 轮次的原地更新 ────────────────────────────────────────
   const patchTurn = useCallback((id: string, patch: Partial<Turn> | ((t: Turn) => Partial<Turn>)) => {
@@ -796,6 +817,13 @@ function ConsoleInner() {
           <>
             <div className="cc-thread-wrap">
               <div className="cc-thread scroll-thin" ref={bodyRef}>
+                {earlier.hasMore && (
+                  <div className="cc-earlier">
+                    <button type="button" onClick={() => void loadEarlier()} disabled={earlier.loading}>
+                      {earlier.loading ? "正在取…" : `加载更早的对话（还有 ${earlier.from} 轮）`}
+                    </button>
+                  </div>
+                )}
                 {turns.map((t) =>
                   t.role === "user" ? (
                     <div className="cc-user" key={t.id} data-turn={t.id}>

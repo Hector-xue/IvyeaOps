@@ -32,8 +32,25 @@ export type IvyeaChatSessionDetail = {
   updated?: number;
   model?: string;
   usage?: any;
-  messages: { role: string; content: string }[];
+  /**
+   * 本页的消息。assistant 行带 `tool_calls`（id + 工具名）、tool 行带 `tool_call_id` ——
+   * 它们是把落盘的执行步骤挂回对应轮次的锚点（agent ≥ v1.10.3）。
+   */
+  messages: {
+    role: string;
+    content: string;
+    tool_calls?: { id: string; name: string }[];
+    tool_call_id?: string;
+  }[];
+  /** 本页涉及的执行步骤（agent ≥ v1.10.3；老版本没有这个字段）。 */
+  steps?: IvyeaStepEvent[];
+  /** 本页涉及的技能命中，anchor 是该轮第一个 call_id。 */
+  skill_matches?: { anchor: string; skills: MatchedSkillRow[] }[];
+  /** 按轮分页的游标。老 agent 不回这个字段 —— 那就当成"只有这一页"。 */
+  turns?: { total: number; from: number; to: number; has_more: boolean };
 };
+
+export type MatchedSkillRow = { id: string; title: string; domain?: string; score?: number };
 
 export type RetrievalStatus = {
   ok: boolean;
@@ -311,7 +328,8 @@ export async function ivyeaAwaitSessionAnswer(
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, interval));
     try {
-      const data = await ivyeaChatSession(sessionId);
+      // 只要最后一条回答，别每 5 秒把整页历史拖回来（最长要轮询 12 分钟）。
+      const data = await ivyeaChatSession(sessionId, { turns: 1 });
       const session = data?.session;
       if (!session) continue;
       if ((session.updated ?? 0) < sentAtEpochSeconds) continue; // 还没落盘
@@ -537,9 +555,19 @@ export async function ivyeaChatSessions(limit = 30) {
   return data;
 }
 
-export async function ivyeaChatSession(sessionId: string) {
+/**
+ * 历史会话详情，**按轮**分页。
+ *
+ * turns = 这一页要几轮；before = 从第几轮往前取（翻更早的对话时传上一页的 from）。
+ * 别改回按条数取：一次提问能产生几十条消息，按条切会把用户自己发的那句话挤出窗口 ——
+ * 这正是"刷新之后我发的指令不见了"的成因。
+ */
+export async function ivyeaChatSession(
+  sessionId: string, opts?: { turns?: number; before?: number },
+) {
   const { data } = await api.get<{ ok: boolean; session: IvyeaChatSessionDetail }>(
     `/ivyea-agent/chat/sessions/${encodeURIComponent(sessionId)}`,
+    { params: { turns: opts?.turns, before: opts?.before } },
   );
   return data;
 }
