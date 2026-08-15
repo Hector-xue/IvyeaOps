@@ -37,7 +37,13 @@ export type ThemeDef = {
 };
 
 export const THEMES: readonly ThemeDef[] = [
-  // 门道两套排在最前 —— 它们是默认，选择器里第一眼要看到的就是它们。
+  // 静谧两套排在最前 —— 它们是默认，选择器里第一眼要看到的就是它们。
+  // 调色板继承门道（同一份 --md-c-*，只偏移了表面与线的几档），所以 accent
+  // 和门道是同一个值：浅色 #4078f2、深色 #61afef。静谧与门道的区别不在颜色，
+  // 在形状 —— 见 styles/quiet-skin.css。
+  { id: "quiet-light",   name: "静谧·浅", icon: "○", accent: "#4078f2", mode: "light" },
+  { id: "quiet-dark",    name: "静谧·深", icon: "●", accent: "#61afef", mode: "dark"  },
+  // 门道两套：同一套调色板 + 线条直角风。
   // accent 必须等于 CSS 里 --acc 解析后的值，也就是 --md-info（见 workbench.css
   // 的接线块）：浅色 #4078f2、深色 #61afef。
   { id: "mendao-light",  name: "门道·浅", icon: "▤", accent: "#4078f2", mode: "light" },
@@ -60,7 +66,7 @@ export const THEMES: readonly ThemeDef[] = [
   { id: "bordeaux",      name: "波尔红", icon: "⊗",  accent: "#b03280", mode: "dark"  },
 ];
 
-export const DEFAULT_THEME = "mendao-light";
+export const DEFAULT_THEME = "quiet-light";
 
 /** localStorage 键。写在这里，免得四个启动路径各拼一遍字符串。 */
 export const THEME_KEY = "ivyea-ops.theme";
@@ -69,10 +75,11 @@ export const THEME_KEY = "ivyea-ops.theme";
  * 用户之后手动选的任何主题都不会再被覆盖。
  */
 const MIGRATION_KEY = "ivyea-ops.theme.v";
-const MIGRATION = "2";
+const MIGRATION = "3";
 
 /**
- * 把默认主题换成门道，同时不粗暴对待存量用户。
+ * 把默认主题换成静谧，同时不粗暴对待存量用户。
+ * （v2 那一轮换的是门道，同一套机制，只是把版本号推到 3。）
  *
  * 直接改 DEFAULT_THEME 是不够的：老用户的 localStorage 里已经存着 `dark`，
  * 他们永远不会知道有新主题。而无条件改写又太横 —— 那等于把手动选过主题的人
@@ -90,7 +97,7 @@ export function migrateTheme(): boolean {
     const current = localStorage.getItem(THEME_KEY);
     // 没存过 = 新用户，直接吃默认值，不必提示
     if (!isThemeId(current)) return false;
-    if (current.startsWith("mendao-")) return false;
+    if (current.startsWith("quiet-")) return false;
     localStorage.setItem(THEME_KEY, DEFAULT_THEME);
     return true;
   } catch {
@@ -120,14 +127,25 @@ export function themeLabel(id: string): string {
 }
 
 /**
- * 形状皮肤。`data-theme` 管配色，`data-skin` 管形状（圆角/阴影/背景画）。
+ * 形状皮肤。`data-theme` 管配色，`data-skin` 管形状（圆角/阴影/边框/背景画）。
  *
- * **只有门道两套用 flat，这不是一个可以自由组合的开关** —— 旧 16 套的四级
- * 表面是半透明的、层次靠背景画叠出来，关掉画之后会塌成同色。理由和白名单
- * 都写在 styles/mendao-skin.css 顶部。
+ * 三种皮肤，各自绑死在自己的主题上，**都不是可以自由组合的开关**：
+ *
+ * · `flat`    门道两套。直角 + 归零阴影，线条是它的骨架。styles/mendao-skin.css
+ * · `quiet`   静谧两套。保留圆角，**删掉绝大多数边框**，靠留白和表面色差分层。
+ *             styles/quiet-skin.css
+ * · `classic` 其余 16 套。原样。
+ *
+ * 为什么不能自由组合：旧 16 套的四级表面是半透明的、层次靠底下那张背景画叠
+ * 出来，四级之间颜色差极小。flat 关掉背景画会让它们塌成同色；quiet 删掉边框
+ * 同理 —— 边框正是那 16 套唯一还在分隔容器的东西。要真支持得为 16 套各补
+ * 四个不透明表面值再逐套调，那是另一件事。
  */
-export function themeSkin(id: string | null | undefined): "flat" | "classic" {
-  return getTheme(id).id.startsWith("mendao-") ? "flat" : "classic";
+export function themeSkin(id: string | null | undefined): "flat" | "quiet" | "classic" {
+  const themeId = getTheme(id).id;
+  if (themeId.startsWith("mendao-")) return "flat";
+  if (themeId.startsWith("quiet-")) return "quiet";
+  return "classic";
 }
 
 /** 把主题的两个维度一次打到 <html> 上。启动路径和切换路径共用，避免只改一半。 */

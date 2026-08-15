@@ -32,9 +32,9 @@ function MarkdownReportImpl({ text }: { text: string }) {
         i++;
       }
       elements.push(
-        <pre key={i} style={{ background: "var(--bg3)", border: "1px solid var(--b)", borderRadius: 6, padding: "10px 14px", overflowX: "auto", fontSize: "0.88em", lineHeight: 1.65, margin: "10px 0" }}>
-          {lang && <div style={{ fontSize: "0.8em", color: "var(--t3)", marginBottom: 6, letterSpacing: ".06em" }}>{lang}</div>}
-          <code style={{ whiteSpace: "pre", display: "block" }}>{codeLines.join("\n")}</code>
+        <pre key={i} className="md-pre">
+          {lang && <div className="md-pre-lang">{lang}</div>}
+          <code className="md-code">{codeLines.join("\n")}</code>
         </pre>
       );
       i++;
@@ -50,12 +50,12 @@ function MarkdownReportImpl({ text }: { text: string }) {
         i++;
       }
       elements.push(
-        <div key={i} style={{ overflowX: "auto", margin: "10px 0" }}>
-          <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.9em" }}>
+        <div key={i} className="md-table-wrap">
+          <table className="md-table">
             <thead>
               <tr>
                 {headers.map((h, hi) => (
-                  <th key={hi} style={{ textAlign: "left", padding: "6px 12px", borderBottom: "2px solid var(--acc)", color: "var(--t)", fontWeight: 600, whiteSpace: "nowrap" }}>
+                  <th key={hi} className="md-th">
                     {renderInline(h)}
                   </th>
                 ))}
@@ -63,9 +63,9 @@ function MarkdownReportImpl({ text }: { text: string }) {
             </thead>
             <tbody>
               {rows.map((row, ri) => (
-                <tr key={ri} style={{ borderBottom: "1px solid var(--b)" }}>
+                <tr key={ri} className="md-tr">
                   {row.map((cell, ci) => (
-                    <td key={ci} style={{ padding: "6px 12px", color: "var(--t2)", verticalAlign: "top" }}>
+                    <td key={ci} className="md-td">
                       {renderInline(cell)}
                     </td>
                   ))}
@@ -79,28 +79,28 @@ function MarkdownReportImpl({ text }: { text: string }) {
     }
 
     if (line.startsWith("# ")) {
-      elements.push(<h1 key={i} style={{ fontSize: 17, fontWeight: 700, margin: "0 0 12px", color: "var(--t)", borderBottom: "2px solid var(--acc)", paddingBottom: 8 }}>{line.slice(2)}</h1>);
+      elements.push(<h1 key={i} className="md-h1">{line.slice(2)}</h1>);
     } else if (line.startsWith("## ")) {
-      elements.push(<h2 key={i} style={{ fontSize: 14, fontWeight: 600, margin: "18px 0 8px", color: "var(--t)" }}>{line.slice(3)}</h2>);
+      elements.push(<h2 key={i} className="md-h2">{line.slice(3)}</h2>);
     } else if (line.startsWith("### ")) {
-      elements.push(<h3 key={i} style={{ fontSize: 13, fontWeight: 600, margin: "12px 0 6px", color: "var(--t2)" }}>{line.slice(4)}</h3>);
+      elements.push(<h3 key={i} className="md-h3">{line.slice(4)}</h3>);
     } else if (line.startsWith("> ")) {
       elements.push(
-        <div key={i} style={{ borderLeft: "3px solid var(--acc)", paddingLeft: 12, margin: "6px 0", color: "var(--t2)", fontStyle: "italic", lineHeight: 1.7 }}>
+        <div key={i} className="md-quote">
           {renderInline(line.slice(2))}
         </div>
       );
     } else if (line.startsWith("- ") || line.startsWith("* ")) {
-      elements.push(<div key={i} style={{ paddingLeft: 16, lineHeight: 1.7, display: "flex", gap: 8 }}><span style={{ color: "var(--acc)", flexShrink: 0 }}>•</span><span>{renderInline(line.slice(2))}</span></div>);
+      elements.push(<div key={i} className="md-li"><span className="md-bullet">•</span><span>{renderInline(line.slice(2))}</span></div>);
     } else if (/^\d+\. /.test(line)) {
       const num = line.match(/^(\d+)\. /)?.[1] ?? "";
-      elements.push(<div key={i} style={{ paddingLeft: 16, lineHeight: 1.7, display: "flex", gap: 8 }}><span style={{ color: "var(--t3)", flexShrink: 0, minWidth: 18 }}>{num}.</span><span>{renderInline(line.replace(/^\d+\. /, ""))}</span></div>);
+      elements.push(<div key={i} className="md-li"><span className="md-num">{num}.</span><span>{renderInline(line.replace(/^\d+\. /, ""))}</span></div>);
     } else if (line.startsWith("---") || line.startsWith("===")) {
-      elements.push(<hr key={i} style={{ border: "none", borderTop: "1px solid var(--b)", margin: "14px 0" }} />);
+      elements.push(<hr key={i} className="md-hr" />);
     } else if (line.trim() === "") {
-      elements.push(<div key={i} style={{ height: 6 }} />);
+      elements.push(<div key={i} className="md-gap" />);
     } else {
-      elements.push(<div key={i} style={{ lineHeight: 1.8 }}>{renderInline(line)}</div>);
+      elements.push(<div key={i} className="md-p">{renderInline(line)}</div>);
     }
 
     i++;

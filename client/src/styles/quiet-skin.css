@@ -1,0 +1,380 @@
+/* 静谧皮肤 —— 形状层
+ * ============================================================================
+ *
+ * `data-theme` 管配色，`data-skin` 管形状。静谧两套 = 门道调色板（微调）+ 这一层。
+ *
+ * ⚠️ **quiet 只给静谧两套用，不要试图套到旧 16 套上。** 那 16 套的四级表面是
+ * 半透明 rgba、颜色差极小，容器之间**唯一**还在起分隔作用的就是这些边框；
+ * 删掉之后整页会塌成一片。理由同 mendao-skin.css 顶部那段。
+ *
+ * ── 为什么不学 flat 用一条 `*` 上的 !important ─────────────────────────────
+ * flat 要做的是"圆角和阴影全部归零"，那是个**无差别**的诉求，通配符正合适。
+ * 这里要做的不是"边框全删" —— 有几处边框是必须活下来的（下面 ④），无差别
+ * 归零之后再逐条捞回来，就成了"先炸掉再抢救"，而抢救名单会一直漏。
+ *
+ * 所以这里按**层**点名：
+ *   L2 控件（按钮/芯片）→ 默认无形，hover 才显形
+ *   L1 容器（卡片/面板/回答块）→ 去框，靠留白和表面色差分组
+ *   L0 结构（顶栏/侧栏/底座）→ 去线，靠表面色差分隔
+ *   ④ 白名单 → 有意保留，见下
+ *
+ * 三层里 L2 的杠杆最大：`.tbtn` 一条规则覆盖了 48 个文件里的 271 处调用，
+ * 这就是为什么全站扫尾几乎不用逐页改样式。
+ *
+ * ── 为什么这里的 !important 是必要的 ─────────────────────────────────────
+ * 被覆盖的原规则里有大量 `.a.b` 两级选择器（如 `.cc-ai .cs-approval`），
+ * 特异性高于 `html[data-skin=quiet] .x` 里的单类部分；且部分容器的边框写在
+ * 内联 style 上。逐条去数特异性会让这个文件变得没法维护 —— 这一层的职责就是
+ * "最后一道形状裁决"，用 !important 表达它本来就该赢。
+ * ============================================================================ */
+
+/* ── ⓪ 圆角档位 ──────────────────────────────────────────────────────────
+   静谧的参照系是 ChatGPT / DeepSeek / iOS，它们"软"的观感有一半来自**半径**，
+   不是来自没有边框。--r 是全站通用半径（1219 处引用），在这里抬到 14px；
+   几个大面自己再加大一档。 */
+html[data-skin="quiet"] { --r: 14px; }
+/* 输入区是整屏视觉重心，半径要最大 —— 参考图里它接近胶囊。 */
+html[data-skin="quiet"] .cc-composer { border-radius: 22px !important; }
+html[data-skin="quiet"] .cc-bubble { border-radius: 18px !important; }
+html[data-skin="quiet"] .tv-panel { border-radius: 18px !important; }
+html[data-skin="quiet"] .tv-card { border-radius: 12px !important; }
+html[data-skin="quiet"] .sb-menu { border-radius: 14px !important; }
+html[data-skin="quiet"] .sb-menu-item,
+html[data-skin="quiet"] .sb-acct,
+html[data-skin="quiet"] .ni,
+html[data-skin="quiet"] .sb-sess { border-radius: 10px !important; }
+
+/* ── ① 背景画三件套：关掉 ─────────────────────────────────────────────────
+   表面已经全不透明，那两个 position:fixed + mix-blend-mode 的伪元素留着就是
+   两个覆盖全屏、强制整页 GPU 合成的空层。**必须 content:none 而不是 opacity:0**。 */
+html[data-skin="quiet"] body { background-image: none !important; }
+html[data-skin="quiet"] body::before,
+html[data-skin="quiet"] body::after { content: none !important; }
+
+/* 表面不透明之后，19 处 backdrop-filter 变成纯开销（还会强制合成层） */
+html[data-skin="quiet"] * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+
+
+/* ── ② L0 结构：顶栏 / 侧栏 / 底座 ──────────────────────────────────────── */
+
+/* 顶栏完全透明、与主画面之间不留分界线。它现在只承载"我在哪儿"和一两个
+   板块动作，没有任何需要被框起来的东西。 */
+html[data-skin="quiet"] .topbar {
+  background: transparent !important;
+  border-bottom: none !important;
+  height: 46px;
+}
+/* 标题是坐标不是主角 —— 不加粗、用次级色。 */
+html[data-skin="quiet"] .tb-path b { font-weight: 500; color: var(--t2); }
+
+/* 侧栏：去掉那条 inset 分界阴影，改由表面色差站住
+   （静谧浅色是"内容区纯白 + 侧栏微灰"，见 mendao-tokens.css 的偏移 ①）。 */
+html[data-skin="quiet"] .sb {
+  box-shadow: none !important;
+  border-right: none !important;
+}
+html[data-skin="quiet"] .sb-logo { border-bottom: none !important; }
+html[data-skin="quiet"] .sb-nav-dock { border-top: none !important; }
+/* 浮起来的面（账户菜单 / 全部工具浮层）**保留边框**：它们脱离了页面平面，
+   需要一圈线说明"这是浮在上面的一层"。去掉之后在浅色下会直接和页面糊在一起。 */
+/* 侧栏里那些 1px 的手写分隔条（MainLayout 里的 divider，内联 style）。
+   **不能 display:none** —— 经典外壳的四段分组没有小标题，全靠这几条线分开，
+   直接删掉就成了 18 条不分组的长列表。改成"线消失、间距留下"：分组关系还在，
+   只是由留白承担，这正是这套皮肤想表达的东西。 */
+html[data-skin="quiet"] .sb nav div[style*="background: var(--b)"] {
+  background: transparent !important;
+  margin-top: 10px !important;
+  margin-bottom: 10px !important;
+}
+
+/* 会话滚到输入框底下时的渐隐。
+   去掉 .cc-dock 那条 border-top 之后，正文会**直接被输入框切断**，看着像盖住了
+   而不是滚下去了。参考图里 ChatGPT 用的也是渐隐而不是线 —— 这正是"用留白代替
+   线条"该有的收尾，不补的话去掉的那条线就成了纯损失。
+   .cc-thread-wrap 本来就是 position:relative（给「回到底部」当定位参照）。 */
+html[data-skin="quiet"] .cc-thread-wrap::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 30px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--bg));
+}
+/* 「回到底部」是浮在渐隐之上的，不抬 z-index 会被那层渐隐洗掉。 */
+html[data-skin="quiet"] .cc-tobottom { z-index: 1; }
+
+/* 内容区与任务台底座。
+   `:not(.content-fullpage)` 是必须的 —— 整页板块（终端 / 任务台 / 外部智能体）
+   的 padding 是 8px，而 `html[data-skin=quiet] .content` 的特异性压过
+   `.content-fullpage`，不排除的话终端会平白多出 20px 内边距、还会算错高度。 */
+html[data-skin="quiet"] .content:not(.content-fullpage):not(:has(.terminal-workbench-page)) {
+  padding: 20px 24px;
+}
+html[data-skin="quiet"] .cc-dock { border-top: none !important; }
+
+
+/* ── ③ L2 控件：默认无形，触碰才显形 ──────────────────────────────────────
+   这是 Apple 那套语汇里最值得抄的一条 —— iOS 的按钮本身就是纯文字，边界只在
+   按下时以背景的形式出现。 */
+html[data-skin="quiet"] .tbtn,
+html[data-skin="quiet"] .cs-btn,
+html[data-skin="quiet"] .cc-chip,
+html[data-skin="quiet"] .cc-scene,
+html[data-skin="quiet"] .hs-test-btn,
+html[data-skin="quiet"] .sb-toggle,
+html[data-skin="quiet"] .cs-toggle,
+html[data-skin="quiet"] .cc-tobottom,
+html[data-skin="quiet"] .cc-followup {
+  border-color: transparent !important;
+  background: transparent !important;
+}
+html[data-skin="quiet"] .tbtn:hover,
+html[data-skin="quiet"] .cs-btn:hover:not(:disabled),
+html[data-skin="quiet"] .cc-chip:hover,
+html[data-skin="quiet"] .cc-scene:hover,
+html[data-skin="quiet"] .hs-test-btn:hover,
+html[data-skin="quiet"] .sb-toggle:hover,
+html[data-skin="quiet"] .cs-toggle:hover,
+html[data-skin="quiet"] .cc-tobottom:hover,
+html[data-skin="quiet"] .cc-followup:hover {
+  border-color: transparent !important;
+  background: var(--bg2) !important;
+}
+/* 主按钮是唯一带实底的控件 —— 一屏只该有一个，它就是"下一步做什么"。 */
+html[data-skin="quiet"] .cs-btn-primary {
+  background: var(--acc) !important;
+  color: var(--on-acc) !important;
+}
+html[data-skin="quiet"] .cs-btn-primary:hover:not(:disabled) {
+  background: var(--acc) !important;
+  filter: brightness(1.08);
+}
+/* 「回到底部」浮在内容上，去框之后需要一点底才不至于和正文糊在一起 */
+html[data-skin="quiet"] .cc-tobottom {
+  background: var(--bg1) !important;
+  box-shadow: 0 1px 8px rgb(0 0 0 / .08);
+}
+
+
+/* ── ④ 白名单：有意保留边框 ──────────────────────────────────────────────
+   这不是漏网，是判断。简约不能吃掉三类信号：能填的、要处理的、有风险的。 */
+
+/* 4.1 输入区。参考图里 ChatGPT 的输入框同样是有形的 —— 整个界面里它是唯一
+       "等你动手"的地方，必须一眼可辨。 */
+html[data-skin="quiet"] .cc-composer {
+  border: 1px solid var(--b) !important;
+  background: var(--bg1) !important;
+}
+html[data-skin="quiet"] .cc-composer:focus-within {
+  border-color: var(--acc) !important;
+}
+
+/* 4.2 表单控件。去框会让人不知道哪里能填、哪里能选。 */
+html[data-skin="quiet"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-skin="quiet"] select,
+html[data-skin="quiet"] textarea,
+html[data-skin="quiet"] .hs-input {
+  border: 1px solid var(--b) !important;
+  background: var(--bg1) !important;
+}
+/* SheetSelect 的触发器就是 `.xsel-wrap`，在设置页它带 `.hs-input`（上面已覆盖）、
+   在输入器里它带 `.cc-chip`（属于 L2 控件，该无形）—— 所以这里**不能**按
+   `.xsel-wrap` 一刀切，否则输入器上那几个芯片会把边框长回来。 */
+/* 输入器内部那块 textarea 例外 —— 它的边界由外面的 .cc-composer 承担，
+   再套一层就成了框中框。 */
+html[data-skin="quiet"] .cc-input,
+/* 「全部工具」浮层的搜索框同理：整条 header 就是搜索区，外面还有面板自己的
+   边框，再给 input 套一个就成了框中框 —— 而且它没有圆角，看着就是个直角条。 */
+html[data-skin="quiet"] .tv-search {
+  border: none !important;
+  background: transparent !important;
+}
+
+/* 4.3 需要你处理 / 有风险。审批卡、危险动作、告警芯片、更新提醒：
+       这些的存在意义就是被看见。 */
+html[data-skin="quiet"] .cc-ai .cs-approval,
+html[data-skin="quiet"] .cs-approval {
+  border: 1px solid var(--b2) !important;
+}
+html[data-skin="quiet"] .cs-approval.cs-destructive { border-color: var(--amber) !important; }
+html[data-skin="quiet"] .cc-chip-warn { border: 1px solid var(--amber) !important; }
+/* 「有新版本」现在是账户行头像上那颗红点 + 菜单里那一行变红（见 .sb-acct-dot /
+   .sb-menu-item.has-update），不再是一个带框按钮 —— 它们本身就没有边框可留。 */
+
+/* 4.4 焦点圈。键盘可达性不参与简约。
+   **但不能无差别套。** outline 是矩形的，元素自己没有圆角时画出来就是个直角框；
+   而任务台的输入框恰恰是 border-radius:0 的裸 textarea（它的焦点由外层
+   .cc-composer 换边框色来表达，基础样式里写的是 outline:none）。无差别加上去
+   的结果，就是一进页面输入框里凭空多出一个直角矩形 —— 这条规则上一版就是
+   这么把"简约"变成"多了个框"的。
+   所以：**只给自己有圆角的元素画焦点圈**，并显式排掉那些由容器代为表达焦点的。 */
+html[data-skin="quiet"] :focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--acc) 60%, transparent) !important;
+  outline-offset: 1px;
+}
+html[data-skin="quiet"] .cc-input:focus-visible,
+html[data-skin="quiet"] .cc-input:focus,
+html[data-skin="quiet"] .tv-search:focus-visible,
+html[data-skin="quiet"] .tv-search:focus {
+  outline: none !important;
+}
+
+/* 4.5 **凡是保留了边框的，都必须有圆角。**
+   白名单是按"这块要不要被看见"选的，选完就忘了形状 —— 于是留下来的那几个框
+   全是直角，在一套圆角语汇里格外扎眼。这条兜住它们。 */
+html[data-skin="quiet"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-skin="quiet"] select,
+html[data-skin="quiet"] textarea:not(.cc-input),
+html[data-skin="quiet"] .hs-input,
+html[data-skin="quiet"] .cs-approval,
+html[data-skin="quiet"] .sb-sess-more,
+html[data-skin="quiet"] .tv-kbd {
+  border-radius: 10px !important;
+}
+
+
+/* ── ⑤ L1 容器：去框，靠留白和表面色差分组 ──────────────────────────────── */
+html[data-skin="quiet"] .card,
+html[data-skin="quiet"] .hs-section,
+html[data-skin="quiet"] .hs-agent-card,
+html[data-skin="quiet"] .cc-rail-panel,
+html[data-skin="quiet"] .cs-timeline,
+html[data-skin="quiet"] .cc-answer {
+  border-color: transparent !important;
+}
+html[data-skin="quiet"] .cs-timeline.cs-open { border-color: transparent !important; }
+html[data-skin="quiet"] .cc-rail,
+html[data-skin="quiet"] .cc-rail-panel { border-left-color: transparent !important; }
+html[data-skin="quiet"] .cc-rail-title { border-bottom: none !important; }
+
+
+/* ── ⑥ 任务台对话流 ──────────────────────────────────────────────────────
+   用户读的是**内容**，不是承载内容的那个盒子。这一段把盒子全部拿掉，只留
+   字和留白。 */
+
+/* 6.1 回答：直接落在画布上，不再是一张卡。 */
+html[data-skin="quiet"] .cc-answer {
+  background: transparent !important;
+  padding: 0 !important;
+  font-size: 16px;
+  line-height: 1.8;
+  color: var(--t);
+}
+/* 失败态仍然要红，但也不套框 */
+html[data-skin="quiet"] .cc-answer-error {
+  color: var(--red) !important;
+  background: transparent !important;
+}
+
+/* 6.2 阅读行宽。一行 100+ 字的中文读起来极累，眼睛回扫会丢行。
+       ~720px 在 15~16px 字号下约合 45 个汉字，是长文的舒适区。 */
+html[data-skin="quiet"] .cc-thread { padding: 22px 24px 10px; align-items: center; }
+/* 一条规则管住**所有**直接子项（提问 / 回答 / 跟进 / "更早"分隔），而不是逐个
+   点名 —— 漏掉一个，那一项就会在居中列里缩成内容宽度，看着像排版塌了。
+   width:100% 是必须的：align-items:center 会让 flex 子项退回内容宽度。 */
+html[data-skin="quiet"] .cc-thread > * { width: 100%; max-width: 720px; }
+html[data-skin="quiet"] .cc-dock > * { max-width: 720px; margin-left: auto; margin-right: auto; }
+
+/* 6.3 提问气泡：保留气泡形（参考图里 ChatGPT 也保留），但去掉描边，
+       只留一层极淡的强调色底。 */
+html[data-skin="quiet"] .cc-bubble {
+  border: none !important;
+  padding: 10px 15px;
+  background: color-mix(in srgb, var(--acc) 9%, var(--bg2)) !important;
+  font-size: 15px;
+}
+
+/* 6.4 执行过程：去掉外框；展开后用**左侧一条发丝竖线**表达层级，而不是盒子。
+       竖线是"这些属于上一行"的最轻量表达 —— 一根线，不是四根。 */
+html[data-skin="quiet"] .cs-timeline { background: transparent !important; }
+html[data-skin="quiet"] .cs-log-wrap {
+  border-top: none !important;
+  border-left: 1px solid var(--b) !important;
+  margin-left: 11px;
+  padding-left: 12px;
+}
+html[data-skin="quiet"] .cs-args {
+  border-top: none !important;
+  background: var(--bg2) !important;
+}
+
+/* 6.5 跟进建议：从"带框按钮"变成一行可点的文字。 */
+html[data-skin="quiet"] .cc-followup { padding: 7px 0 7px 10px; }
+html[data-skin="quiet"] .cc-followup:hover {
+  background: var(--bg2) !important;
+  padding-left: 14px;
+  transform: none !important;
+}
+
+/* 6.6 统计条：去掉竖分隔线，改留白 + 更淡。 */
+html[data-skin="quiet"] .cc-stat + .cc-stat { border-left: none !important; padding-left: 0; }
+html[data-skin="quiet"] .cc-stats { gap: 4px 18px; opacity: .8; }
+
+/* 6.7 Hero 态。
+   删掉副标题之后，标题和输入框之间的关系变成"一句话 + 一个动作"，参考图里
+   就是这么干净。标题再大一档撑住这块留白；场景入口从"带框胶囊"改成**无框
+   文字行**（ChatGPT 的「撰写或编辑 / 搜索网页」就是这个形态）—— 一排五个
+   描边胶囊等于把刚去掉的框又摆回首屏正中。 */
+html[data-skin="quiet"] .cc-hero { gap: 20px; }
+html[data-skin="quiet"] .cc-hero-title { font-size: 32px; letter-spacing: -.015em; }
+html[data-skin="quiet"] .cc-hero-composer { max-width: 760px; }
+html[data-skin="quiet"] .cc-scenes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(190px, 1fr));
+  gap: 2px 28px;
+  max-width: 560px;
+}
+html[data-skin="quiet"] .cc-scene {
+  justify-content: flex-start;
+  gap: 9px;
+  padding: 9px 12px;
+  border-radius: 10px !important;
+  background: transparent !important;
+  color: var(--t2) !important;
+}
+html[data-skin="quiet"] .cc-scene:hover {
+  background: var(--bg2) !important;
+  color: var(--t) !important;
+  transform: none !important;
+}
+@media (max-width: 640px) {
+  html[data-skin="quiet"] .cc-scenes { grid-template-columns: 1fr; max-width: 100%; }
+}
+
+
+/* ── ⑦ Markdown 正文：让层级由字重和留白表达，不由线条 ────────────────────
+   基线样式（含类名定义）在 workbench.css 的「Markdown 报告」一节。 */
+html[data-skin="quiet"] .md-h1 {
+  border-bottom: none !important;
+  padding-bottom: 0 !important;
+  font-size: 1.35em;
+}
+html[data-skin="quiet"] .md-h2 { font-size: 1.15em; margin-top: 1.6em; }
+html[data-skin="quiet"] .md-h3 { color: var(--t) !important; }
+/* 代码块：去框，只留一层 wash 底 */
+html[data-skin="quiet"] .md-pre { border: none !important; background: var(--bg2) !important; }
+/* 表格：表头一条实线 + 行发丝线，去掉强调色那条 2px 粗线 */
+html[data-skin="quiet"] .md-th { border-bottom: 1px solid var(--b) !important; }
+html[data-skin="quiet"] .md-tr { border-bottom: 1px solid var(--b) !important; }
+/* 列表符号回归中性 —— 每一个圆点都是强调色的话，强调色就不强调了 */
+html[data-skin="quiet"] .md-bullet { color: var(--t3) !important; }
+html[data-skin="quiet"] .md-quote { border-left-color: var(--b2) !important; font-style: normal; }
+html[data-skin="quiet"] .md-hr { border-top-color: var(--b) !important; }
+
+
+/* ── ⑧ 侧栏项：选中态由左侧色条改为整块淡底 ──────────────────────────────
+   一条 2px 的竖线在无边框语境里显得很突兀（它是"线条风"的语汇）；整块淡底
+   才是 ChatGPT / Finder 那种选中表达。 */
+html[data-skin="quiet"] .ni {
+  border-left-color: transparent !important;
+  border-radius: 8px;
+  margin: 1px 8px;
+  padding-left: 10px;
+}
+html[data-skin="quiet"] .ni.active {
+  border-left-color: transparent !important;
+  background: var(--bg3) !important;
+  color: var(--t) !important;
+}
+html[data-skin="quiet"] .sb.collapsed .ni { margin: 1px 6px; }
+html[data-skin="quiet"] .sb.collapsed .ni.active { border-right-color: transparent !important; }

@@ -11,6 +11,7 @@
  * 落盘成功后才发），所以这里列的都是**真的改到磁盘上**的东西。
  */
 import { useMemo, useState, type ReactNode } from "react";
+import Icon from "../Icon";
 import { MarkdownReport } from "../../lib/reportFormat";
 import type { IvyeaFileChange } from "../../api/ivyeaAgent";
 
@@ -20,12 +21,12 @@ export type RailApproval = { title: string; decision: string; at: number };
 type TabKey = "report" | "file" | "diff" | "todo" | "approval" | "session";
 
 const TABS: { key: TabKey; icon: string; label: string }[] = [
-  { key: "report", icon: "▤", label: "报告" },
-  { key: "file", icon: "◰", label: "文件" },
-  { key: "diff", icon: "±", label: "改动" },
-  { key: "todo", icon: "☑", label: "待办" },
-  { key: "approval", icon: "⚑", label: "审批" },
-  { key: "session", icon: "◷", label: "会话" },
+  { key: "report", icon: "report", label: "报告" },
+  { key: "file", icon: "file", label: "文件" },
+  { key: "diff", icon: "diff", label: "改动" },
+  { key: "todo", icon: "todo", label: "待办" },
+  { key: "approval", icon: "flag", label: "审批" },
+  { key: "session", icon: "history", label: "会话" },
 ];
 
 const ACTION_LABEL: Record<string, string> = {
@@ -141,6 +142,15 @@ export default function ArtifactRail({
     URL.revokeObjectURL(url);
   };
 
+  // 一条产物都没有时整条栏不渲染。
+  //
+  // 它原本无条件常驻：首页（还没开始对话）右边就挂着一条 40px 的空图标竖条，
+  // 六个格子点进去全是"还没有产出"。参考图里那块位置是纯留白 —— 一个永远
+  // 有六个入口、但九成时间六个都是空的侧栏，占的是注意力不是空间。
+  const hasAnything =
+    !!report || fileChanges.length > 0 || todos.length > 0 || approvals.length > 0 || !!sessionId;
+  if (!hasAnything) return null;
+
   return (
     <aside className={"cc-rail" + (open ? " open" : "")}>
       <div className="cc-rail-tabs">
@@ -152,7 +162,7 @@ export default function ArtifactRail({
             title={t.label}
             onClick={() => setOpen((v) => (v === t.key ? null : t.key))}
           >
-            <span>{t.icon}</span>
+            <Icon name={t.icon} size={16} />
             {counts[t.key] > 0 && <em className="cc-rail-badge">{counts[t.key]}</em>}
           </button>
         ))}

@@ -30,6 +30,10 @@ export type BoardEntry = {
   to: string;
   /** 用于路由匹配和面包屑的纯 pathname；省略时取 `to` 的 ? 之前部分。 */
   path?: string;
+  /**
+   * 图标名，对应 components/Icon.tsx 里那张表（不是字符字形）。
+   * 这里存名字而不是组件：注册表是纯数据，不该 import React。
+   */
   icon: string;
   label: string;
   group: NavGroup;
@@ -60,19 +64,19 @@ export type BoardEntry = {
 export const BOARDS: BoardEntry[] = [
   // ── 新壳一级项 ────────────────────────────────────────────────────────────
   {
-    to: "/console", icon: "◆", label: "任务台", group: "console",
+    to: "/console", icon: "console", label: "任务台", group: "console",
     pathLabel: "~/任务台", fullPage: true, ready: true,
   },
   {
-    to: "/capabilities", icon: "◈", label: "能力市场", group: "capability",
+    to: "/capabilities", icon: "capability", label: "能力市场", group: "capability",
     pathLabel: "~/能力市场", ready: true,
   },
   {
-    to: "/approvals", icon: "✓", label: "待审批", group: "automation",
+    to: "/approvals", icon: "approval", label: "待审批", group: "automation",
     pathLabel: "~/待审批", admin: false, key: "agents", ready: true,
   },
   {
-    to: "/schedules", icon: "⏱", label: "定时任务", group: "automation",
+    to: "/schedules", icon: "schedule", label: "定时任务", group: "automation",
     pathLabel: "~/定时任务", admin: false, key: "agents", ready: true,
   },
 
@@ -80,103 +84,103 @@ export const BOARDS: BoardEntry[] = [
   // 运营驾驶舱。改造前它挂在 "/"；现在 "/" 变成按外壳模式分流的落地跳转，
   // 驾驶舱有了自己的固定地址，两套外壳都能稳定链到它。
   {
-    to: "/dashboard", icon: "⌂", label: "首页", group: "tools", legacySection: "工具",
+    to: "/dashboard", icon: "home", label: "首页", group: "tools", legacySection: "工具",
     pathLabel: "~/首页", ready: true,
   },
   {
-    to: "/market", icon: "◈", label: "市场调研", group: "tools", legacySection: "工具",
+    to: "/market", icon: "market", label: "市场调研", group: "tools", legacySection: "工具",
     pathLabel: "~/市场调研", keepAlive: true, ready: true,
     scene: {
-      icon: "◈", label: "市场调研",
+      icon: "market", label: "市场调研",
       prompt: "帮我对「」这个关键词做一份美国站市场调研报告，用市场调研板块的真实数据。",
     },
   },
   {
-    to: "/playbook", icon: "◎", label: "打法推荐", group: "tools", legacySection: "工具",
+    to: "/playbook", icon: "playbook", label: "打法推荐", group: "tools", legacySection: "工具",
     pathLabel: "~/打法推荐", keepAlive: true, ready: true,
     scene: {
-      icon: "◎", label: "打法推荐",
+      icon: "playbook", label: "打法推荐",
       prompt: "帮我给「」这个产品出一份美国站的站内打法方案，售价按 USD 计。",
     },
   },
   {
-    to: "/listing", icon: "◧", label: "Listing工作台", group: "tools", legacySection: "工具",
+    to: "/listing", icon: "listing", label: "Listing工作台", group: "tools", legacySection: "工具",
     pathLabel: "~/Listing工作台", admin: true, key: "listing", ready: true,
     scene: {
-      icon: "◧", label: "Listing 诊断",
+      icon: "listing", label: "Listing 诊断",
       prompt: "ASIN  这条 Listing 为什么不转化？帮我拉真实数据做质量诊断。",
     },
   },
   {
-    to: "/image-translate", icon: "⇄", label: "一键图片翻译", group: "tools", legacySection: "工具",
+    to: "/image-translate", icon: "translate", label: "一键图片翻译", group: "tools", legacySection: "工具",
     pathLabel: "~/一键图片翻译", admin: true, key: "image-translate", ready: true,
   },
   {
-    to: "/tools", icon: "⊕", label: "分析工具", group: "tools", legacySection: "工具",
+    to: "/tools", icon: "analysis", label: "分析工具", group: "tools", legacySection: "工具",
     pathLabel: "~/分析工具", admin: true, key: "tools", keepAlive: true, ready: true,
     scene: {
-      icon: "⊕", label: "关键词竞争",
+      icon: "analysis", label: "关键词竞争",
       prompt: "帮我分析「」这个关键词在美国站的竞争格局，并给出切入建议。",
     },
   },
   {
-    to: "/lingxing", icon: "◭", label: "领星 ERP", group: "tools", legacySection: "工具",
+    to: "/lingxing", icon: "lingxing", label: "领星 ERP", group: "tools", legacySection: "工具",
     pathLabel: "~/领星ERP", admin: true, ready: true,
     scene: {
-      icon: "◭", label: "广告浪费诊断",
+      icon: "ad-waste", label: "广告浪费诊断",
       prompt: "拉一下最近 7 天的领星广告大盘，找出高花费零转化的低效项并给出可执行的调整方案。",
     },
   },
   {
-    to: "/skill-hub", icon: "✦", label: "Skill 中心", group: "tools", legacySection: "工具",
+    to: "/skill-hub", icon: "skill", label: "Skill 中心", group: "tools", legacySection: "工具",
     pathLabel: "~/Skill中心", admin: true, key: "skill-hub", ready: true,
   },
 
   // ── AI & 系统（旧壳第二段）────────────────────────────────────────────────
   {
-    to: "/assistant", icon: "⊡", label: "AI 问答", group: "tools", legacySection: "AI & 系统",
+    to: "/assistant", icon: "assistant", label: "AI 问答", group: "tools", legacySection: "AI & 系统",
     pathLabel: "~/AI问答", ready: true,
   },
   {
-    to: "/imagegen", icon: "▦", label: "AI 生图", group: "tools", legacySection: "AI & 系统",
+    to: "/imagegen", icon: "imagegen", label: "AI 生图", group: "tools", legacySection: "AI & 系统",
     pathLabel: "~/AI生图", keepAlive: true, ready: true,
   },
   {
-    to: "/brain?tab=governance", path: "/brain", icon: "▤", label: "知识库工作台",
+    to: "/brain?tab=governance", path: "/brain", icon: "brain", label: "知识库工作台",
     group: "tools", legacySection: "AI & 系统",
     pathLabel: "~/知识库工作台", admin: true, key: "brain", ready: true,
   },
   {
-    to: "/agents", icon: "◉", label: "外部智能体", group: "tools", legacySection: "AI & 系统",
+    to: "/agents", icon: "agents", label: "外部智能体", group: "tools", legacySection: "AI & 系统",
     pathLabel: "~/外部智能体", admin: true, key: "agents",
     persistent: true, fullPage: true, ready: true,
   },
   {
-    to: "/terminal", icon: "▶", label: "服务器终端", group: "tools", legacySection: "AI & 系统",
+    to: "/terminal", icon: "terminal", label: "服务器终端", group: "tools", legacySection: "AI & 系统",
     pathLabel: "~/服务器终端", admin: true, key: "terminal", persistent: true, ready: true,
   },
   {
-    to: "/servmon", icon: "⊙", label: "服务器监控", group: "tools", legacySection: "AI & 系统",
+    to: "/servmon", icon: "monitor", label: "服务器监控", group: "tools", legacySection: "AI & 系统",
     pathLabel: "~/服务器监控", admin: true, key: "servmon", ready: true,
   },
 
   // ── 小工具（旧壳第三段）───────────────────────────────────────────────────
   {
-    to: "/freight", icon: "⊞", label: "头程比价", group: "tools", legacySection: "小工具",
+    to: "/freight", icon: "freight", label: "头程比价", group: "tools", legacySection: "小工具",
     pathLabel: "~/头程比价", ready: true,
   },
 
   // ── 管理（旧壳第四段）─────────────────────────────────────────────────────
   {
-    to: "/users", icon: "⊗", label: "用户管理", group: "admin", legacySection: "管理",
+    to: "/users", icon: "users", label: "用户管理", group: "admin", legacySection: "管理",
     pathLabel: "~/用户管理", admin: true, ready: true,
   },
   {
-    to: "/hub-settings", icon: "⚙", label: "系统配置", group: "admin", legacySection: "管理",
+    to: "/hub-settings", icon: "settings", label: "系统配置", group: "admin", legacySection: "管理",
     pathLabel: "~/系统配置", admin: true, ready: true,
   },
   {
-    to: "/news", icon: "≡", label: "资讯", group: "admin", legacySection: "管理",
+    to: "/news", icon: "news", label: "资讯", group: "admin", legacySection: "管理",
     pathLabel: "~/资讯", admin: true, key: "news", ready: true,
   },
 ];
