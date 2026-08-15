@@ -918,7 +918,10 @@ def _search_citations(user_message: str, category: str | None = None) -> list[di
         if citations:
             break
     if not citations and last_error:
-        return [{"slug": "gbrain-search", "score": 0, "snippet": f"检索失败：{last_error}"}]
+        # 以前这里把 GBrain 的报错当成一条"引用"塞给用户。新机器上根本没装 GBrain，
+        # 于是每次对话都挂一条"检索失败：..."——而回答本身是 IvyeaAgent 给的，
+        # 它有自己的知识库，压根不依赖这条路。所以只记日志，不污染回答。
+        logger.debug("GBrain 引用检索失败（旁路，已忽略）：%s", last_error)
     return citations[:8]
 
 

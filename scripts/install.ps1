@@ -206,7 +206,7 @@ IVYEA_OPS_ALLOWED_ORIGINS=http://127.0.0.1:8001
 if (-not (Test-Path "$RepoRoot\data")) { New-Item -ItemType Directory -Path "$RepoRoot\data" | Out-Null }
 
 # ── 4.5 内置 IvyeaAgent ─────────────────────────────────────────────────────
-# 新部署默认使用 IvyeaAgent 承担 Agent、知识库与本地检索；Hermes/GBrain/Ollama
+# 新部署默认使用 IvyeaAgent 承担 Agent、知识库与本地检索；Hermes/Ollama
 # 只作为旧部署兼容组件，需要显式设置 IVYEA_OPS_INSTALL_LEGACY_AI=1 才安装。
 Write-Host ""
 Write-Info "安装内置 IvyeaAgent（Agent + 知识库 + 本地检索）..."
@@ -252,7 +252,7 @@ if ($env:IVYEA_OPS_INSTALL_LEGACY_AI -eq "1") {
     try {
         & powershell -NoProfile -ExecutionPolicy Bypass -File "$RepoRoot\scripts\install-components.ps1" -Component legacy
     } catch {
-        Write-Warn "旧兼容组件 Hermes/GBrain 安装失败（不影响 IvyeaOps 主程序）：$_"
+        Write-Warn "旧兼容组件 Hermes 安装失败（不影响 IvyeaOps 主程序）：$_"
         Write-Warn "稍后可运行：powershell -ExecutionPolicy Bypass -File scripts\install-components.ps1 -Component legacy"
     }
     Write-Host "  旧链路安装路径会被 IvyeaOps 自动发现；如未识别，可在「系统配置 → 智能体」里填路径。" -ForegroundColor Yellow

@@ -84,7 +84,7 @@ def test_credential_fields_are_encrypted(name):
 
 
 @pytest.mark.parametrize("name", [
-    "hermes_base_url", "ivyea_agent_url", "gbrain_embed_provider",
+    "hermes_base_url", "ivyea_agent_url", "imgflow_url",
     "password_hash",          # 已经是 bcrypt 哈希，再包一层没有意义
 ])
 def test_non_credential_fields_are_left_alone(name):

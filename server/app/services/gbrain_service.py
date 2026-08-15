@@ -303,53 +303,17 @@ def ensure_db_ready() -> dict[str, Any]:
 
 
 def ensure_ready() -> dict[str, Any]:
-    """Self-heal the knowledge base on board load, so the user doesn't have to
-    hand-configure anything:
-      1. If the local DB isn't initialised → run ``gbrain init --pglite``. If that
-         fails because the installed gbrain is an incompatible (database_url-only)
-         version, report it so the UI can offer a reinstall instead of showing the
-         raw "No database URL" error.
-      2. If a local Ollama is running with nomic-embed-text and embedding isn't
-         wired yet → configure it, enabling semantic search automatically.
-    Best-effort and idempotent; cheap once everything is already configured.
+    """确认本地库是否就绪，**不再自作主张地装配任何东西**。
+
+    以前这里会在面板加载时自动跑 ``gbrain init --pglite``、自动探测 Ollama 并把
+    embedding 接上。现在知识库的前门是 IvyeaAgent，语义检索归它自己管，GBrain 只是
+    还没迁完的旧读路径 —— 在新机器上自动初始化一个用不到的 pglite 库，只会在部署时
+    抛一堆和当前功能无关的错。所以这里只做只读判断，装配交给用户显式操作。
     """
-    import json
-    actions: list[str] = []
-    result: dict[str, Any] = {"db_ready": False, "embed_ready": False,
-                              "version_compatible": True, "actions": actions, "hint": ""}
-
-    # 1. Database
-    was_configured = _db_configured()
-    db = ensure_db_ready()
-    if not db["db_ready"]:
-        result["version_compatible"] = db["version_compatible"]
-        result["hint"] = db["hint"]
-        return result
-    if not was_configured:
-        actions.append("已自动初始化本地知识库（PGLite）")
-    result["db_ready"] = True
-
-    # 2. Embedding via Ollama
-    embed_model = ""
-    try:
-        embed_model = str(json.loads(_gbrain_config_path().read_text(encoding="utf-8")).get("embedding_model") or "")
-    except Exception:
-        logger.debug("str 失败（旁路，已忽略）", exc_info=True)
-    if embed_model.startswith("ollama:"):
-        result["embed_ready"] = True
-    else:
-        models = _ollama_models()
-        if models and any("nomic-embed-text" in m for m in models):
-            try:
-                from app.services.hermes_config_sync import sync_gbrain_embedding
-                sync_gbrain_embedding("ollama", "nomic-embed-text", "")
-                actions.append("检测到 Ollama，已自动启用本地语义检索（nomic-embed-text）")
-                result["embed_ready"] = True
-            except Exception:
-                logger.debug("sync_gbrain_embedding 失败（旁路，已忽略）", exc_info=True)
-        elif models:
-            result["hint"] = ("Ollama 已运行但未拉取 embedding 模型；执行 "
-                              "`ollama pull nomic-embed-text` 后即可自动启用语义检索。")
+    result: dict[str, Any] = {"db_ready": _db_configured(), "embed_ready": False,
+                              "version_compatible": True, "actions": [], "hint": ""}
+    if not result["db_ready"]:
+        result["hint"] = "GBrain 本地库未初始化（知识库主路径走 IvyeaAgent，不影响使用）。"
     return result
 
 

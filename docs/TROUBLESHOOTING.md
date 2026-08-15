@@ -44,7 +44,7 @@ git -c credential.interactive=never clone https://gitee.com/hectorxue/IvyeaOps.g
 
 - 想强制开启：`IVYEA_CN=1 bash scripts/install.sh`
 - 想关闭（国际网络误判时）：`IVYEA_CN=0 bash scripts/install.sh`
-- **Hermes / GBrain 慢**：这俩是境外官方安装器（下载 uv/Node 等），可选、可稍后单独重试；镜像只能加速它们内部的 Python 依赖，二进制下载绕不开。不想等就先跳过，配个「全局兜底大模型」先用起来。
+- **Hermes 慢**：这俩是境外官方安装器（下载 uv/Node 等），可选、可稍后单独重试；镜像只能加速它们内部的 Python 依赖，二进制下载绕不开。不想等就先跳过，配个「全局兜底大模型」先用起来。
 
 ---
 

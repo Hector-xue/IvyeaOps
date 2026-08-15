@@ -166,7 +166,7 @@ def _proc_env() -> dict:
     #   ~/.hermes/node/bin                 -> claude / codex (npm-installed)
     #   ~/.local/bin                       -> hermes symlink
     #   ~/.hermes/hermes-agent/venv/bin    -> hermes (real venv entrypoint)
-    #   ~/.bun/bin                         -> gbrain / bun-based CLIs
+    #   ~/.bun/bin                         -> bun-based CLIs
     home = os.path.expanduser("~")
     extra_dirs = [
         os.path.join(home, ".hermes", "node", "bin"),

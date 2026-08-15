@@ -21,7 +21,7 @@ Listing 套图制作、图片翻译、市场调研、深度分析、广告优化
 
 - **技术栈**：后端 FastAPI（Python）+ 前端 React / Vite（TypeScript），后端直接托管前端构建产物。
 - **预构建发行包**：`IvyeaOps.zip` 已含前端 `client/dist` 与 Windows Python 3.12 后端依赖 wheels；`IvyeaOps-Windows-x64.zip` 额外内置后端 `IvyeaOpsServer.exe`，Windows 可免 Python / Node；`IvyeaOps-macOS.zip` 解压得到 **`IvyeaOps.app`（自包含、内嵌 Python，双击即用）**，macOS 可免 Python / Node。
-- **内置 Agent**：默认安装 IvyeaAgent，提供右下角会话入口、知识库上传、搜索和本地检索；知识库工作台新增治理中心，支持官方变更审核、覆盖/时效看板、41 项持续评测、冲突检查、账户证据脱敏导入和二次确认发布；管理员审核身份通过本地 Agent token 签名，未验证批准不能发布；可在「系统配置 → IvyeaAgent → 检查并更新」一键升级；Hermes / GBrain / Ollama 仅作为旧兼容组件保留。
+- **内置 Agent**：默认安装 IvyeaAgent，提供右下角会话入口、知识库上传、搜索和本地检索；知识库工作台新增治理中心，支持官方变更审核、覆盖/时效看板、41 项持续评测、冲突检查、账户证据脱敏导入和二次确认发布；管理员审核身份通过本地 Agent token 签名，未验证批准不能发布；可在「系统配置 → IvyeaAgent → 检查并更新」一键升级；Hermes / Ollama 仅作为旧兼容组件保留。
 - **支持平台**：Linux / macOS（完整，含 `.app` 免环境包）· Windows（除 PTY 终端外完整；Windows x64 有免 Python 包）。
   - macOS 首次双击 `IvyeaOps.app` 若被 Gatekeeper 拦截（未签名），右键 →「打开」一次即可；浏览器会自动开到 http://127.0.0.1:8001 。
 - **默认端口**：`8001`（`http://127.0.0.1:8001`）。
@@ -116,9 +116,9 @@ Listing 套图制作、图片翻译、市场调研、深度分析、广告优化
   </tr>
   <tr>
     <td align="center" colspan="2">
-      <img src="docs/assets/screenshot-gbrain.png" alt="知识库工作台（GBrain 兼容）" width="50%" />
+      <img src="docs/assets/screenshot-gbrain.png" alt="知识库工作台" width="50%" />
       <br />
-      <sub><strong>知识库工作台</strong>：保留 GBrain 上传、编辑、搜索和对话流程；右下角 IvyeaAgent 可迁移 ~/brain 到 ~/.ivyea/knowledge</sub>
+      <sub><strong>知识库工作台</strong>：上传、编辑、搜索和对话；右下角 IvyeaAgent 可迁移 ~/brain 到 ~/.ivyea/knowledge</sub>
     </td>
   </tr>
 </table>
@@ -193,7 +193,7 @@ bash scripts/start.sh
 > ```
 > `install.sh` 会**自动检测国内网络**，把 pip / npm 切到清华 + 淘宝镜像，并在需要从 Git 安装 IvyeaAgent 时使用同一套加速配置（可用 `IVYEA_CN=0` 关闭镜像、`IVYEA_GH_PROXY=none` 关闭 GitHub 代理、`IVYEA_GH_PROXY=<你的代理/>` 自定义）。若 `ghfast.top` 偶发不可用,可换 `https://gh-proxy.com/` 前缀。
 
-> IvyeaAgent 会随安装脚本默认安装并启动；Hermes / GBrain / Ollama 是旧兼容增强组件，只有设置 `IVYEA_OPS_INSTALL_LEGACY_AI=1` 或在「系统配置 → 系统状态」里手动修复时才会安装。
+> IvyeaAgent 会随安装脚本默认安装并启动；Hermes / Ollama 是旧兼容增强组件，只有设置 `IVYEA_OPS_INSTALL_LEGACY_AI=1` 或在「系统配置 → 系统状态」里手动修复时才会安装。
 
 <details><summary>开发者：从源码构建（需 Node 18+ 与 ≥2G 内存）</summary>
 
@@ -218,7 +218,7 @@ bash scripts/start.sh
 > 或 **Gitee 镜像**（最快，但 Windows 的 Git Credential Manager 可能弹 Gitee 登录——仓库是公开的、其实不用账号，可加 `-c credential.interactive=never` 强制匿名）：
 > `git -c credential.interactive=never clone https://gitee.com/hectorxue/IvyeaOps.git`
 > - **装依赖慢**：`install.sh` / `install.ps1` 会**自动检测**是否在大陆网络，自动把 pip、npm 切到清华 + 淘宝镜像（无需手动；可用 `IVYEA_CN=1` 强制开、`IVYEA_CN=0` 关）。
-> - **旧兼容组件慢**：Hermes / GBrain / Ollama 会访问境外安装器、npm/pip 或模型源，默认不再安装；需要兼容旧链路时可稍后单独重试。
+> - **旧兼容组件慢**：Hermes / Ollama 会访问境外安装器、npm/pip 或模型源，默认不再安装；需要兼容旧链路时可稍后单独重试。
 
 > macOS 与 Linux 命令完全一致（同为 Unix）：原生脚本和 `docker compose up -d` 都可用，
 > PTY 终端也正常工作。下载预构建包时只需 Python 3.9+；从源码构建前端才需要 Node 18+（可用 Homebrew 安装）。
@@ -239,7 +239,7 @@ bash scripts/start.sh
 3. 以后**双击桌面「IvyeaOps」**—— 浏览器自动打开 **http://127.0.0.1:8001**。
 4. x64 包会自动检测新版本，侧边栏左下角版本号旁出现红点时可点击 **更新**；也可双击 **「更新 IvyeaOps Windows x64.bat」**。如需停止，直接关闭控制窗口；**「停止 IvyeaOps.bat」** 仍可作为备用入口。
 
-> IvyeaAgent 是默认内置组件；Hermes / GBrain / Ollama 只作为旧兼容增强项，可在「系统配置 → 系统状态」里手动安装 / 修复。
+> IvyeaAgent 是默认内置组件；Hermes / Ollama 只作为旧兼容增强项，可在「系统配置 → 系统状态」里手动安装 / 修复。
 
 > **团队共享（同一局域网，其他电脑/手机零安装）**：双击 **「启动 IvyeaOps (局域网共享).bat」**。
 > 它会自动探测本机局域网 IP、把服务绑到 `0.0.0.0`、将该 IP 加入 CSRF 白名单（否则跨机登录会
@@ -343,8 +343,7 @@ IvyeaOps 默认内置 IvyeaAgent：右下角常驻图标提供会话、知识库
 |---|---|
 | **IvyeaAgent** | 默认内置主链，提供 Agent、知识库、上传文档、本地检索和 IvyeaOps 桥接 API |
 | **Hermes Agent** | 旧兼容 / 可选增强，支持 MCP / 工具调用 / Skill |
-| **GBrain** | 知识库工作台兼容 CLI；IvyeaAgent 可一键继承 `~/brain` 到 `~/.ivyea/knowledge` |
-| **Ollama** | 可选本地模型运行环境；用于旧 GBrain embedding 或其他本地模型工作流 |
+| **Ollama** | 可选本地模型运行环境；用于本地模型工作流 |
 | **Claude Code** | 「外部智能体」原生移植 claudecodeui，走 stream-json 结构化输出，支持会话 resume、工具调用可视化 |
 | **Codex** *(可选)* | OpenAI Codex CLI；如不使用可忽略 |
 
@@ -455,7 +454,7 @@ IvyeaOps/
 IvyeaOps 站在不少优秀开源项目之上，特此致谢：
 
 - **[claudecodeui](https://github.com/siteboon/claudecodeui)**（**AGPL-3.0**）—— 「外部智能体」板块的浏览器端交互体验移植自该项目。正因如此，整个 IvyeaOps 依 AGPL-3.0 的 copyleft 要求以 **AGPL-3.0** 发布。
-- **[Hermes Agent](https://github.com/NousResearch/hermes-agent)**（NousResearch）· **[GBrain](https://github.com/garrytan/gbrain)**（MIT）—— 可选集成的本地智能体与本地知识库（作为独立程序由 IvyeaOps 经子进程调用，并未内置其源码，故不影响本项目的许可证）。
+- **[Hermes Agent](https://github.com/NousResearch/hermes-agent)**（NousResearch）—— 可选集成的本地智能体（作为独立程序由 IvyeaOps 经子进程调用，并未内置其源码，故不影响本项目的许可证）。
 - 基础设施：**FastAPI** · **React** · **Vite** · **xterm.js** 等众多开源库。
 
 上述各上游项目的版权与许可证均归其原作者所有；如有疏漏，欢迎提 Issue 指正。

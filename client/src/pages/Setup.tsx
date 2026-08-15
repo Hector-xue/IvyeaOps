@@ -234,7 +234,7 @@ function AgentRow({
       </div>
 
       {/* Legacy installers are optional; failures do not block setup. */}
-      {!isOk && (name === "hermes" || name === "gbrain") && (
+      {!isOk && name === "hermes" && (
         <div style={S.hint}>
           将在线安装可选组件；如网络较慢或失败，可先跳过，稍后在系统配置或脚本中重试。
         </div>

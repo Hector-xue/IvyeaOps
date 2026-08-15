@@ -62,7 +62,7 @@ def test_harvest_is_idempotent(monkeypatch, restore_store):
 
 
 def test_industry_standard_keys_are_deliberately_left_alone(monkeypatch, restore_store):
-    """OPENAI_API_KEY / ANTHROPIC_API_KEY 不摘：gbrain、hermes 这些子进程正是靠
+    """OPENAI_API_KEY / ANTHROPIC_API_KEY 不摘：hermes 这些子进程正是靠
     它们工作的，摘掉会直接把功能弄坏。它们由 proc.child_env() 在高危路径上单独
     剥离 —— 分层处理，而不是一刀切。"""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")

@@ -38,7 +38,7 @@ UI 里的分区：
 - **数据源** —— Sorftime / SIF / 卖家精灵 的 Key（带连通性测试）
 - **Hermes 兼容模型** —— 仅旧 Hermes 链路使用的主模型 + Fallback 模型
 - **应用模型** —— 全局兜底大模型（兼 AI 问答）+ AI 生图
-- **智能体** —— IvyeaAgent 状态、可选外部 CLI 路径、AI 提供商顺序、自动修复、旧 GBrain Embedding
+- **智能体** —— IvyeaAgent 状态、可选外部 CLI 路径、AI 提供商顺序、自动修复
 - **飞书 / Lark 通知** —— webhook 或自建应用（app_id + app_secret + chat_id）
 - **高级 / 运维** —— CPU 报警阈值、内嵌服务地址、资讯 RSS 源等
 - **账号安全** —— 修改密码（把新哈希写入 hub_settings.json 的 `password_hash`，
@@ -63,34 +63,18 @@ UI 里的分区：
 
 新知识库由 IvyeaAgent 管理，默认文件夹是 `~/.ivyea/knowledge`。右下角 IvyeaAgent 面板支持上传文档、预览导入草稿、确认入库、搜索知识卡和查看最近上传。安装脚本会创建目录并启动本地服务；如果服务暂时没起来，IvyeaOps 的状态检查会自动重试拉起。
 
-### 旧 GBrain 语义检索（embedding）
+### 语义检索（embedding）
 
-旧 `/brain` 兼容入口使用 GBrain。要继续使用它的**语义检索**（措辞不同也能找到相关内容）需要一个 embedding 模型，两条路：
+知识库的语义检索归 IvyeaAgent 自己管，IvyeaOps 这边**不需要配置任何 embedding**。
+以前这里有一组「知识库语义检索」的服务商/模型/Key 设置，它写的是 GBrain 的
+`~/.gbrain/config.json`，对 IvyeaAgent 毫无作用——配了也不生效，纯误导，已移除。
 
-**A. 本地免费 —— Ollama（旧兼容推荐）。** 可在「系统配置 → 系统状态」手动安装 / 修复；手动方式：
+要查看或调整 agent 的检索后端，用它自己的命令：
 
 ```bash
-curl -fsSL https://ollama.com/install.sh | sh
-ollama pull nomic-embed-text          # 768 维，约 274MB
+ivyea retrieval embeddings          # 看当前后端与是否真的生效
+ivyea retrieval embeddings --probe  # 实际编码一次做验证
 ```
-
-然后在 UI：`系统配置 → 智能体 → 知识库语义检索`，选 **Ollama** 保存。
-
-**B. 在线 API。** 在同一面板选服务商（智谱 / 阿里云 DashScope / MiniMax / OpenAI /
-Voyage / Google），填它的 API key。key 写入 `~/.hermes/.env`，
-服务商/模型写入 `~/.gbrain/config.json`。
-
-> **两个坑，UI + 同步逻辑会替你处理，但值得了解：**
-> 1. GBrain 从 `~/.gbrain/config.json` 读 `embedding_model`，格式是
->    `provider:model`（如 `ollama:nomic-embed-text`）。单独用 `gbrain config
->    set` **不行**——它写的是另一个存储。IvyeaOps 的同步会直接写 config.json
->    并自动加上 provider 前缀。
-> 2. pglite 向量列建为 `vector(1536)`（OpenAI 的维度）。换成不同维度的模型
->    （nomic 是 768）需要迁移该列。IvyeaOps 的同步会自动跑迁移；手动用户参考
->    gbrain 包里的 `docs/embedding-migrations.md`。
-
-配置完后给已有笔记做 embedding：`cd ~/brain && gbrain embed --all`，
-再用 `gbrain doctor` 验证（看到 `embedding_provider ✓ DB aligned` 即可）。
 
 ### 取值优先级
 

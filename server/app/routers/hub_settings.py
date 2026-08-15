@@ -20,7 +20,7 @@ router = APIRouter()
 
 _SECRET_KEYS: List[str] = [
     "apimart_key", "sorftime_key", "sif_key", "sellersprite_key",
-    "hermes_api_key", "hermes_fallback_api_key", "gbrain_embed_api_key",
+    "hermes_api_key", "hermes_fallback_api_key",
     "alert_app_secret", "alert_webhook", "openai_api_key",
     "ivyea_agent_token", "ivyea_agent_api_key", "lingxing_mcp_key", "lingxing_openapi_secret",
     "vision_api_key",
@@ -32,7 +32,6 @@ _HERMES_SYNC_KEYS = {
     "hermes_provider", "hermes_model", "hermes_api_key", "hermes_base_url",
     "hermes_fallback_provider", "hermes_fallback_model",
     "hermes_fallback_api_key", "hermes_fallback_base_url",
-    "gbrain_embed_provider", "gbrain_embed_model", "gbrain_embed_api_key",
 }
 
 _IVYEA_AGENT_SYNC_KEYS = {
@@ -181,10 +180,6 @@ async def settings_health(_u: str = Depends(require_user)):
         return {"ok": False, "detail": "未安装 IvyeaAgent"}
 
     imgflow_url = (cfg.get("imgflow_url") or "http://127.0.0.1:3001").rstrip("/")
-    gbrain_bin = cfg.get("gbrain_bin") or ""
-    if not gbrain_bin:
-        gbrain_bin = __import__("os").environ.get("IVYEA_OPS_GBRAIN_BIN", "/usr/local/bin/gbrain")
-
     brain_root = cfg.get("brain_root") or ""
     if not brain_root:
         brain_root = __import__("os").environ.get("IVYEA_OPS_BRAIN_ROOT") or str(Path.home() / "brain")
@@ -192,7 +187,7 @@ async def settings_health(_u: str = Depends(require_user)):
     # Probe the local ollama server directly — the most reliable "installed &
     # running" signal. `shutil.which` alone gives false negatives because the
     # systemd service PATH often omits /usr/local/bin where ollama lives.
-    ollama_host = (cfg.get("gbrain_embed_base_url") or "http://127.0.0.1:11434").rstrip("/")
+    ollama_host = (cfg.get("ollama_base_url") or "http://127.0.0.1:11434").rstrip("/")
     imgflow_result, ollama_http = await asyncio.gather(
         _check_http(imgflow_url + "/"),
         _check_http(ollama_host + "/api/tags", 1.5),
@@ -249,7 +244,6 @@ async def settings_health(_u: str = Depends(require_user)):
         "apimart":   _check_key("apimart_key", "API Key 已设置"),
         "sorftime":  _check_key("sorftime_key", "API Key 已设置"),
         "imgflow":   imgflow_result,
-        "gbrain_bin": _check_bin(gbrain_bin),
         "ollama": _check_ollama(),
         "brain_root": {
             "ok": Path(brain_root).exists(),
