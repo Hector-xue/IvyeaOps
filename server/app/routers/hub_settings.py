@@ -1,7 +1,6 @@
 """GET /api/settings  ·  PATCH /api/settings  ·  GET /api/settings/health"""
 from __future__ import annotations
 
-import asyncio
 import logging
 from pathlib import Path
 from typing import Any, Dict, List
@@ -184,31 +183,14 @@ async def settings_health(_u: str = Depends(require_user)):
     if not brain_root:
         brain_root = __import__("os").environ.get("IVYEA_OPS_BRAIN_ROOT") or str(Path.home() / "brain")
 
-    # Probe the local ollama server directly — the most reliable "installed &
-    # running" signal. `shutil.which` alone gives false negatives because the
-    # systemd service PATH often omits /usr/local/bin where ollama lives.
-    ollama_host = (cfg.get("ollama_base_url") or "http://127.0.0.1:11434").rstrip("/")
-    imgflow_result, ollama_http = await asyncio.gather(
-        _check_http(imgflow_url + "/"),
-        _check_http(ollama_host + "/api/tags", 1.5),
-    )
+    # 曾经这里还探一个本地 ollama —— 那是给 GBrain 的 embedding 用的
+    # （安装按钮拉的就是 `ollama pull nomic-embed-text`）。GBrain 已整体摘除，
+    # IvyeaAgent 的语义检索是随包自带的 ONNX 模型，装完即用、不需要任何服务，
+    # 所以这一项连同它的状态行、安装按钮和 `ollama_base_url` 配置一起去掉了。
+    # （Ollama 作为**本地大模型 provider** 仍然可用，那是另一回事，见首启向导。）
+    imgflow_result = await _check_http(imgflow_url + "/")
 
     from app.core import integrations as _integ
-
-    def _check_ollama() -> Dict[str, Any]:
-        if ollama_http.get("ok"):
-            return {"ok": True, "detail": f"运行中 · {ollama_host}"}
-        import shutil
-        found = shutil.which("ollama")
-        if not found:
-            cands = [
-                *(f"{d}/ollama" for d in _integ.extra_path_dirs()),
-                "/usr/local/bin/ollama",
-                str(Path.home() / ".local" / "bin" / "ollama"),
-                str(Path.home() / "AppData" / "Local" / "Programs" / "Ollama" / "ollama.exe"),
-            ]
-            found = next((c for c in cands if Path(c).exists()), None)
-        return {"ok": True, "detail": f"已安装 · {found}"} if found else {"ok": False, "detail": "未安装"}
 
     def _vision_detail(tier: int, label: str) -> str:
         """把档位说成人话——重点是让 T3 的用户知道"能用，只是少了什么"。"""
@@ -263,7 +245,6 @@ async def settings_health(_u: str = Depends(require_user)):
         "apimart":   _check_key("apimart_key", "API Key 已设置"),
         "sorftime":  _check_key("sorftime_key", "API Key 已设置"),
         "imgflow":   imgflow_result,
-        "ollama": _check_ollama(),
         "brain_root": {
             "ok": Path(brain_root).exists(),
             "detail": brain_root if Path(brain_root).exists() else f"目录不存在：{brain_root}",

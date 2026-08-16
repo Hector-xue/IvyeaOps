@@ -50,7 +50,7 @@ _INSTALLABLE: dict[str, str] = {
     "codex":  "@openai/codex",
     "claude": "@anthropic-ai/claude-code",
 }
-_COMPONENTS = {"ivyea-agent", "legacy", "hermes", "ollama", "codex", "claude", "all"}
+_COMPONENTS = {"ivyea-agent", "legacy", "hermes", "codex", "claude", "all"}
 _LATEST_RELEASE_API = "https://api.github.com/repos/Hector-xue/IvyeaOps/releases/latest"
 
 
@@ -94,10 +94,6 @@ def setup_status(_u: str = Depends(require_user)):
     agents_found = {name: bool(_find_bin(name)) for name in RUNNER_ORDER}
     ivyea_found = bool(_ivyea_bin())
     agents_found["ivyea-agent"] = ivyea_found
-    agents_found["ollama"] = bool(
-        shutil.which("ollama")
-        or (Path.home() / "AppData" / "Local" / "Programs" / "Ollama" / "ollama.exe").exists()
-    )
     any_agent_found = ivyea_found or any(agents_found.get(name) for name in RUNNER_ORDER)
     apimart_set: bool = bool(cfg.get("apimart_key"))
 
@@ -484,8 +480,6 @@ async def _component_install_stream(component: str) -> AsyncGenerator[str, None]
         cmd = ["bash", "-lc", _ivyea_install_shell(root)]
     elif component in {"legacy", "hermes"}:
         cmd = ["bash", "-lc", "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash"]
-    elif component == "ollama":
-        cmd = ["bash", "-lc", "command -v ollama >/dev/null || curl -fsSL https://ollama.com/install.sh | sh; ollama pull nomic-embed-text"]
     elif component in _INSTALLABLE:
         async for event in _npm_install_stream(component, _INSTALLABLE[component]):
             yield event
