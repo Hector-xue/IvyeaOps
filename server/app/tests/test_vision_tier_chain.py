@@ -253,3 +253,69 @@ def test_vision_payload_reads_the_settings_passed_in(monkeypatch):
     got = _agent_vision_payload({"vision_provider": "openai", "vision_api_key": "sk-x",
                                  "vision_model": "gpt-4o"})
     assert got["model"] == "gpt-4o"
+
+
+# ── agent 更新链路：装 release tag，不装 main ─────────────────────────────
+
+def test_upgrade_agent_installs_the_release_tag_not_main(monkeypatch, tmp_path):
+    """点「更新」必须装**最新 release tag**。
+
+    旧实现回退 `git+…@main`：和「有新版本」的提示对不上（提示比的是 release
+    tag），还会把未发布代码推给用户。发行流水线 release.yml 早就刻意拒绝回退
+    main，更新链路却一直在这么干。
+    """
+    from app.services import ivyea_agent_service as svc
+
+    steps: list[list[str]] = []
+    monkeypatch.delenv("IVYEA_AGENT_REF", raising=False)
+    monkeypatch.setattr(svc, "_find_ivyea_cli", lambda: "/usr/bin/ivyea")
+    monkeypatch.setattr(svc, "_venv_python", lambda cli: "/usr/bin/python3")
+    monkeypatch.setattr(svc, "_installed_agent_version", lambda py: "1.12.0")
+    monkeypatch.setattr(svc, "latest_agent_version", lambda: "v1.13.1")
+    monkeypatch.setattr(svc, "start_local_service", lambda: {"ok": True})
+    # `ivyea self update` 失败 → 走 pip 回退分支，正是要盯的那条
+    monkeypatch.setattr(svc, "_run_step",
+                        lambda cmd, timeout=300.0: steps.append(cmd) or {"cmd": " ".join(cmd[:3]),
+                                                                         "returncode": 1, "stdout": "", "stderr": "x"})
+    svc.upgrade_agent()
+
+    pip_steps = [c for c in steps if "pip" in " ".join(c)]
+    assert pip_steps, steps
+    flat = " ".join(pip_steps[0])
+    assert "@v1.13.1" in flat, flat
+    assert "@main" not in flat, flat
+    # 版本之间会新增依赖（1.13.0 加了 Pillow / rapidocr）；--no-deps 会让升级
+    # "成功"但新功能装完即坏，且坏得很安静。
+    assert "--no-deps" not in flat, flat
+
+
+def test_upgrade_agent_aborts_when_release_unresolved(monkeypatch):
+    """解析不出 release 时中止，绝不悄悄退回 main。"""
+    from app.services import ivyea_agent_service as svc
+
+    monkeypatch.delenv("IVYEA_AGENT_REF", raising=False)
+    monkeypatch.setattr(svc, "_find_ivyea_cli", lambda: "/usr/bin/ivyea")
+    monkeypatch.setattr(svc, "_venv_python", lambda cli: "/usr/bin/python3")
+    monkeypatch.setattr(svc, "latest_agent_version", lambda: "")
+
+    res = svc.upgrade_agent()
+    assert res["ok"] is False
+    assert res["error"] == "agent_release_unresolved"
+
+
+def test_upgrade_agent_honours_an_explicit_ref(monkeypatch):
+    """IVYEA_AGENT_REF 仍然是逃生门（回滚 / 装未发布分支自测）。"""
+    from app.services import ivyea_agent_service as svc
+
+    steps: list[list[str]] = []
+    monkeypatch.setenv("IVYEA_AGENT_REF", "v1.9.9")
+    monkeypatch.setattr(svc, "_find_ivyea_cli", lambda: "/usr/bin/ivyea")
+    monkeypatch.setattr(svc, "_venv_python", lambda cli: "/usr/bin/python3")
+    monkeypatch.setattr(svc, "_installed_agent_version", lambda py: "1.12.0")
+    monkeypatch.setattr(svc, "latest_agent_version", lambda: "v1.13.1")
+    monkeypatch.setattr(svc, "start_local_service", lambda: {"ok": True})
+    monkeypatch.setattr(svc, "_run_step",
+                        lambda cmd, timeout=300.0: steps.append(cmd) or {"cmd": "x", "returncode": 1,
+                                                                         "stdout": "", "stderr": ""})
+    svc.upgrade_agent()
+    assert any("@v1.9.9" in " ".join(c) for c in steps), steps

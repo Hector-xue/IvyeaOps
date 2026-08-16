@@ -242,8 +242,22 @@ if [ ! -x "$IVYEA_AGENT_BIN" ]; then
     info "  从本地源码安装 IvyeaAgent：$IVYEA_AGENT_SOURCE"
     "$VENV_PY" -m pip install -e "$IVYEA_AGENT_SOURCE" $PIP_MIRROR
   else
-    IVYEA_AGENT_REF="${IVYEA_AGENT_REF:-main}"
     IVYEA_AGENT_REPO="${IVYEA_AGENT_REPO:-https://github.com/Hector-xue/ivyea-agent.git}"
+    # 默认装**最新 release tag**，不是 main。装 main 等于把未发布代码推给用户，
+    # 而且和「有新版本」的提示对不上（那个提示比的就是 release tag）。
+    # 取不到时这里**不像更新流程那样直接失败** —— 安装是从零开始，硬失败会把人
+    # 挡在门外；但必须大声说清楚退到了 main，不能悄悄退。
+    if [ -z "${IVYEA_AGENT_REF:-}" ]; then
+      IVYEA_AGENT_REF="$(curl -fsSL --max-time 8 \
+        -H 'Accept: application/vnd.github+json' \
+        https://api.github.com/repos/Hector-xue/ivyea-agent/releases/latest 2>/dev/null \
+        | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+      if [ -z "$IVYEA_AGENT_REF" ]; then
+        IVYEA_AGENT_REF="main"
+        warn "  取不到 IvyeaAgent 的最新 release（网络？），改用 main 分支 —— 这是**未发布代码**。"
+        warn "  网络恢复后建议重装到正式版：IVYEA_AGENT_REF=vX.Y.Z 重跑本脚本。"
+      fi
+    fi
     info "  从 Git 安装 IvyeaAgent：$IVYEA_AGENT_REPO@$IVYEA_AGENT_REF"
     "$VENV_PY" -m pip install "git+$IVYEA_AGENT_REPO@$IVYEA_AGENT_REF" $PIP_MIRROR || \
       warn "IvyeaAgent 自动安装失败；可稍后设置 IVYEA_AGENT_LOCAL=/path/to/ivyea-agent 后重跑安装脚本。"

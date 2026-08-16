@@ -224,7 +224,22 @@ try {
             & $VenvPy -m pip install -q @PipMirror -e $IvyeaAgentSource
         } else {
             $IvyeaAgentRepo = if ($env:IVYEA_AGENT_REPO) { $env:IVYEA_AGENT_REPO } else { "https://github.com/Hector-xue/ivyea-agent.git" }
-            $IvyeaAgentRef = if ($env:IVYEA_AGENT_REF) { $env:IVYEA_AGENT_REF } else { "main" }
+            # 默认装**最新 release tag**，不是 main：装 main 等于把未发布代码推给
+            # 用户，且和「有新版本」的提示对不上（那个提示比的就是 release tag）。
+            # 取不到时不硬失败（安装是从零开始，挡住人不合适），但要大声说清楚。
+            $IvyeaAgentRef = $env:IVYEA_AGENT_REF
+            if ([string]::IsNullOrWhiteSpace($IvyeaAgentRef)) {
+                try {
+                    $rel = Invoke-RestMethod -TimeoutSec 8 -Headers @{ "User-Agent" = "IvyeaOps" } `
+                        -Uri "https://api.github.com/repos/Hector-xue/ivyea-agent/releases/latest"
+                    $IvyeaAgentRef = $rel.tag_name
+                } catch { $IvyeaAgentRef = $null }
+            }
+            if ([string]::IsNullOrWhiteSpace($IvyeaAgentRef)) {
+                $IvyeaAgentRef = "main"
+                Write-Warn "  取不到 IvyeaAgent 的最新 release（网络？），改用 main 分支 —— 这是**未发布代码**。"
+                Write-Warn "  网络恢复后建议重装到正式版：`$env:IVYEA_AGENT_REF='vX.Y.Z' 后重跑本脚本。"
+            }
             Write-Info "  从 Git 安装 IvyeaAgent：$IvyeaAgentRepo@$IvyeaAgentRef"
             & $VenvPy -m pip install -q @PipMirror "git+$IvyeaAgentRepo@$IvyeaAgentRef"
         }

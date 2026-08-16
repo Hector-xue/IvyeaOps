@@ -160,6 +160,35 @@ jobs:
         run: python ../scripts/ci_migrate_verify.py
         env: { PYTHONUTF8: "1" }
 
+  powershell-syntax:
+    # Windows 安装脚本此前**没有任何门禁** —— 改坏了只有用户装的时候才会发现，
+    # 而那时候他连 IvyeaOps 都还没跑起来，报错也回不到我们这里。
+    # 这里只做解析（不执行），足够挡住语法错、引号/花括号不配平、
+    # 反引号续行后带了尾随空格这类静默断行。
+    name: PowerShell 脚本语法门禁
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 解析全部 .ps1
+        shell: pwsh
+        run: |
+          $bad = 0
+          Get-ChildItem -Recurse -Filter *.ps1 |
+            Where-Object { $_.FullName -notmatch '\\node_modules\\' } |
+            ForEach-Object {
+              $errors = $null
+              [System.Management.Automation.Language.Parser]::ParseFile(
+                $_.FullName, [ref]$null, [ref]$errors) | Out-Null
+              if ($errors -and $errors.Count -gt 0) {
+                $bad++
+                Write-Host "::error file=$($_.FullName)::$($errors.Count) 处语法错误"
+                $errors | ForEach-Object { Write-Host "  行 $($_.Extent.StartLineNumber): $($_.Message)" }
+              } else {
+                Write-Host "ok  $($_.Name)"
+              }
+            }
+          if ($bad -gt 0) { exit 1 }
+
   client:
     name: client build + typecheck
     runs-on: ubuntu-latest

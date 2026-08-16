@@ -128,7 +128,9 @@ Set-Location $repoDir
 if (!(Test-Path ".env")) {
     $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
     $pass = -join (1..12 | ForEach-Object { $chars[(Get-Random -Maximum $chars.Length)] })
-    "ADMIN_PASSWORD=*** | "PORT=8080" | Set-Content .env
+    # 两行写进 .env：ADMIN_PASSWORD 由 config 自动 bcrypt 成 hash；
+    # PORT 给 docker-compose 用（"${PORT:-8080}:80"），不是给应用读的。
+    "ADMIN_PASSWORD=$pass", "PORT=8080" | Set-Content .env
     Write-Status "Created .env" "ok"
     Write-Host ""
     Write-Host "  ╔═══════════════════════════════════════╗" -ForegroundColor Yellow
