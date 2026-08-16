@@ -302,6 +302,20 @@ def ensure_db_ready() -> dict[str, Any]:
     return res
 
 
+def installed() -> bool:
+    """本机到底有没有 GBrain 这个外部二进制。
+
+    GBrain 正在被完全摘除：知识库的前门是 IvyeaAgent，历史数据也早已整批导入
+    （agent 里那些 `user.gbrain.*` / `category: legacy_gbrain` 的卡片就是）。
+    这个探测让所有旧路径变成**可选**——没装就干净地跳过，而不是抛一堆
+    "gbrain 不存在"的错，或者更糟：明明 agent 在线，却还去起一次外部进程。
+    """
+    try:
+        return _gbrain_cmd() is not None
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def ensure_ready() -> dict[str, Any]:
     """确认本地库是否就绪，**不再自作主张地装配任何东西**。
 

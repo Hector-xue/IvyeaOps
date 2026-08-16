@@ -84,18 +84,83 @@ def _ivyea_front_door() -> bool:
 
 
 def _ia_search(query: str, mode: str) -> dict[str, Any]:
-    res = ia.knowledge_search(query, limit=12)
-    items: list[dict[str, Any]] = []
-    for r in (res.get("results") or []):
-        items.append({
-            "slug": r.get("id"),
-            "score": r.get("score", 0),
-            "snippet": r.get("snippet") or "",
-            "title": r.get("title") or "",
-            "source_url": r.get("source_url") or "",
-            "marketplaces": r.get("marketplaces") or [],
-        })
-    return {"mode": mode, "query": query, "raw": "", "items": items, "source": "ivyea-agent"}
+    # 适配器下沉到 brain_chat_service：搜索端点和对话引用检索必须用**同一个**，
+    # 否则又会出现"搜索走 agent、引用走 GBrain"这种一半迁完的状态。
+    return bc.ia_search(query, mode)
+
+
+def _ia_stats() -> dict[str, Any]:
+    """知识库统计，取自 IvyeaAgent 的 /health（卡片数）+ retrieval 状态。
+
+    字段名沿用 GBrain 那套（前端已经在读），值换成 agent 的真实数字。
+    """
+    health = (ia.availability().get("health") or {})
+    know = health.get("knowledge") or {}
+    retr = health.get("retrieval") or {}
+    return {
+        "documents": int(know.get("cards") or 0),
+        "user_documents": int(know.get("user_cards") or 0),
+        "chunks": int(retr.get("knowledge_cards") or know.get("cards") or 0),
+        "sources": retr.get("sources") or [],
+        "mode": retr.get("mode") or "",
+    }
+
+
+def _ia_doctor() -> dict[str, Any]:
+    """把 agent 的检索/嵌入就绪状态整理成体检报告。
+
+    GBrain 的 `doctor` 检的是它自己那套（pglite 库、embedding provider、
+    git 仓状态）。摘除之后这里改检真正在用的东西：agent 是否在线、语义检索
+    后端是否就绪、知识库有没有内容。
+    """
+    checks: list[dict[str, Any]] = []
+    avail = ia.availability()
+    online = bool(avail.get("available"))
+    checks.append({"name": "IvyeaAgent 服务", "status": "ok" if online else "fail",
+                   "detail": avail.get("base_url") or "",
+                   "fix": "" if online else "启动本地 IvyeaAgent 服务（systemctl start ivyea-agent）"})
+    emb: dict[str, Any] = {}
+    if online:
+        try:
+            emb = (ia.retrieval_embeddings().get("embeddings") or {})
+        except Exception:  # noqa: BLE001
+            emb = {}
+    semantic = bool(emb.get("semantic_enabled"))
+    checks.append({"name": "语义检索", "status": "ok" if semantic else "warn",
+                   "detail": f"backend={emb.get('active_backend') or '-'}",
+                   "fix": "" if semantic else "检查 IvyeaAgent 的 retrieval embeddings 配置"})
+    cards = int(((avail.get("health") or {}).get("knowledge") or {}).get("cards") or 0)
+    checks.append({"name": "知识卡片", "status": "ok" if cards else "warn",
+                   "detail": f"{cards} 张", "fix": "" if cards else "上传文档或同步知识库"})
+    bad = [c for c in checks if c["status"] == "fail"]
+    return {"status": "fail" if bad else "ok", "checks": checks, "source": "ivyea-agent"}
+
+
+def _ia_overview() -> dict[str, Any]:
+    emb: dict[str, Any] = {}
+    try:
+        emb = (ia.retrieval_embeddings().get("embeddings") or {})
+    except Exception:  # noqa: BLE001
+        emb = {}
+    doctor_status = "unknown"
+    try:
+        doctor_status = str(_ia_doctor().get("status") or "unknown")
+    except Exception:  # noqa: BLE001
+        pass
+    return {
+        "brain_root": str(gb.BRAIN_ROOT),
+        "gbrain_bin": "",                     # 已摘除：知识库不再依赖外部二进制
+        "openai_configured": bool(emb.get("semantic_enabled")),   # 兼容旧键
+        "embed_configured": bool(emb.get("semantic_enabled")),
+        "embed_provider": str(emb.get("active_backend") or ""),
+        "embed_model": str(emb.get("api_model") or "内置 bge-small-zh (ONNX int8)"),
+        "search_mode": "local_hybrid_lexical_vector",
+        "doctor_status": doctor_status,
+        "git_dirty": False,
+        "git_status": "",
+        "stats": _ia_stats(),
+        "source": "ivyea-agent",
+    }
 
 
 def _ia_page(slug: str) -> dict[str, Any]:
@@ -292,9 +357,15 @@ def overview() -> dict[str, Any]:
         ready = gb.ensure_ready()
     except Exception as e:  # noqa: BLE001 — never let self-heal break the board
         ready = {"db_ready": False, "version_compatible": True, "actions": [], "hint": str(e)}
-    if not ready.get("db_ready"):
+    # 前门：IvyeaAgent。GBrain 装没装都不影响这个面板能用 —— 摘除 GBrain 的目标
+    # 就是让 /brain 在**只有 agent**的机器上完整工作。
+    if _ivyea_front_door():
+        ov = _ia_overview()
+        ov["ready"] = ready
+        return ov
+    if not gb.installed() or not ready.get("db_ready"):
         return {"ready": ready, "embed_configured": False, "stats": {},
-                "brain_root": "", "gbrain_bin": "", "doctor_status": "not_ready",
+                "brain_root": str(gb.BRAIN_ROOT), "gbrain_bin": "", "doctor_status": "not_ready",
                 "search_mode": "unknown", "git_dirty": False, "git_status": ""}
     ov = _handle(gb.overview)
     ov["ready"] = ready
@@ -303,11 +374,20 @@ def overview() -> dict[str, Any]:
 
 @router.get("/stats")
 def stats() -> dict[str, Any]:
+    if _ivyea_front_door():
+        return _ia_stats()
+    if not gb.installed():
+        return {"documents": 0, "chunks": 0, "source": "unavailable"}
     return _handle(gb.stats)
 
 
 @router.get("/doctor")
 def doctor() -> dict[str, Any]:
+    if _ivyea_front_door():
+        return _ia_doctor()
+    if not gb.installed():
+        return {"status": "unavailable", "checks": [],
+                "hint": "IvyeaAgent 未连接，且本机未安装 GBrain。"}
     return _handle(gb.doctor)
 
 
@@ -326,8 +406,16 @@ def get_page(slug: str) -> dict[str, Any]:
     if _ivyea_front_door():
         try:
             return _ia_page(slug)
-        except Exception:  # noqa: BLE001 — degrade to legacy GBrain page
+        except ia.IvyeaAgentNotFound as e:
+            # 卡片不存在是**正常答复**，不是 agent 故障 —— 不能拿它当理由去回退
+            # 已被摘除的 GBrain（那会让"没这张卡"变成"起一个外部进程"）。
+            if not gb.installed():
+                # agent 的报错里 slug 是 URL 编码的，直接透出来用户读不懂。
+                raise HTTPException(status_code=404, detail="页面不存在。") from e
+        except Exception:  # noqa: BLE001 — agent 真故障时才降级到旧 GBrain 页面
             logger.debug("_ia_page 失败（旁路，已忽略）", exc_info=True)
+    if not gb.installed():
+        raise HTTPException(status_code=404, detail="页面不存在。")
     return _handle(gb.get_page, slug)
 
 
@@ -336,8 +424,16 @@ def get_page_post(body: PageBody) -> dict[str, Any]:
     if _ivyea_front_door():
         try:
             return _ia_page(body.slug)
-        except Exception:  # noqa: BLE001 — degrade to legacy GBrain page
+        except ia.IvyeaAgentNotFound as e:
+            # 卡片不存在是**正常答复**，不是 agent 故障 —— 不能拿它当理由去回退
+            # 已被摘除的 GBrain（那会让"没这张卡"变成"起一个外部进程"）。
+            if not gb.installed():
+                # agent 的报错里 slug 是 URL 编码的，直接透出来用户读不懂。
+                raise HTTPException(status_code=404, detail="页面不存在。") from e
+        except Exception:  # noqa: BLE001 — agent 真故障时才降级到旧 GBrain 页面
             logger.debug("_ia_page 失败（旁路，已忽略）", exc_info=True)
+    if not gb.installed():
+        raise HTTPException(status_code=404, detail="页面不存在。")
     return _handle(gb.get_page, body.slug)
 
 
@@ -409,11 +505,20 @@ def delete_file(path: str = Query(..., min_length=1, max_length=240), user: str 
 
 @router.post("/import")
 def import_brain() -> dict[str, Any]:
-    return _handle(gb.import_brain)
+    """重建检索索引。前门是 IvyeaAgent 的 retrieval sync。"""
+    status, raw = bc.reindex_after_save()
+    if status.startswith("failed"):
+        raise HTTPException(status_code=502, detail=status)
+    return {"ok": True, "status": status, "raw": raw}
 
 
 @router.get("/git/status")
 def git_status() -> dict[str, str]:
+    # GBrain 把知识库存成一个 git 仓，这个端点是给它的"未提交改动"提示用的。
+    # IvyeaAgent 的知识库有自己的版本与变更台账（/v1/knowledge/versions、
+    # /v1/knowledge/changes），不走 git —— 所以摘除之后这里恒为干净。
+    if _ivyea_front_door() or not gb.installed():
+        return {"dirty": "", "status": ""}
     return _handle(gb.git_status)
 
 

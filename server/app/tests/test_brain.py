@@ -230,3 +230,101 @@ def test_chat_model_status_does_not_leak_keys(client):
     r = c.get("/api/brain/chat/status")
     assert r.status_code == 200, r.text
     assert "api_key" not in r.text.lower()
+
+
+# ── GBrain 摘除：/brain 必须在「只有 IvyeaAgent」的机器上完整工作 ──────────
+
+def _kill_gbrain(monkeypatch):
+    """把 GBrain 变成"本机根本没装"，且任何触碰二进制的调用都当场炸。"""
+    from app.services import gbrain_service as gb
+    monkeypatch.setattr(gb, "installed", lambda: False)
+    monkeypatch.setattr(gb, "_gbrain_cmd", lambda: None)
+
+    def boom(*a, **k):
+        raise AssertionError("触碰了已摘除的 GBrain 二进制")
+
+    for fn in ("search", "overview", "stats", "doctor", "get_page",
+               "import_brain", "git_status", "ensure_db_ready"):
+        monkeypatch.setattr(gb, fn, boom)
+    return gb
+
+
+def test_citations_use_the_agent_not_gbrain(monkeypatch):
+    """对话引用检索此前**完全没有 ivyea 分支** —— agent 明明是前门、数据也早已
+    整批导入，每次对话还要起一次外部二进制查一遍，agent 内部又查一遍。"""
+    from app.services import brain_chat_service as bc
+    _kill_gbrain(monkeypatch)
+    monkeypatch.setattr(bc, "ivyea_chat_available", lambda: True)
+    monkeypatch.setattr(bc, "ia_search", lambda q, m="search", limit=12: {
+        "items": [{"slug": "k1", "title": "否词", "snippet": "s", "category": "amazon_ads"}]})
+
+    cites = bc._search_citations("广告怎么优化否词")
+    assert [c["slug"] for c in cites] == ["k1"]
+
+
+def test_citations_respect_category_scope(monkeypatch):
+    from app.services import brain_chat_service as bc
+    _kill_gbrain(monkeypatch)
+    monkeypatch.setattr(bc, "ivyea_chat_available", lambda: True)
+    monkeypatch.setattr(bc, "ia_search", lambda q, m="search", limit=12: {
+        "items": [{"slug": "a", "category": "amazon_ads"},
+                  {"slug": "b", "category": "policies"}]})
+
+    assert [c["slug"] for c in bc._search_citations("x", "amazon_ads")] == ["a"]
+    assert bc._search_citations("x", "不存在") == []
+
+
+def test_citations_return_empty_when_nothing_available(monkeypatch):
+    """agent 不可用 + 没装 GBrain → 干净地返回空，不抛错、不留"检索失败"假引用。"""
+    from app.services import brain_chat_service as bc
+    _kill_gbrain(monkeypatch)
+    monkeypatch.setattr(bc, "ivyea_chat_available", lambda: False)
+    assert bc._search_citations("随便问点什么") == []
+
+
+def test_legacy_gbrain_category_is_recovered():
+    """从 GBrain 导入的卡片在 agent 里统一是 legacy_gbrain，原分类藏在
+    source_url / path 里。不还原的话按分类过滤会把历史卡片全滤掉。"""
+    from app.services import brain_chat_service as bc
+    assert bc._legacy_category(
+        {"source_url": "gbrain://amazon/ads/2026-06-10-x", "category": "legacy_gbrain"}) == "amazon"
+    assert bc._legacy_category(
+        {"path": "user/imported/gbrain/ops/notes/a.md", "category": "legacy_gbrain"}) == "ops"
+    assert bc._legacy_category({"category": "amazon_ads"}) == "amazon_ads"
+
+
+def test_reindex_prefers_the_agent(monkeypatch):
+    from app.services import brain_chat_service as bc
+    _kill_gbrain(monkeypatch)
+    monkeypatch.setattr(bc, "ivyea_chat_available", lambda: True)
+    import app.services.ivyea_agent_service as ia_mod
+    monkeypatch.setattr(ia_mod, "retrieval_sync", lambda: {"ok": True})
+    status, raw = bc.reindex_after_save()
+    assert status == "ok" and "ivyea-agent" in raw
+
+
+def test_reindex_without_any_backend_is_not_a_failure(monkeypatch):
+    """文件已经落到 BRAIN_ROOT，agent 下次同步会捡到 —— 不该报成失败吓用户。"""
+    from app.services import brain_chat_service as bc
+    _kill_gbrain(monkeypatch)
+    monkeypatch.setattr(bc, "ivyea_chat_available", lambda: False)
+    assert bc.reindex_after_save() == ("skipped", "")
+
+
+def test_missing_page_is_a_404_not_a_gbrain_fallback(monkeypatch):
+    """"卡片不存在"是 agent 的**正常答复**，不是故障 —— 不能拿它当理由去回退
+    已被摘除的 GBrain。"""
+    from fastapi import HTTPException
+    from app.routers import brain as B
+    from app.services import ivyea_agent_service as ia_mod
+    _kill_gbrain(monkeypatch)
+    monkeypatch.setattr(B, "_ivyea_front_door", lambda: True)
+
+    def not_found(_slug):
+        raise ia_mod.IvyeaAgentNotFound("IvyeaAgent HTTP 404: 知识卡不存在")
+
+    monkeypatch.setattr(B, "_ia_page", not_found)
+    with pytest.raises(HTTPException) as ei:
+        B.get_page("nope")
+    assert ei.value.status_code == 404
+    assert "页面不存在" in str(ei.value.detail)   # 不透出 URL 编码的原始报错
