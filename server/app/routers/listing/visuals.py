@@ -20,7 +20,9 @@ from pydantic import BaseModel
 
 from app.core.security import require_user
 
-from .ai import _call_ai, _collect_vision, has_vision
+from .ai import (
+    _call_ai, _collect_vision, has_semantic_vision, has_vision, vision_tier, vision_tier_label,
+)
 from .common import (
     IMAGES_DIR, _approved_copy, _build_product_context, _cached_white_product_source,
     _clean_text, _copy_source, _db, _detect_white_product_source, _fetch_image_bytes,
@@ -716,17 +718,38 @@ def _normalise_product_visual_profile(value: dict, fallback: dict) -> dict:
         items = value.get(key)
         if isinstance(items, list):
             cleaned = [_clean_text(item)[:220] for item in items if _clean_text(item)]
-            if cleaned:
-                result[key] = cleaned[:10]
+            # 去重（保序、大小写不敏感）。模型很容易在 supporting_palette 这种
+            # "给我五个颜色"的位置吐出重复值——实测出过 [白,白,红,红,黑]，
+            # 于是生图的背景/承载面/辅助/强调/深中性五个槽位塌成三种颜色，
+            # 整套图的层次直接没了。
+            seen: set[str] = set()
+            deduped = []
+            for item in cleaned:
+                fold = item.strip().lower()
+                if fold in seen:
+                    continue
+                seen.add(fold)
+                deduped.append(item)
+            if deduped:
+                result[key] = deduped[:10]
     return result
 
 
 async def _analyze_product_visual_identity(
     scrape_data: dict, product_context: str, white_source: str,
 ) -> dict:
-    """Stage 1 of visual planning: understand this product before designing shots."""
+    """Stage 1 of visual planning: understand this product before designing shots.
+
+    三档视觉下的行为：
+      T1/T2（真看得见画面）→ 完整视觉分析，产出全部字段。
+      T3（只有本地 CV 读数）→ 照样跑，但走 CV 专用 prompt：只让模型从**测量读数**
+        推可推的（配色、形态尺度、比例），其余保留 fallback，并标 source=local_cv。
+      无视觉 → fallback。
+    此前只有"有/无"两分支，主脑一是纯文本模型就整块 return fallback。
+    """
     fallback = _fallback_product_visual_profile(product_context)
     if not has_vision():
+        fallback["source"] = "fallback_no_vision"
         return fallback
 
     candidates: list[str] = []
@@ -756,7 +779,36 @@ async def _analyze_product_visual_identity(
         if data_uri and data_uri not in images:
             images.append(data_uri)
     if not images:
+        fallback["source"] = "fallback_no_images"
         return fallback
+
+    if not has_semantic_vision():
+        # T3：模型拿到的是本地 CV 读数（尺寸/白底/主体占比/主色板/OCR 文本），
+        # 不是画面。只准从读数推可推的，其余留空由 fallback 兜——让它照着读数
+        # 编"这是个什么产品"会污染后面整条生图链。
+        prompt = f"""你正在做电商视觉总监流程的第 1 阶段。你**没有**看到图片本身，
+只拿到了对图片的客观测量读数（尺寸、白底判定、主体占比与偏移、k-means 主色板、OCR 文本）。
+
+产品文字资料：
+{product_context[:9000]}
+
+只返回 JSON。**只填你能从测量读数或产品文字资料确证的字段，其余一律填空数组或空字符串**：
+{{"product_colours":["从主色板里挑出属于产品本身（非背景）的颜色，用 #RRGGBB"],
+"supporting_palette":["基于产品色推导的五个 #RRGGBB：背景、承载面、辅助色、强调色、深中性色"],
+"form_and_scale":"只在产品文字资料明确写了形态/尺寸时填写，否则填空字符串",
+"category_family":"只在产品文字资料明确写了品类时填写，否则填空字符串",
+"materials_and_finish":[],"fidelity_anchors":[],"natural_interactions":[],
+"scene_families":[],"visual_opportunities":[],"avoid":[]}}
+
+严禁根据颜色或占比数字猜测产品是什么、材质是什么、画面里有什么。猜不出来就留空。"""
+        try:
+            parsed = _strip_json(await _collect_vision(prompt, images)) or {}
+        except Exception:
+            parsed = {}
+        profile = _normalise_product_visual_profile(parsed, fallback)
+        profile["source"] = "local_cv"
+        profile["vision_tier"] = vision_tier()
+        return profile
 
     prompt = f"""You are stage 1 of an ecommerce visual-director pipeline. Analyze the PHYSICAL PRODUCT before any gallery is designed.
 Image 1 is the white-background product truth when available. Other images are evidence of use and features only.
@@ -782,7 +834,32 @@ Do not design image slots, do not copy the collected gallery's composition, and 
         parsed = _strip_json(await _collect_vision(prompt, images)) or {}
     except Exception:
         parsed = {}
-    return _normalise_product_visual_profile(parsed, fallback)
+    profile = _normalise_product_visual_profile(parsed, fallback)
+    profile["source"] = "vision"
+    profile["vision_tier"] = vision_tier()
+    return profile
+
+
+def _note_skipped_analysis(scrape_data: dict, stage: str, code: str, message: str) -> None:
+    """记下"这一步因为能力不足被跳过了"，挂在 scrape_data 上带出去。
+
+    **为什么必须留痕**：跳过本身是合理降级，但静默跳过不是——用户看到的是一份
+    少了版式参考的方案，却完全不知道少了什么、为什么少、怎么补。这正是此前
+    `if not has_vision(): return []` 造成的体验：功能像坏了，没有任何解释。
+    """
+    if not isinstance(scrape_data, dict):
+        return
+    notes = scrape_data.setdefault("_analysis_notes", [])
+    if any(n.get("stage") == stage for n in notes):
+        return
+    notes.append({"stage": stage, "code": code, "message": message, "severity": "info"})
+
+
+def _analysis_notes(scrape_data: dict) -> list[dict]:
+    if not isinstance(scrape_data, dict):
+        return []
+    notes = scrape_data.get("_analysis_notes")
+    return list(notes) if isinstance(notes, list) else []
 
 
 _VISION_BATCH = 4
@@ -795,8 +872,23 @@ async def _analyze_reference_templates(scrape_data: dict) -> list[dict]:
     品牌与文案。产出喂给策划器作参考语法，并可为对应卡绑定 template_url 走
     双参考生图（REFERENCE 2 = 仅版式模板）。
     """
-    refs = _reference_images(scrape_data)[:8]
-    if len(refs) < 4 or not has_vision():
+    all_refs = _reference_images(scrape_data)
+    refs = all_refs[:8]
+    if len(all_refs) < 4:
+        # 采集图太少不算能力问题，只在确实采到过图时提示；一张都没采到时
+        # 用户本来就知道，再报一条只是噪音。
+        if all_refs:
+            _note_skipped_analysis(scrape_data, "reference_templates", "reference_images_too_few",
+                                   f"参考图仅 {len(all_refs)} 张，不足 4 张，竞品版式逆向已跳过。")
+        return []
+    if not has_semantic_vision():
+        # 版式逆向要求真正看懂画面（版式结构、presence、销售任务），本地 CV 读数
+        # 做不到。**明确跳过并告知**，不产出假版式——拿 OCR 文字块坐标硬凑一个
+        # "左图右字"塞进生图链，比没有更糟。
+        _note_skipped_analysis(
+            scrape_data, "reference_templates", "no_semantic_vision",
+            f"当前视觉能力为「{vision_tier_label()}」，只能量化图片而无法逆向版式，本项已跳过。"
+            "配置一个支持视觉的模型即可解锁竞品套图版式复刻。")
         return []
     images: list[tuple[int, str]] = []
     for index, url in enumerate(refs, 1):
@@ -1268,7 +1360,18 @@ def _bind_reference_templates(plan: dict, project_id: str, scrape_data: dict,
                 and previous_product and previous_product != product_source):
             invalidate_render()
 
-    plan["quality"] = _creative_plan_quality(images, deliverable)
+    quality = _creative_plan_quality(images, deliverable)
+    # 把"因能力不足跳过的分析"并进质检结果，走前端已有的 issues 渲染通道，
+    # 不再另造一套展示。severity=info 不参与扣分——降级不是方案缺陷。
+    notes = _analysis_notes(scrape_data)
+    if notes:
+        quality["issues"] = list(quality.get("issues") or []) + [
+            {"code": n["code"], "message": n["message"], "severity": "info"} for n in notes
+        ]
+        quality["skipped_analyses"] = notes
+    quality["vision_tier"] = vision_tier()
+    quality["vision_tier_label"] = vision_tier_label()
+    plan["quality"] = quality
     return plan
 
 
@@ -1515,7 +1618,10 @@ async def run_plan_image_set(project_id: str, body: PlanImageSetReq,
     # 通道 2：竞品套图逆向学习。采到 ≥4 张（通常是优秀卖家的完整套图）且视觉可用
     # 时，把每张的版式语法逆向出来喂给策划器——借结构，不借像素。
     plan_template_story: list[dict] = []
-    if deliverable == "gallery" and len(_reference_images(scrape_data)) >= 4 and has_vision():
+    if deliverable == "gallery":
+        # 参考图数量与视觉能力两道闸都收在 _analyze_reference_templates 里，
+        # 这里**不要**再复制一份：闸在外面时，"没有视觉能力"这条路根本进不了函数，
+        # 于是跳过原因也就没人记录——用户看到的又是一份莫名其妙少了东西的方案。
         progress("templates", "逆向学习竞品套图版式…", 0.32)
         try:
             plan_template_story = await asyncio.wait_for(

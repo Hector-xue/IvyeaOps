@@ -9,6 +9,7 @@
 // 懒加载、主题启动顺序全都是真的，所以真实页面里长什么样，这里就长什么样。
 //
 // ⚠️ 只在 vite.harness.config.ts 这个入口里被引用，**不进产物包**。
+import axios from "axios";
 import { api } from "../src/api/client";
 
 type Canned = Record<string, unknown>;
@@ -84,6 +85,37 @@ const TURNS = [
  * 没命中的一律回 `{}` 而不是 404 —— 验证台的目的是把界面画出来，
  * 不是模拟后端的错误分支。
  */
+/** 一份 T3（本地 CV 量化）下产出的套图方案：版式逆向被跳过并留了说明。
+ *  用 ?vt=1|2 时降级横幅应当消失，这正是要盯的分支。 */
+const DEMO_PLAN = {
+  deliverable: "gallery",
+  planner: "ai",
+  style: { direction: "clean studio", palette: "蓝白", accent_color: "#1C4A8C" },
+  product_lock: "藏青蓝硬壳收纳箱",
+  template_story: [],
+  template_images: [],
+  images: [
+    {
+      shot_type: "white_main", layout: "white_main", product_presence: "hero",
+      selling_point: "纯白底主图", headline: "", asset_mode: "generate",
+      text_on_image: false, canvas: "2000x2000", evidence: "产品实拍",
+      render_prompt: "white background product shot", final_url: "",
+      product_source_url: "https://example.com/p.jpg",
+    },
+  ],
+  quality: {
+    score: 88,
+    ready: true,
+    issues: [{ code: "no_semantic_vision", severity: "info",
+               message: "当前视觉能力为「本地 CV 度量（OCR：RapidOCR (ONNX) 1.4.4）」，只能量化图片而无法逆向版式，本项已跳过。配置一个支持视觉的模型即可解锁竞品套图版式复刻。" }],
+    skipped_analyses: [{ stage: "reference_templates", code: "no_semantic_vision",
+                         message: "当前视觉能力为「本地 CV 度量（OCR：RapidOCR (ONNX) 1.4.4）」，只能量化图片而无法逆向版式，本项已跳过。配置一个支持视觉的模型即可解锁竞品套图版式复刻。" }],
+    vision_tier: 3,
+    vision_tier_label: "本地 CV 度量（OCR：RapidOCR (ONNX) 1.4.4）",
+  },
+  set_qa: null,
+};
+
 const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   ["/auth/me", { username: "admin", role: "admin", permissions: [] }],
   ["/setup/status", { needs_setup: false, checks: {} }],
@@ -115,6 +147,72 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   ["/ivyea-agent/skills", { ok: true, skills: [] }],
   ["/ivyea-agent/ops-tools", { ok: true, tools: [] }],
   ["/skill-tools/pinned", []],
+  // ── Listing 工作台 ──────────────────────────────────────────────────────
+  // 键是 "/listing/..."（见 reply()：按 baseURL+url 匹配）。
+  // 这里只铺到"能打开视觉步骤并看到一份方案"为止——目的就是验降级横幅这类
+  // 只在特定状态下才出现的界面，它们此前在验证台里根本渲染不出来。
+  ["/listing/projects/p-demo/reference-images", { uploaded: [], scraped: [] }],
+  ["/listing/projects/p-demo/jobs", { active: null, jobs: [] }],
+  ["/listing/projects/p-demo", () => ({
+    id: "p-demo", asin: "B0DEMO0001", marketplace: "US", status: "planned",
+    title: "便携旅行收纳箱", created_at: Date.now() / 1000, updated_at: Date.now() / 1000,
+    scrape_data: JSON.stringify({ title: "便携旅行收纳箱", bullets: [], images: [] }),
+    analysis_data: null, copy_result: null, copy_job_id: null,
+    creative_sets: JSON.stringify({ gallery: DEMO_PLAN }),
+    imgflow_project_id: null,
+  })],
+  ["/listing/projects", [{
+    id: "p-demo", asin: "B0DEMO0001", marketplace: "US", status: "planned",
+    title: "便携旅行收纳箱", created_at: Date.now() / 1000, updated_at: Date.now() / 1000,
+    active_jobs: [],
+  }]],
+  // 「系统状态与更多设置」折叠区里的通知与 MCP 两块。缺了它们整棵子树会在
+  // Object.entries(undefined) / tokens.length 上炸掉——而系统状态卡就在同一棵
+  // 子树里，于是根本验不到。这是 harness 的坑，不是产品的。
+  ["/notify/config", {
+    events: { task_done: "任务完成", task_failed: "任务失败", budget_warn: "预算告警" },
+    default_events: ["task_failed"], enabled_events: ["task_failed"],
+    webhook_set: false, channel: "",
+  }],
+  ["/notify/budget/summary", { month: "2026-08", limit_usd: 0, spend_usd: 0, total_tokens: 0, ratio: 0, level: "ok", exceeded: false }],
+  ["/notify/budget", { month: "2026-08", limit_usd: 0, spend_usd: 0, total_tokens: 0, ratio: 0, level: "ok", exceeded: false }],
+  ["/mcp-admin/tokens", { tokens: [], scopes: ["read", "write"] }],
+  ["/mcp-admin/config", { config: "{}" }],
+  // 系统状态卡。视觉那行是三档链（1 主脑直读 / 2 旁路 / 3 本地 CV），
+  // 用 ?vt=1|2|3 切档来验徽标与文案——默认给 T3，因为它是最容易被误当成
+  // "功能坏了"的那一档，也是最需要盯住渲染的。
+  ["/settings/health", () => {
+    const tier = Number(new URLSearchParams(location.search).get("vt") || 3) as 0 | 1 | 2 | 3;
+    const label = { 1: "主脑直读", 2: "视觉旁路 · Qwen/Qwen3-VL-30B-A3B-Instruct",
+                    3: "本地 CV 度量（OCR：RapidOCR (ONNX) 1.4.4）", 0: "无视觉能力" }[tier];
+    const detail = {
+      1: "主脑直读：主脑模型自带视觉，全部图片分析可用",
+      2: "视觉旁路：主脑不支持图片，已由独立视觉模型代读，全部图片分析可用",
+      3: "本地 CV 度量：未配置视觉模型，图片走本地量化——合规/比例/主体占比/配色/图上文字照常分析；版式逆向与审美判断需配置一个支持视觉的模型",
+      0: "不可用：IvyeaAgent 未连接且未配置视觉模型（影响 Listing 图片识别 / 视觉 Skill）",
+    }[tier];
+    return {
+      version: { ok: true, detail: "1.6.1" },
+      ivyea_agent: { ok: true, detail: "127.0.0.1:8765" },
+      apimart: { ok: false, detail: "未配置" },
+      sorftime: { ok: true, detail: "已配置" },
+      imgflow: { ok: false, detail: "未配置" },
+      ollama: { ok: false, detail: "未安装" },
+      brain_root: { ok: true, detail: "~/.ivyea/knowledge" },
+      openai: { ok: false, detail: "未配置" },
+      ai_chain: {
+        text: { ok: true, detail: "至少一个文本 AI 可用" },
+        global_fallback: { ok: true, detail: "已配置" },
+        vision: { ok: tier > 0, tier, tier_label: label, detail },
+        chain_order: "ivyea-agent, deepseek, assistant",
+      },
+      runners: {
+        hermes: { ok: false, detail: "未安装" },
+        codex: { ok: false, detail: "未安装" },
+        claude: { ok: false, detail: "未安装" },
+      },
+    };
+  }],
   ["/health", { version: "1.6.1" }],
 ];
 
@@ -128,16 +226,26 @@ function match(url: string): Canned {
 
 /** 装上假适配器。必须在 render 之前调用。 */
 export function installMockApi(): void {
-  api.defaults.adapter = async (config) => {
-    const url = config.url || "";
+  const reply = (config: { url?: string; baseURL?: string }) => {
+    // 用 baseURL + url 去匹配：Listing 等板块各自 axios.create 了实例，
+    // 它们的 config.url 是 "/projects" 这种**相对自己 baseURL** 的短路径，
+    // 只看 url 会和别的板块撞名。
+    const base = (config.baseURL || "/api").replace(/^\/api/, "");
+    const full = base + (config.url || "");
     return {
-      data: match(url),
+      data: match(full || config.url || ""),
       status: 200,
       statusText: "OK",
       headers: {},
       config,
     } as never;
   };
+
+  api.defaults.adapter = async (config) => reply(config);
+  // 各板块自建的 axios 实例（listing/api.ts 就是一个）不共享上面那个 adapter，
+  // 但会在发请求时回落到全局默认值——不设这个，整个 Listing 板块在验证台里
+  // 是打不开的。
+  axios.defaults.adapter = async (config) => reply(config);
 
   // MainLayout 的健康检查走的是裸 fetch，不经过 axios 实例。
   const realFetch = window.fetch.bind(window);

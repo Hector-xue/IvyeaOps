@@ -538,6 +538,17 @@ function HealthPanel() {
             <div key={row.label} className="hs-health-row">
               <Dot ok={item?.ok} loading={loading || (!health && !err)} />
               <span className="hs-health-label">{row.label}</span>
+              {/* 视觉是三档链，光一个绿点说不清"能到什么程度"。档位徽标让用户
+                  一眼看出自己在 T1/T2/T3，detail 里再讲这一档少了什么。 */}
+              {typeof item?.tier === "number" && item.tier > 0 && (
+                <span
+                  className="hs-tier-chip"
+                  data-tier={item.tier}
+                  title={item.tier_label || ""}
+                >
+                  T{item.tier}
+                </span>
+              )}
               <span className="hs-health-detail" title={full}>{shortDetail(full)}</span>
               {row.install && (
                 <button

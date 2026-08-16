@@ -69,6 +69,27 @@ def has_vision() -> bool:
     return ai_synthesis_service.has_vision_capability()
 
 
+def vision_tier() -> int:
+    """当前生效档位：1 主脑直读 / 2 第三方视觉旁路 / 3 本地 CV 量化 / 0 无。
+
+    Listing 用它决定哪些分析做得了：T1/T2 是真的"看见了画面"；T3 只有度量读数
+    （尺寸/白底/占比/配色/OCR 文字），语义类分析（版式逆向、审美判断）在 T3 下
+    **必须跳过并明说**，不能拿读数硬编一个假结果出来。
+    """
+    from app.services import ai_synthesis_service
+    return ai_synthesis_service.vision_tier()
+
+
+def vision_tier_label() -> str:
+    from app.services import ai_synthesis_service
+    return ai_synthesis_service.vision_tier_label()
+
+
+def has_semantic_vision() -> bool:
+    """能不能真正"看懂画面"（而不只是量出读数）。T1/T2 为真，T3/无 为假。"""
+    return vision_tier() in (1, 2)
+
+
 async def _collect_vision(prompt: str, images_b64: list[str]) -> str:
     """Run the vision fallback chain and collect its text output."""
     from app.services import ai_synthesis_service

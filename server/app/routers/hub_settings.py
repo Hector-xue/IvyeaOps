@@ -210,6 +210,18 @@ async def settings_health(_u: str = Depends(require_user)):
             found = next((c for c in cands if Path(c).exists()), None)
         return {"ok": True, "detail": f"已安装 · {found}"} if found else {"ok": False, "detail": "未安装"}
 
+    def _vision_detail(tier: int, label: str) -> str:
+        """把档位说成人话——重点是让 T3 的用户知道"能用，只是少了什么"。"""
+        if tier == 1:
+            return f"{label}：主脑模型自带视觉，全部图片分析可用"
+        if tier == 2:
+            return f"{label}：主脑不支持图片，已由独立视觉模型代读，全部图片分析可用"
+        if tier == 3:
+            return (f"{label}：未配置视觉模型，图片走本地量化——"
+                    "合规/比例/主体占比/配色/图上文字照常分析；"
+                    "版式逆向与审美判断需配置一个支持视觉的模型")
+        return "不可用：IvyeaAgent 未连接且未配置视觉模型（影响 Listing 图片识别 / 视觉 Skill）"
+
     # AI readiness: can the standard text chain / vision actually run? Gives a
     # fresh install an at-a-glance answer for "why is AI not working".
     from app.services import ai_synthesis_service as _ai
@@ -219,6 +231,9 @@ async def settings_health(_u: str = Depends(require_user)):
     _any_runner = any(_fb(n) for n in ("hermes", "codex", "claude"))
     _http_text = bool(_ai._deepseek_key() or _ai._apimart_key())
     _text_ok = bool(ivyea_agent_result.get("ok")) or _global_fb or _any_runner or _http_text
+    # 「重新检测」必须真的重测：先强制刷一次 agent 视觉链，把 5 秒缓存顶掉，
+    # 后面 has_vision_capability / vision_tier / vision_tier_label 复用这一次结果。
+    _ai._agent_vision_chain(fresh=True)
     _vision_ok = _ai.has_vision_capability()
     ai_chain = {
         "text": {
@@ -230,9 +245,13 @@ async def settings_health(_u: str = Depends(require_user)):
             "ok": _global_fb,
             "detail": "已配置" if _global_fb else "未配置（建议配置以保证开箱即用）",
         },
+        # 视觉不再是"有/无"两态，而是三档降级链——只报 ok 会让用户以为 T3
+        # 等于没有，而 T3 其实能做全部可测量的分析（合规/比例/占比/配色/图上文字）。
         "vision": {
             "ok": _vision_ok,
-            "detail": "可用" if _vision_ok else "未配置（影响 Listing 图片识别 / 视觉 Skill）",
+            "tier": _ai.vision_tier(),
+            "tier_label": _ai.vision_tier_label(),
+            "detail": _vision_detail(_ai.vision_tier(), _ai.vision_tier_label()),
         },
         "chain_order": ", ".join(_ai._text_provider_chain()),
     }

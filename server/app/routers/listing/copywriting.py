@@ -26,7 +26,9 @@ from pydantic import BaseModel
 from app.core.config import settings
 from app.core.security import require_user
 
-from .ai import _call_ai, _collect_vision, has_vision
+from .ai import (
+    _call_ai, _collect_vision, has_semantic_vision, has_vision, vision_tier, vision_tier_label,
+)
 from .common import (
     _parse_copy_result, _strip_json, project_row, update_project,
 )
@@ -182,26 +184,49 @@ async def _analyze_images_vision(image_paths: list[str], product_type: str) -> d
     if not images_b64:
         return {"mode": "skipped", "features": [], "reason": "Could not read image files"}
 
-    prompt = (
-        f"You are analyzing product images for an Amazon listing. "
-        f"Product type: {product_type}. "
-        f"Extract: materials, key features, dimensions/size cues, accessories included, "
-        f"color options, usage scenarios visible in images. "
-        f"Be specific and factual. Do not invent features not visible. "
-        f"Return JSON: {{\"features\": [\"feature1\", ...], \"materials\": \"...\", "
-        f"\"size_hints\": \"...\", \"accessories\": \"...\", \"scenarios\": [\"...\"]}}"
-    )
+    semantic = has_semantic_vision()
+    if semantic:
+        prompt = (
+            f"You are analyzing product images for an Amazon listing. "
+            f"Product type: {product_type}. "
+            f"Extract: materials, key features, dimensions/size cues, accessories included, "
+            f"color options, usage scenarios visible in images. "
+            f"Be specific and factual. Do not invent features not visible. "
+            f"Return JSON: {{\"features\": [\"feature1\", ...], \"materials\": \"...\", "
+            f"\"size_hints\": \"...\", \"accessories\": \"...\", \"scenarios\": [\"...\"]}}"
+        )
+    else:
+        # T3：拿到的是本地 CV 读数 + OCR 文本，不是画面。素材图上的文字（包装标注、
+        # 参数表、卖点条）恰恰是文案最有用的原料，所以这一步在 T3 下仍有价值——
+        # 但只能提取"图上写了什么"，不能提取"图上看起来是什么材质"。
+        prompt = (
+            f"你在为亚马逊 listing 分析产品图，但**没有看到画面**，只拿到了客观测量读数"
+            f"（尺寸、白底判定、主体占比、主色板）和 OCR 识别出的图上文字。\n"
+            f"产品类型：{product_type}\n\n"
+            f"只返回 JSON，且**只填能从 OCR 文字或测量读数确证的内容，其余留空数组/空字符串**：\n"
+            f'{{"features": ["仅来自 OCR 文字的卖点/参数，逐条注明是图上文字"], '
+            f'"materials": "仅当 OCR 文字明确写了材质时填写，否则空字符串", '
+            f'"size_hints": "仅当 OCR 文字明确写了尺寸时填写，否则空字符串", '
+            f'"accessories": "仅当 OCR 文字明确列出配件时填写，否则空字符串", '
+            f'"scenarios": [], "colour_hints": ["主色板里属于产品的颜色"]}}\n\n'
+            f"严禁根据颜色或占比数字推测材质、功能、使用场景。推不出来就留空。"
+        )
     try:
         text = await asyncio.wait_for(_collect_vision(prompt, images_b64), timeout=180)
     except Exception as exc:  # noqa: BLE001
         return {"mode": "error", "features": [], "reason": str(exc)}
     if not text:
         return {"mode": "skipped", "features": [], "reason": "Vision call failed"}
+    mode = "vision" if semantic else "local_cv"
     parsed = _strip_json(text)
     if parsed:
-        parsed["mode"] = "vision"
+        parsed["mode"] = mode
+        parsed["vision_tier"] = vision_tier()
+        if not semantic:
+            parsed["reason"] = (f"当前视觉能力为「{vision_tier_label()}」，"
+                                "仅从图上文字与测量读数提取，未做画面语义识别。")
         return parsed
-    return {"mode": "vision", "features": [text[:500]], "raw": text}
+    return {"mode": mode, "features": [text[:500]], "raw": text, "vision_tier": vision_tier()}
 
 
 async def _fetch_competitor_data(asins: list[str], marketplace: str) -> dict:

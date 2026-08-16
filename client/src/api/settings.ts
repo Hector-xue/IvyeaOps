@@ -106,8 +106,24 @@ export interface RunnerStatus {
   detail: string;
 }
 
+/** 视觉能力不是"有/无"两态，而是三档降级链：
+ *  1 主脑直读 · 2 第三方视觉模型旁路 · 3 本地 CV+OCR 量化 · 0 不可用。
+ *  只看 ok 会让用户以为 T3 等于没有——T3 其实能做全部可测量的分析。 */
+export interface VisionStatus extends RunnerStatus {
+  tier?: 0 | 1 | 2 | 3;
+  tier_label?: string;
+}
+
+export interface AiChainStatus {
+  text: RunnerStatus;
+  global_fallback: RunnerStatus;
+  vision: VisionStatus;
+  chain_order: string;
+}
+
 export interface HealthResp {
   version: RunnerStatus;
+  ai_chain?: AiChainStatus;
   ivyea_agent: RunnerStatus;
   apimart: RunnerStatus;
   sorftime: RunnerStatus;
