@@ -428,7 +428,16 @@ def upgrade_agent(progress=None) -> dict[str, Any]:
         return {"ok": False, "error": "ivyea CLI 未找到（IvyeaAgent 可能未安装）"}
     py = _venv_python(cli)
     repo = (os.getenv("IVYEA_AGENT_REPO") or "https://github.com/Hector-xue/ivyea-agent.git").strip()
-    ref = (os.getenv("IVYEA_AGENT_REF") or "main").strip()
+    # 装 release tag，**不装 main**。「有新版本」的提示比的就是 release tag
+    # （agent_update_available → latest_agent_version），装 main 会让提示和实际
+    # 装到的东西对不上，还会把未发布代码推给用户。release.yml 同一策略。
+    ref = (os.getenv("IVYEA_AGENT_REF") or "").strip() or latest_agent_version()
+    if not ref:
+        return {"ok": False, "error": "agent_release_unresolved",
+                "note": "取不到 IvyeaAgent 的最新 release，已中止更新。"
+                        "这里**故意不回退到 main** —— 那会装上未发布代码，而且和"
+                        "「有新版本」的提示对不上（提示比的是 release tag）。"
+                        "请检查网络后重试，或设置 IVYEA_AGENT_REF 指定版本。"}
     before = _installed_agent_version(py) or agent_version()
     _p("downloading", 25)
     # 优先用 IvyeaAgent 自己的 updater：`ivyea self update` 会按安装方式选对更新方式——
@@ -439,9 +448,13 @@ def upgrade_agent(progress=None) -> dict[str, Any]:
     if upd.get("returncode") == 0 or "已是最新" in _out or "更新完成" in _out:
         install = upd
     else:
-        # --no-cache-dir + --force-reinstall: pip caches VCS builds → 强制新拉。--no-deps 快。
+        # --no-cache-dir + --force-reinstall: pip caches VCS builds → 强制新拉。
+        #
+        # **不再加 --no-deps**（原来是为了快）：版本之间会新增依赖——v1.13.0 就加了
+        # Pillow 和 rapidocr-onnxruntime。跳过依赖的话，升级"成功"了但新功能
+        # 装完即坏，而且坏得很安静（本地视觉探测到缺 Pillow 就直接判不可用）。
         install = _run_step([py, "-m", "pip", "install", "--no-cache-dir",
-                             "--force-reinstall", "--no-deps", f"git+{repo}@{ref}"])
+                             "--force-reinstall", f"git+{repo}@{ref}"], timeout=900.0)
     _p("restarting", 80)
     _run_step([cli, "self", "service-stop"], timeout=20.0)   # stop old serve
     restart = start_local_service()                          # start fresh (new code)

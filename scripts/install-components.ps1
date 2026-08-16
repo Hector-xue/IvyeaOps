@@ -165,7 +165,24 @@ function Install-IvyeaAgent {
             & $VenvPy -m pip install -e $IvyeaAgentSource
         } else {
             $IvyeaAgentRepo = if ($env:IVYEA_AGENT_REPO) { $env:IVYEA_AGENT_REPO } else { "https://github.com/Hector-xue/ivyea-agent.git" }
-            $IvyeaAgentRef = if ($env:IVYEA_AGENT_REF) { $env:IVYEA_AGENT_REF } else { "main" }
+            # Default to the latest *release tag*, not main: installing main ships
+            # unreleased code and disagrees with the "update available" prompt,
+            # which compares against the release tag. Falling back to main is
+            # allowed here (a fresh install shouldn't be blocked by a flaky
+            # network) but must be said out loud, never silently.
+            $IvyeaAgentRef = $env:IVYEA_AGENT_REF
+            if ([string]::IsNullOrWhiteSpace($IvyeaAgentRef)) {
+                try {
+                    $rel = Invoke-RestMethod -TimeoutSec 8 -Headers @{ "User-Agent" = "IvyeaOps" } `
+                        -Uri "https://api.github.com/repos/Hector-xue/ivyea-agent/releases/latest"
+                    $IvyeaAgentRef = $rel.tag_name
+                } catch { $IvyeaAgentRef = $null }
+            }
+            if ([string]::IsNullOrWhiteSpace($IvyeaAgentRef)) {
+                $IvyeaAgentRef = "main"
+                Write-Warn "Could not resolve the latest IvyeaAgent release; falling back to main (UNRELEASED code)."
+                Write-Warn "Once the network is back, reinstall a release: `$env:IVYEA_AGENT_REF='vX.Y.Z'"
+            }
             Write-Info "Installing IvyeaAgent from Git: $IvyeaAgentRepo@$IvyeaAgentRef"
             & $VenvPy -m pip install "git+$IvyeaAgentRepo@$IvyeaAgentRef"
         }
