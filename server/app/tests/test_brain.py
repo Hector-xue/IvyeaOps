@@ -25,8 +25,8 @@ def client(tmp_path: Path, monkeypatch):
     import importlib
     from app.core import config as cfg_mod
     importlib.reload(cfg_mod)
-    from app.services import gbrain_service as gb_mod
-    importlib.reload(gb_mod)
+    from app.services import brain_files as bf_mod
+    importlib.reload(bf_mod)
     from app.services import brain_chat_service as bc_mod
     importlib.reload(bc_mod)
     from app.routers import brain as brain_router_mod
@@ -52,11 +52,11 @@ def client(tmp_path: Path, monkeypatch):
     }
 
     with TestClient(main_mod.app) as c:
-        yield c, brain, gb_mod, bc_mod
+        yield c, brain, bf_mod, bc_mod
 
 
 def test_list_and_read_file(client):
-    c, _brain, _gb, _bc = client
+    c, _brain, _bf, _bc = client
     r = c.get("/api/brain/files")
     assert r.status_code == 200, r.text
     data = r.json()
@@ -69,7 +69,7 @@ def test_list_and_read_file(client):
 
 
 def test_write_file_rejects_path_escape(client):
-    c, _brain, _gb, _bc = client
+    c, _brain, _bf, _bc = client
     r = c.put(
         "/api/brain/file",
         json={"path": "../x.md", "content": "bad"},
@@ -79,7 +79,7 @@ def test_write_file_rejects_path_escape(client):
 
 
 def test_write_file_allows_markdown_under_brain(client):
-    c, brain, _gb, _bc = client
+    c, brain, _bf, _bc = client
     r = c.put(
         "/api/brain/file",
         json={"path": "products/test.md", "content": "# Product\n"},
@@ -89,29 +89,44 @@ def test_write_file_allows_markdown_under_brain(client):
     assert (brain / "products" / "test.md").read_text(encoding="utf-8") == "# Product\n"
 
 
-def test_search_uses_whitelisted_service(client, monkeypatch):
-    c, _brain, gb, _bc = client
+def test_search_goes_through_the_agent(client, monkeypatch):
+    """检索唯一后端是 IvyeaAgent —— 外部 GBrain 已摘除。"""
+    c, _brain, _bf, bc = client
+    from app.routers import brain as B
 
-    def fake_search(query: str, mode: str = "search"):
-        return {"query": query, "mode": mode, "raw": "", "items": [{"slug": "amazon/note", "score": 1, "snippet": "ok"}]}
+    monkeypatch.setattr(B, "_ivyea_front_door", lambda: True)
+    monkeypatch.setattr(bc, "ia_search", lambda q, m="search", limit=12: {
+        "mode": m, "query": q, "raw": "", "source": "ivyea-agent",
+        "items": [{"slug": "amazon/note", "score": 1, "snippet": "ok"}]})
 
-    monkeypatch.setattr(gb, "search", fake_search)
     r = c.post("/api/brain/search", json={"query": "广告", "mode": "search"}, headers=_HDR)
     assert r.status_code == 200, r.text
     assert r.json()["items"][0]["slug"] == "amazon/note"
 
 
+def test_search_reports_503_when_agent_is_down(client, monkeypatch):
+    """没有第二个后端了 —— 如实报不可用，而不是悄悄返回空结果
+    （那会让用户以为知识库里没有这些内容）。"""
+    c, _brain, _bf, _bc = client
+    from app.routers import brain as B
+
+    monkeypatch.setattr(B, "_ivyea_front_door", lambda: False)
+    r = c.post("/api/brain/search", json={"query": "广告", "mode": "search"}, headers=_HDR)
+    assert r.status_code == 503
+    assert "未连接" in r.json()["detail"]
+
+
 def test_search_rejects_bad_mode(client):
-    c, _brain, _gb, _bc = client
+    c, _brain, _bf, _bc = client
     r = c.post("/api/brain/search", json={"query": "x", "mode": "shell"}, headers=_HDR)
     assert r.status_code == 422
 
 
 def test_upload_text_creates_markdown_under_brain(client, monkeypatch):
-    c, brain, _gb, _bc = client
-    monkeypatch.setattr(_gb, "installed", lambda: True)
+    c, brain, _bf, _bc = client
     monkeypatch.setattr(_bc, "ivyea_chat_available", lambda: False)
-    monkeypatch.setattr(_gb, "import_brain", lambda: {"ok": True, "raw": "import ok"})
+    # 索引重建单独打桩：这条测的是本地落盘，不该被"agent 在不在线"影响。
+    monkeypatch.setattr(_bc, "reindex_after_save", lambda: ("ok", ""))
     r = c.post(
         "/api/brain/upload",
         files={"file": ("note.txt", b"hello knowledge", "text/plain")},
@@ -126,10 +141,9 @@ def test_upload_text_creates_markdown_under_brain(client, monkeypatch):
 
 
 def test_ingest_text_uses_hermes_analysis_and_creates_new_directory(client, monkeypatch):
-    c, brain, _gb, bc = client
-    monkeypatch.setattr(_gb, "installed", lambda: True)
+    c, brain, _bf, bc = client
     monkeypatch.setattr(bc, "ivyea_chat_available", lambda: False)
-    monkeypatch.setattr(_gb, "import_brain", lambda: {"ok": True, "raw": "import ok"})
+    monkeypatch.setattr(bc, "reindex_after_save", lambda: ("ok", ""))
     monkeypatch.setattr(
         bc,
         "_call_runner_json",
@@ -162,10 +176,9 @@ def test_ingest_text_uses_hermes_analysis_and_creates_new_directory(client, monk
 
 
 def test_ingest_text_falls_back_and_sanitizes_bad_directory(client, monkeypatch):
-    c, brain, _gb, bc = client
-    monkeypatch.setattr(_gb, "installed", lambda: True)
+    c, brain, _bf, bc = client
     monkeypatch.setattr(bc, "ivyea_chat_available", lambda: False)
-    monkeypatch.setattr(_gb, "import_brain", lambda: {"ok": True, "raw": "import ok"})
+    monkeypatch.setattr(bc, "reindex_after_save", lambda: ("ok", ""))
     monkeypatch.setattr(
         bc,
         "_call_runner_json",
@@ -194,10 +207,9 @@ def test_ingest_text_falls_back_and_sanitizes_bad_directory(client, monkeypatch)
 
 
 def test_ingest_text_rules_fallback_when_hermes_unavailable(client, monkeypatch):
-    c, brain, _gb, bc = client
-    monkeypatch.setattr(_gb, "installed", lambda: True)
+    c, brain, _bf, bc = client
     monkeypatch.setattr(bc, "ivyea_chat_available", lambda: False)
-    monkeypatch.setattr(_gb, "import_brain", lambda: {"ok": True, "raw": "import ok"})
+    monkeypatch.setattr(bc, "reindex_after_save", lambda: ("ok", ""))
     monkeypatch.setattr(bc, "_call_runner_json", lambda prompt: (_ for _ in ()).throw(RuntimeError("offline")))
 
     r = c.post(
@@ -214,12 +226,11 @@ def test_ingest_text_rules_fallback_when_hermes_unavailable(client, monkeypatch)
 
 
 def test_chat_sessions_persist_messages(client, monkeypatch):
-    c, _brain, gb, bc = client
-    # 这条测的是 **GBrain 回退路径**：显式声明前提（装了 GBrain、agent 不可用），
-    # 否则结论会随运行环境漂移（本机装了就绿、CI 没装就红）。
-    monkeypatch.setattr(gb, "installed", lambda: True)
-    monkeypatch.setattr(bc, "ivyea_chat_available", lambda: False)
-    monkeypatch.setattr(gb, "search", lambda q, mode="search": {"items": [{"slug": "amazon/note", "score": 1, "snippet": "广告优化"}]})
+    c, _brain, _bf, bc = client
+    # 引用来自 agent 的知识库；回答本身用桩，避免真调模型。
+    monkeypatch.setattr(bc, "ivyea_chat_available", lambda: True)
+    monkeypatch.setattr(bc, "ia_search", lambda q, m="search", limit=12: {
+        "items": [{"slug": "amazon/note", "score": 1, "snippet": "广告优化"}]})
     monkeypatch.setattr(bc, "_call_llm", lambda messages: "基于知识库的回答")
 
     r = c.post("/api/brain/chat/sessions", json={"title": "测试会话", "mode": "amazon_operator"}, headers=_HDR)
@@ -238,7 +249,7 @@ def test_chat_sessions_persist_messages(client, monkeypatch):
 
 
 def test_chat_model_status_does_not_leak_keys(client):
-    c, _brain, _gb, _bc = client
+    c, _brain, _bf, _bc = client
     r = c.get("/api/brain/chat/status")
     assert r.status_code == 200, r.text
     assert "api_key" not in r.text.lower()
@@ -246,26 +257,10 @@ def test_chat_model_status_does_not_leak_keys(client):
 
 # ── GBrain 摘除：/brain 必须在「只有 IvyeaAgent」的机器上完整工作 ──────────
 
-def _kill_gbrain(monkeypatch):
-    """把 GBrain 变成"本机根本没装"，且任何触碰二进制的调用都当场炸。"""
-    from app.services import gbrain_service as gb
-    monkeypatch.setattr(gb, "installed", lambda: False)
-    monkeypatch.setattr(gb, "_gbrain_cmd", lambda: None)
-
-    def boom(*a, **k):
-        raise AssertionError("触碰了已摘除的 GBrain 二进制")
-
-    for fn in ("search", "overview", "stats", "doctor", "get_page",
-               "import_brain", "git_status", "ensure_db_ready"):
-        monkeypatch.setattr(gb, fn, boom)
-    return gb
-
-
 def test_citations_use_the_agent_not_gbrain(monkeypatch):
     """对话引用检索此前**完全没有 ivyea 分支** —— agent 明明是前门、数据也早已
     整批导入，每次对话还要起一次外部二进制查一遍，agent 内部又查一遍。"""
     from app.services import brain_chat_service as bc
-    _kill_gbrain(monkeypatch)
     monkeypatch.setattr(bc, "ivyea_chat_available", lambda: True)
     monkeypatch.setattr(bc, "ia_search", lambda q, m="search", limit=12: {
         "items": [{"slug": "k1", "title": "否词", "snippet": "s", "category": "amazon_ads"}]})
@@ -276,7 +271,6 @@ def test_citations_use_the_agent_not_gbrain(monkeypatch):
 
 def test_citations_respect_category_scope(monkeypatch):
     from app.services import brain_chat_service as bc
-    _kill_gbrain(monkeypatch)
     monkeypatch.setattr(bc, "ivyea_chat_available", lambda: True)
     monkeypatch.setattr(bc, "ia_search", lambda q, m="search", limit=12: {
         "items": [{"slug": "a", "category": "amazon_ads"},
@@ -289,7 +283,6 @@ def test_citations_respect_category_scope(monkeypatch):
 def test_citations_return_empty_when_nothing_available(monkeypatch):
     """agent 不可用 + 没装 GBrain → 干净地返回空，不抛错、不留"检索失败"假引用。"""
     from app.services import brain_chat_service as bc
-    _kill_gbrain(monkeypatch)
     monkeypatch.setattr(bc, "ivyea_chat_available", lambda: False)
     assert bc._search_citations("随便问点什么") == []
 
@@ -307,7 +300,6 @@ def test_legacy_gbrain_category_is_recovered():
 
 def test_reindex_prefers_the_agent(monkeypatch):
     from app.services import brain_chat_service as bc
-    _kill_gbrain(monkeypatch)
     monkeypatch.setattr(bc, "ivyea_chat_available", lambda: True)
     import app.services.ivyea_agent_service as ia_mod
     monkeypatch.setattr(ia_mod, "retrieval_sync", lambda: {"ok": True})
@@ -318,7 +310,6 @@ def test_reindex_prefers_the_agent(monkeypatch):
 def test_reindex_without_any_backend_is_not_a_failure(monkeypatch):
     """文件已经落到 BRAIN_ROOT，agent 下次同步会捡到 —— 不该报成失败吓用户。"""
     from app.services import brain_chat_service as bc
-    _kill_gbrain(monkeypatch)
     monkeypatch.setattr(bc, "ivyea_chat_available", lambda: False)
     assert bc.reindex_after_save() == ("skipped", "")
 
@@ -329,7 +320,6 @@ def test_missing_page_is_a_404_not_a_gbrain_fallback(monkeypatch):
     from fastapi import HTTPException
     from app.routers import brain as B
     from app.services import ivyea_agent_service as ia_mod
-    _kill_gbrain(monkeypatch)
     monkeypatch.setattr(B, "_ivyea_front_door", lambda: True)
 
     def not_found(_slug):

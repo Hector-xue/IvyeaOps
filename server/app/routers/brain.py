@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from app.core.proc import no_window_kwargs
 from app.core.security import require_user, require_user_info
 from app.services import brain_chat_service as bc
-from app.services import gbrain_service as gb
+from app.services import brain_files as bf
 from app.services import console_sessions
 from app.services import ivyea_agent_service as ia
 
@@ -26,13 +26,13 @@ router = APIRouter(dependencies=[Depends(require_user)])
 
 
 class SearchBody(BaseModel):
-    query: str = Field(..., min_length=1, max_length=gb.MAX_QUERY_CHARS)
+    query: str = Field(..., min_length=1, max_length=bf.MAX_QUERY_CHARS)
     mode: str = Field("search", pattern="^(search|query)$")
 
 
 class FileWriteBody(BaseModel):
     path: str = Field(..., min_length=1, max_length=240)
-    content: str = Field(..., max_length=gb.MAX_WRITE_BYTES)
+    content: str = Field(..., max_length=bf.MAX_WRITE_BYTES)
 
 
 class PageBody(BaseModel):
@@ -72,7 +72,7 @@ class IngestUrlBody(BaseModel):
 def _handle(fn, *args, **kwargs):
     try:
         return fn(*args, **kwargs)
-    except (gb.GBrainError, bc.BrainChatError) as e:
+    except (bf.BrainFilesError, bc.BrainChatError) as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
@@ -148,7 +148,7 @@ def _ia_overview() -> dict[str, Any]:
     except Exception:  # noqa: BLE001 — 体检失败不该拖垮整个概览
         logger.debug("_ia_doctor 失败（旁路，已忽略）", exc_info=True)
     return {
-        "brain_root": str(gb.BRAIN_ROOT),
+        "brain_root": str(bf.BRAIN_ROOT),
         "gbrain_bin": "",                     # 已摘除：知识库不再依赖外部二进制
         "openai_configured": bool(emb.get("semantic_enabled")),   # 兼容旧键
         "embed_configured": bool(emb.get("semantic_enabled")),
@@ -349,92 +349,77 @@ async def _ia_ingest_analyzed(text: str, analysis: dict[str, Any] | None = None)
 
 @router.get("/overview")
 def overview() -> dict[str, Any]:
-    # Self-heal first: auto-init the DB + auto-wire Ollama embedding so the board
-    # works without manual setup. If the DB still can't come up (e.g. incompatible
-    # gbrain version), return the readiness info — with an actionable hint — instead
-    # of letting gb.overview() raise the raw "No database URL" error.
-    try:
-        ready = gb.ensure_ready()
-    except Exception as e:  # noqa: BLE001 — never let self-heal break the board
-        ready = {"db_ready": False, "version_compatible": True, "actions": [], "hint": str(e)}
-    # 前门：IvyeaAgent。GBrain 装没装都不影响这个面板能用 —— 摘除 GBrain 的目标
-    # 就是让 /brain 在**只有 agent**的机器上完整工作。
-    if _ivyea_front_door():
+    # `ready` 是给前端留的兼容字段（Brain.tsx 会读 ready.hint / db_ready）。
+    # 知识库已经全在 IvyeaAgent 里，没有需要自愈的本地库了，所以这里只如实报告
+    # agent 在不在线，不再做任何初始化动作。
+    online = _ivyea_front_door()
+    ready = {"db_ready": online, "embed_ready": online, "version_compatible": True,
+             "actions": [], "hint": "" if online else "IvyeaAgent 未连接，知识库暂不可用。"}
+    if online:
         ov = _ia_overview()
         ov["ready"] = ready
         return ov
-    if not gb.installed() or not ready.get("db_ready"):
-        return {"ready": ready, "embed_configured": False, "stats": {},
-                "brain_root": str(gb.BRAIN_ROOT), "gbrain_bin": "", "doctor_status": "not_ready",
-                "search_mode": "unknown", "git_dirty": False, "git_status": ""}
-    ov = _handle(gb.overview)
-    ov["ready"] = ready
-    return ov
+    return {"ready": ready, "embed_configured": False, "stats": {},
+            "brain_root": str(bf.BRAIN_ROOT), "gbrain_bin": "", "doctor_status": "not_ready",
+            "search_mode": "unknown", "git_dirty": False, "git_status": ""}
 
 
 @router.get("/stats")
 def stats() -> dict[str, Any]:
     if _ivyea_front_door():
         return _ia_stats()
-    if not gb.installed():
-        return {"documents": 0, "chunks": 0, "source": "unavailable"}
-    return _handle(gb.stats)
+    return {"documents": 0, "chunks": 0, "source": "unavailable"}
 
 
 @router.get("/doctor")
 def doctor() -> dict[str, Any]:
     if _ivyea_front_door():
         return _ia_doctor()
-    if not gb.installed():
-        return {"status": "unavailable", "checks": [],
-                "hint": "IvyeaAgent 未连接，且本机未安装 GBrain。"}
-    return _handle(gb.doctor)
+    return {"status": "unavailable", "checks": [],
+            "hint": "IvyeaAgent 未连接，知识库暂不可用。"}
 
 
 @router.post("/search")
 def search(body: SearchBody) -> dict[str, Any]:
-    if _ivyea_front_door():
-        try:
-            return _ia_search(body.query, body.mode)
-        except Exception:  # noqa: BLE001 — degrade to legacy GBrain search
-            logger.debug("_ia_search 失败（旁路，已忽略）", exc_info=True)
-    return _handle(gb.search, body.query, body.mode)
+    if not _ivyea_front_door():
+        raise HTTPException(status_code=503, detail="IvyeaAgent 未连接，知识库检索暂不可用。")
+    try:
+        return _ia_search(body.query, body.mode)
+    except Exception as e:  # noqa: BLE001
+        # 已经没有第二个后端了。此前这里"降级到 GBrain"，现在如实报错 ——
+        # 悄悄返回空结果会让用户以为知识库里没有这些内容。
+        logger.warning("知识库检索失败：%s", e)
+        raise HTTPException(status_code=502, detail=f"知识库检索失败：{e}") from e
 
 
 @router.get("/page/{slug:path}")
 def get_page(slug: str) -> dict[str, Any]:
-    if _ivyea_front_door():
-        try:
-            return _ia_page(slug)
-        except ia.IvyeaAgentNotFound as e:
-            # 卡片不存在是**正常答复**，不是 agent 故障 —— 不能拿它当理由去回退
-            # 已被摘除的 GBrain（那会让"没这张卡"变成"起一个外部进程"）。
-            if not gb.installed():
-                # agent 的报错里 slug 是 URL 编码的，直接透出来用户读不懂。
-                raise HTTPException(status_code=404, detail="页面不存在。") from e
-        except Exception:  # noqa: BLE001 — agent 真故障时才降级到旧 GBrain 页面
-            logger.debug("_ia_page 失败（旁路，已忽略）", exc_info=True)
-    if not gb.installed():
-        raise HTTPException(status_code=404, detail="页面不存在。")
-    return _handle(gb.get_page, slug)
+    if not _ivyea_front_door():
+        raise HTTPException(status_code=503, detail="IvyeaAgent 未连接，知识库暂不可用。")
+    try:
+        return _ia_page(slug)
+    except ia.IvyeaAgentNotFound as e:
+        # "这张卡不存在"是 agent 的**正常答复**，不是故障。agent 的原始报错里
+        # slug 是 URL 编码的，直接透出来用户读不懂。
+        raise HTTPException(status_code=404, detail="页面不存在。") from e
+    except Exception as e:  # noqa: BLE001
+        logger.warning("读取知识卡失败：%s", e)
+        raise HTTPException(status_code=502, detail=f"读取失败：{e}") from e
 
 
 @router.post("/page")
 def get_page_post(body: PageBody) -> dict[str, Any]:
-    if _ivyea_front_door():
-        try:
-            return _ia_page(body.slug)
-        except ia.IvyeaAgentNotFound as e:
-            # 卡片不存在是**正常答复**，不是 agent 故障 —— 不能拿它当理由去回退
-            # 已被摘除的 GBrain（那会让"没这张卡"变成"起一个外部进程"）。
-            if not gb.installed():
-                # agent 的报错里 slug 是 URL 编码的，直接透出来用户读不懂。
-                raise HTTPException(status_code=404, detail="页面不存在。") from e
-        except Exception:  # noqa: BLE001 — agent 真故障时才降级到旧 GBrain 页面
-            logger.debug("_ia_page 失败（旁路，已忽略）", exc_info=True)
-    if not gb.installed():
-        raise HTTPException(status_code=404, detail="页面不存在。")
-    return _handle(gb.get_page, body.slug)
+    if not _ivyea_front_door():
+        raise HTTPException(status_code=503, detail="IvyeaAgent 未连接，知识库暂不可用。")
+    try:
+        return _ia_page(body.slug)
+    except ia.IvyeaAgentNotFound as e:
+        # "这张卡不存在"是 agent 的**正常答复**，不是故障。agent 的原始报错里
+        # slug 是 URL 编码的，直接透出来用户读不懂。
+        raise HTTPException(status_code=404, detail="页面不存在。") from e
+    except Exception as e:  # noqa: BLE001
+        logger.warning("读取知识卡失败：%s", e)
+        raise HTTPException(status_code=502, detail=f"读取失败：{e}") from e
 
 
 @router.get("/files")
@@ -444,7 +429,7 @@ def list_files() -> dict[str, Any]:
             return _ia_list_files()
         except Exception:  # noqa: BLE001 — degrade to legacy GBrain file list
             logger.debug("_ia_list_files 失败（旁路，已忽略）", exc_info=True)
-    return _handle(gb.list_files)
+    return _handle(bf.list_files)
 
 
 @router.get("/file")
@@ -456,7 +441,7 @@ def read_file(path: str = Query(..., min_length=1, max_length=240)) -> dict[str,
             return _ia_read_file(path)
         except Exception:  # noqa: BLE001 — degrade to legacy GBrain read
             logger.debug("_ia_read_file 失败（旁路，已忽略）", exc_info=True)
-    return _handle(gb.read_file, path)
+    return _handle(bf.read_file, path)
 
 
 @router.put("/file")
@@ -480,7 +465,7 @@ def write_file(body: FileWriteBody, user: str = Depends(require_user)) -> dict[s
         if not resp.get("ok"):
             raise HTTPException(status_code=400, detail=f"保存失败：{resp.get('result') or resp}")
         return {"ok": True, "path": cid, "saved_path": cid, "source": "ivyea-agent"}
-    return _handle(gb.write_file, body.path, body.content)
+    return _handle(bf.write_file, body.path, body.content)
 
 
 @router.delete("/file")
@@ -500,7 +485,7 @@ def delete_file(path: str = Query(..., min_length=1, max_length=240), user: str 
         if not resp.get("ok"):
             raise HTTPException(status_code=400, detail="删除失败。")
         return {"ok": True, "removed": [cid], "removed_card_ids": resp.get("removed_card_ids") or [cid], "source": "ivyea-agent"}
-    return _handle(gb.delete_file, path)
+    return _handle(bf.delete_file, path)
 
 
 @router.post("/import")
@@ -517,9 +502,9 @@ def git_status() -> dict[str, str]:
     # GBrain 把知识库存成一个 git 仓，这个端点是给它的"未提交改动"提示用的。
     # IvyeaAgent 的知识库有自己的版本与变更台账（/v1/knowledge/versions、
     # /v1/knowledge/changes），不走 git —— 所以摘除之后这里恒为干净。
-    if _ivyea_front_door() or not gb.installed():
-        return {"dirty": "", "status": ""}
-    return _handle(gb.git_status)
+    # 知识库不再是一个 git 仓：IvyeaAgent 有自己的版本与变更台账
+    # （/v1/knowledge/versions、/v1/knowledge/changes）。恒为干净。
+    return {"dirty": "", "status": ""}
 
 
 @router.post("/upload")
@@ -851,7 +836,7 @@ async def chat_message_stream(session_id: str, body: ChatStreamBody,
                 session_id, body.content, regenerate=body.regenerate,
                 category=body.category, retrieve=not use_ivyea,
             )
-        except (gb.GBrainError, bc.BrainChatError) as e:
+        except (bf.BrainFilesError, bc.BrainChatError) as e:
             yield _sse({"type": "error", "detail": str(e)})
             return
         except Exception as e:  # noqa: BLE001
@@ -976,7 +961,7 @@ async def chat_message_stream(session_id: str, body: ChatStreamBody,
             return
         try:
             assistant = bc.commit_chat_answer(session_id, answer, turn["citations"])
-        except (gb.GBrainError, bc.BrainChatError) as e:
+        except (bf.BrainFilesError, bc.BrainChatError) as e:
             yield _sse({"type": "error", "detail": str(e)})
             return
         # 落库成功之后才镜像，镜像里就不会出现"问了但还没答"的半截会话

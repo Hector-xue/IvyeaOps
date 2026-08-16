@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator
 
 from app.core.config import settings
-from app.services import gbrain_service as gb
+from app.services import brain_files as bf
 
 logger = logging.getLogger("ivyea.services.brain_chat_service")
 
@@ -219,9 +219,9 @@ def _safe_ingest_dir(directory: str | None) -> str:
     if not parts:
         return "inbox"
     safe = "/".join(parts[:4])
-    target = (gb.BRAIN_ROOT / safe).resolve()
+    target = (bf.BRAIN_ROOT / safe).resolve()
     try:
-        target.relative_to(gb.BRAIN_ROOT)
+        target.relative_to(bf.BRAIN_ROOT)
     except ValueError:
         return "inbox"
     return safe
@@ -315,7 +315,7 @@ def _call_runner_json(prompt: str, timeout: int = 90) -> dict[str, Any] | None:
     cmd = _build_runner_cmd(_RUNNER, _runner_bin(), prompt)
     proc = subprocess.run(
         cmd,
-        cwd=str(gb.BRAIN_ROOT),
+        cwd=str(bf.BRAIN_ROOT),
         env=_runner_env(),
         text=True,
         capture_output=True,
@@ -537,13 +537,13 @@ def upload_knowledge(filename: str, data: bytes, category: str | None = None, ti
     markdown, warnings = _convert_to_markdown(filename, data, clean_title, cat)
     date_prefix = datetime.now().strftime("%Y-%m-%d")
     if cat == "inbox":
-        parent = gb.BRAIN_ROOT / "inbox"
+        parent = bf.BRAIN_ROOT / "inbox"
     else:
-        parent = gb.BRAIN_ROOT / cat / "uploads"
+        parent = bf.BRAIN_ROOT / cat / "uploads"
     parent.mkdir(parents=True, exist_ok=True)
     target = _unique_path(parent / f"{date_prefix}-{_slugify(clean_title)}.md")
     target.write_text(markdown, encoding="utf-8")
-    rel = str(target.relative_to(gb.BRAIN_ROOT))
+    rel = str(target.relative_to(bf.BRAIN_ROOT))
     import_status = "skipped"
     import_raw = ""
     if import_after_save:
@@ -613,9 +613,9 @@ def ingest_pasted_text(text: str, import_after_save: bool = True) -> dict[str, A
     analysis = analyze_pasted_text(clean)
     directory = _safe_ingest_dir(str(analysis.get("directory") or "inbox"))
     analysis["directory"] = directory
-    parent = (gb.BRAIN_ROOT / directory).resolve()
+    parent = (bf.BRAIN_ROOT / directory).resolve()
     try:
-        parent.relative_to(gb.BRAIN_ROOT)
+        parent.relative_to(bf.BRAIN_ROOT)
     except ValueError as e:
         raise BrainChatError("自动目录不安全，已拒绝保存") from e
     parent.mkdir(parents=True, exist_ok=True)
@@ -623,7 +623,7 @@ def ingest_pasted_text(text: str, import_after_save: bool = True) -> dict[str, A
     target = _unique_path(parent / f"{date_prefix}-{_slugify(str(analysis.get('title') or '粘贴知识'))}.md")
     markdown = _pasted_markdown(clean, analysis)
     target.write_text(markdown, encoding="utf-8")
-    rel = str(target.relative_to(gb.BRAIN_ROOT))
+    rel = str(target.relative_to(bf.BRAIN_ROOT))
     warnings = list(analysis.get("warnings") or [])
     import_status = "skipped"
     import_raw = ""
@@ -738,15 +738,10 @@ def reindex_after_save() -> tuple[str, str]:
             if res.get("ok", True):
                 return "ok", "ivyea-agent retrieval sync"
         except Exception as e:  # noqa: BLE001
-            logger.debug("IvyeaAgent retrieval sync 失败（将回退 GBrain）：%s", e)
-    if not gb.installed():
-        # 没有 GBrain 也不算失败：文件已经落到 BRAIN_ROOT，agent 下次同步会捡到。
-        return "skipped", ""
-    try:
-        imp = gb.import_brain()
-        return "ok", imp.get("raw", "")
-    except Exception as e:  # noqa: BLE001
-        return f"failed: {e}", ""
+            logger.debug("IvyeaAgent retrieval sync 失败：%s", e)
+            return f"failed: {e}", ""
+    # agent 不在线不算失败：文件已经落到 BRAIN_ROOT，等它下次同步会捡到。
+    return "skipped", ""
 
 
 def ia_search(query: str, mode: str = "search", limit: int = 12) -> dict[str, Any]:
@@ -852,7 +847,7 @@ def _runner_chat_text(prompt: str) -> str:
     try:
         proc = subprocess.run(
             cmd,
-            cwd=str(gb.BRAIN_ROOT),
+            cwd=str(bf.BRAIN_ROOT),
             env=_runner_env(),
             text=True,
             capture_output=True,
@@ -935,85 +930,32 @@ def _build_prompt(user_message: str, citations: list[dict[str, Any]], mode: str)
 
 
 def _search_citations(user_message: str, category: str | None = None) -> list[dict[str, Any]]:
-    def add_candidate(value: str, out: list[str]) -> None:
-        v = value.strip()
-        if v and v not in out:
-            out.append(v[: gb.MAX_QUERY_CHARS])
+    """给对话回答配引用，来源是 IvyeaAgent 的治理知识库。
 
-    cleaned = re.sub(r"[？?！!。；;，,：:\n\r\t]+", " ", user_message).strip()
-    candidates: list[str] = []
-    add_candidate(user_message, candidates)
-    add_candidate(cleaned, candidates)
-
-    # GBrain 的 conservative/关键词检索对完整口语句不一定敏感；补充常见运营短语兜底。
-    phrase_hints = [
-        "广告优化", "广告", "优先级", "投放", "关键词", "否词", "Listing", "A+", "CTR", "CVR",
-        "trail camera", "4G", "WiFi", "售后", "合规", "评价", "站外引流", "供应商", "1688",
-    ]
-    lower_msg = user_message.lower()
-    for phrase in phrase_hints:
-        if phrase.lower() in lower_msg:
-            add_candidate(phrase, candidates)
-
-    # 对英文/数字词保留空格组合，便于 ASIN、SKU、品牌、产品线命中。
-    ascii_terms = re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]{1,}", user_message)
-    if ascii_terms:
-        add_candidate(" ".join(ascii_terms[:8]), candidates)
-
+    以前这里有一整套候选词轮询（把问题拆成原句 / 去标点句 / "广告优化""否词" 这类
+    预设短语 / ASCII 词组合，逐个去查、命中就停）。那是在**替一个弱关键词检索器
+    补词** —— GBrain 只做关键词匹配，对完整口语句不敏感。换成 agent 的语义 + 词法
+    双路召回之后，一次查询就够，那套脚手架连同 GBrain 一起摘掉了。
+    """
+    if not ivyea_chat_available():
+        return []
     scope = (category or "").strip().lower()
-    seen: set[str] = set()
-    citations: list[dict[str, Any]] = []
-    last_error: Exception | None = None
-
-    # 前门：IvyeaAgent 的治理知识库。它是**语义 + 词法双路召回**，一次查询就够，
-    # 不需要上面那套候选词轮询 —— 那套是为 GBrain 的关键词检索兜底才存在的
-    # （"广告优化""否词"之类的短语提示，本质是在替一个弱检索器补词）。
-    #
-    # 此前这个函数**完全没有 ivyea 分支**：agent 明明是前门、明明已经把 GBrain
-    # 的数据全导进来了，每次对话还是要起一次外部二进制去查一遍，然后 agent 自己
-    # 内部又检索一次 —— 一次对话两套检索，其中一套的结果基本只用来显示"引用"。
-    if ivyea_chat_available():
-        try:
-            hits = ia_search(user_message, "search", limit=12).get("items") or []
-            for item in hits:
-                if scope and str(item.get("category") or "").strip().lower() != scope:
-                    continue
-                key = str(item.get("slug") or item.get("path") or item.get("snippet") or "")
-                if key and key not in seen:
-                    seen.add(key)
-                    citations.append(item)
-            if citations:
-                return citations[:8]
-        except Exception as e:  # noqa: BLE001 — agent 挂了就退回下面的 GBrain 路径
-            last_error = e
-            logger.debug("IvyeaAgent 引用检索失败（将回退 GBrain）：%s", e)
-
-    if not gb.installed():
-        if last_error:
-            logger.debug("引用检索无可用后端：%s", last_error)
+    try:
+        hits = ia_search(user_message, "search", limit=12).get("items") or []
+    except Exception as e:  # noqa: BLE001
+        # 引用拿不到不该让整轮对话失败：回答本身来自 agent，它内部有自己的检索。
+        logger.debug("知识库引用检索失败（旁路，已忽略）：%s", e)
         return []
 
-    for query in candidates[:8]:
-        try:
-            search_result = gb.search(query, "search")
-        except Exception as e:
-            last_error = e
+    seen: set[str] = set()
+    citations: list[dict[str, Any]] = []
+    for item in hits:
+        if scope and str(item.get("category") or "").strip().lower() != scope:
             continue
-        for item in search_result.get("items", [])[:8]:
-            # Scope retrieval to a single knowledge category when requested.
-            if scope and str(item.get("category") or "").strip().lower() != scope:
-                continue
-            key = str(item.get("slug") or item.get("path") or item.get("snippet") or "")
-            if key and key not in seen:
-                seen.add(key)
-                citations.append(item)
-        if citations:
-            break
-    if not citations and last_error:
-        # 以前这里把 GBrain 的报错当成一条"引用"塞给用户。新机器上根本没装 GBrain，
-        # 于是每次对话都挂一条"检索失败：..."——而回答本身是 IvyeaAgent 给的，
-        # 它有自己的知识库，压根不依赖这条路。所以只记日志，不污染回答。
-        logger.debug("GBrain 引用检索失败（旁路，已忽略）：%s", last_error)
+        key = str(item.get("slug") or item.get("path") or item.get("snippet") or "")
+        if key and key not in seen:
+            seen.add(key)
+            citations.append(item)
     return citations[:8]
 
 
@@ -1142,7 +1084,7 @@ def stream_spec(prompt: str) -> dict[str, Any]:
         "argv": [binary, "chat", "-p", prompt, *_ivyea_permission_args(binary)],
         "stdin": b"",
         "env": _runner_env(),
-        "cwd": str(gb.BRAIN_ROOT),
+        "cwd": str(bf.BRAIN_ROOT),
     }
 
 
