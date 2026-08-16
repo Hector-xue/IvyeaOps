@@ -8,6 +8,23 @@
 
 ## [未发布]
 
+### 移除
+
+- **摘掉 GBrain**。知识库已经归 IvyeaAgent，GBrain 留着只会误导：
+  - 设置页那个「知识库语义检索（Embedding）」三个键只写进 `~/.gbrain/config.json`，对 IvyeaAgent 的 `retrieval_embedding_*` 一个字都没动 —— 认真填完 key，agent 侧仍是默认后端，还不报错。该配置项已移除；**语义检索现在由 IvyeaAgent 自带，装完即用，不需要在这里配任何东西**（需 IvyeaAgent v1.12.0+）。
+  - 监控不再把 `gbrain` / `gbrain serve` 当必检进程 —— 知识库跑在 agent 里，探不到就报「知识库功能不可用」是必然误报。
+  - 安装器（`setup.sh` / `install.sh` / `install-components.ps1` / 面板一键安装）不再拉 bun + GBrain，也不再交互式问「要不要下 400MB 的 Ollama 做语义检索」。新装少 400MB 下载和一轮提问。
+  - 面板加载时不再自动 `gbrain init --pglite` + 自动接 Ollama embedding（新机器上等于自动初始化一个用不到的库，只会抛一堆无关的错），改成只读判断。
+  - `/brain` 对话里 GBrain 检索失败不再伪装成一条「引用」显示「检索失败：...」—— 回答本身来自 IvyeaAgent，不依赖这条路，改为只记日志。
+
+  未动：`BRAIN_ROOT` 下的文件读写、`/brain` 的 overview/stats/page 仍走旧路径 —— 那是真正的迁移（要连带迁「点引用打开原文」），另开改动做。
+
+## [v1.7.0] - 2026-08-15
+
+### 变更
+
+- **「静谧」主题 + 外壳收纳**：把界面从描边堆里拆出来。
+
 ## [v1.6.0] - 2026-08-14
 
 ### 变更
