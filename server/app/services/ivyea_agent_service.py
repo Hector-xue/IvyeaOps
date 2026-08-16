@@ -44,6 +44,15 @@ class IvyeaAgentUnavailable(IvyeaAgentError):
     """The local IvyeaAgent service is not reachable."""
 
 
+class IvyeaAgentNotFound(IvyeaAgentError):
+    """The agent answered, but the requested resource does not exist (HTTP 404).
+
+    和"服务挂了"必须分开：调用方常写成「agent 出错就回退旧后端」，而 404 是
+    **正常答复**——"这张卡不存在"。混在一起会让一次普通的找不到，变成一次
+    对已被摘除的旧依赖（GBrain）的调用。
+    """
+
+
 def base_url() -> str:
     """Return the configured local IvyeaAgent base URL."""
     from app.core import hub_settings
@@ -157,7 +166,13 @@ def request_json(
                 detail = str(body.get("detail") or body.get("error") or body)
             except IvyeaAgentError:
                 detail = raw.decode("utf-8", errors="replace")[:500]
-        raise IvyeaAgentError(f"IvyeaAgent HTTP {exc.code}: {detail or exc.reason}") from exc
+        msg = f"IvyeaAgent HTTP {exc.code}: {detail or exc.reason}"
+        # 404 单独成类：它是**正常答复**（"这东西不存在"），不是故障。调用方普遍
+        # 写成「agent 出错就回退旧后端」，混在一起会让一次普通的找不到，变成一次
+        # 对已摘除依赖的调用。
+        if exc.code == 404:
+            raise IvyeaAgentNotFound(msg) from exc
+        raise IvyeaAgentError(msg) from exc
     except (urllib.error.URLError, TimeoutError, socket.timeout, OSError) as exc:
         raise IvyeaAgentUnavailable(str(exc)) from exc
 

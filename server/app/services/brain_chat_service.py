@@ -547,12 +547,8 @@ def upload_knowledge(filename: str, data: bytes, category: str | None = None, ti
     import_status = "skipped"
     import_raw = ""
     if import_after_save:
-        try:
-            imp = gb.import_brain()
-            import_status = "ok"
-            import_raw = imp.get("raw", "")
-        except Exception as e:
-            import_status = f"failed: {e}"
+        import_status, import_raw = reindex_after_save()
+        if import_status.startswith("failed"):
             warnings.append("文件已保存，但自动导入失败；可稍后手动重新导入。")
     uid = uuid.uuid4().hex
     with _connect() as conn:
@@ -632,12 +628,8 @@ def ingest_pasted_text(text: str, import_after_save: bool = True) -> dict[str, A
     import_status = "skipped"
     import_raw = ""
     if import_after_save:
-        try:
-            imp = gb.import_brain()
-            import_status = "ok"
-            import_raw = imp.get("raw", "")
-        except Exception as e:
-            import_status = f"failed: {e}"
+        import_status, import_raw = reindex_after_save()
+        if import_status.startswith("failed"):
             warnings.append("内容已保存，但自动导入失败；可稍后手动重新导入。")
     uid = uuid.uuid4().hex
     encoded_size = len(clean.encode("utf-8"))
@@ -708,6 +700,77 @@ def ivyea_chat_available() -> bool:
         return _ia.chat_available()
     except Exception:  # noqa: BLE001
         return False
+
+
+def _legacy_category(item: dict[str, Any]) -> str:
+    """从 GBrain 导入的卡片还原它原来的分类。
+
+    这些卡在 agent 里统一是 `category: legacy_gbrain`，原分类藏在
+    `source_url`（`gbrain://amazon/ads/...`）和 `path`
+    （`user/imported/gbrain/amazon/ads/...`）里。不还原的话，按分类过滤引用
+    会把所有历史卡片全滤掉 —— 而那恰恰是 /brain 里内容最多的一批。
+    """
+    src = str(item.get("source_url") or "")
+    if src.startswith("gbrain://"):
+        rest = src[len("gbrain://"):].strip("/")
+        if "/" in rest:
+            return rest.split("/", 1)[0]
+    path = str(item.get("path") or "")
+    marker = "imported/gbrain/"
+    if marker in path:
+        rest = path.split(marker, 1)[1].strip("/")
+        if "/" in rest:
+            return rest.split("/", 1)[0]
+    return str(item.get("category") or "")
+
+
+def reindex_after_save() -> tuple[str, str]:
+    """新文件落盘后重建检索索引，返回 (status, raw)。
+
+    前门是 IvyeaAgent 的 retrieval sync；GBrain 的 `import` 只在 agent 不可用
+    **且** 本机确实装了 GBrain 时才兜底。两个上传入口（文件、粘贴文本）此前各写了
+    一份一模一样的 try/except，都硬绑在 GBrain 上。
+    """
+    if ivyea_chat_available():
+        try:
+            from app.services import ivyea_agent_service as _ia
+            res = _ia.retrieval_sync()
+            if res.get("ok", True):
+                return "ok", "ivyea-agent retrieval sync"
+        except Exception as e:  # noqa: BLE001
+            logger.debug("IvyeaAgent retrieval sync 失败（将回退 GBrain）：%s", e)
+    if not gb.installed():
+        # 没有 GBrain 也不算失败：文件已经落到 BRAIN_ROOT，agent 下次同步会捡到。
+        return "skipped", ""
+    try:
+        imp = gb.import_brain()
+        return "ok", imp.get("raw", "")
+    except Exception as e:  # noqa: BLE001
+        return f"failed: {e}", ""
+
+
+def ia_search(query: str, mode: str = "search", limit: int = 12) -> dict[str, Any]:
+    """IvyeaAgent 知识库检索，产出与旧 GBrain `search()` 同构的结果。
+
+    `/brain` 的搜索、页面、引用三处共用这一个适配器 —— 此前搜索端点自己有一份、
+    对话引用那条路**一份都没有**（直接调 GBrain），于是 agent 明明在线，
+    对话引用还是走外部二进制。
+    """
+    from app.services import ivyea_agent_service as _ia
+    res = _ia.knowledge_search(query, limit=limit)
+    items: list[dict[str, Any]] = []
+    for r in (res.get("results") or []):
+        items.append({
+            "slug": r.get("id"),
+            "path": r.get("path") or "",
+            "score": r.get("score", 0),
+            "snippet": r.get("snippet") or "",
+            "title": r.get("title") or "",
+            "source_url": r.get("source_url") or "",
+            "marketplaces": r.get("marketplaces") or [],
+            "category": _legacy_category(r),
+        })
+    return {"mode": mode, "query": query, "raw": "", "items": items, "source": "ivyea-agent"}
 
 
 def chat_model_status() -> dict[str, Any]:
@@ -901,6 +964,35 @@ def _search_citations(user_message: str, category: str | None = None) -> list[di
     seen: set[str] = set()
     citations: list[dict[str, Any]] = []
     last_error: Exception | None = None
+
+    # 前门：IvyeaAgent 的治理知识库。它是**语义 + 词法双路召回**，一次查询就够，
+    # 不需要上面那套候选词轮询 —— 那套是为 GBrain 的关键词检索兜底才存在的
+    # （"广告优化""否词"之类的短语提示，本质是在替一个弱检索器补词）。
+    #
+    # 此前这个函数**完全没有 ivyea 分支**：agent 明明是前门、明明已经把 GBrain
+    # 的数据全导进来了，每次对话还是要起一次外部二进制去查一遍，然后 agent 自己
+    # 内部又检索一次 —— 一次对话两套检索，其中一套的结果基本只用来显示"引用"。
+    if ivyea_chat_available():
+        try:
+            hits = ia_search(user_message, "search", limit=12).get("items") or []
+            for item in hits:
+                if scope and str(item.get("category") or "").strip().lower() != scope:
+                    continue
+                key = str(item.get("slug") or item.get("path") or item.get("snippet") or "")
+                if key and key not in seen:
+                    seen.add(key)
+                    citations.append(item)
+            if citations:
+                return citations[:8]
+        except Exception as e:  # noqa: BLE001 — agent 挂了就退回下面的 GBrain 路径
+            last_error = e
+            logger.debug("IvyeaAgent 引用检索失败（将回退 GBrain）：%s", e)
+
+    if not gb.installed():
+        if last_error:
+            logger.debug("引用检索无可用后端：%s", last_error)
+        return []
+
     for query in candidates[:8]:
         try:
             search_result = gb.search(query, "search")
