@@ -451,7 +451,7 @@ function HealthPanel() {
 
   useEffect(() => { check(); }, [check]);
 
-  type InstallableComponent = "ivyea-agent" | "legacy" | "hermes" | "ollama" | "codex" | "claude" | "all";
+  type InstallableComponent = "ivyea-agent" | "legacy" | "hermes" | "codex" | "claude" | "all";
 
   const installComponent = useCallback((component: InstallableComponent) => {
     if (installing) return;
@@ -487,7 +487,6 @@ function HealthPanel() {
     { label: "AI · 视觉识别",             key: "ai_chain", nested: "vision" },
     { label: "Apimart · 图片 / AI 服务", key: "apimart" },
     { label: "Sorftime · 市场数据",       key: "sorftime" },
-    { label: "兼容 · Ollama Embedding",   key: "ollama", install: "ollama" },
     { label: "外部 Agent · Hermes",       key: "runners", nested: "hermes", install: "hermes" },
     { label: "外部 Agent · Codex",        key: "runners", nested: "codex", install: "codex" },
     { label: "外部 Agent · Claude",       key: "runners", nested: "claude", install: "claude" },

@@ -286,8 +286,6 @@ export default function Brain() {
 
   const selectedFile = useMemo(() => files.find((f) => f.path === selectedPath), [files, selectedPath]);
   const stats = overview?.stats;
-  const embedOn = overview && (overview.embed_configured ?? overview.openai_configured);
-  const noEmbed = overview && !embedOn;
   // The front door is IvyeaAgent; the legacy GBrain readiness/embedding notices
   // (Ollama, gbrain bin, version-compat) only matter when we've degraded to it.
   const legacyGbrainMode = chatStatus?.provider !== "ivyea-agent";
@@ -619,7 +617,6 @@ export default function Brain() {
         <div style={{ marginBottom: 10 }}><MiniAlert kind="info">{overview.ready.hint}</MiniAlert></div>
       )}
       {flash && tab !== "governance" && <div style={{ marginBottom: 10 }}><MiniAlert kind="info"><pre style={{ whiteSpace: "pre-wrap", fontFamily: "var(--font)" }}>{flash}</pre></MiniAlert></div>}
-      {legacyGbrainMode && tab !== "governance" && noEmbed && <div style={{ marginBottom: 10 }}><MiniAlert kind="warn">未配置 Embedding：当前以关键词检索为主（功能正常）。如需语义检索，<a href="/hub-settings" style={{ color: "var(--acc)" }}>前往系统配置 → 智能体 → 知识库语义检索 →</a> 选择服务商（Ollama 本地免费）。</MiniAlert></div>}
       {chatStatus && !chatStatus.configured && tab === "chat" && <div style={{ marginBottom: 10 }}><MiniAlert kind="warn">对话引擎未就绪：请确认本机 IvyeaAgent 服务在运行，或在「系统配置 → 全局兜底大模型」配置一个文本模型。搜索、上传、页面仍可用。</MiniAlert></div>}
 
       {/* Outer row does NOT clip overflow, so the 「更多」dropdown can escape.

@@ -128,7 +128,6 @@ export interface HealthResp {
   apimart: RunnerStatus;
   sorftime: RunnerStatus;
   imgflow: RunnerStatus;
-  ollama: RunnerStatus;
   brain_root: RunnerStatus;
   openai: RunnerStatus;
   runners: {
