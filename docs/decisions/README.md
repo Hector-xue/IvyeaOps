@@ -12,7 +12,7 @@ git log 记得住「改了什么」，记不住「为什么不选另一条路」
 - 踩了一个坑，而这个坑的根因值得让未来的自己记住
 
 日常改 bug、加功能不用写 —— 那些看 [CHANGELOG](../../CHANGELOG.md) 和
-[时间线](/root/dev-history/ivyea-ops/timeline.md)（本机私有）。
+维护者本机私有的开发时间线。
 
 ## 索引
 

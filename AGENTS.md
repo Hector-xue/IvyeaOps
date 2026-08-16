@@ -60,20 +60,14 @@ systemctl restart ivyea-ops     # 改后端后重启生效
 
 纯重构、内部整理不进 CHANGELOG —— 那些看 git log 就够了。
 
-### 二、留本机（作者的私人记录，**不要提交进仓库**）
+### 二、维护者的私人记录（不在本仓库）
 
-位置：`/root/dev-history/ivyea-ops/`
+项目维护者另有一套本机私有的开发历史归档 —— 逐日时间线、里程碑、需求池，以及由 git 钩子
+自动追加的提交流水。它由本机多个 AI CLI 的会话存档还原而来，**不进这个公开仓库**：里面含
+密钥、业务数据和个人记录。
 
-| 做了什么 | 落到哪 |
-|---|---|
-| 发版了、或做完一件成规模的事 | `timeline.md` 追加当天条目，标注日期与所用工具 |
-| 需求状态变化（新需求 / 开工 / 完成 / 否决） | `roadmap.md` |
-
-同目录下的 `journal.md` 由 git 钩子自动追加，**不要手工编辑**，它是写 `timeline.md` 时的素材。
-
-`/root/dev-history/` 同时存着多个 AI CLI 的原始会话与逐日摘要，2026-04 至今的历史就是从那里
-还原的。**那些原始记录含密钥、密码、客户信息和真实 ASIN，连同上面两份私人记录，都不能进这个
-公开仓库。**
+如果你在给维护者本人干活，那套归档的落档要求写在它自己的 README 里，按那份做。
+如果你是外部贡献者，这一节与你无关 —— 按上面第一节做就够了。
 
 ## 发布纪律
 
@@ -96,6 +90,4 @@ systemctl restart ivyea-ops     # 改后端后重启生效
 
 ## 想了解这个项目怎么走到今天
 
-- [docs/decisions/](./docs/decisions/) —— 14 份 ADR，为什么这么选（在仓库里）
-- `/root/dev-history/ivyea-ops/timeline.md` —— 逐日时间线，从 2026-04-19 第一句需求起（本机私有）
-- `/root/dev-history/ivyea-ops/milestones.md` —— 十个转折点（本机私有）
+- [docs/decisions/](./docs/decisions/) —— 14 份 ADR，为什么这么选
