@@ -293,6 +293,113 @@ def _hostname() -> str:
         return "unknown"
 
 
+# ── 系统级孤儿进程巡检 ──────────────────────────────────────────────────────
+#
+# 上面那套只盯 IvyeaOps 自己的 MainPID —— 它是给"uvicorn 陷进死循环"设计的自监控。
+# 代价是**机器上其它任何东西它都看不见**：2026-08-16 在生产机上抓到一个
+# `bun … gbrain config set …`，本该几毫秒退出的一次性命令卡死空转了 8 天半，
+# 一直吃满一个核（2 核机器负载 3.3），全程零告警。同一天还捞出跑了 6 天的测试
+# serve 和 3 天的 headless Chrome。
+#
+# 这类漏网之鱼的共同特征很稳定：
+#   PPID == 1（原会话早退了，被 init 收养）
+#   + 不是任何 systemd 服务的 MainPID（真服务也 PPID==1，必须排掉）
+#   + 持续高 CPU
+#
+# **只报告，不自动杀**：误杀一个正经进程，比多烧几个 CPU 严重得多。
+
+ORPHAN_THRESHOLD_PCT = float(_hub_setting("orphan_threshold") or "50")
+ORPHAN_SUSTAIN_MIN = int(_hub_setting("orphan_sustain") or "10")
+
+
+def _systemd_managed_pids() -> set[int]:
+    """所有 systemd 服务的 MainPID —— 它们 PPID 也是 1，但不是孤儿。"""
+    pids: set[int] = set()
+    try:
+        out = subprocess.run(
+            ["systemctl", "show", "--type=service", "--state=running",
+             "--property=MainPID", "--value"],
+            capture_output=True, text=True, timeout=15,
+        ).stdout
+        for line in out.splitlines():
+            line = line.strip()
+            if line.isdigit() and int(line) > 0:
+                pids.add(int(line))
+    except Exception:  # noqa: BLE001 — 巡检失败绝不能影响主告警
+        pass
+    return pids
+
+
+def _proc_cmdline(pid: int) -> str:
+    try:
+        raw = Path(f"/proc/{pid}/cmdline").read_bytes()
+    except OSError:
+        return ""
+    return " ".join(p.decode("utf-8", "replace") for p in raw.split(b"\0") if p)
+
+
+def _proc_ppid(pid: int) -> int:
+    try:
+        for line in Path(f"/proc/{pid}/status").read_text().splitlines():
+            if line.startswith("PPid:"):
+                return int(line.split()[1])
+    except (OSError, ValueError, IndexError):
+        pass
+    return -1
+
+
+def scan_orphans(state: dict) -> list[dict]:
+    """返回持续高 CPU 的孤儿进程。维护自己的采样历史，和主告警互不干扰。"""
+    if not Path("/proc").exists():
+        return []          # 非 Linux：整段跳过
+    managed = _systemd_managed_pids()
+    me = os.getpid()
+    now = time.time()
+
+    hist: dict = state.setdefault("orphans", {})
+    live: set[str] = set()
+    for entry in os.listdir("/proc"):
+        if not entry.isdigit():
+            continue
+        pid = int(entry)
+        if pid == me or pid in managed or pid <= 1:
+            continue
+        if _proc_ppid(pid) != 1:
+            continue
+        cpu = _sample_cpu_pct(pid)
+        if cpu is None:
+            continue
+        key = str(pid)
+        live.add(key)
+        rec = hist.setdefault(key, {"cmd": _proc_cmdline(pid)[:200], "samples": []})
+        rec["samples"] = _trim_samples(rec["samples"], ORPHAN_SUSTAIN_MIN * 60 + 30)
+        rec["samples"].append({"ts": now, "cpu": round(cpu, 1)})
+
+    # PID 消失了就把历史丢掉，否则 PID 回绕后会把新进程算进旧账
+    for key in list(hist):
+        if key not in live:
+            hist.pop(key, None)
+
+    window_start = now - ORPHAN_SUSTAIN_MIN * 60
+    hits = []
+    for key, rec in hist.items():
+        win = [s for s in rec["samples"] if s["ts"] >= window_start]
+        if len(win) >= ORPHAN_SUSTAIN_MIN and all(s["cpu"] >= ORPHAN_THRESHOLD_PCT for s in win):
+            hits.append({"pid": int(key), "cmd": rec["cmd"],
+                         "avg": sum(s["cpu"] for s in win) / len(win),
+                         "peak": max(s["cpu"] for s in win)})
+    return sorted(hits, key=lambda h: -h["peak"])
+
+
+def _proc_age(pid: int) -> str:
+    try:
+        out = subprocess.run(["ps", "-o", "etime=", "-p", str(pid)],
+                             capture_output=True, text=True, timeout=10).stdout.strip()
+        return out or "?"
+    except Exception:  # noqa: BLE001
+        return "?"
+
+
 def main() -> int:
     # Test mode: `--test` sends a one-off test message and exits, useful
     # for verifying the webhook + group keyword/signature config without
@@ -367,8 +474,41 @@ def main() -> int:
         if ok:
             state["last_alert_ts"] = time.time()
 
+    _report_orphans(state)
     _save_history(state)
     return 0
+
+
+def _report_orphans(state: dict) -> None:
+    """孤儿巡检的告警分支。用**独立**的冷却计时：和主告警共用一个的话，
+    IvyeaOps 自己那条一响就会把孤儿这条压住半小时，而这两件事毫无关系。"""
+    try:
+        hits = scan_orphans(state)
+    except Exception:  # noqa: BLE001 — 巡检永远不许影响主告警
+        return
+    if not hits:
+        return
+    last = state.get("last_orphan_alert_ts", 0)
+    if (time.time() - last) < COOLDOWN_MIN * 60:
+        return
+    if not (WEBHOOK_URL or (APP_ID and APP_SECRET and CHAT_ID)):
+        return
+    lines = [
+        "⚠️ 发现无人托管的高 CPU 进程",
+        f"主机: {_hostname()}",
+        f"窗口: 最近 {ORPHAN_SUSTAIN_MIN} 分钟持续 ≥ {ORPHAN_THRESHOLD_PCT:.0f}%",
+        "",
+    ]
+    for h in hits[:5]:
+        lines.append(f"PID {h['pid']} · 已运行 {_proc_age(h['pid'])} · "
+                     f"avg={h['avg']:.0f}% peak={h['peak']:.0f}%")
+        lines.append(f"  {h['cmd'][:120]}")
+    lines += ["", "这些进程的父进程已退出（PPID=1）且不受 systemd 管辖，",
+              "多半是历史会话/脚本留下的。确认无用后按精确 PID 结束：kill <PID>",
+              "（不要用宽泛的 pkill -f）"]
+    ok, _ch = _push("\n".join(lines))
+    if ok:
+        state["last_orphan_alert_ts"] = time.time()
 
 
 if __name__ == "__main__":
