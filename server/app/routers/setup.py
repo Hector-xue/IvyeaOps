@@ -50,7 +50,7 @@ _INSTALLABLE: dict[str, str] = {
     "codex":  "@openai/codex",
     "claude": "@anthropic-ai/claude-code",
 }
-_COMPONENTS = {"ivyea-agent", "legacy", "hermes", "gbrain", "ollama", "codex", "claude", "all"}
+_COMPONENTS = {"ivyea-agent", "legacy", "hermes", "ollama", "codex", "claude", "all"}
 _LATEST_RELEASE_API = "https://api.github.com/repos/Hector-xue/IvyeaOps/releases/latest"
 
 
@@ -94,7 +94,6 @@ def setup_status(_u: str = Depends(require_user)):
     agents_found = {name: bool(_find_bin(name)) for name in RUNNER_ORDER}
     ivyea_found = bool(_ivyea_bin())
     agents_found["ivyea-agent"] = ivyea_found
-    agents_found["gbrain"] = bool(shutil.which("gbrain") or (Path.home() / ".bun" / "bin" / "gbrain.exe").exists())
     agents_found["ollama"] = bool(
         shutil.which("ollama")
         or (Path.home() / "AppData" / "Local" / "Programs" / "Ollama" / "ollama.exe").exists()
@@ -457,21 +456,9 @@ def update_install(_u: str = Depends(require_user)):
     return {"ok": True, "detail": "正在安装，服务即将重启。"}
 
 
-# Pin GBrain to a known-good commit. Upstream HEAD (v0.35+) changed the config
-# schema to require database_url and broke `init --pglite`, so an *unpinned*
-# install (what this used to do) left the 知识库 board erroring "No database URL".
-# Clean-reinstall (remove + cache rm) so an already-installed v0.35 is replaced.
-_GBRAIN_REF = "github:garrytan/gbrain#1a6b543cc536cb8c379ce30518390a38e6d2ee57"
-_GBRAIN_INSTALL_SH = (
-    'command -v bun >/dev/null || curl -fsSL https://bun.sh/install | bash; '
-    'export PATH="$HOME/.bun/bin:$PATH"; '
-    'bun remove -g gbrain >/dev/null 2>&1 || true; '
-    'bun pm cache rm >/dev/null 2>&1 || true; '
-    f'bun install -g {_GBRAIN_REF}; '
-    # On POSIX the gbrain bin is a symlink to src/cli.ts run via bun's shebang, so
-    # `gbrain` works directly (the "Blocked postinstall" is just pglite's migration).
-    'mkdir -p "$HOME/brain"; cd "$HOME/brain" && (gbrain init --pglite || true)'
-)
+# GBrain 的安装脚本已移除。知识库现在由 IvyeaAgent 自带，GBrain 只剩尚未迁完的
+# 旧读路径。它必须 pin 在某个 commit（上游 v0.35+ 改了配置 schema、废掉
+# `init --pglite`），装的时候还要先拉 bun —— 对新用户是纯负担且经常装不上。
 
 
 async def _component_install_stream(component: str) -> AsyncGenerator[str, None]:
@@ -495,12 +482,8 @@ async def _component_install_stream(component: str) -> AsyncGenerator[str, None]
         cmd = [ps, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), "-Component", component]
     elif component in {"all", "ivyea-agent"}:
         cmd = ["bash", "-lc", _ivyea_install_shell(root)]
-    elif component == "legacy":
-        cmd = ["bash", "-lc", "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash; " + _GBRAIN_INSTALL_SH]
-    elif component == "hermes":
+    elif component in {"legacy", "hermes"}:
         cmd = ["bash", "-lc", "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash"]
-    elif component == "gbrain":
-        cmd = ["bash", "-lc", _GBRAIN_INSTALL_SH]
     elif component == "ollama":
         cmd = ["bash", "-lc", "command -v ollama >/dev/null || curl -fsSL https://ollama.com/install.sh | sh; ollama pull nomic-embed-text"]
     elif component in _INSTALLABLE:
@@ -508,7 +491,7 @@ async def _component_install_stream(component: str) -> AsyncGenerator[str, None]
             yield event
         return
     else:
-        cmd = ["bash", "-lc", "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash; " + _GBRAIN_INSTALL_SH]
+        cmd = ["bash", "-lc", "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash"]
 
     yield f"data: > {' '.join(cmd)}\n\n"
     env = {**os.environ}

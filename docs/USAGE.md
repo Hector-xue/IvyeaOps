@@ -21,7 +21,7 @@
 ```
 
 - **IvyeaAgent** 是 IvyeaOps 内置 Agent，负责右下角会话、知识库和本地检索。
-- **Codex / Claude / Hermes** 是可选外部 Agent CLI；新部署不再要求安装 Hermes/GBrain/Ollama。
+- **Codex / Claude / Hermes** 是可选外部 Agent CLI；新部署不再要求安装 Hermes/Ollama。
 - **全局兜底大模型**是你在「系统配置 → 应用模型 → 全局兜底大模型」里填的任意 OpenAI 兼容模型（DeepSeek / OpenAI / OpenRouter / Kimi / 自定义…）。
   **只要配好它，主要 AI 功能即可开箱使用**。
 - 链的顺序可在「系统配置 → 智能体 → AI 提供商顺序」(`text_ai_providers`) 自定义。
@@ -222,7 +222,7 @@ Skill 生成默认走稳定的标准文本链（应用模型优先 + 可选外�
 
 “账户证据”标签支持账户健康、Listing、注册合规、费用、税务、结算、退货/SAFE-T 和品牌保护等文本证据。必须勾选本地处理授权与数据权利确认；系统不保存原始文件，邮箱、电话、地址、证件、银行和税号会脱敏，账户/order/case/claim/settlement/transaction 等标识只保留哈希引用。浏览器闭环可用 `cd client && npm run test:e2e:knowledge` 验证。
 
-`/brain` 的对话、上传、搜索、页面等其他标签继续保留原 GBrain 兼容工作流；只有继续使用这些旧标签时才需要配置 `gbrain_bin`、`brain_root` 与 Embedding 模型。
+`/brain` 的对话、上传、搜索、页面等其他标签仍走尚未迁完的旧兼容工作流，读的是 `brain_root`（默认 `~/brain`）下的文件。
 
 ---
 
@@ -250,7 +250,7 @@ Skill 生成默认走稳定的标准文本链（应用模型优先 + 可选外�
 - **数据源**：Sorftime / SIF / 卖家精灵 Key（带连通性测试）。
 - **大模型**：Hermes 主模型 + Fallback 模型。
 - **应用模型**：**全局兜底大模型（兼 AI 问答）** + AI 生图。
-- **智能体**：hermes/codex/claude 路径、AI 提供商顺序、自动修复开关、GBrain Embedding。
+- **智能体**：hermes/codex/claude 路径、AI 提供商顺序、自动修复开关。
 - **飞书 / Lark 通知**、**高级 / 运维**。
 - **健康检查**：一眼看清各服务与 **AI 链就绪状态**（文本链 / 全局兜底 / 视觉）。
 

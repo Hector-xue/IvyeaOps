@@ -3,15 +3,14 @@
 # Components:
 #   all         - IvyeaAgent runtime (default)
 #   ivyea-agent - IvyeaAgent runtime (Agent + knowledge base + retrieval)
-#   legacy      - old Hermes + GBrain compatibility chain
+#   legacy      - old Hermes compatibility chain
 #   hermes      - official Hermes Agent installer
-#   gbrain      - Bun + GBrain CLI + ~/brain initialization
-#   ollama      - Ollama + nomic-embed-text for old GBrain embeddings
+#   ollama      - Ollama + nomic-embed-text (local models)
 #   codex       - Node.js + OpenAI Codex CLI
 #   claude      - Node.js + Claude Code CLI
 
 param(
-    [ValidateSet("all", "ivyea-agent", "legacy", "hermes", "gbrain", "ollama", "codex", "claude", "status")]
+    [ValidateSet("all", "ivyea-agent", "legacy", "hermes", "ollama", "codex", "claude", "status")]
     [string]$Component = "all"
 )
 
@@ -43,7 +42,6 @@ function Show-Status {
     $hermes = Get-Command hermes -ErrorAction SilentlyContinue
     $ivyea = Get-Command ivyea -ErrorAction SilentlyContinue
     $bun = Get-Command bun -ErrorAction SilentlyContinue
-    $gbrain = Get-Command gbrain -ErrorAction SilentlyContinue
     $node = Get-Command node -ErrorAction SilentlyContinue
     $npm = Get-Command npm -ErrorAction SilentlyContinue
     $ollama = Get-Command ollama -ErrorAction SilentlyContinue
@@ -52,7 +50,6 @@ function Show-Status {
     Write-Host "IvyeaAgent: $(if ($ivyea) { $ivyea.Source } else { 'not installed' })"
     Write-Host "Hermes: $(if ($hermes) { $hermes.Source } else { 'not installed' })"
     Write-Host "Bun:    $(if ($bun) { $bun.Source } else { 'not installed' })"
-    Write-Host "GBrain: $(if ($gbrain) { $gbrain.Source } else { 'not installed' })"
     Write-Host "Node:   $(if ($node) { $node.Source } else { 'not installed' })"
     Write-Host "npm:    $(if ($npm) { $npm.Source } else { 'not installed' })"
     Write-Host "Ollama: $(if ($ollama) { $ollama.Source } else { 'not installed' })"
@@ -212,87 +209,6 @@ function Install-Hermes {
     }
 }
 
-function Install-GBrain {
-    Refresh-Path
-    if (-not (Test-Cmd "bun")) {
-        Write-Info "Installing Bun for GBrain..."
-        Invoke-Expression (Invoke-RestMethod "https://bun.sh/install.ps1")
-        $env:Path = "$env:USERPROFILE\.bun\bin;" + $env:Path
-        Refresh-Path
-    } else {
-        Write-Info "Bun already installed: $((Get-Command bun).Source)"
-    }
-
-    $bun = Get-Command bun -ErrorAction SilentlyContinue
-    if (-not $bun) {
-        $fallback = "$env:USERPROFILE\.bun\bin\bun.exe"
-        if (Test-Path $fallback) { $bun = [pscustomobject]@{ Source = $fallback } }
-    }
-    if (-not $bun) { throw "bun not found. Cannot install GBrain." }
-
-    Write-Info "Installing/updating GBrain (clean reinstall to the pinned version)..."
-    # Pin to a known-good commit. Upstream HEAD (v0.35+) changed the config schema
-    # to require database_url and broke `init --pglite`, so an unpinned install made
-    # the knowledge-base board error "No database URL: database_url is missing from
-    # config". v0.33.2.0 keeps the local PGLite (database_path) flow.
-    $GbrainRef = "github:garrytan/gbrain#1a6b543cc536cb8c379ce30518390a38e6d2ee57"
-    # Clean any prior (possibly v0.35 or half-installed) global gbrain so the pinned
-    # commit installs fresh. These are best-effort: with $ErrorActionPreference='Stop'
-    # a native command writing to stderr (e.g. `bun remove` when nothing is installed:
-    # "package.json is empty {}") throws a terminating error and aborts the whole
-    # install — which is exactly why repair kept failing. Force EA=Continue + try/catch
-    # so cleanup can never abort the install.
-    $prevEAP = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    try { & $bun.Source remove -g gbrain *>$null } catch {}
-    try { & $bun.Source pm cache rm *>$null } catch {}
-    # Nuke a leftover corrupt package dir — an aborted earlier install can leave a
-    # gbrain folder without src/cli.ts → runtime "Module not found .../src/cli.ts".
-    $gbPkg = "$env:USERPROFILE\.bun\install\global\node_modules\gbrain"
-    if (Test-Path $gbPkg) { try { Remove-Item -Recurse -Force $gbPkg *>$null } catch {} }
-    $ErrorActionPreference = $prevEAP
-    & $bun.Source install -g $GbrainRef
-    if ($LASTEXITCODE -ne 0) { throw "bun install -g $GbrainRef failed." }
-    Refresh-Path
-
-    # IMPORTANT: do NOT use the bun-generated gbrain.exe shim — on Windows it errors
-    # "The system cannot find the path specified" (it's a symlink-to-.ts trick that
-    # only works on POSIX). gbrain's entry is a TypeScript file; run it directly with
-    # `bun run <cli.ts>`, which works cross-platform (verified). The "Blocked 1
-    # postinstall" warning is just pglite's DB migration — not needed for init.
-    $gbrainCli = "$env:USERPROFILE\.bun\install\global\node_modules\gbrain\src\cli.ts"
-    if (-not (Test-Path $gbrainCli)) { throw "gbrain entry not found after install: $gbrainCli" }
-
-    $brain = "$env:USERPROFILE\brain"
-    if (-not (Test-Path $brain)) { New-Item -ItemType Directory -Path $brain | Out-Null }
-    # Initialise the local PGLite database. Do NOT silence this: a failed init leaves
-    # ~/.gbrain/config.json without a database, and the board then errors
-    # "No database URL". Capture output and verify the result.
-    Write-Info "Initializing GBrain local knowledge base (PGLite)..."
-    Push-Location $brain
-    # init --pglite creates the DB successfully, but a post-init advisory step
-    # (gbrain looks for GStack / shells out to a tool that doesn't exist on
-    # Windows) writes "The system cannot find the path specified" to stderr and
-    # exits non-zero. With $ErrorActionPreference='Stop' that aborts the whole
-    # installer BEFORE the success check below — even though the brain is ready.
-    # Run it under EA=Continue + try/catch so the DB-created check decides success.
-    $prevEAP = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    try { $gbInit = & $bun.Source run $gbrainCli init --pglite 2>&1 | Out-String } catch { $gbInit = "$_" }
-    $ErrorActionPreference = $prevEAP
-    Pop-Location
-    $gbCfg = "$env:USERPROFILE\.gbrain\config.json"
-    if ((Test-Path $gbCfg) -and ((Get-Content $gbCfg -Raw) -match '"database_path"')) {
-        Write-Info "GBrain database ready: $gbCfg"
-    } else {
-        Write-Warn "GBrain init did not complete — the board will error 'No database URL'."
-        Write-Warn "gbrain init output:`n$gbInit"
-        Write-Warn "Retry: cd `"$brain`"; & `"$($bun.Source)`" run `"$gbrainCli`" init --pglite"
-    }
-    Write-Info "GBrain installed (entry): $gbrainCli"
-    Write-Info "Brain root: $brain"
-}
-
 function Get-OllamaCommand {
     Refresh-Path
     $ollama = Get-Command ollama -ErrorAction SilentlyContinue
@@ -303,38 +219,6 @@ function Get-OllamaCommand {
         return $fallback
     }
     return $null
-}
-
-function Set-GBrainOllamaEmbedding {
-    $dir = "$env:USERPROFILE\.gbrain"
-    $file = Join-Path $dir "config.json"
-    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-
-    $cfg = @{}
-    if (Test-Path $file) {
-        try {
-            $raw = Get-Content $file -Raw
-            if ($raw.Trim()) {
-                $obj = $raw | ConvertFrom-Json
-                foreach ($p in $obj.PSObject.Properties) { $cfg[$p.Name] = $p.Value }
-            }
-        } catch {
-            Write-Warn "Could not parse existing GBrain config; rewriting embedding fields only."
-        }
-    }
-    $cfg["embedding_model"] = "ollama:nomic-embed-text"
-    $cfg["embedding_dimensions"] = 768
-    ($cfg | ConvertTo-Json -Depth 10) | Set-Content -Path $file -Encoding UTF8
-
-    $gbrain = Get-Command gbrain -ErrorAction SilentlyContinue
-    if (-not $gbrain) {
-        $fallback = "$env:USERPROFILE\.bun\bin\gbrain.exe"
-        if (Test-Path $fallback) { $gbrain = [pscustomobject]@{ Source = $fallback } }
-    }
-    if ($gbrain) {
-        try { & $gbrain.Source config set embedding_model "ollama:nomic-embed-text" | Out-Host } catch {}
-    }
-    Write-Info "GBrain embedding configured: ollama:nomic-embed-text"
 }
 
 function Install-Ollama {
@@ -369,15 +253,13 @@ function Install-Ollama {
     & $ollamaPath pull nomic-embed-text
     if ($LASTEXITCODE -ne 0) { throw "ollama pull nomic-embed-text failed." }
 
-    Set-GBrainOllamaEmbedding
     Write-Info "Ollama ready: $ollamaPath"
 }
 
 if ($Component -eq "status") { Show-Status; exit 0 }
 if ($Component -eq "all" -or $Component -eq "ivyea-agent") { Install-IvyeaAgent }
-if ($Component -eq "legacy") { Install-Hermes; Install-GBrain }
+if ($Component -eq "legacy") { Install-Hermes }
 if ($Component -eq "hermes") { Install-Hermes }
-if ($Component -eq "gbrain") { Install-GBrain }
 if ($Component -eq "ollama") { Install-Ollama }
 if ($Component -eq "codex") { Install-NpmPackage "codex" "@openai/codex" }
 if ($Component -eq "claude") { Install-NpmPackage "claude" "@anthropic-ai/claude-code" }

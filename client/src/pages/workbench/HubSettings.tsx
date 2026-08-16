@@ -451,7 +451,7 @@ function HealthPanel() {
 
   useEffect(() => { check(); }, [check]);
 
-  type InstallableComponent = "ivyea-agent" | "legacy" | "hermes" | "gbrain" | "ollama" | "codex" | "claude" | "all";
+  type InstallableComponent = "ivyea-agent" | "legacy" | "hermes" | "ollama" | "codex" | "claude" | "all";
 
   const installComponent = useCallback((component: InstallableComponent) => {
     if (installing) return;
@@ -487,7 +487,6 @@ function HealthPanel() {
     { label: "AI · 视觉识别",             key: "ai_chain", nested: "vision" },
     { label: "Apimart · 图片 / AI 服务", key: "apimart" },
     { label: "Sorftime · 市场数据",       key: "sorftime" },
-    { label: "兼容 · GBrain CLI",         key: "gbrain_bin", install: "gbrain" },
     { label: "兼容 · Ollama Embedding",   key: "ollama", install: "ollama" },
     { label: "外部 Agent · Hermes",       key: "runners", nested: "hermes", install: "hermes" },
     { label: "外部 Agent · Codex",        key: "runners", nested: "codex", install: "codex" },
@@ -804,13 +803,12 @@ const EMPTY: HubSettings = {
   ivyea_agent_url: "http://127.0.0.1:8765", ivyea_agent_token: "", ivyea_agent_auto_start: true,
   ivyea_agent_provider: "", ivyea_agent_model: "", ivyea_agent_api_key: "", ivyea_agent_base_url: "",
   image_model: "", image_api_key: "", image_base_url: "",
-  gbrain_embed_provider: "", gbrain_embed_model: "", gbrain_embed_api_key: "",
   apimart_key: "", apimart_base: "https://api.apimart.ai/v1",
   text_ai_providers: "ivyea-agent,assistant,deepseek,codex,claude",
   vision_ai_providers: "openai,assistant", deepseek_api_key: "", news_feeds: "",
   sorftime_key: "", sif_key: "", sellersprite_key: "",
   imgflow_url: "http://127.0.0.1:3001",
-  gbrain_bin: "", brain_root: "", openai_api_key: "",
+  brain_root: "", openai_api_key: "",
   alert_webhook: "", alert_app_id: "", alert_app_secret: "", alert_chat_id: "",
   alert_threshold: 80, alert_sustain: 5, alert_cooldown: 30,
   dashboard_url: "", terminal_url: "",
@@ -1457,11 +1455,10 @@ export default function HubSettings() {
       {/* -- 可选能力：AI 降级、视觉、Embedding -- */}
       <Section
         title="可选 AI 能力"
-        desc="低频或增强项：AI 降级链、图片分析、知识库语义检索和自动修复。默认值已可覆盖大多数场景。"
+        desc="低频或增强项：AI 降级链、图片分析和自动修复。默认值已可覆盖大多数场景。"
         keys={["text_ai_providers", "autofix_enabled",
           "skill_market_enabled", "skill_market_url", "skill_market_pubkey",
-          "vision_ai_providers", "openai_api_key", "deepseek_api_key",
-          "gbrain_embed_provider", "gbrain_embed_model", "gbrain_embed_api_key"]}
+          "vision_ai_providers", "openai_api_key", "deepseek_api_key"]}
         vals={vals} onSave={save}
       >
         <Field label={<><Tag kind="opt">可选</Tag>AI 提供商顺序（全局降级链）</>}
@@ -1481,50 +1478,6 @@ export default function HubSettings() {
           <SecretInput value={vals.deepseek_api_key} onChange={v => set("deepseek_api_key", v)} placeholder="sk-..." />
         </Field>
 
-        <div style={{ borderTop: "1px solid var(--b)", margin: "4px 0 2px", paddingTop: 10 }}>
-          <div style={{ fontSize: "var(--fs-11)", color: "var(--t2)", fontWeight: 600, marginBottom: 2 }}>
-            知识库语义检索（Embedding）
-          </div>
-          <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginBottom: 8 }}>
-            配置后知识库支持语义检索；留空则仅关键词检索。
-          </div>
-        </div>
-        <Field label={<><Tag kind="opt">可选</Tag>Embedding 服务商</>}
-          hint={<>支持 embedding 的服务商。<code>ollama</code> 本地免费，其余需对应 API Key。</>}>
-          <SheetSelect className="hs-input" value={vals.gbrain_embed_provider} title="Embedding 服务商"
-            onChange={p => {
-              set("gbrain_embed_provider", p);
-              if (p && !vals.gbrain_embed_model) {
-                const dm: Record<string, string> = {
-                  openai: "text-embedding-3-large", zhipu: "embedding-3",
-                  dashscope: "text-embedding-v3", minimax: "embo-01",
-                  voyage: "voyage-3", google: "text-embedding-004",
-                  ollama: "nomic-embed-text",
-                };
-                if (dm[p]) set("gbrain_embed_model", dm[p]);
-              }
-            }}
-            options={[
-              { value: "", label: "未配置（关键词检索）" },
-              { value: "ollama", label: "Ollama（本地免费）" },
-              { value: "zhipu", label: "智谱 Zhipu" },
-              { value: "dashscope", label: "阿里 DashScope" },
-              { value: "minimax", label: "MiniMax" },
-              { value: "openai", label: "OpenAI" },
-              { value: "voyage", label: "Voyage" },
-              { value: "google", label: "Google" },
-            ]} />
-        </Field>
-        {vals.gbrain_embed_provider && (
-          <Field label="Embedding 模型" hint="已按服务商预填默认值，可改">
-            <TxtInput value={vals.gbrain_embed_model} onChange={v => set("gbrain_embed_model", v)} placeholder="模型名" />
-          </Field>
-        )}
-        {vals.gbrain_embed_provider && vals.gbrain_embed_provider !== "ollama" && (
-          <Field label="Embedding API Key">
-            <SecretInput value={vals.gbrain_embed_api_key} onChange={v => set("gbrain_embed_api_key", v)} placeholder="对应服务商的 API Key" />
-          </Field>
-        )}
 
         <div className="hs-agent-card hs-agent-card-wide">
           <div className="hs-agent-card-title"><Tag kind="opt">功能</Tag>能力市场（门道社区）</div>
@@ -1581,12 +1534,12 @@ export default function HubSettings() {
       {/* -- 低优先级：兼容与旧链路 -- */}
       <Section
         title="兼容与旧链路"
-        desc="Hermes/Codex/Claude/GBrain 仅作为兼容或增强链路。新部署通常不需要配置。"
+        desc="Hermes/Codex/Claude 仅作为兼容或增强链路。新部署通常不需要配置。"
         keys={[
           "hermes_provider", "hermes_model", "hermes_api_key", "hermes_base_url",
           "hermes_fallback_provider", "hermes_fallback_model",
           "hermes_fallback_api_key", "hermes_fallback_base_url",
-          "hermes_bin", "codex_bin", "claude_bin", "gbrain_bin", "brain_root",
+          "hermes_bin", "codex_bin", "claude_bin", "brain_root",
         ]}
         vals={vals} onSave={save}
       >
@@ -1647,10 +1600,7 @@ export default function HubSettings() {
             <Field label={<><Tag kind="opt">可选</Tag>Claude 路径</>} hint={<>留空 = PATH 自动发现。<code>npm i -g @anthropic-ai/claude-code</code></>}>
               <TxtInput value={vals.claude_bin} onChange={v => set("claude_bin", v)} placeholder="留空 = PATH 自动发现" />
             </Field>
-            <Field label={<><Tag kind="opt">可选</Tag>GBrain 路径</>} hint={<>留空 = PATH 自动发现（通常 <code>~/.bun/bin/gbrain</code>）。</>}>
-              <TxtInput value={vals.gbrain_bin} onChange={v => set("gbrain_bin", v)} placeholder="留空 = PATH 自动发现" />
-            </Field>
-            <Field label={<><Tag kind="opt">可选 · 旧兼容</Tag>知识库根目录</>} hint={<>GBrain 笔记目录，留空 = <code>~/brain</code>。新知识库文件由 IvyeaAgent 保存在 <code>~/.ivyea/knowledge</code>。</>}>
+            <Field label={<><Tag kind="opt">可选 · 旧兼容</Tag>知识库根目录</>} hint={<>旧笔记目录，留空 = <code>~/brain</code>。新知识库文件由 IvyeaAgent 保存在 <code>~/.ivyea/knowledge</code>。</>}>
               <TxtInput value={vals.brain_root} onChange={v => set("brain_root", v)} placeholder="~/brain" />
             </Field>
           </div>

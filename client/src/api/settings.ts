@@ -34,9 +34,6 @@ export interface HubSettings {
   image_api_key: string;
   image_base_url: string;
   // GBrain 语义检索 embedding
-  gbrain_embed_provider: string;
-  gbrain_embed_model: string;
-  gbrain_embed_api_key: string;
   // Primary image-generation gateway
   apimart_key: string;
   apimart_base: string;
@@ -53,7 +50,6 @@ export interface HubSettings {
   // Listing Generator
   imgflow_url: string;
   // GBrain
-  gbrain_bin: string;
   brain_root: string;
   openai_api_key: string;
   // Feishu alerts
@@ -116,7 +112,6 @@ export interface HealthResp {
   apimart: RunnerStatus;
   sorftime: RunnerStatus;
   imgflow: RunnerStatus;
-  gbrain_bin: RunnerStatus;
   ollama: RunnerStatus;
   brain_root: RunnerStatus;
   openai: RunnerStatus;

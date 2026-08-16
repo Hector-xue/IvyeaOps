@@ -518,7 +518,7 @@ async def test_value(key: str, value: Optional[str]) -> Dict[str, Any]:
         # Test the whole bundle together — single field alone isn't useful.
         return await _probe_feishu_app()
 
-    if key in ("hermes_bin", "codex_bin", "claude_bin", "kiro_cli_bin", "gbrain_bin"):
+    if key in ("hermes_bin", "codex_bin", "claude_bin", "kiro_cli_bin"):
         return _probe_bin(val)
     if key.endswith("_db"):
         return _probe_db(val)
@@ -604,7 +604,7 @@ def autodetect() -> Dict[str, Any]:
 
     # --- CLIs (try PATH lookup then common locations) ---
     for name, key in (("hermes", "hermes_bin"), ("codex", "codex_bin"),
-                      ("kiro-cli", "kiro_cli_bin"), ("gbrain", "gbrain_bin")):
+                      ("kiro-cli", "kiro_cli_bin")):
         if current.get(key):
             continue
         w = shutil.which(name)

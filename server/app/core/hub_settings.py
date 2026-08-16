@@ -67,21 +67,18 @@ _DEFAULTS: Dict[str, Any] = {
     "image_model": "",            # default gpt-image-2
     "image_api_key": "",          # empty = reuse apimart_key
     "image_base_url": "",         # empty = reuse apimart_base
-    # GBrain 语义检索 embedding — provider key written to ~/.hermes/.env,
-    # model/provider pushed via `gbrain config set`. Empty = keyword search only.
-    "gbrain_embed_provider": "",  # openai | zhipu | dashscope | minimax | voyage | ollama
-    "gbrain_embed_model": "",
-    "gbrain_embed_api_key": "",
+    # 语义检索的 embedding 配置曾经在这里（gbrain_embed_*），已随 GBrain 一起移除：
+    # 知识库前门是 IvyeaAgent，它的检索后端由 agent 自己管（ivyea retrieval embeddings），
+    # 这三个键写的是 ~/.gbrain/config.json，配了对 agent 一点作用都没有——纯误导。
     # Market data
     "sorftime_key": "",      # sorftime.com — 市场调研、关键词趋势
     "sif_key": "",           # sif.com — 深度分析工具箱（独立账号和 key）
     "sellersprite_key": "",  # sellersprite.com — 竞品关键词分析
     # Listing Generator — imgflow backend
     "imgflow_url": "http://127.0.0.1:3001",
-    # GBrain knowledge base
-    "gbrain_bin": "",           # empty = use env / auto-detect
+    # 知识库文件根目录（笔记/上传落盘位置，与 GBrain 无关，前门是 IvyeaAgent）
     "brain_root": "",           # empty = use env / default /root/brain
-    "openai_api_key": "",       # for GBrain embeddings
+    "openai_api_key": "",       # 视觉识别（AI 图片分析）用的 OpenAI key
     # 通知渠道（见 services/notify）。notify_webhook 留空则退回 alert_webhook，
     # 老部署不用重配。notify_events 存 JSON 数组，留空用 notify.DEFAULT_EVENTS。
     "notify_webhook": "",
@@ -239,7 +236,7 @@ _DEFAULTS: Dict[str, Any] = {
     "kiro_cli_sessions_dir": "", # /root/.kiro/sessions/cli
     "claude_projects_dir": "",   # /root/.claude/projects (jsonl token logs)
     "hermes_node_bin": "",       # /root/.hermes/node/bin (PATH augment for spawns)
-    "bun_bin": "",               # /root/.bun/bin (gbrain depends on bun)
+    "bun_bin": "",               # /root/.bun/bin (bun-based CLIs)
     # ASIN/广告审计的默认执行智能体（选择器里 "auto" 解析到它）。默认 hermes——它是
     # IvyeaOps 配好 skill + 数据源 MCP 的 runner，审计才能出结构化报告。空=hermes。
     "audit_default_runner": "hermes",
@@ -258,7 +255,6 @@ _ENV_MAP: Dict[str, str] = {
     "deepseek_api_key": "DEEPSEEK_API_KEY",
     "sorftime_key": "SORFTIME_KEY",
     "openai_api_key": "OPENAI_API_KEY",
-    "gbrain_bin": "IVYEA_OPS_GBRAIN_BIN",
     "brain_root": "IVYEA_OPS_BRAIN_ROOT",
     "alert_webhook": "IVYEA_OPS_ALERT_WEBHOOK",
     "alert_app_id": "IVYEA_OPS_ALERT_APP_ID",

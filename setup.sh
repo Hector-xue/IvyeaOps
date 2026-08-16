@@ -117,148 +117,6 @@ install_bun() {
     fi
 }
 
-# ── Install GBrain ────────────────────────────────
-install_gbrain() {
-    log "Installing GBrain..."
-
-    # Ensure bun is available
-    if ! has bun; then
-        if [[ -f "$HOME/.bun/bin/bun" ]]; then
-            export PATH="$HOME/.bun/bin:$PATH"
-        else
-            install_bun
-        fi
-    fi
-
-    if ! has bun; then
-        err "Bun not available — cannot install GBrain. Install bun manually: https://bun.sh"
-        return 1
-    fi
-
-    bun install -g gbrain 2>/dev/null || {
-        err "Failed to install GBrain. Check: https://github.com/gbrain/gbrain"
-        return 1
-    }
-
-    # Add bun bin to PATH
-    BUN_BIN="$HOME/.bun/bin"
-    if [[ ":$PATH:" != *":$BUN_BIN:"* ]]; then
-        export PATH="$BUN_BIN:$PATH"
-        echo "export PATH=\"$BUN_BIN:\$PATH\"" >> "$HOME/.bashrc" 2>/dev/null || true
-        echo "export PATH=\"$BUN_BIN:\$PATH\"" >> "$HOME/.zshrc" 2>/dev/null || true
-    fi
-
-    if ! has gbrain; then
-        warn "GBrain installed but not in PATH. Run: export PATH=\"\$HOME/.bun/bin:\$PATH\""
-        return 0
-    fi
-
-    ok "GBrain installed ($(gbrain --version 2>/dev/null || echo 'ok'))"
-
-    # Initialize brain directory if not already done
-    BRAIN_DIR="$HOME/brain"
-    if [[ ! -d "$BRAIN_DIR" ]]; then
-        log "Initializing GBrain knowledge base at ~/brain ..."
-        mkdir -p "$BRAIN_DIR"
-        cd "$BRAIN_DIR"
-        gbrain init --pglite 2>/dev/null && ok "GBrain initialized at ~/brain" || warn "GBrain init skipped (run manually: cd ~/brain && gbrain init)"
-        cd - > /dev/null
-    else
-        ok "GBrain brain directory already exists: $BRAIN_DIR"
-    fi
-
-    # Register GBrain as Hermes MCP server (so hermes can call gbrain tools)
-    if has hermes; then
-        GBRAIN_BIN="$(which gbrain)"
-        if hermes mcp list 2>/dev/null | grep -q "gbrain"; then
-            ok "GBrain already registered as Hermes MCP server"
-        else
-            log "Registering GBrain as Hermes MCP server..."
-            echo "Y" | hermes mcp add gbrain --command "$GBRAIN_BIN" --args serve 2>/dev/null && \
-                ok "GBrain registered in Hermes MCP (63 tools enabled)" || \
-                warn "Could not auto-register GBrain in Hermes. Run manually: hermes mcp add gbrain --command gbrain --args serve"
-        fi
-    else
-        warn "Hermes not found — skipping GBrain MCP registration. Run after installing Hermes: hermes mcp add gbrain --command gbrain --args serve"
-    fi
-
-    # Optional: local semantic-search embedding via Ollama (free, offline).
-    # Without it GBrain falls back to keyword search — usable but no semantic.
-    echo ""
-    read -p "  Enable GBrain semantic search via local Ollama? (downloads ~400MB) [Y/n] " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-        setup_gbrain_embedding
-    else
-        warn "Skipping semantic search. GBrain will use keyword search only."
-        warn "  To enable later: install ollama, 'ollama pull nomic-embed-text',"
-        warn "  then set embedding in IvyeaOps 系统配置 → 智能体 → 知识库语义检索."
-    fi
-}
-
-# ── Configure GBrain local embedding (Ollama + nomic-embed-text) ──────────
-setup_gbrain_embedding() {
-    # 1. Install Ollama if missing.
-    if ! has ollama; then
-        log "Installing Ollama..."
-        curl -fsSL https://ollama.com/install.sh | sh 2>&1 | tail -2 || {
-            err "Ollama install failed. Skipping semantic search."
-            return 1
-        }
-    fi
-    # Ensure the service is up.
-    if ! curl -sf http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
-        (ollama serve >/dev/null 2>&1 &) ; sleep 3
-    fi
-
-    # 2. Pull the embedding model (768-dim, ~274MB).
-    log "Pulling nomic-embed-text embedding model..."
-    ollama pull nomic-embed-text 2>&1 | tail -1
-
-    # 3. Point GBrain at it: embedding_model MUST be provider:model in config.json
-    #    (gbrain config set writes the DB, not config.json — won't take effect).
-    local GCONF="$HOME/.gbrain/config.json"
-    if [[ -f "$GCONF" ]] && has python3; then
-        python3 - "$GCONF" <<'PY'
-import json, sys
-p = sys.argv[1]
-d = json.load(open(p))
-d["embedding_model"] = "ollama:nomic-embed-text"
-d["embedding_dimensions"] = 768
-json.dump(d, open(p, "w"), indent=2)
-print("  GBrain embedding_model -> ollama:nomic-embed-text (768-dim)")
-PY
-    fi
-
-    # 4. Migrate the pglite vector column 1536 -> 768 (default is OpenAI's 1536).
-    local GBRAIN_PKG="$HOME/.bun/install/global/node_modules/gbrain"
-    local DBPATH="$HOME/.gbrain/brain.pglite"
-    if [[ -d "$GBRAIN_PKG" && -d "$DBPATH" ]] && has bun; then
-        log "Aligning GBrain vector column to 768-dim..."
-        (cd "$GBRAIN_PKG" && bun -e "
-import { PGlite } from '@electric-sql/pglite';
-import { vector } from '@electric-sql/pglite/vector';
-import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm';
-const db = new PGlite('$DBPATH', { extensions: { vector, pg_trgm } });
-await db.waitReady;
-const r = await db.query(\"SELECT atttypmod FROM pg_attribute WHERE attrelid='content_chunks'::regclass AND attname='embedding'\");
-if (r.rows[0]?.atttypmod !== 768) {
-  await db.exec(\`DROP INDEX IF EXISTS idx_chunks_embedding;
-    ALTER TABLE content_chunks ALTER COLUMN embedding TYPE vector(768);
-    UPDATE content_chunks SET embedding=NULL, embedded_at=NULL;
-    CREATE INDEX idx_chunks_embedding ON content_chunks USING hnsw (embedding vector_cosine_ops);\`);
-}
-await db.close();
-" 2>/dev/null) && ok "Vector column aligned" || warn "Vector migration skipped (no notes yet is fine)"
-    fi
-
-    # 5. Embed existing notes.
-    if [[ -d "$HOME/brain" ]]; then
-        (cd "$HOME/brain" && gbrain embed --all >/dev/null 2>&1) && ok "Existing notes embedded" || true
-    fi
-    ok "GBrain semantic search enabled (Ollama + nomic-embed-text)"
-}
-
 # ── Install Hermes ────────────────────────────────
 install_hermes() {
     log "Installing Hermes Agent..."
@@ -360,7 +218,7 @@ fi
 echo ""
 
 # ── Step 2: Check Hermes (optional) ───────────────
-log "Step 2/5 — Checking Hermes Agent & GBrain..."
+log "Step 2/5 — Checking Hermes Agent..."
 echo ""
 
 if has hermes; then
@@ -377,26 +235,6 @@ else
 fi
 
 echo ""
-
-if has gbrain; then
-    ok "GBrain found ($(gbrain --version 2>/dev/null || echo 'ok'))"
-    # Ensure GBrain is registered in Hermes MCP
-    if has hermes && ! hermes mcp list 2>/dev/null | grep -q "gbrain"; then
-        log "Registering GBrain as Hermes MCP server..."
-        GBRAIN_BIN="$(which gbrain)"
-        echo "Y" | hermes mcp add gbrain --command "$GBRAIN_BIN" --args serve 2>/dev/null && \
-            ok "GBrain registered in Hermes MCP" || true
-    fi
-else
-    warn "GBrain not found."
-    read -p "  Install GBrain (personal knowledge base, recommended)? [Y/n] " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-        install_gbrain
-    else
-        warn "Skipping GBrain. Knowledge base features will be unavailable."
-    fi
-fi
 
 echo ""
 
