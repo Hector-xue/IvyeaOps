@@ -145,8 +145,8 @@ def _ia_overview() -> dict[str, Any]:
     doctor_status = "unknown"
     try:
         doctor_status = str(_ia_doctor().get("status") or "unknown")
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception:  # noqa: BLE001 — 体检失败不该拖垮整个概览
+        logger.debug("_ia_doctor 失败（旁路，已忽略）", exc_info=True)
     return {
         "brain_root": str(gb.BRAIN_ROOT),
         "gbrain_bin": "",                     # 已摘除：知识库不再依赖外部二进制

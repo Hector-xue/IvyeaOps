@@ -109,6 +109,8 @@ def test_search_rejects_bad_mode(client):
 
 def test_upload_text_creates_markdown_under_brain(client, monkeypatch):
     c, brain, _gb, _bc = client
+    monkeypatch.setattr(_gb, "installed", lambda: True)
+    monkeypatch.setattr(_bc, "ivyea_chat_available", lambda: False)
     monkeypatch.setattr(_gb, "import_brain", lambda: {"ok": True, "raw": "import ok"})
     r = c.post(
         "/api/brain/upload",
@@ -125,6 +127,8 @@ def test_upload_text_creates_markdown_under_brain(client, monkeypatch):
 
 def test_ingest_text_uses_hermes_analysis_and_creates_new_directory(client, monkeypatch):
     c, brain, _gb, bc = client
+    monkeypatch.setattr(_gb, "installed", lambda: True)
+    monkeypatch.setattr(bc, "ivyea_chat_available", lambda: False)
     monkeypatch.setattr(_gb, "import_brain", lambda: {"ok": True, "raw": "import ok"})
     monkeypatch.setattr(
         bc,
@@ -159,6 +163,8 @@ def test_ingest_text_uses_hermes_analysis_and_creates_new_directory(client, monk
 
 def test_ingest_text_falls_back_and_sanitizes_bad_directory(client, monkeypatch):
     c, brain, _gb, bc = client
+    monkeypatch.setattr(_gb, "installed", lambda: True)
+    monkeypatch.setattr(bc, "ivyea_chat_available", lambda: False)
     monkeypatch.setattr(_gb, "import_brain", lambda: {"ok": True, "raw": "import ok"})
     monkeypatch.setattr(
         bc,
@@ -189,6 +195,8 @@ def test_ingest_text_falls_back_and_sanitizes_bad_directory(client, monkeypatch)
 
 def test_ingest_text_rules_fallback_when_hermes_unavailable(client, monkeypatch):
     c, brain, _gb, bc = client
+    monkeypatch.setattr(_gb, "installed", lambda: True)
+    monkeypatch.setattr(bc, "ivyea_chat_available", lambda: False)
     monkeypatch.setattr(_gb, "import_brain", lambda: {"ok": True, "raw": "import ok"})
     monkeypatch.setattr(bc, "_call_runner_json", lambda prompt: (_ for _ in ()).throw(RuntimeError("offline")))
 
@@ -207,6 +215,10 @@ def test_ingest_text_rules_fallback_when_hermes_unavailable(client, monkeypatch)
 
 def test_chat_sessions_persist_messages(client, monkeypatch):
     c, _brain, gb, bc = client
+    # 这条测的是 **GBrain 回退路径**：显式声明前提（装了 GBrain、agent 不可用），
+    # 否则结论会随运行环境漂移（本机装了就绿、CI 没装就红）。
+    monkeypatch.setattr(gb, "installed", lambda: True)
+    monkeypatch.setattr(bc, "ivyea_chat_available", lambda: False)
     monkeypatch.setattr(gb, "search", lambda q, mode="search": {"items": [{"slug": "amazon/note", "score": 1, "snippet": "广告优化"}]})
     monkeypatch.setattr(bc, "_call_llm", lambda messages: "基于知识库的回答")
 
