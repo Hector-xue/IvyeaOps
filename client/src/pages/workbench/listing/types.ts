@@ -131,6 +131,12 @@ export interface PlanQuality {
   score: number;
   ready: boolean;
   issues: { code: string; severity: string; message: string }[];
+  /** 因视觉能力不足被跳过的分析（如竞品套图版式逆向）。
+   *  必须显式展示：静默跳过会让用户以为功能坏了，而不知道配个视觉模型就能解锁。 */
+  skipped_analyses?: { stage: string; code: string; message: string }[];
+  /** 1 主脑直读 · 2 视觉旁路 · 3 本地 CV 量化 · 0 无 */
+  vision_tier?: 0 | 1 | 2 | 3;
+  vision_tier_label?: string;
 }
 
 export interface Plan {

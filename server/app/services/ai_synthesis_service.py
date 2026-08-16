@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import re
+import time
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -1341,18 +1342,94 @@ def _assistant_vision_cfg() -> tuple[str, str, str, str] | None:
     )
 
 
+_VISION_CHAIN_CACHE: tuple[float, dict] = (0.0, {})
+# 缓存窗口。取 5 秒是因为它只需要覆盖**一次请求内部的扇出**：
+# _vision_provider_chain / vision_tier / vision_tier_label 会连环调这个函数，
+# 不缓存的话一次设置页刷新就是五六个 HTTP 往返（每个还带 2 秒超时）。
+# 窗口再长就会让"刚配好视觉模型"的用户刷新后仍看到旧档位。
+_VISION_CHAIN_TTL = 5.0
+
+
+def _agent_vision_chain(*, fresh: bool = False) -> dict:
+    """agent 自报的视觉三档链状态（/health 的 vision_chain）。
+
+    老版本 serve 没有这个字段，回 {} —— 调用方要按"老行为"处理，
+    不能把缺字段当成"没有视觉"。
+    """
+    global _VISION_CHAIN_CACHE
+    now = time.monotonic()
+    if not fresh:
+        stamp, cached = _VISION_CHAIN_CACHE
+        if now - stamp < _VISION_CHAIN_TTL:
+            return cached
+    try:
+        from app.services import ivyea_agent_service as ivyea
+        avail = ivyea.availability()
+        chain = (avail.get("health") or {}).get("vision_chain") if avail.get("available") else None
+        result = chain if isinstance(chain, dict) else {}
+    except Exception:
+        result = {}
+    _VISION_CHAIN_CACHE = (now, result)
+    return result
+
+
 def _ivyea_agent_vision_available() -> bool:
-    """ivyea-agent 可作视觉 provider：serve 可达且主脑标记了视觉能力。"""
+    """ivyea-agent 能不能接带图任务。
+
+    **看整条链，不是看主脑。** agent v1.13 起内部有三档降级：
+      T1 主脑自带视觉 / T2 第三方视觉模型旁路代读 / T3 本地 CV+OCR 量化。
+    此前这里只读 `model.capabilities.vision`（主脑那一档），于是用户主脑一旦是
+    DeepSeek 这类纯文本模型，整条视觉链就被判死，Listing 的图片分析静默空转。
+
+    老版本 serve 没有 vision_chain → 退回旧判据（只有主脑有视觉才算数），
+    行为与升级前完全一致，不会把老 agent 判成能力更强。
+    """
+    chain = _agent_vision_chain()
+    if chain:
+        return bool(chain.get("effective"))
     try:
         from app.services import ivyea_agent_service as ivyea
         avail = ivyea.availability()
         if not avail.get("available"):
             return False
         caps = (((avail.get("health") or {}).get("model") or {}).get("capabilities") or {})
-        # 老版本 serve 不回 capabilities → 保守认为不可用（也不支持 images 参数）
         return bool(caps.get("vision"))
     except Exception:
         return False
+
+
+def vision_tier() -> int:
+    """当前实际生效的视觉档位：1 主脑直读 / 2 旁路 / 3 本地 CV / 0 无。
+
+    Listing 要靠它决定哪些分析做得了、哪些必须明说"跳过"——CV 能量化的
+    （合规/比例/占比/配色/文字）照做，语义类的（版式逆向、审美）在 T3 下
+    做不了就不要产出假结果。
+
+    只有 agent 那一档能自报档位；走 openai / assistant 直连视觉模型时，
+    那本来就是真视觉模型，等价于 T1。
+    """
+    chain = _vision_provider_chain()
+    if not chain:
+        return 0
+    if chain[0] == "ivyea-agent":
+        tier = _agent_vision_chain().get("tier")
+        if isinstance(tier, int) and tier > 0:
+            return tier
+        return 1        # 老 serve：能进链就说明主脑有视觉
+    return 1
+
+
+def vision_tier_label() -> str:
+    labels = {1: "主脑直读", 2: "视觉旁路", 3: "本地 CV 度量", 0: "无视觉能力"}
+    tier = vision_tier()
+    base = labels.get(tier, "未知")
+    if tier == 2:
+        model = ((_agent_vision_chain().get("sidecar") or {}).get("model") or "").strip()
+        return f"{base} · {model}" if model else base
+    if tier == 3:
+        ocr = ((_agent_vision_chain().get("local_cv") or {}).get("ocr_engine") or "").strip()
+        return f"{base}（OCR：{ocr}）" if ocr else f"{base}（无 OCR）"
+    return base
 
 
 def _vision_provider_chain() -> list[str]:
@@ -1381,6 +1458,14 @@ def _vision_provider_chain() -> list[str]:
             available.append(p)
         elif p == "assistant" and _assistant_vision_cfg():
             available.append(p)
+
+    # agent 恒排第一是**文本链**的规矩，视觉链不能照抄：agent 只在 T3（本地 CV
+    # 量化）时，它给的是读数而不是画面，而 openai/assistant 槽里坐着的是真视觉
+    # 模型。让 T3 顶掉真视觉模型是纯粹的质量倒退，所以这里把"只有 T3 的 agent"
+    # 降到真视觉 provider 之后——它仍在链上，作为真视觉模型全挂时的兜底。
+    if len(available) > 1 and available[0] == "ivyea-agent":
+        if _agent_vision_chain().get("tier") == 3:
+            available = available[1:] + ["ivyea-agent"]
     return available
 
 
@@ -1466,11 +1551,16 @@ async def _stream_openai_vision(
                     yield text
 
 
-async def _stream_ivyea_agent_vision(prompt: str, images_b64: list[str]) -> AsyncGenerator[str, None]:
+async def _stream_ivyea_agent_vision(prompt: str, images_b64: list[str],
+                                     observed: dict | None = None) -> AsyncGenerator[str, None]:
     """ivyea-agent 作视觉 provider：serve /v1/chat/stream 带 images（v1.8.3+）。
 
     persist=False —— 成图复核/图片分析属于内部管线调用，不进 agent 会话历史。
     max_steps=1 —— 看图回答是单步任务，不需要 agent 工具循环。
+
+    `observed` 传进来时，会把 agent 上报的**本次请求实际档位**（vision_tier 事件）
+    写进去。用它而不是 /health 快照：旁路在请求中途失败会就地降到 T3，快照还停在
+    T2，标签就会虚报成"真看见了"。
     """
     from app.services import ivyea_agent_service as ivyea
 
@@ -1514,8 +1604,13 @@ async def _stream_ivyea_agent_vision(prompt: str, images_b64: list[str]) -> Asyn
                     if text:
                         got_token = True
                         yield text
+                elif event == "vision_tier":
+                    if observed is not None and isinstance(data, dict):
+                        observed.update(data)
                 elif event == "final":
                     final_text = str(data.get("text") or "")
+                    if observed is not None and isinstance(data.get("vision_tier"), dict):
+                        observed.update(data["vision_tier"])
                 elif event == "error":
                     raise RuntimeError(str(data.get("detail") or data.get("error") or data))
     if not got_token and final_text:
@@ -1531,12 +1626,15 @@ async def stream_vision(prompt: str, images_b64: list[str]) -> AsyncGenerator[tu
     """
     chain = _vision_provider_chain()
     if not chain:
+        # 走到这里说明连 agent 都不可达（agent 只要在线就至少有 T3 本地 CV）。
+        # 所以文案不能再说"没配视觉模型就做不了"——没配视觉模型是能做的，
+        # 前提是 agent 服务活着。
         yield "error", (
-            "当前没有配置支持视觉分析的模型。"
-            "请在「系统配置 → AI 服务」配置以下任意一项：\n"
-            "  · Apimart key（Claude Vision）\n"
-            "  · OpenAI API key（GPT-4o）\n"
-            "  · 自定义 assistant provider（支持视觉的模型）"
+            "当前没有任何可用的视觉通道。\n"
+            "  · 首选：确认 IvyeaAgent 服务在线——它自带三档降级，"
+            "即使主脑不支持图片，也会用第三方视觉模型旁路或本地 CV+OCR 量化处理。\n"
+            "  · 或在「系统配置 → AI 服务」配置 OpenAI API key（GPT-4o）"
+            "或支持视觉的自定义 assistant provider。"
         )
         return
 
@@ -1544,9 +1642,18 @@ async def stream_vision(prompt: str, images_b64: list[str]) -> AsyncGenerator[tu
     for provider in chain:
         try:
             got = False
+            observed: dict = {}      # agent 上报的本次实际档位，其余 provider 留空
             if provider == "ivyea-agent":
-                label = "ivyea-agent"
-                gen = _stream_ivyea_agent_vision(prompt, images_b64)
+                # 标签带上档位：上层（Listing）要按档位决定哪些分析做得了，
+                # 前端也要显示"本次是哪一档的结果"。降级本身不是问题，
+                # 降级了却不说才是。
+                #
+                # 先用 /health 快照兜个底，拿到 agent 上报的 vision_tier 事件后
+                # 立刻换成**本次实测**的档位——旁路中途失败会就地降到 T3，
+                # 只信快照就会把编不出来的那一档报成"真看见了"。
+                snapshot = _agent_vision_chain().get("tier")
+                label = f"ivyea-agent/t{snapshot}" if isinstance(snapshot, int) and snapshot else "ivyea-agent"
+                gen = _stream_ivyea_agent_vision(prompt, images_b64, observed)
             elif provider == "apimart":
                 label = "claude"
                 gen = _stream_apimart_vision(prompt, images_b64)
@@ -1569,7 +1676,9 @@ async def stream_vision(prompt: str, images_b64: list[str]) -> AsyncGenerator[tu
 
             async for chunk in gen:
                 got = True
-                yield label, chunk
+                # vision_tier 事件在首个 token 之前到达，所以从第一段起标签就是真的。
+                live = observed.get("tier")
+                yield (f"ivyea-agent/t{live}" if isinstance(live, int) and live else label), chunk
             if got:
                 return
             failures.append(f"{provider}: 返回空")

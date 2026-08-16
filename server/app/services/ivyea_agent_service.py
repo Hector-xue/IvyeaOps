@@ -31,6 +31,9 @@ DEFAULT_TIMEOUT_SECONDS = 5.0
 AUTOSTART_COOLDOWN_SECONDS = 20.0
 _LAST_START_ATTEMPT = 0.0
 _LAST_MODEL_SYNC_SIGNATURE = ""
+# 本进程是否往 agent 推过一个**非空**视觉槽。用来区分"用户在界面上把槽位删了"
+# （该推清除）和"ops 本来就没配过视觉槽"（不该碰 agent 那边，见 sync_model_settings）。
+_VISION_SLOT_PUSHED = False
 
 
 class IvyeaAgentError(RuntimeError):
@@ -706,19 +709,95 @@ def _agent_provider_payload(settings: dict[str, Any]) -> dict[str, Any] | None:
     return {k: v for k, v in payload.items() if v not in ("", None)}
 
 
+def configure_vision(payload: dict[str, Any]) -> dict[str, Any]:
+    return request_json("POST", "/v1/config/vision", payload, timeout=max(_timeout(), 30.0))
+
+
+def _agent_vision_payload(settings: dict[str, Any]) -> dict[str, Any]:
+    """把 Hub Settings 的独立视觉槽组成 agent 的 /v1/config/vision 入参。
+
+    这是 agent 视觉三档里 T2（旁路代读）的模型来源。下推而不是让 agent 自己配，
+    是为了让用户在 IvyeaOps 界面配一次就同时对网页和 CLI 生效——两边各配一份
+    必然长期不一致。
+
+    槽位为空时返回 {"model": ""}，agent 端把空 model 当作**清除**。但要不要真把这个
+    清除推出去，由 sync_model_settings 判断——见那里的"绝不主动清除"。
+
+    优先级与 `ai_synthesis_service._assistant_vision_cfg()` 保持一致：
+    独立视觉槽 > 全局兜底槽（用 assistant_vision_model，退而用 assistant_model）。
+    只读 vision_* 四个键会漏掉一大批只配了全局兜底的存量用户——他们明明有可用的
+    视觉模型，agent 却还停在 T3。
+
+    这里按**传入的 settings** 解析而不是直接调那个函数：sync_model_settings 允许
+    调用方显式传一份 settings（同步前预演、测试都用这条路），复用那个函数会让它
+    绕过入参去读全局配置，同步的就不是调用方给的那一份了。
+    """
+    def _pick(provider_key: str, key_key: str, base_key: str, model_key: str) -> dict[str, Any] | None:
+        provider = str(settings.get(provider_key) or "").strip().lower()
+        api_key = str(settings.get(key_key) or "").strip()
+        base_url = str(settings.get(base_key) or "").strip()
+        model = str(settings.get(model_key) or "").strip()
+        if not api_key or not model:
+            return None
+        return {
+            "provider": provider or ("custom" if base_url else ""),
+            "model": model,
+            "base_url": base_url,
+            "api_key": api_key,
+        }
+
+    slot = _pick("vision_provider", "vision_api_key", "vision_base_url", "vision_model")
+    if slot:
+        return slot
+    fallback = _pick("assistant_provider", "assistant_api_key", "assistant_base_url",
+                     "assistant_vision_model")
+    if fallback:
+        return fallback
+    fallback = _pick("assistant_provider", "assistant_api_key", "assistant_base_url",
+                     "assistant_model")
+    return fallback or {"model": ""}
+
+
 def sync_model_settings(settings: dict[str, Any] | None = None, force: bool = False) -> dict[str, Any]:
-    """Best-effort push of the IvyeaAgent model slot from Hub Settings."""
+    """Best-effort push of the IvyeaAgent model slot from Hub Settings.
+
+    连同**视觉槽**一起推：主脑和视觉模型是同一次配置动作的两半，分两条路同步
+    必然出现"主脑换了、视觉槽还是旧的"。
+    """
     global _LAST_MODEL_SYNC_SIGNATURE
     if settings is None:
         from app.core import hub_settings
         settings = hub_settings.load()
     payload = _agent_provider_payload(settings)
-    if not payload:
+    vision_payload = _agent_vision_payload(settings)
+    if not payload and not vision_payload:
         return {"ok": True, "skipped": True, "reason": "ivyea_agent_model_unconfigured"}
-    signature = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+    signature = json.dumps({"model": payload, "vision": vision_payload},
+                           ensure_ascii=False, sort_keys=True)
     if not force and signature == _LAST_MODEL_SYNC_SIGNATURE:
         return {"ok": True, "skipped": True, "reason": "unchanged"}
-    result = configure_model(payload)
+
+    result: dict[str, Any] = {"ok": True}
+    if payload:
+        result = configure_model(payload)
+
+    # **绝不主动清除**：ops 这边没配视觉槽时，不代表 agent 那边也不该有——CLI 用户
+    # 完全可能自己 `ivyea config set vision_slot`。无脑推一条空 model 会把它悄悄
+    #清掉，用户只会看到"某天起视觉突然降级了"，且毫无线索。
+    # 只有本进程确实推过一个非空槽位、之后又被清空（= 用户在界面上删了它），
+    # 才把清除推下去。
+    global _VISION_SLOT_PUSHED
+    has_slot = bool(vision_payload.get("model"))
+    if has_slot or _VISION_SLOT_PUSHED:
+        try:
+            result["vision"] = configure_vision(vision_payload)
+            _VISION_SLOT_PUSHED = has_slot
+        except IvyeaAgentError as exc:
+            # 老版本 serve 没有 /v1/config/vision。视觉槽推不过去不该让主脑同步
+            # 一起失败——主脑同步是每次 ensure_available 都跑的关键路径。
+            logger.debug("configure_vision 失败（旁路，已忽略）：%s", exc)
+            result["vision"] = {"ok": False, "error": str(exc)}
     if result.get("ok"):
         _LAST_MODEL_SYNC_SIGNATURE = signature
     return result

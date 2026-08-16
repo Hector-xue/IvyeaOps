@@ -3,7 +3,7 @@
 // 数据流重做：编排在服务端，刷新页面不丢任何进行中的工作。
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, Check, ChevronDown, Download, Image as ImageIcon,
+  AlertTriangle, Check, ChevronDown, Download, Image as ImageIcon, Info,
   Layers3, Loader2, Maximize2, RefreshCw, ShieldCheck, Sparkles, WandSparkles,
 } from "lucide-react";
 import JobProgress from "./JobProgress";
@@ -346,13 +346,33 @@ export default function VisualStep({ state }: { state: ListingState }) {
             </div>
           </div>
 
+          {/* 降级不是缺陷，但**必须说出来**。此前无视觉模型时版式逆向直接
+              return []，用户看到的是一份莫名其妙缺了参考版式的方案，
+              没有任何解释、也不知道配个视觉模型就能解锁。 */}
+          {(plan.quality?.skipped_analyses?.length ?? 0) > 0 && (
+            <div className="vs-degraded">
+              <Info size={14} />
+              <div>
+                <strong>
+                  当前视觉能力：{plan.quality?.vision_tier_label || "本地 CV 度量"}
+                </strong>
+                {plan.quality!.skipped_analyses!.map((note) => (
+                  <p key={note.stage}>{note.message}</p>
+                ))}
+              </div>
+            </div>
+          )}
+
           {(plan.quality?.issues?.length ?? 0) > 0 && (
             <details className="vs-issues">
               <summary><AlertTriangle size={14} /> 策略质检发现 {plan.quality!.issues.length} 项 <ChevronDown size={14} /></summary>
               <div>
                 {plan.quality!.issues.map((issue, index) => (
-                  <p key={`${issue.code}-${index}`} className={issue.severity === "error" ? "error" : "warning"}>
-                    {issue.severity === "error" ? "阻塞" : "建议"} · {issue.message}
+                  <p
+                    key={`${issue.code}-${index}`}
+                    className={issue.severity === "error" ? "error" : issue.severity === "info" ? "info" : "warning"}
+                  >
+                    {issue.severity === "error" ? "阻塞" : issue.severity === "info" ? "说明" : "建议"} · {issue.message}
                   </p>
                 ))}
               </div>

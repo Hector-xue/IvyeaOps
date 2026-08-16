@@ -1917,7 +1917,13 @@ body::after{
 .vs-delivery-state strong{display:flex;align-items:center;gap:5px}.vs-delivery-state .ready{color:var(--acc)}.vs-delivery-state .pending{color:var(--amber)}
 .vs-issues{border:1px solid rgba(245,158,11,.24);border-radius:8px;background:rgba(245,158,11,.035)}
 .vs-issues summary{display:flex;align-items:center;gap:6px;padding:8px 10px;color:var(--amber);font-size:var(--fs-10);font-weight:650;cursor:pointer;list-style:none}.vs-issues summary svg:last-child{margin-left:auto}
-.vs-issues>div{padding:0 10px 8px}.vs-issues p{margin:4px 0;font-size:var(--fs-95);line-height:1.5}.vs-issues p.error{color:var(--red)}.vs-issues p.warning{color:var(--t2)}
+.vs-issues>div{padding:0 10px 8px}.vs-issues p{margin:4px 0;font-size:var(--fs-95);line-height:1.5}.vs-issues p.error{color:var(--red)}.vs-issues p.warning{color:var(--t2)}.vs-issues p.info{color:var(--t3)}
+/* 视觉能力降级说明。刻意用中性信息色而不是琥珀/红：降级是**可用**状态，
+   标成警告会让用户去排查一个并不存在的故障。 */
+.vs-degraded{display:flex;gap:8px;align-items:flex-start;padding:9px 11px;border:1px solid var(--b);border-radius:8px;background:var(--bg);color:var(--t3)}
+.vs-degraded svg{flex-shrink:0;margin-top:2px}
+.vs-degraded strong{display:block;color:var(--t2);font-size:var(--fs-10);font-weight:650}
+.vs-degraded p{margin:4px 0 0;font-size:var(--fs-95);line-height:1.5}
 .vs-workspace{display:grid;grid-template-columns:minmax(0,1fr) 330px;align-items:start;gap:12px}
 .vs-board,.vs-inspector{min-width:0;max-width:100%;border:1px solid var(--b);border-radius:var(--vs-radius);background:var(--bg1);box-shadow:0 8px 24px rgba(0,0,0,.05)}
 .vs-board{padding:12px}.vs-board-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}.vs-board-head h3{margin:0;font-size:var(--fs-12)}.vs-board-head p{margin:3px 0 0;color:var(--t3);font-size:var(--fs-95)}
@@ -2358,6 +2364,13 @@ body::after{
 .hs-dot-err{color:var(--red)}
 .hs-dot-loading{color:var(--t3);animation:pulse 1s infinite}
 .hs-health-label{color:var(--t2);flex-shrink:0;min-width:0}
+/* 视觉能力档位徽标：T1 满血、T2 旁路、T3 本地量化。
+   T3 用中性色而不是红/黄——它是**可用**状态，不是故障，标成警告会误导用户
+   去排查一个并不存在的问题。 */
+.hs-tier-chip{flex-shrink:0;font-size:var(--fs-10);font-weight:600;line-height:1;padding:2px 6px;border-radius:999px;border:1px solid var(--b);color:var(--t3);background:var(--bg)}
+.hs-tier-chip[data-tier="1"]{color:var(--acc);border-color:color-mix(in srgb,var(--acc) 40%,transparent)}
+.hs-tier-chip[data-tier="2"]{color:var(--t2)}
+.hs-tier-chip[data-tier="3"]{color:var(--t3)}
 .hs-health-detail{color:var(--t3);font-size:var(--fs-10);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;text-align:right}
 .hs-install-log{max-height:180px;overflow:auto;margin:0;padding:8px 16px;border-top:1px solid var(--b);background:var(--bg);color:var(--t2);font-family:var(--font-mono,var(--font));font-size:var(--fs-105);line-height:1.6;white-space:pre-wrap;word-break:break-word}
 .hs-install-log .err{color:var(--red)}
