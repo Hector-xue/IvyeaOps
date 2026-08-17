@@ -240,6 +240,17 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   // 用 ?vt=1|2|3 切档来验徽标与文案——默认给 T3，因为它是最容易被误当成
   // "功能坏了"的那一档，也是最需要盯住渲染的。
   // 使用手册对话框：文档目录 + 正文。
+  // 服务器终端：两列栅格（终端列表 + 终端）。第三栏「会话内容快照」已移除，
+  // 这里要能验出终端确实铺满了右边、没留白。
+  ["/terminal/live/sessions", { sessions: [
+    { id: "s-1", title: "默认终端", cwd: "/root", status: "running", archived: false,
+      created_at: 1755400000, updated_at: 1755400000 },
+  ] }],
+  // 字段名照抄 server/app/routers/terminal.py 的 get_live_history —— 少一个 items
+  // 前端就是 `data.items.length` 直接崩，整页变「页面渲染出错」。
+  ["/terminal/live/sessions/s-1/history", { items: [], total: 0 }],
+  ["/terminal/status", { active: true, running: true, url: "" }],
+  ["/terminal/bash-history", { items: [] }],
   ["/help/docs", { docs: [
     { name: "usage", title: "使用手册" },
     { name: "config", title: "配置说明" },

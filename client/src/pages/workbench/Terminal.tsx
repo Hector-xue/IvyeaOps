@@ -604,7 +604,9 @@ export default function Terminal() {
       {error ? (
         <div className="card" style={{ color: "var(--red)", lineHeight: 1.8 }}>{error}</div>
       ) : (
-        <div className="terminal-workbench">
+        // 列数跟着实际渲染的列走：写死三列时，删掉「会话内容」那一栏之后右边会
+        // 空出 360px 的白 —— 栅格还按三列在留位置。
+        <div className={`terminal-workbench${showSessionList ? "" : " terminal-workbench-solo"}`}>
           {showSessionList && (
             <>
               {isMobileLayout && <div className="terminal-sheet-backdrop" onClick={() => setShowSessionList(false)} />}
