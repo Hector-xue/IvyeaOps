@@ -41,13 +41,13 @@ export const THEMES: readonly ThemeDef[] = [
   // 调色板继承门道（同一份 --md-c-*，只偏移了表面与线的几档），所以 accent
   // 和门道是同一个值：浅色 #4078f2、深色 #61afef。静谧与门道的区别不在颜色，
   // 在形状 —— 见 styles/quiet-skin.css。
-  { id: "quiet-light",   name: "静谧·浅", icon: "○", accent: "#4078f2", mode: "light" },
-  { id: "quiet-dark",    name: "静谧·深", icon: "●", accent: "#61afef", mode: "dark"  },
+  { id: "quiet-light",   name: "静谧·浅", icon: "○", accent: "#16a34a", mode: "light" },
+  { id: "quiet-dark",    name: "静谧·深", icon: "●", accent: "#4ade80", mode: "dark"  },
   // 门道两套：同一套调色板 + 线条直角风。
   // accent 必须等于 CSS 里 --acc 解析后的值，也就是 --md-info（见 workbench.css
   // 的接线块）：浅色 #4078f2、深色 #61afef。
-  { id: "mendao-light",  name: "门道·浅", icon: "▤", accent: "#4078f2", mode: "light" },
-  { id: "mendao-dark",   name: "门道·深", icon: "▥", accent: "#61afef", mode: "dark"  },
+  { id: "mendao-light",  name: "门道·浅", icon: "▤", accent: "#16a34a", mode: "light" },
+  { id: "mendao-dark",   name: "门道·深", icon: "▥", accent: "#4ade80", mode: "dark"  },
   { id: "dark",          name: "暗夜",   icon: "🌲", accent: "#4ade80", mode: "dark"  },
   { id: "deep-space",    name: "星渊",   icon: "🌌", accent: "#4d8fff", mode: "dark"  },
   { id: "smoke-gold",    name: "烟金",   icon: "✦",  accent: "#f0a030", mode: "dark"  },

@@ -151,9 +151,37 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   // 能力市场的三个数据源。真实部署里 /skill/* 和 /skill-market/* 都挂在
   // require_module("skill-hub") 后面，没这个模块的用户会 403 —— 前端要在
   // 请求之前就把对应区块收起来，这里给的是**有权限时**该看到的样子。
+  // Skill 中心并入能力市场后，「技能」标签下的三段各自要的数据。
+  // 字段名照抄 server/app/routers/skill_tools.py 的 SkillToolListResponse / SkillToolMeta。
+  // **categories 不能漏** —— 少一个字段就是整页白屏（SkillTools 直接 Object.entries 它）。
+  ["/skill-tools/list", {
+    tools: [
+      { name: "amazon/search-term", category: "amazon", description: "Search term report analysis",
+        description_zh: "搜索词报表分析", icon: "⚡", pinned: false, has_execution: true,
+        inputs: [{ name: "asin", label: "ASIN", required: true }],
+        kind: "report", runtime: "llm-only", output_format: "markdown",
+        exportable: true, sample_params: {} },
+      { name: "amazon/market-research", category: "amazon", description: "Market research",
+        description_zh: "市场调研", icon: "◎", pinned: false, has_execution: true,
+        inputs: [], kind: "report", runtime: "llm-only", output_format: "markdown",
+        exportable: false, sample_params: {} },
+    ],
+    categories: { amazon: 2 },
+  }],
+  ["/skill-tools/runs", { runs: [] }],
+  ["/skill/stats", { total_skills: 98, total_size_bytes: 1048576,
+                     categories: { amazon: 5, research: 12 }, recently_edited: [] }],
+  ["/skill/agent-sync", { domains: ["amazon"], roots: ["/root/ivyea-ops/data/skills/amazon"],
+                          registered: true, count: 5 }],
+  // 字段名照抄 server/app/services/skill_repo.py 的 SkillMeta。
+  // updated_at 漏了的话界面上是「Invalid Date」—— 猜字段名就是这么露馅的。
   ["/skill/list", { skills: [
-    { name: "amazon/ad_negative_guard", description_zh: "否词护栏：低效搜索词批量加否", category: "amazon", size_bytes: 4096 },
-    { name: "custom/weekly_review", description_zh: "账户周检清单", category: "custom", size_bytes: 2048 },
+    { name: "amazon/ad_negative_guard", category: "amazon", description: "Negative keyword guard",
+      description_zh: "否词护栏：低效搜索词批量加否", pinned: false, editable: true,
+      source: "user", updated_at: ago(6), size_bytes: 4096, file_count: 3 },
+    { name: "custom/weekly_review", category: "custom", description: "Weekly account review",
+      description_zh: "账户周检清单", pinned: false, editable: true,
+      source: "user", updated_at: ago(30), size_bytes: 2048, file_count: 1 },
   ], total: 2 }],
   ["/skill-market/status", { enabled: true, reachable: true, base_url: "https://mendao.example" }],
   ["/skill-market/skills", { total: 1, items: [
@@ -211,6 +239,53 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   // 系统状态卡。视觉那行是三档链（1 主脑直读 / 2 旁路 / 3 本地 CV），
   // 用 ?vt=1|2|3 切档来验徽标与文案——默认给 T3，因为它是最容易被误当成
   // "功能坏了"的那一档，也是最需要盯住渲染的。
+  // 使用手册对话框：文档目录 + 正文。
+  // 服务器终端：两列栅格（终端列表 + 终端）。第三栏「会话内容快照」已移除，
+  // 这里要能验出终端确实铺满了右边、没留白。
+  ["/terminal/live/sessions", { sessions: [
+    { id: "s-1", title: "默认终端", cwd: "/root", status: "running", archived: false,
+      created_at: 1755400000, updated_at: 1755400000 },
+  ] }],
+  // 字段名照抄 server/app/routers/terminal.py 的 get_live_history —— 少一个 items
+  // 前端就是 `data.items.length` 直接崩，整页变「页面渲染出错」。
+  ["/terminal/live/sessions/s-1/history", { items: [], total: 0 }],
+  ["/terminal/status", { active: true, running: true, url: "" }],
+  ["/terminal/bash-history", { items: [] }],
+  // 知识库工作台：页头统计 + 四个标签。
+  ["/brain/files", { files: [
+    { path: "amazon/ads/negative.md", title: "否词护栏", category: "ads", size: 2048, mtime: 1755300000 },
+    { path: "amazon/listing/main-image.md", title: "主图合规", category: "listing", size: 1024, mtime: 1755310000 },
+    { path: "amazon/policy/vat.md", title: "VAT 税务", category: "policy", size: 4096, mtime: 1755320000 },
+  ] }],
+  ["/brain/uploads", { uploads: [] }],
+  ["/brain/chat/status", { configured: true, provider: "ivyea-agent", model: "deepseek-v4-pro" }],
+  ["/brain/overview", { ready: { db_ready: true, embed_ready: true, actions: [], hint: "" }, counts: {} }],
+  // 服务器监控 / 资讯 / 分析工具：字段名照抄各自的 response model。
+  // 这三个页面此前在验证台里整页崩溃 —— 那是 mock 缺字段，不是页面坏了；
+  // 但也说明它们在真实降级场景下同样脆弱（见 CHANGELOG 的加固条目）。
+  ["/monitor/snapshot", {
+    cpu: { percent: 12.5, count: 2, load_1m: 0.4, load_5m: 0.3, load_15m: 0.2 },
+    memory: { total: 3999997952, used: 2200000000, available: 1700000000, percent: 55.1, percent_used_raw: 58.2 },
+    disk: { total: 52000000000, used: 31000000000, free: 21000000000, percent: 59.6,
+            total_hardware: 53687091200, percent_hardware: 57.7 },
+    network: { bytes_sent_total: 12000000, bytes_recv_total: 34000000,
+               bytes_sent_rate: 1200, bytes_recv_rate: 3400, interface: "eth0" },
+    uptime_seconds: 864000,
+  }],
+  ["/monitor/services", []],
+  ["/monitor/processes", []],
+  ["/monitor/logs", { lines: [] }],
+  ["/news/dates", { dates: ["2026-08-17"], latest: "2026-08-17" }],
+  ["/news/day", { date: "2026-08-17", items: [], generated_at: "", summary: "" }],
+  ["/deep-analysis/history", { items: [] }],
+  ["/help/docs", { docs: [
+    { name: "usage", title: "使用手册" },
+    { name: "config", title: "配置说明" },
+    { name: "troubleshooting", title: "故障排查" },
+  ] }],
+  ["/help/doc/", (url: string) => ({
+    markdown: `# ${url.split("/").pop()}\n\n这是验证台里的示例文档正文。\n\n- 一条\n- 两条\n`,
+  })],
   ["/settings/health", () => {
     const tier = Number(new URLSearchParams(location.search).get("vt") || 3) as 0 | 1 | 2 | 3;
     const label = { 1: "主脑直读", 2: "视觉旁路 · Qwen/Qwen3-VL-30B-A3B-Instruct",

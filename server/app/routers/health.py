@@ -1,6 +1,7 @@
-"""Health check + 一键诊断包。"""
+"""Health check + 一键诊断包 + 前端崩溃上报。"""
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -11,7 +12,36 @@ from app.core.security import require_admin
 from app.core.version import app_version
 from app.services import diagnostics
 
+logger = logging.getLogger("ivyea.client")
+
 router = APIRouter()
+
+
+class ClientErrorBody(BaseModel):
+    message: str
+    stack: str = ""
+    component_stack: str = ""
+    path: str = ""
+    ua: str = ""
+
+
+@router.post("/client-error")
+def client_error(body: ClientErrorBody) -> dict:
+    """前端错误边界把崩溃报到这里，落进服务端日志。
+
+    为什么需要它：错误边界原来只 `console.error`，那条信息只存在于用户的浏览器里。
+    用户报"知识库偶尔白屏、刷新才好"，而我这边**什么都看不到** —— 只能靠猜，猜错了
+    还会去改根本没问题的地方。现在下一次复现会直接落到 journalctl 里，带上是哪一页、
+    什么报错、组件栈。
+
+    不做鉴权收紧到管理员：崩溃可能发生在任何登录用户身上，收窄了就收不到最需要的那些。
+    """
+    logger.error(
+        "[前端崩溃] path=%s msg=%s\nstack=%s\ncomponent=%s\nua=%s",
+        body.path[:200], body.message[:500], body.stack[:2000],
+        body.component_stack[:2000], body.ua[:200],
+    )
+    return {"ok": True}
 
 
 @router.get("/health")

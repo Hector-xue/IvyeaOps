@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { MarkdownReport } from "../lib/reportFormat";
+import AppDialog from "./AppDialog";
 
-// In-console documentation viewer — full-screen, OPAQUE (it's a document, not a
-// floating panel), responsive on mobile. Renders docs/*.md from /api/help.
-
+/**
+ * 使用手册 —— 渲染 docs/*.md（走 /api/help）。
+ *
+ * 以前是铺满整屏的不透明浮层，看着和"跳到了另一个页面"没区别，看完还得找路回来。
+ * 现在走统一的对话框外壳：左边是文档目录，右边是正文，背后那一页还在。
+ */
 type DocMeta = { name: string; title: string };
 
 export default function ManualModal({ onClose }: { onClose: () => void }) {
@@ -27,63 +31,28 @@ export default function ManualModal({ onClose }: { onClose: () => void }) {
   }, [active]);
 
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0, zIndex: 9000,
-        background: "var(--bg)", // opaque — a clean document view, not see-through
-        display: "flex", flexDirection: "column",
-      }}
+    <AppDialog
+      title="使用手册"
+      icon="📖"
+      onClose={onClose}
+      nav={
+        <nav className="app-dialog-nav-list">
+          {docs.map((d) => (
+            <button
+              key={d.name}
+              className={"app-dialog-nav-item" + (active === d.name ? " active" : "")}
+              onClick={() => setActive(d.name)}
+            >
+              {d.title}
+            </button>
+          ))}
+          {docs.length === 0 && <div className="app-dialog-nav-empty">加载中…</div>}
+        </nav>
+      }
     >
-      {/* Header: title + close on one row */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 10,
-        padding: "12px 16px", borderBottom: "1px solid var(--b)", flex: "0 0 auto",
-      }}>
-        <span style={{ fontWeight: 700, color: "var(--t)", fontSize: "var(--fs-15)" }}>📖 使用手册</span>
-        <button
-          onClick={onClose}
-          style={{
-            marginLeft: "auto", border: "1px solid var(--b)", background: "var(--bg1)",
-            color: "var(--t2)", borderRadius: 6, width: 30, height: 30, cursor: "pointer", fontSize: "var(--fs-14)",
-          }}
-          title="关闭"
-        >
-          ✕
-        </button>
+      <div className="manual-doc">
+        {loading ? <div className="app-dialog-loading">加载中…</div> : <MarkdownReport text={md} />}
       </div>
-
-      {/* Doc switcher: horizontally scrollable so it never wraps/overlaps on mobile */}
-      <div style={{
-        display: "flex", gap: 6, padding: "8px 16px", flex: "0 0 auto",
-        borderBottom: "1px solid var(--b)", overflowX: "auto", whiteSpace: "nowrap",
-      }}>
-        {docs.map((d) => (
-          <button
-            key={d.name}
-            onClick={() => setActive(d.name)}
-            style={{
-              flex: "0 0 auto", fontSize: "var(--fs-12)", padding: "5px 12px", borderRadius: 6, cursor: "pointer",
-              border: "1px solid var(--b)",
-              background: active === d.name ? "var(--acc)" : "var(--bg1)",
-              color: active === d.name ? "#000" : "var(--t2)",
-              fontWeight: active === d.name ? 600 : 400,
-            }}
-          >
-            {d.title}
-          </button>
-        ))}
-      </div>
-
-      {/* Body */}
-      <div style={{ flex: "1 1 auto", overflowY: "auto", padding: "16px 20px", background: "var(--bg)" }}>
-        <div style={{ maxWidth: 860, margin: "0 auto" }}>
-          {loading ? (
-            <div style={{ color: "var(--t3)", fontSize: "var(--fs-12)" }}>加载中…</div>
-          ) : (
-            <MarkdownReport text={md} />
-          )}
-        </div>
-      </div>
-    </div>
+    </AppDialog>
   );
 }

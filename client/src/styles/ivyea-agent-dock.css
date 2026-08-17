@@ -1,17 +1,17 @@
+/* 面板配色**直接用主题变量**，不再自己维护一套。
+ *
+ * 原来这里写死了一套深色值，另给 `[data-theme="light"]` 一个浅色覆盖 —— 而主题表里
+ * 有三个浅色主题（quiet-light / mendao-light / light），那条覆盖只命中最后一个。
+ * 结果是在「静谧·浅」「门道·浅」下面板整块漆黑，和页面完全割裂。
+ *
+ * 教训：只要开始"自己维护一份调色板"，就等于要在每次新增主题时记得同步 ——
+ * 而那件事没人会记得。用 --bg1/--bg2/--bg3/--b，16 套主题自动都对。 */
 .ivyea-agent-fab,
 .ivyea-agent-panel {
-  --ivyea-agent-surface: #101412;
-  --ivyea-agent-surface-2: #171d1a;
-  --ivyea-agent-surface-3: #0b0f0d;
-  --ivyea-agent-border: color-mix(in srgb, var(--b) 72%, #5b6b62);
-}
-
-[data-theme="light"] .ivyea-agent-fab,
-[data-theme="light"] .ivyea-agent-panel {
-  --ivyea-agent-surface: #ffffff;
-  --ivyea-agent-surface-2: #f5f7f5;
-  --ivyea-agent-surface-3: #eef2ee;
-  --ivyea-agent-border: #d8dfd9;
+  --ivyea-agent-surface: var(--bg1);
+  --ivyea-agent-surface-2: var(--bg2);
+  --ivyea-agent-surface-3: var(--bg3);
+  --ivyea-agent-border: var(--b);
 }
 
 .ivyea-agent-fab {

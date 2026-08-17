@@ -11,7 +11,6 @@ import {
   boardPath,
   classicSections,
   isFullPage,
-  pathLabel as breadcrumbFor,
   primaryItems,
   readShellMode,
   toolSections,
@@ -32,6 +31,7 @@ function BoardFallback() {
   return <div style={{ padding: 40, textAlign: "center", color: "var(--t3)", fontSize: "var(--fs-13)" }}>加载中…</div>;
 }
 import ManualModal from "../components/ManualModal";
+import SettingsDialog, { OPEN_SETTINGS_EVENT } from "../components/SettingsDialog";
 import UpdateModal from "../components/UpdateModal";
 import Tour from "../components/Tour";
 import IvyeaAgentDock from "../components/IvyeaAgentDock";
@@ -39,6 +39,7 @@ import AccountMenu from "../components/AccountMenu";
 import Icon from "../components/Icon";
 import ToolsOverlay from "../components/ToolsOverlay";
 import SessionRail from "../components/console/SessionRail";
+import { TopbarSlotHost } from "../lib/uiSlots";
 import { BOARD_PREFS_EVENT, getPinnedBoards, pushRecentBoard } from "../lib/boardPrefs";
 import { TOURS, hasTour } from "../lib/tours";
 
@@ -61,6 +62,12 @@ const PERSISTENT_BOARDS: Record<string, () => ReactElement> = {
   "/terminal": () => <Terminal />,
   "/agents": () => <Agents />,
 };
+
+/** 手机抽屉宽度。桌面默认 264，手机窄一点但要装得下导航项。 */
+const MOBILE_SB_W = 272;
+
+/** 「全部工具」分组的展开状态（本机偏好）。 */
+const TOOLS_OPEN_KEY = "ivyea-ops.sidebar.tools-open";
 
 const HIDDEN_STYLE: CSSProperties = {
   position: "absolute", width: 0, height: 0, overflow: "hidden", opacity: 0, pointerEvents: "none",
@@ -93,6 +100,8 @@ export default function MainLayout() {
 
   // 「全部工具」浮层 —— 18 个板块的目录从侧栏搬进了它，见 components/ToolsOverlay。
   const [toolsOverlay, setToolsOverlay] = useState(false);
+  const [toolsExpanded, setToolsExpanded] = useState(
+    () => localStorage.getItem(TOOLS_OPEN_KEY) === "1");
 
   // 钉在侧栏的板块（本机偏好，lib/boardPrefs）。和下面的 pinnedTools 不是一回事：
   // 那个钉的是技能工具、有后端、跨设备。两者并排显示在「我的工具」下。
@@ -162,11 +171,13 @@ export default function MainLayout() {
   // 会话标题动辄十几个字，196px 下几乎每一条都被截成"广告怎么优化…"，
   // 光看列表分不出哪条是哪条。宽度是每个人自己的取舍（屏幕宽度、会话命名习惯
   // 都不一样），所以做成可拖 + 记住，而不是我替所有人挑一个数。
-  const SB_MIN = 180;
+  const SB_MIN = 200;
   const SB_MAX = 420;
   const [sbWidth, setSbWidth] = useState(() => {
     const v = parseInt(localStorage.getItem("ivyea-ops.sidebar.width") || "", 10);
-    return Number.isFinite(v) && v >= SB_MIN && v <= SB_MAX ? v : 196;
+    // 默认 264：196 是"能放下字"的宽度，不是"读着舒服"的宽度 —— 参考图里
+    // ChatGPT / deepseek 的侧栏都在 260~330，会话标题基本不截断。
+    return Number.isFinite(v) && v >= SB_MIN && v <= SB_MAX ? v : 264;
   });
   const [dragging, setDragging] = useState(false);
 
@@ -315,6 +326,18 @@ export default function MainLayout() {
     setUpdating(true);
   };
   const [manualOpen, setManualOpen] = useState(false);
+  // 系统配置改成对话框（见 components/AppDialog）。用全局事件而不是层层传回调：
+  // 触发点散在账户菜单、花费芯片、任务台的模型行、能力市场的"去填密钥"里，
+  // 一路 prop 传下去只会把中间那些组件变成传声筒。
+  const [settingsSection, setSettingsSection] = useState<string | null>(null);
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const detail = (e as CustomEvent<{ section?: string }>).detail;
+      setSettingsSection(detail?.section || "");
+    };
+    window.addEventListener(OPEN_SETTINGS_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_SETTINGS_EVENT, onOpen);
+  }, []);
 
   // Interactive tour: auto-run a board's tour on first visit (remembered per
   // board in localStorage); replayable via the "?" button.
@@ -378,7 +401,6 @@ export default function MainLayout() {
     ? (new URLSearchParams(location.search).get("session") || "")
     : "";
 
-  const path = breadcrumbFor(location.pathname);
   const versionLabel = appVersion.startsWith("v") ? appVersion : `v${appVersion}`;
   const hasUpdate = !!updateInfo?.update_available;
   const updateTitle = updateInfo
@@ -435,15 +457,19 @@ export default function MainLayout() {
       <aside
         className={"sb" + (collapsed && !mobileMenu ? " collapsed" : "") + (dragging ? " sb-dragging" : "")}
         style={isMobile
-          ? { position: "fixed", zIndex: 999, height: "100%", width: 196, minWidth: 196, overflow: "auto", left: 0, transform: mobileMenu ? "translateX(0)" : "translateX(-200px)", transition: "transform .22s cubic-bezier(.4,0,.2,1)", willChange: "transform" }
+          // 手机抽屉：**宽度和隐藏位移必须联动**。原来写死 196px 配 -200px 位移，
+          // 桌面字号上调之后这个宽度装不下导航项（实测右边缘 204 > 196，溢出 8px），
+          // 而位移一旦和宽度对不上，抽屉收起时还会露出一条边。
+          // 用 -100% 而不是具体像素，宽度以后再改也不会脱节。
+          ? { position: "fixed", zIndex: 999, height: "100%", width: MOBILE_SB_W, minWidth: MOBILE_SB_W, overflow: "auto", left: 0, transform: mobileMenu ? "translateX(0)" : "translateX(-100%)", transition: "transform .22s cubic-bezier(.4,0,.2,1)", willChange: "transform" }
           // 收起态的宽度归 CSS 的 .collapsed 管，这里只在展开时给宽度，
           // 否则拖过的宽度会把 52px 的收起态顶开。
           : (railCollapsed ? undefined : { width: sbWidth, minWidth: sbWidth })}
       >
         <div className="sb-logo">
-          <div className="sb-logo-name" title="个人工作台">
+          <div className="sb-logo-name" title="IvyeaOps">
             <img src="/ivyea-logo.png" alt="" className="sb-logo-img" />
-            <span className="sb-logo-text">个人工作台</span>
+            <span className="sb-logo-text">IvyeaOps</span>
           </div>
           <button
             className="sb-toggle"
@@ -476,9 +502,51 @@ export default function MainLayout() {
                   <span className="ni-label">新建任务</span>
                 </button>
                 {primary.map(renderNavItem)}
+
+                {/* 「全部工具」跟在定时任务后面，做成可展开的分组 —— 它是导航的一部分，
+                    不该沉到侧栏最底下和账户挤在一起。展开状态记在本机。 */}
+                {toolGroups.length > 0 && (
+                  <>
+                    <button
+                      className={"ni ni-group" + (toolsExpanded ? " open" : "")}
+                      onClick={() => {
+                        if (railCollapsed) { setToolsOverlay(true); return; }  // 收起态点它开浮层
+                        setToolsExpanded((v) => { localStorage.setItem(TOOLS_OPEN_KEY, v ? "0" : "1"); return !v; });
+                      }}
+                      title={railCollapsed ? `全部工具（${toolCount}）` : "全部工具"}
+                    >
+                      <i className="ic"><Icon name="all-tools" /></i>
+                      <span className="ni-label">全部工具</span>
+                      {!railCollapsed && (
+                        <>
+                          <span className="ni-count">{toolCount}</span>
+                          <span className={"ni-caret" + (toolsExpanded ? " open" : "")}>›</span>
+                        </>
+                      )}
+                    </button>
+                    {toolsExpanded && !railCollapsed && (
+                      <div className="sb-tools-tree">
+                        {toolGroups.map((g) => (
+                          <div key={g.title}>
+                            <div className="sb-tools-group">{g.title}</div>
+                            {g.items.map(renderNavItem)}
+                          </div>
+                        ))}
+                        <button className="ni ni-more" onClick={() => setToolsOverlay(true)}>
+                          <span className="ni-label">在浮层里打开　⌘K</span>
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
               {/* ── 弹性区：工作区 / 会话（自己滚）─────────────────────── */}
+              {/* ── 弹性区：工作区 / 会话（自己滚）───────────────────────
+               *
+               * **这里永远是任务台的会话列表，不给板块接管。** 曾经让终端页把自己的
+               * 终端列表画到这儿，结果是主侧边栏在不同板块下变成不同东西 —— 全局导航
+               * 就不再是全局的了。板块自己的列表归板块自己的页面。 */}
               <div className="sb-nav-flex scroll-thin">
                 <SessionRail
                   collapsed={railCollapsed}
@@ -493,24 +561,9 @@ export default function MainLayout() {
                * 那块会话区整个挤到折叠线以下。现在整份目录搬进了浮层
                * （components/ToolsOverlay），侧栏只留一个入口和一个数量。
                */}
-              <div className="sb-nav-dock">
-                {pinnedGroup}
-                {toolGroups.length > 0 && (
-                  <>
-                    {divider}
-                    <button
-                      className="ni ni-group"
-                      onClick={() => { if (isMobile) setMobileMenu(false); setToolsOverlay(true); }}
-                      title={railCollapsed ? `全部工具（${toolCount}）` : "全部工具　⌘K"}
-                    >
-                      <i className="ic"><Icon name="all-tools" /></i>
-                      <span className="ni-label">全部工具</span>
-                      {/* 数量是"板块一个都没丢"的凭据 */}
-                      {!railCollapsed && <span className="ni-count">{toolCount}</span>}
-                    </button>
-                  </>
-                )}
-              </div>
+              {/* 底部只留「我的工具」（钉住的板块和技能）。「全部工具」已经移到
+                  定时任务下面 —— 它是导航，不是账户区的附属品。 */}
+              <div className="sb-nav-dock">{pinnedGroup}</div>
             </>
           ) : (
             <>
@@ -570,14 +623,19 @@ export default function MainLayout() {
          * 刷新 / 主题 / 退出），每天占着视野换一个月一次的使用频率。它们全部
          * 搬进了左下角的账户菜单。右侧留一个挂位给**属于当前这一页**的动作
          * （lib/topbarSlot），没有板块挂东西时它不占任何位置。 */}
+        {/* 顶栏**不再显示面包屑**（原来那行「~/任务台」）：左边侧栏的高亮项已经
+            回答了"我在哪"，再写一遍是重复，还平白占掉 40px。
+            这一条现在只在**有内容时**才出现 —— 板块挂了动作（见 lib/uiSlots），
+            或者移动端需要那个菜单按钮；两者都没有时整条消失（CSS 的 :has）。 */}
         <div className="topbar">
           {isMobile && (
             <button className="tbtn" onClick={() => setMobileMenu(!mobileMenu)}
                     style={{ marginRight: 4 }} aria-label="打开侧边栏">☰</button>
           )}
-          <div className="tb-path">
-            <b>{path}</b>
-          </div>
+          {/* 属于当前这一页的动作挂这里（lib/uiSlots）。没人挂时是个空 div，不占位置。
+              这条注释以前描述的 lib/topbarSlot 其实从没建起来 —— 于是各板块只能
+              自己再画一行工具条，把同一个板块名写两遍、白占 44px。 */}
+          <TopbarSlotHost />
         </div>
         <div className={"content" + (isFullPage(location.pathname) ? " content-fullpage" : "")}>
           {/* Persistent boards (terminal / agents) are always mounted after their
@@ -613,6 +671,9 @@ export default function MainLayout() {
         visibility={visibility}
       />
       {manualOpen && <ManualModal onClose={() => setManualOpen(false)} />}
+      {settingsSection !== null && (
+        <SettingsDialog section={settingsSection || undefined} onClose={() => setSettingsSection(null)} />
+      )}
       {updating && <UpdateModal currentVersion={appVersion} onClose={() => setUpdating(false)} />}
       {tourOn && hasTour(location.pathname) && (
         <Tour steps={TOURS[location.pathname]} onClose={() => setTourOn(false)} />

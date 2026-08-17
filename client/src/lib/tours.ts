@@ -22,7 +22,7 @@ const DASHBOARD_TOUR: TourStep[] = [
   },
   { sel: '[data-tour="sidebar"]', title: "左侧 = 所有板块入口", body: "「任务台」是一句话把活派给 Agent 的地方；现有板块都收在「更多工具」里，按原来的分组排列。左下角按钮可折叠侧边栏。" },
   { sel: '.sb a[href="/hub-settings"]', title: "第一步：系统配置", body: "新装后先来这里：配一个「全局兜底大模型」（DeepSeek/OpenAI 等任选）+ 数据源 Key。配好这两样，全站 AI 与数据功能就能用了。" },
-  { sel: ".home-tabs", title: "首页 · 运营驾驶舱", body: "每日盯盘面板：大盘流量 / 关键词 / 竞品监控 / 自有 ASIN / 类目大盘 五个标签页。点标签切换不同维度。" },
+  { sel: ".home-tabs", title: "运营驾驶舱", body: "每日盯盘面板：大盘流量 / 关键词 / 竞品监控 / 自有 ASIN / 类目大盘 五个标签页。点标签切换不同维度。" },
   { sel: '[data-tour="home-source"]', title: "数据源 & 站点", body: "右上角选站点和数据源（Sorftime）。切换数据源会重新加载全部数据。" },
   { sel: '[data-tour="tour-help"]', title: "随时查手册 / 重看引导", body: "📖 是使用手册（各板块详细文档）。旁边的「?」可随时重看当前板块的这个引导。" },
 ];
@@ -42,10 +42,10 @@ export const TOURS: Record<string, TourStep[]> = {
 
   // ── 能力市场 ──────────────────────────────────────────────────────────────
   "/capabilities": [
-    { title: "能力市场", body: "Agent 能用什么，都摊在这一页：技能、MCP、智能体、授权。看得见才谈得上组合。" },
-    { sel: ".home-tabs", title: "四类能力", body: "技能=可复用的做法；MCP=连数据和工具的通道；智能体=主脑模型；授权=数据源密钥状态。" },
-    { title: "两套注册表，别混了", body: "技能和 MCP 各有两套：Agent 自己的（~/.ivyea/）和 Skill 中心 / Claude Code 的。页面按来源分区标明了——真正决定「任务台里的 Agent 能干什么」的是 Agent 那一套。" },
-    { title: "用起来", body: "技能卡上点「用这个技能」，会带着它跳回任务台并预选好，直接说需求就行。" },
+    { title: "能力市场", body: "Agent 能用什么，都摊在这一页：技能、社区市场、MCP、智能体、授权。看得见才谈得上组合。" },
+    { sel: ".home-tabs", title: "五类能力", body: "技能=可复用的做法（原「Skill 中心」已并进来）；社区市场=别人做好的方法装过来；MCP=连数据和工具的通道；智能体=主脑模型；授权=数据源密钥状态。" },
+    { sel: ".cap-seg", title: "技能的三个动作", body: "同一批技能，三件事：「运行」填参数就跑、「创建」一句话生成、「管理」编辑文件和快照。以前这三块在单独的 Skill 中心里，同一批技能被列了三遍。" },
+    { title: "用起来", body: "Agent 内置技能点「在任务台用」会带着它跳回任务台并预选好；自己的技能在「运行」里直接填参数执行。" },
   ],
 
   // ── 定时任务 ──────────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ export const TOURS: Record<string, TourStep[]> = {
     },
     { sel: '[data-tour="sidebar"]', title: "左侧 = 所有板块入口", body: "按「工具 / AI & 系统 / 小工具 / 管理」分组。点任意一项进入对应板块；左下角按钮可折叠侧边栏。" },
     { sel: '.sb a[href="/hub-settings"]', title: "第一步：系统配置", body: "新装后先来这里：配一个「全局兜底大模型」（DeepSeek/OpenAI 等任选）+ 数据源 Key。配好这两样，全站 AI 与数据功能就能用了。" },
-    { sel: ".home-tabs", title: "首页 · 运营驾驶舱", body: "每日盯盘面板：大盘流量 / 关键词 / 竞品监控 / 自有 ASIN / 类目大盘 五个标签页。点标签切换不同维度。" },
+    { sel: ".home-tabs", title: "运营驾驶舱", body: "每日盯盘面板：大盘流量 / 关键词 / 竞品监控 / 自有 ASIN / 类目大盘 五个标签页。点标签切换不同维度。" },
     { sel: '[data-tour="home-source"]', title: "数据源 & 站点", body: "右上角选站点和数据源（Sorftime）。切换数据源会重新加载全部数据。" },
     { sel: '[data-tour="tour-help"]', title: "随时查手册 / 重看引导", body: "📖 是使用手册（各板块详细文档）。旁边的「?」可随时重看当前板块的这个引导。" },
   ],
@@ -114,10 +114,7 @@ export const TOURS: Record<string, TourStep[]> = {
   ],
 
   // ── Skill 中心 ───────────────────────────────────────────────────────────────
-  "/skill-hub": [
-    { title: "Skill 中心 · 想法工坊", body: "一句话生成 Skill：输入需求 → 多阶段流水线（理解→规划→复核→优化→生成→自检修复）产出 SKILL.md，并可视化其 Tool Spec。" },
-    { title: "管理已有", body: "除创建外，还能管理已有 Skill、从 GitHub 导入、查看执行历史、可视化执行 Tool。Skill 生成默认走稳定文本链（应用模型优先 + 可选外部 Agent）。" },
-  ],
+  // Skill 中心的引导并进了能力市场（见 "/capabilities"）。
 
   // AI 问答 / AI 生图的引导跟着板块一起并进了任务台（见 "/console"）。
 

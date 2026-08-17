@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import SheetSelect from "../../components/SheetSelect";
 import {
   getSettings, patchSettings, getHealth, changePassword,
@@ -1128,21 +1128,57 @@ function McpSection() {
 }
 
 function AppearanceSection() {
+  // 用 router 的 hash 而不是 window.location.hash + hashchange：应用内 navigate 走的是
+  // history.pushState，**pushState 不派发 hashchange**，只听那个事件在站内点根本不响。
+  const { hash } = useLocation();
   const [fontId, setFontId] = useState(getFontId());
   const [zoom, setZoom] = useState(getZoom());
   const [weight, setWeight] = useState(getWeight());
 
   // 账户菜单里的「字体与字号」深链到这里（/hub-settings#appearance）。
-  // 只 navigate 到设置首页的话，用户还得在十几个分区里自己找 —— 那等于没做。
-  // 用 requestAnimationFrame 等这一帧画完再滚：挂载当帧元素还没有布局高度，
-  // 直接 scrollIntoView 会滚到一个错的位置。
+  //
+  // 这里踩过两次，两次的表现都是"点了没反应，停在设置首页"：
+  //
+  // 1. **滚一次是不够的。** 这一页的内容是异步来的（设置值、健康检查、MCP 列表…），
+  //    挂载那一帧页面还很短，滚过去之后上面的内容陆续到达、把目标一路往下推，
+  //    最终停在的位置和目标毫无关系。所以要**滚到位置稳定为止**。
+  // 2. **已经在这一页时不会重新挂载。** 用户在设置页里点账户菜单的「字体与字号」，
+  //    路由只是加了个 hash，组件不重挂，useEffect 不再跑 —— 所以依赖里要有 hash。
+  //    **别用 window 的 hashchange**：应用内 navigate 走 pushState，不派发那个事件。
   useEffect(() => {
-    if (window.location.hash !== "#appearance") return;
-    const id = requestAnimationFrame(() => {
-      document.getElementById("appearance")?.scrollIntoView({ block: "start", behavior: "smooth" });
-    });
-    return () => cancelAnimationFrame(id);
-  }, []);
+    let raf = 0;
+    let timer = 0;
+    const scrollToSelf = () => {
+      window.clearTimeout(timer);
+      cancelAnimationFrame(raf);
+      let lastTop = Number.NaN;
+      let stableFor = 0;
+      const deadline = Date.now() + 3000;   // 兜底：再长也不能一直滚下去
+      const step = () => {
+        const el = document.getElementById("appearance");
+        if (!el) return;
+        const top = el.getBoundingClientRect().top;
+        el.scrollIntoView({ block: "start", behavior: "smooth" });
+        // 连续两次量到的位置一致（±2px）才算稳了 —— 说明上面的内容不再增高。
+        stableFor = Math.abs(top - lastTop) < 2 ? stableFor + 1 : 0;
+        lastTop = top;
+        if (stableFor >= 2 || Date.now() > deadline) {
+          el.classList.add("hs-section-hit");         // 到了要能看出来
+          window.setTimeout(() => el.classList.remove("hs-section-hit"), 1600);
+          return;
+        }
+        timer = window.setTimeout(() => { raf = requestAnimationFrame(step); }, 160);
+      };
+      raf = requestAnimationFrame(step);
+    };
+
+    if (hash === "#appearance") scrollToSelf();
+    return () => {
+      window.clearTimeout(timer);
+      cancelAnimationFrame(raf);
+    };
+    // hash 进依赖：从别的页面跳进来、以及已经在这一页时再点一次，都要滚。
+  }, [hash]);
 
   const onFont = (id: string) => { setFontId(id); applyFont(id); };
   const onZoom = (v: number) => { setZoom(v); applyZoom(v); };
@@ -1214,7 +1250,17 @@ function AppearanceSection() {
   );
 }
 
-export default function HubSettings() {
+/**
+ * @param focusSection 深链要落到的分区 id（对话框传进来）。**它可能被折叠在
+ *   「系统状态与更多设置」里** —— 那种情况下必须先把折叠块展开，否则目标元素
+ *   根本不在 DOM 里，滚动无从谈起。
+ *
+ *   这正是「字体与字号」点了没反应的真正原因：不是滚错了位置，是外观区压根
+ *   还没渲染出来，看起来就像"跳到了系统设置主页面"。
+ */
+const COLLAPSED_SECTIONS = new Set(["appearance"]);
+
+export default function HubSettings({ focusSection = "" }: { focusSection?: string } = {}) {
   const [vals, setVals] = useState<HubSettings>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState("");
@@ -1246,7 +1292,9 @@ export default function HubSettings() {
   }, []);
 
   const [compatPathsOpen, setCompatPathsOpen] = useState(false);
-  const [sysOpen, setSysOpen] = useState(false);
+  // 深链指向折叠块里的分区时，直接以展开态渲染 —— 让用户自己再点一次"更多设置"
+  // 才看得到目标，等于这个深链没做。
+  const [sysOpen, setSysOpen] = useState(() => COLLAPSED_SECTIONS.has(focusSection));
 
   if (loading) return (
     <div aria-busy="true" aria-live="polite" style={{ display: "grid", gap: 12, maxWidth: 720 }}>

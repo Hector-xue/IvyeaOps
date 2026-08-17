@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getBudgetSummary, type BudgetStatus } from "../api/notify";
+import { openSettings } from "./SettingsDialog";
 
 /**
  * 顶栏常驻的「本月用量」。
@@ -88,7 +89,7 @@ export default function CostChip({ variant = "chip" }: { variant?: "chip" | "inl
       className="tbtn cost-chip"
       style={{ color }}
       title={title}
-      onClick={() => navigate("/hub-settings")}
+      onClick={() => openSettings()}
     >
       <span className="cost-chip-dot" style={{ background: color }} />
       {shown}

@@ -274,7 +274,7 @@
   /* 三级文字 */
   --t:var(--md-ink);--t2:var(--md-muted);--t3:var(--md-faint);
   /* 强调色见 ② */
-  --acc:var(--md-info);
+  --acc:var(--md-brand);
   --acc-ink:var(--md-ink);
   /* 语义色一一对应 */
   --blue:var(--md-info);--amber:var(--md-warn);--red:var(--md-accent);
@@ -295,11 +295,13 @@
   --term-fg:rgb(var(--md-c-syn-str));
   --on-acc:var(--md-canvas);
   --on-acc-ink:var(--md-canvas);
-  /* 字号刻度重排（见 ③）*/
-  --fs-7:10.5px;--fs-75:10.5px;--fs-8:10.5px;--fs-85:10.5px;--fs-9:10.5px;--fs-95:10.5px;
-  --fs-10:12px;--fs-105:12px;--fs-11:12px;
-  --fs-115:13.5px;--fs-12:13.5px;--fs-125:13.5px;--fs-13:13.5px;
-  --fs-135:15px;--fs-14:15px;--fs-15:15px;--fs-16:15px;
+  /* 字号刻度重排（见 ③）。**2026-08-17 整体上调一档**：
+     和 ChatGPT / DeepSeek Harness 并排一比，原来的 10.5/12/13.5/15 明显偏小，
+     长时间看吃力 —— 那两家的正文都在 14~16px。四档整体抬到 12/13.5/15/17。 */
+  --fs-7:12px;--fs-75:12px;--fs-8:12px;--fs-85:12px;--fs-9:12px;--fs-95:12px;
+  --fs-10:13.5px;--fs-105:13.5px;--fs-11:13.5px;
+  --fs-115:15px;--fs-12:15px;--fs-125:15px;--fs-13:15px;
+  --fs-135:17px;--fs-14:17px;--fs-15:17px;--fs-16:17px;
 }
 
 /* ══ 静谧 · 无边框阅读风 ═══════════════════════════════════════════════════
@@ -330,8 +332,10 @@
   --b:var(--md-rule);--b2:var(--md-faint);--brd:var(--b);
   /* 三级文字 */
   --t:var(--md-ink);--t2:var(--md-muted);--t3:var(--md-faint);
-  /* 强调色同门道：info 蓝 = "可点 / 进行中 / 选中"，用朱红会像一直在报警 */
-  --acc:var(--md-info);
+  /* 强调色 = **品牌绿**（logo 那支嫩芽的颜色）。原来绑的是 info 蓝，
+     结果整套界面的"可点/选中/进行中"全是蓝的 —— 那是通用信息色，不是这个产品的颜色。
+     语义蓝 --blue 仍然是蓝的，两者不混用。 */
+  --acc:var(--md-brand);
   --acc-ink:var(--md-ink);
   /* 语义色一一对应 */
   --blue:var(--md-info);--amber:var(--md-warn);--red:var(--md-accent);
@@ -351,11 +355,11 @@
   --on-acc-ink:var(--md-canvas);
   /* 圆角，见 ② */
   --r:10px;
-  /* 字号刻度重排为阅读尺度，见 ① */
-  --fs-7:12px;--fs-75:12px;--fs-8:12px;--fs-85:12px;--fs-9:12px;--fs-95:12px;
-  --fs-10:13px;--fs-105:13px;--fs-11:13px;
-  --fs-115:15px;--fs-12:15px;--fs-125:15px;--fs-13:15px;
-  --fs-135:17px;--fs-14:17px;--fs-15:17px;--fs-16:17px;
+  /* 字号刻度重排为阅读尺度，见 ①。**2026-08-17 再上调一档** —— 见门道那块的说明。 */
+  --fs-7:13px;--fs-75:13px;--fs-8:13px;--fs-85:13px;--fs-9:13px;--fs-95:13px;
+  --fs-10:14.5px;--fs-105:14.5px;--fs-11:14.5px;
+  --fs-115:16px;--fs-12:16px;--fs-125:16px;--fs-13:16px;
+  --fs-135:18.5px;--fs-14:18.5px;--fs-15:18.5px;--fs-16:18.5px;
 }
 
 /* ─────────────────────────────────────────────────────────────────
@@ -410,12 +414,16 @@ body::after{
 .sb{position:relative;width:196px;min-width:196px;background:var(--bg1);box-shadow:inset -1px 0 0 0 var(--b);display:flex;flex-direction:column;transition:width .22s ease,min-width .22s ease}
 /* 拖宽时关掉宽度过渡，否则每一帧都在追一个 220ms 的缓动，手感变成"面条" */
 .sb.sb-dragging{transition:none}
-.sb-logo{height:40px;padding:0 10px 0 14px;border-bottom:1px solid var(--b);display:flex;align-items:center;gap:8px;flex-shrink:0}
-.sb-logo-name{flex:1;display:flex;align-items:center;gap:8px;font-size:var(--fs-12);color:var(--t);min-width:0;overflow:hidden}
+/* 品牌区。原来和普通导航项一样是 12px 常规字重，混在一起看不出是个牌子 ——
+   参考图里 ChatGPT / deepseek 的左上角都明显更重更大。这里加高、加粗、收字距，
+   并去掉那条分隔线（靠留白分区，线是上一代的做法）。 */
+.sb-logo{height:52px;padding:0 10px 0 14px;display:flex;align-items:center;gap:9px;flex-shrink:0}
+.sb-logo-name{flex:1;display:flex;align-items:center;gap:9px;color:var(--t);min-width:0;overflow:hidden}
 .sb-logo-icon{color:var(--acc);font-size:var(--fs-12);flex-shrink:0;width:14px;text-align:center}
 /* 左上角品牌位：原来是一个字符 ◆，换成真的 logo（参考图里左上角同样是品牌标） */
-.sb-logo-img{width:18px;height:18px;object-fit:contain;flex-shrink:0;display:block}
-.sb-logo-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-logo-img{width:22px;height:22px;object-fit:contain;flex-shrink:0;display:block}
+.sb-logo-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-size:var(--fs-15);font-weight:650;letter-spacing:-.015em;color:var(--t)}
 .sb-toggle{background:transparent;border:1px solid var(--b);border-radius:var(--r);color:var(--t3);cursor:pointer;font-size:var(--fs-9);padding:2px 6px;font-family:var(--font);flex-shrink:0;transition:all .1s}
 .sb-toggle:hover{color:var(--t);border-color:var(--b2)}
 .sb nav{flex:1;overflow-y:auto;padding:6px 0}
@@ -438,10 +446,15 @@ body::after{
   border-radius:99px;padding:0 5px;line-height:1.7}
 .sb.collapsed .ni-count{display:none}
 .sb nav::-webkit-scrollbar{width:0}
-.ns{padding:10px 12px 3px;font-size:var(--fs-9);color:var(--t3);letter-spacing:.12em;text-transform:uppercase}
-.ni{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;color:var(--t2);border-left:2px solid transparent;font-size:var(--fs-11);transition:all .1s;white-space:nowrap;text-decoration:none}
+.ns{padding:14px 18px 4px;font-size:var(--fs-9);color:var(--t3);letter-spacing:.10em;text-transform:uppercase}
+/* 导航项。原来 6px 上下内边距 + 11px 字，密而不好点；选中靠左边一条 2px 竖线，
+   在浅色主题下几乎看不见。改成参考图的做法：整块圆角底 + 更重的字。 */
+.ni{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:1px 8px;border-radius:8px;
+  cursor:pointer;color:var(--t2);font-size:var(--fs-115);transition:background .12s,color .12s;
+  white-space:nowrap;text-decoration:none}
 .ni:hover{color:var(--t);background:var(--bg2)}
-.ni.active{color:var(--acc);border-left-color:var(--acc);background:color-mix(in srgb, var(--acc) 5%, transparent)}
+.ni.active{color:var(--t);background:var(--bg3);font-weight:600}
+.ni.active .ic{color:var(--acc)}
 /* 图标位。改用 lucide SVG 之后它装的不再是一个字符，而是一个 16px 的方块 ——
    必须 flex 居中，靠 text-align 对不齐 SVG。 */
 .ni .ic{width:17px;height:17px;flex-shrink:0;font-style:normal;
@@ -458,7 +471,7 @@ body::after{
 .sb.collapsed .sb-logo-name{display:none}
 .sb.collapsed .sb-toggle{padding:3px 8px;font-size:var(--fs-11)}
 .sb.collapsed .ns{display:none}
-.sb.collapsed .ni{justify-content:center;padding:8px 0;gap:0;border-left-width:0;border-right:2px solid transparent}
+.sb.collapsed .ni{justify-content:center;padding:8px 0;margin:1px 6px;gap:0;border-left-width:0;border-right:2px solid transparent}
 .sb.collapsed .ni.active{border-left-width:0;border-right-color:var(--acc)}
 .sb.collapsed .ni-label{display:none}
 .sb.collapsed .nb{display:none}
@@ -1184,24 +1197,44 @@ body::after{
 .terminal-workbench-page{height:calc(100vh - 56px);max-height:calc(100dvh - 56px);display:flex;flex-direction:column;min-height:0}
 .terminal-page-title{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:0;margin-bottom:8px}
 .terminal-page-actions{font-size:var(--fs-9);color:var(--t3);text-transform:none;letter-spacing:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.terminal-workbench{flex:1;min-height:0;display:grid;grid-template-columns:260px minmax(0,1fr) 360px;gap:8px}
-.terminal-session-list,.terminal-main,.terminal-history-panel{min-height:0;display:flex;flex-direction:column;padding:10px 12px;background:var(--bg2);border:1px solid var(--b);border-radius:var(--r)}
+/* 两列：终端列表 + 终端。第三栏「会话内容快照」已移除（2026-08-17）——
+   当时忘了改这里，右边白白空出 360px。列表收起时只剩一列，终端铺满。
+   列表项压成一行之后，这一列从 260px 收到 196px —— 一行文字用不了那么宽。 */
+.terminal-workbench{flex:1;min-height:0;display:grid;grid-template-columns:196px minmax(0,1fr);gap:8px}
+.terminal-workbench-solo{grid-template-columns:minmax(0,1fr)}
+.terminal-session-list,.terminal-main{min-height:0;display:flex;flex-direction:column;padding:10px 12px;background:var(--bg2);border:1px solid var(--b);border-radius:var(--r)}
 .terminal-section-title{font-size:var(--fs-10);color:var(--t3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px}
-.terminal-session-scroll,.terminal-history-scroll{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:8px}
-.terminal-session-scroll::-webkit-scrollbar,.terminal-history-scroll::-webkit-scrollbar{width:4px}
-.terminal-session-scroll::-webkit-scrollbar-thumb,.terminal-history-scroll::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
-.terminal-session-item{background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:10px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:6px;color:var(--t2);font-family:var(--font)}
+.terminal-session-scroll{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:8px}
+.terminal-session-scroll::-webkit-scrollbar{width:4px}
+.terminal-session-scroll::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+/* 终端列表项：**一行**。原来是四行的卡片（177px 一张），其中只有"名字 + 在不在跑"
+   有用；工作目录、最后一条输出、更新时间、以及和主区头部重复的三个按钮全部去掉，
+   前三样进 title，悬停可见。 */
+.terminal-session-item{background:transparent;border:1px solid transparent;border-radius:8px;
+  padding:6px 9px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:8px;
+  color:var(--t2);font-family:var(--font);width:100%}
+.terminal-session-item:hover{background:var(--bg3)}
+/* 状态点：颜色说完的事就不用再写一遍字。 */
+.term-dot{flex:0 0 auto;width:6px;height:6px;border-radius:999px;background:var(--t3)}
+.term-dot.live{background:var(--green,#4ade80);box-shadow:0 0 0 3px color-mix(in srgb,var(--green,#4ade80) 18%,transparent)}
+.term-dot.closed,.term-dot.archived{background:var(--t3);opacity:.5}
+.term-dot.idle{background:var(--t3)}
 .terminal-session-item:hover{border-color:var(--b2);color:var(--t)}
 .terminal-session-item.active{border-color:color-mix(in srgb, var(--acc) 35%, transparent);box-shadow:0 0 0 1px color-mix(in srgb, var(--acc) 8%, transparent) inset;background:color-mix(in srgb, var(--acc) 4%, transparent)}
 .terminal-session-item-top{display:flex;align-items:center;gap:8px}
 .terminal-session-name{flex:1;min-width:0;color:var(--t);font-size:var(--fs-11);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.terminal-session-state{font-size:var(--fs-9);padding:1px 6px;border-radius:999px;border:1px solid var(--b2);color:var(--t3);text-transform:uppercase}
+.terminal-session-state{flex:0 0 auto;font-size:var(--fs-9);color:var(--t3);opacity:.75;
+  white-space:nowrap;text-transform:none}
 .terminal-session-state.live{color:var(--acc);border-color:color-mix(in srgb, var(--acc) 25%, transparent)}
 .terminal-session-state.closed{color:var(--amber);border-color:rgba(251,191,36,.25)}
 .terminal-session-state.idle{color:var(--blue);border-color:rgba(96,165,250,.25)}
 .terminal-session-meta{font-size:var(--fs-9);color:var(--t3);line-height:1.5;word-break:break-all}
 .terminal-session-preview{font-size:var(--fs-10);color:var(--t2);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;word-break:break-word}
-.terminal-main-toolbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
+/* 终端头部压成一行：标题和状态并排，不再上下两行。这一行原来占 71px，
+   而它承载的信息只有"哪个终端 + 什么状态" —— 省下的高度全给终端画面。 */
+.terminal-main-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin-bottom:8px;min-height:26px}
+.terminal-main-toolbar > div:first-child{display:flex;align-items:baseline;gap:8px;min-width:0}
 .terminal-main-toolbar-mobile-hidden{display:flex}
 /* Unified mobile bar — hidden on desktop, shown on mobile via media query */
 .terminal-unified-bar{display:none}
@@ -1213,54 +1246,22 @@ body::after{
 .terminal-mobile-menu-check{display:flex;align-items:center;gap:8px;font-size:var(--fs-10);color:var(--t3);cursor:pointer}
 .terminal-page-count{white-space:nowrap}
 .terminal-current-title{font-size:var(--fs-12);color:var(--t)}
-.terminal-current-meta,.terminal-history-meta{font-size:var(--fs-10);color:var(--t3);line-height:1.6}
+.terminal-current-meta{font-size:var(--fs-10);color:var(--t3);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .terminal-inline-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .terminal-pane-wrap{flex:1;min-height:0;border:1px solid var(--b);border-radius:var(--r);overflow:hidden;background:var(--term-bg)}
 .terminal-legacy-shell{height:100%;display:flex;flex-direction:column;min-height:0;background:var(--term-bg)}
 .terminal-legacy-frame{flex:1;min-height:0;display:block}
 .terminal-live-pane{height:100%}
 .terminal-live-error{position:absolute;top:36px;left:10px;border:1px solid rgba(248,113,113,.35);background:rgba(248,113,113,.08);padding:4px 10px;border-radius:var(--r);font-size:var(--fs-10);color:var(--red)}
-.terminal-history-item{border:1px solid var(--b);border-radius:var(--r);background:var(--bg3);overflow:hidden}
-.terminal-history-item-head{display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--b);font-size:var(--fs-9);color:var(--t3);text-transform:uppercase}
-.terminal-history-item pre{margin:0;padding:8px 10px;font-family:var(--font);font-size:var(--fs-10);line-height:1.65;white-space:pre-wrap;word-break:break-word;color:var(--t2);max-height:280px;overflow:auto}
-.terminal-history-item.transcript-card{display:flex;flex-direction:column;min-height:0;flex:1}
-.terminal-history-item.transcript-card pre{flex:1;min-height:0;max-height:none}
-.terminal-history-item.input pre{color:var(--acc)}
-.terminal-history-item.system pre{color:var(--blue)}
 .terminal-empty{height:100%;display:grid;place-items:center;color:var(--t3);font-size:var(--fs-11)}
 
 /* ── Legacy snapshot panel (right-side, when 主终端 active) ───────────────── */
-.legacy-snapshot-panel{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
-.legacy-snapshot-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.legacy-snapshot-count{font-size:var(--fs-10);color:var(--t3);margin-left:auto}
-.legacy-snapshot-msg{font-size:var(--fs-105);color:var(--t2);padding:5px 8px;background:var(--bg2);border:1px solid var(--b);border-left:3px solid var(--blue);border-radius:4px}
-.legacy-snapshot-list{flex:0 0 auto;max-height:36%;min-height:120px;overflow-y:auto;border:1px solid var(--b);border-radius:6px;padding:4px;background:var(--bg1)}
-.legacy-snapshot-row{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:4px;cursor:pointer;font-size:var(--fs-11);transition:background .1s;border:1px solid transparent}
-.legacy-snapshot-row:hover{background:var(--bg2)}
-.legacy-snapshot-row.active{background:color-mix(in srgb, var(--acc) 8%, transparent);border-color:color-mix(in srgb, var(--acc) 35%, transparent)}
-.legacy-snapshot-row.active .legacy-snapshot-ts{color:var(--acc);font-weight:500}
-.legacy-snapshot-ts{flex:1;min-width:0;color:var(--t2);font-family:var(--font-mono,var(--font));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.legacy-snapshot-src{flex-shrink:0;font-size:var(--fs-95);padding:1px 6px;border-radius:3px;letter-spacing:.05em;border:1px solid var(--b)}
-.legacy-snapshot-src.src-auto{color:var(--t3);background:var(--bg2)}
-.legacy-snapshot-src.src-manual{color:var(--blue);background:rgba(96,165,250,.1);border-color:rgba(96,165,250,.3)}
 
 /* Slot-role badge (3-slot rolling: 当前 / 上一个 / 之前) */
-.legacy-snapshot-slot{flex-shrink:0;font-size:var(--fs-10);font-weight:500;padding:2px 8px;border-radius:3px;letter-spacing:.05em;border:1px solid var(--b);min-width:48px;text-align:center}
-.legacy-snapshot-slot.slot-snap_curr{color:var(--acc);background:color-mix(in srgb, var(--acc) 10%, transparent);border-color:color-mix(in srgb, var(--acc) 35%, transparent)}
-.legacy-snapshot-slot.slot-snap_prev{color:var(--blue);background:rgba(96,165,250,.1);border-color:rgba(96,165,250,.3)}
-.legacy-snapshot-slot.slot-snap_before{color:var(--t3);background:var(--bg2)}
-.legacy-snapshot-size{flex-shrink:0;font-size:var(--fs-10);color:var(--t3);min-width:50px;text-align:right;font-family:var(--font-mono,var(--font))}
-.legacy-snapshot-del{flex-shrink:0;width:22px;height:22px;border:1px solid transparent;background:transparent;color:var(--t3);cursor:pointer;border-radius:4px;font-size:var(--fs-11);line-height:1;padding:0;transition:all .1s}
-.legacy-snapshot-del:hover{border-color:rgba(248,113,113,.4);color:var(--red);background:rgba(248,113,113,.08)}
 
-.legacy-snapshot-viewer{flex:1;min-height:0;display:flex;flex-direction:column;border:1px solid var(--b);border-radius:6px;overflow:hidden;background:var(--bg1)}
-.legacy-snapshot-viewer-head{display:flex;gap:10px;padding:6px 10px;background:var(--bg2);border-bottom:1px solid var(--b);font-size:var(--fs-105);color:var(--t3);align-items:center;flex-wrap:wrap}
-.legacy-snapshot-viewer-head span:first-child{color:var(--t);font-weight:500}
-.legacy-snapshot-viewer-body{flex:1;min-height:0;overflow:auto;padding:10px 12px}
-.legacy-snapshot-viewer-body pre{margin:0;font-family:var(--font-mono,var(--font));font-size:var(--fs-115);line-height:1.55;color:var(--t);white-space:pre-wrap;word-break:break-all}
 @media (max-width: 1200px){
-  .terminal-workbench{grid-template-columns:240px minmax(0,1fr)}
-  .terminal-history-panel{grid-column:1 / -1;max-height:280px}
+  .terminal-workbench{grid-template-columns:180px minmax(0,1fr)}
+  .terminal-workbench-solo{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width: 760px){
   .terminal-workbench-page{height:auto;max-height:none;min-height:calc(100vh - 72px);gap:6px}
@@ -1280,10 +1281,7 @@ body::after{
   .terminal-pane-wrap:fullscreen{border-radius:0;border:none}
   .terminal-pane-wrap:fullscreen iframe,
   .terminal-pane-wrap:fullscreen .terminal-live-pane{height:100%}
-  .terminal-history-panel{max-height:36dvh}
-  .terminal-history-item pre{font-size:var(--fs-11);line-height:1.7}
   .terminal-workbench-mobile .terminal-session-item,
-  .terminal-workbench-mobile .terminal-history-item{border-radius:10px}
   .terminal-sheet-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25;animation:term-bd-in .2s ease both}
   .terminal-mobile-sheet{position:fixed;left:10px;right:10px;bottom:10px;top:auto;max-height:min(62dvh,520px);z-index:26;border-radius:18px;padding:12px;box-shadow:0 14px 48px rgba(0,0,0,.5);background:linear-gradient(var(--bg2),var(--bg2)),linear-gradient(var(--bg-cover),var(--bg-cover)),var(--bg-cover);border:1px solid var(--b);animation:term-sheet-up .26s cubic-bezier(.16,1,.3,1) both;will-change:transform}
   .terminal-mobile-sheet::before{content:"";display:block;width:42px;height:4px;border-radius:999px;background:var(--b2);margin:0 auto 10px}
@@ -1874,6 +1872,21 @@ body::after{
 .listing-project-list{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-right:2px;scrollbar-width:thin;scrollbar-color:var(--b2) transparent}
 .listing-project-list::-webkit-scrollbar{width:3px}.listing-project-list::-webkit-scrollbar-thumb{border-radius:3px;background:var(--b2)}
 .listing-workflow-tabs{display:flex;gap:4px;margin-bottom:9px;padding:4px;border:1px solid var(--b);border-radius:8px;background:var(--bg1)}.listing-workflow-tabs button{position:relative;flex:1;height:32px;border:0;border-radius:6px;background:transparent;color:var(--t3);font:550 var(--fs-105)/1 var(--font);cursor:pointer;transition:background .15s,color .15s}.listing-workflow-tabs button:hover{color:var(--t);background:var(--bg2)}.listing-workflow-tabs button.active{background:color-mix(in srgb,var(--acc) 10%,var(--bg2));color:var(--acc);font-weight:700;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--acc) 24%,var(--b))}.listing-workflow-tabs button.active:after{content:"";position:absolute;left:28%;right:28%;bottom:2px;height:2px;border-radius:2px;background:var(--acc)}
+
+/* Listing 步骤条在手机上的适配。
+   桌面是四等分 + 写死 height:32px + line-height:1；手机上一格只有 ~84px，
+   「① 素材与洞察」放不下就换行，而固定高度加 line-height:1 会让换出去的那行
+   **直接溢出按钮盒子、和相邻的字叠在一起**（真机截图里就是这样）。
+   这里放开高度、给正常行高、字号降一档，四步仍然一屏可见。 */
+@media (max-width:760px){
+  .listing-workflow-tabs{gap:3px;padding:3px}
+  .listing-workflow-tabs button{height:auto;min-height:40px;padding:6px 3px;
+    font-size:var(--fs-9);line-height:1.3;white-space:normal;word-break:break-word}
+  .listing-workflow-tabs button.active:after{left:20%;right:20%}
+  /* 页面副标题在手机上占掉三四行，而它是说明性文字，不是操作 —— 收成两行。 */
+  .listing-page-sub{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+    overflow:hidden}
+}
 
 /* ── Listing Visual Studio ─────────────────────────────────────────────── */
 .visual-studio{--vs-radius:10px;width:100%;min-width:0;max-width:100%;display:flex;flex-direction:column;gap:12px;overflow-x:clip;color:var(--t)}
@@ -3003,7 +3016,10 @@ body::after{
 
 /* ── 新外壳的侧边栏增补（一级项 / 全部工具入口 / 工作区占位）─────────────── */
 /* .ni 原本只给 <a>，这里让 <button> 也能长成同一副样子。 */
-button.ni{width:100%;background:transparent;border:none;border-left:2px solid transparent;
+/* **不能是 width:100%**：.ni 有左右外边距，而百分比宽度不含外边距，两者相加
+   一定超出容器 —— 手机抽屉里实测导航项右边缘比抽屉还宽 8px。
+   用 auto + stretch：由 flex/block 布局去算，永远等于"容器减掉外边距"。 */
+button.ni{width:auto;align-self:stretch;background:transparent;border:none;border-left:2px solid transparent;
   font-family:var(--font);font-size:var(--fs-11);text-align:left;line-height:inherit}
 .ni-action{color:var(--acc)}
 .ni-action:hover{background:color-mix(in srgb,var(--acc) 8%,transparent)}
@@ -3017,12 +3033,18 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .cc-main{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0}
 
 /* ── Hero 态 ─────────────────────────────────────────────────────────────── */
+/* 首屏。参考图（ChatGPT / DeepSeek Harness）的共同做法是：**标题大、输入框宽、
+   其余一律往后退**。原来标题 26px、输入框 720px、场景芯片和输入框几乎等重，
+   三样东西在抢同一个焦点。现在拉开：标题 34px，输入框 780px 并整体上移一点
+   （视觉重心略高于几何中心才不显得"沉在底部"），场景芯片退成弱提示。 */
 .cc-hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:24px 16px;gap:14px;overflow-y:auto}
-.cc-hero-title{font-size:26px;font-weight:600;color:var(--t);margin:0;letter-spacing:.01em}
+  padding:24px 16px 15vh;gap:20px;overflow-y:auto}
+.cc-hero-title{font-size:34px;font-weight:650;color:var(--t);margin:0;letter-spacing:-.02em;
+  line-height:1.35}
 .cc-hero-sub{font-size:var(--fs-12);color:var(--t3);margin:0;text-align:center;max-width:520px;line-height:1.7}
-.cc-hero-composer{width:100%;max-width:720px;margin-top:6px}
-.cc-scenes{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:720px}
+.cc-hero-composer{width:100%;max-width:780px;margin-top:2px}
+.cc-scenes{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:660px;
+  margin-top:4px;opacity:.9}
 .cc-scene{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--b);
   border-radius:999px;background:var(--bg1);color:var(--t2);font-family:var(--font);font-size:var(--fs-11);
   cursor:pointer;transition:color var(--dur) var(--ease),border-color var(--dur) var(--ease),
@@ -3216,8 +3238,11 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .cc-send.cc-stop{background:var(--red);color:var(--on-acc)}
 
 /* ── 右侧产物栏 ──────────────────────────────────────────────────────────── */
-.cc-rail{flex-shrink:0;display:flex;border-left:1px solid var(--b);background:var(--bg1)}
-.cc-rail-tabs{display:flex;flex-direction:column;gap:2px;padding:8px 5px;width:40px;flex-shrink:0}
+/* 右侧产物栏。没打开面板时它只是一条窄图标带 —— 去掉左边那条实线，
+   靠留白和图标本身站住；打开时才画分隔线，形成"面板"的感觉。 */
+.cc-rail{flex-shrink:0;display:flex;background:transparent}
+.cc-rail.open{border-left:1px solid var(--b);background:var(--bg1)}
+.cc-rail-tabs{display:flex;flex-direction:column;gap:4px;padding:10px 6px;width:42px;flex-shrink:0}
 .cc-rail-tab{position:relative;width:30px;height:30px;border:1px solid transparent;border-radius:var(--r);
   background:transparent;color:var(--t3);cursor:pointer;
   display:inline-flex;align-items:center;justify-content:center;
@@ -3250,7 +3275,9 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .cc-rail-meta dd{margin:0;color:var(--t2);word-break:break-all}
 
 @media (max-width:900px){
-  .cc-hero-title{font-size:20px}
+  /* 手机上标题小一档，行高给足 —— 1.25 时中文的行盒比 clientHeight 高 3px，
+     会被裁掉一线笔画。 */
+  .cc-hero-title{font-size:24px;line-height:1.35}
   .cc-rail{display:none}           /* 手机端不挤会话区 */
   .cc-thread{padding:12px 10px 6px}
   .cc-dock{padding:6px 10px 10px}
@@ -3271,6 +3298,20 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .cap-page{display:flex;flex-direction:column;gap:2px}
 .cap-search{width:100%;max-width:340px;margin:10px 0 4px}
 .cap-section{margin:14px 0 18px}
+/* 「技能」标签下的分段控件 —— Skill 中心并进来之后，运行/创建/管理是同一批技能上的
+   三个动作。刻意做得比顶级标签轻：它是二级导航，抢了主标签的视觉重量就等于又多了一层"板块"。 */
+.cap-seg{display:flex;align-items:center;gap:4px;margin-bottom:14px;padding-bottom:10px;
+  border-bottom:1px solid var(--b)}
+.cap-seg-btn{padding:5px 14px;font-size:var(--fs-11);border:1px solid transparent;border-radius:6px;
+  background:transparent;color:var(--t2);cursor:pointer;transition:background .15s,color .15s}
+.cap-seg-btn:hover{background:var(--bg2);color:var(--t)}
+.cap-seg-btn.active{background:var(--bg3);border-color:var(--b);color:var(--t);font-weight:600}
+.cap-seg-hint{margin-left:6px;font-size:var(--fs-10);color:var(--t3)}
+/* 技能库挂载状态条（原 Skill 中心「管理」页那条） */
+.cap-mount{padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px;
+  flex-wrap:wrap;font-size:var(--fs-10);color:var(--t2)}
+.cap-mount b{color:var(--acc)}
+.cap-mount .tbtn{margin-left:auto;font-size:var(--fs-9)}
 .cap-section-head{display:flex;align-items:baseline;gap:10px;margin-bottom:9px;padding-bottom:6px;
   border-bottom:1px solid var(--b);flex-wrap:wrap}
 .cap-section-head b{font-size:var(--fs-125);color:var(--t)}
@@ -3342,7 +3383,111 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .sb-sess.active{color:var(--acc);border-left-color:var(--acc);
   background:color-mix(in srgb,var(--acc) 5%,transparent)}
 .sb-sess-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sb-sess-time{font-size:var(--fs-9);color:var(--t3);flex-shrink:0}
+/* 会话时间：纯日期数字，比 --t3 再弱一档，并用等宽数字让它们竖着对成一列 ——
+   一屏几十条时，这一列本来就不该跟标题抢注意力。 */
+
+
+/* 顶栏：**空了就不占位置**。面包屑删掉之后，多数页面这一条里什么都没有 ——
+   留着就是一条 40px 的空带。:has 让它只在真有内容（板块动作 / 移动端菜单键）时出现。 */
+.topbar:not(:has(.tb-slot > *)):not(:has(> .tbtn)){display:none}
+/* 「全部工具」折叠组 */
+.ni-caret{margin-left:4px;color:var(--t3);transition:transform .15s;display:inline-block}
+.ni-caret.open{transform:rotate(90deg)}
+.sb-tools-tree{padding:2px 0 6px}
+.sb-tools-tree .ni{padding-left:26px;font-size:var(--fs-11)}
+.sb-tools-group{padding:8px 18px 3px;font-size:var(--fs-9);color:var(--t3);letter-spacing:.08em}
+.ni-more{color:var(--t3);font-size:var(--fs-10);padding-left:26px}
+/* 顶栏的终端选择器（汉堡下拉）。列表本身一天点几次，不该常年占一整列。 */
+.term-picker{position:relative;display:inline-flex}
+.term-picker-btn{white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.term-picker-btn.active{border-color:var(--acc);color:var(--t)}
+.term-picker-backdrop{position:fixed;inset:0;z-index:2499}
+/* portal 到 body，所以是 fixed + 由 JS 给 top/left（按钮在顶栏插槽里，
+   祖先有 overflow 和 40px 高度限制，absolute 会被裁掉）。 */
+.term-picker-menu{position:fixed;z-index:2500;min-width:240px;
+  max-height:60vh;overflow-y:auto;padding:6px;background:var(--bg1);border:1px solid var(--b);
+  border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.28)}
+.term-picker-menu .terminal-session-item{width:100%}
+/* 知识库工作台页头一行：这个库现在什么样。原来这几个数字自己占一个「概览」标签，
+   而看一眼数字不值得切一次标签。 */
+.brain-stats{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:10px;
+  padding:8px 12px;background:var(--bg2);border:1px solid var(--b);border-radius:var(--r);
+  font-size:var(--fs-10);color:var(--t3)}
+.brain-stats b{color:var(--t);font-size:var(--fs-12);margin-right:3px}
+.brain-stats .ok{color:var(--acc)}
+.brain-stats .warn{color:var(--amber,#f59e0b)}
+.brain-gear{margin-left:auto;padding:3px 9px;font-size:var(--fs-12);line-height:1}
+/* ── 顶栏挂位 / 侧栏挂位（lib/uiSlots）──────────────────────────────────────
+   顶栏原来只有一行面包屑、46px 全宽空着，而板块自己在下面又画一行工具条把同一个
+   名字写第二遍。现在动作挂进顶栏右侧，那一行整个省掉。 */
+.tb-slot{margin-left:auto;display:flex;align-items:center;min-width:0}
+.tb-actions{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow-x:auto;
+  max-width:100%;scrollbar-width:none}
+.tb-actions::-webkit-scrollbar{display:none}
+.tb-actions-meta{font-size:var(--fs-10);color:var(--t3);white-space:nowrap}
+.tb-actions-check{display:flex;align-items:center;gap:5px;font-size:var(--fs-10);
+  color:var(--t3);cursor:pointer;white-space:nowrap}
+/* ════════════════════════════════════════════════════════════════════════════
+   应用级对话框（系统配置 / 使用手册）
+   以前这两样是铺满整屏的不透明浮层，看着和跳到另一个页面没区别 —— 看完还得找路
+   回来。现在是浮在当前工作之上的对话框：左目录、右内容、背后那一页还在。
+   ════════════════════════════════════════════════════════════════════════════ */
+.app-dialog-backdrop{position:fixed;inset:0;z-index:9000;display:flex;align-items:center;
+  justify-content:center;padding:24px;background:rgba(0,0,0,.42);backdrop-filter:blur(2px);
+  animation:app-dialog-fade .14s ease-out}
+@keyframes app-dialog-fade{from{opacity:0}to{opacity:1}}
+.app-dialog{display:flex;width:100%;height:min(86vh,760px);background:var(--bg1);
+  border:1px solid var(--b);border-radius:14px;overflow:hidden;
+  box-shadow:0 18px 60px rgba(0,0,0,.30);animation:app-dialog-in .16s ease-out}
+@keyframes app-dialog-in{from{opacity:0;transform:translateY(6px) scale(.995)}
+  to{opacity:1;transform:none}}
+.app-dialog-plain{max-width:640px;height:auto;max-height:86vh}
+/* 左侧目录 */
+.app-dialog-nav{flex:0 0 208px;display:flex;flex-direction:column;gap:2px;padding:12px 10px;
+  background:var(--bg2);border-right:1px solid var(--b);overflow-y:auto}
+.app-dialog-close{width:30px;height:30px;flex:0 0 auto;margin-bottom:8px;border:1px solid transparent;
+  border-radius:8px;background:transparent;color:var(--t2);cursor:pointer;font-size:var(--fs-13)}
+.app-dialog-close:hover{background:var(--bg3);color:var(--t)}
+.app-dialog-close-inline{margin:0 0 0 auto}
+.app-dialog-nav-list{display:flex;flex-direction:column;gap:2px}
+.app-dialog-nav-item{text-align:left;padding:7px 10px;border:none;border-radius:8px;background:transparent;
+  color:var(--t2);font-size:var(--fs-11);cursor:pointer;line-height:1.35;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .12s,color .12s}
+.app-dialog-nav-item:hover{background:var(--bg3);color:var(--t)}
+.app-dialog-nav-item.active{background:var(--bg3);color:var(--t);font-weight:600}
+.app-dialog-nav-empty{padding:8px 10px;font-size:var(--fs-10);color:var(--t3)}
+/* 右侧内容 */
+.app-dialog-main{flex:1 1 auto;display:flex;flex-direction:column;min-width:0}
+.app-dialog-head{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:14px 20px 10px;
+  border-bottom:1px solid var(--b)}
+.app-dialog-icon{font-size:var(--fs-14)}
+.app-dialog-title{font-size:var(--fs-15);font-weight:700;color:var(--t)}
+.app-dialog-body{flex:1 1 auto;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.app-dialog-loading{padding:20px;color:var(--t3);font-size:var(--fs-12)}
+/* 设置页塞进对话框：滚动交给这一层，页面自己的外边距要收掉 */
+.hs-in-dialog{flex:1 1 auto;overflow-y:auto;padding:16px 20px 28px;min-height:0}
+.hs-in-dialog .ptitle{display:none}
+.manual-doc{flex:1 1 auto;overflow-y:auto;padding:18px 24px 28px;max-width:860px}
+/* 窄屏：目录收成顶部一条横向滚动，别把内容挤没 */
+@media (max-width:720px){
+  .app-dialog-backdrop{padding:0}
+  .app-dialog{height:100%;border-radius:0;flex-direction:column}
+  .app-dialog-nav{flex:0 0 auto;flex-direction:row;align-items:center;gap:6px;overflow-x:auto;
+    border-right:none;border-bottom:1px solid var(--b);padding:8px 10px}
+  .app-dialog-nav-list{flex-direction:row;gap:6px}
+  .app-dialog-nav-item{flex:0 0 auto}
+  .app-dialog-close{margin:0 6px 0 0}
+}
+/* 深链跳到某个设置分区时，短暂高亮一下 —— 长页面里滚到位了但没有任何反馈，
+   用户会以为"又落到设置首页了"。 */
+.hs-section-hit{animation:hs-hit 1.6s ease-out}
+@keyframes hs-hit{
+  0%{box-shadow:0 0 0 2px var(--acc)}
+  70%{box-shadow:0 0 0 2px var(--acc)}
+  100%{box-shadow:0 0 0 2px transparent}
+}
+.sb-sess-time{font-size:var(--fs-9);color:var(--t3);opacity:.62;flex-shrink:0;
+  font-variant-numeric:tabular-nums;letter-spacing:.02em}
 .sb-sess-del{opacity:0;font-size:var(--fs-9);color:var(--t3);flex-shrink:0;padding:0 2px;
   transition:opacity var(--dur) var(--ease)}
 .sb-sess:hover .sb-sess-del{opacity:1}
@@ -3872,6 +4017,6 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 @media (pointer:coarse){ .sb-resizer{width:12px;right:-6px} }
 
 /* ── Hero 品牌行（对标 DeepSeek Harness）───────────────────────────────── */
-.cc-hero-brand{display:flex;align-items:center;gap:12px}
-.cc-hero-logo{width:38px;height:38px;object-fit:contain;flex-shrink:0}
+.cc-hero-brand{display:flex;align-items:center;gap:14px}
+.cc-hero-logo{width:44px;height:44px;object-fit:contain;flex-shrink:0}
 @media (max-width:640px){ .cc-hero-logo{width:30px;height:30px} }

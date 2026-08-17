@@ -36,13 +36,27 @@ const SOURCE_FILTERS: { key: "" | ConsoleSource; label: string }[] = [
   { key: "brain", label: SOURCE_LABEL.brain },
 ];
 
-function relTime(ts: number): string {
+/**
+ * 会话时间：**纯日期数字**，不用「3 小时前」这种相对说法。
+ *
+ * 左栏一屏几十条，每条都挂一句「几小时前 / 几天前」时，这些字在视觉上和会话标题
+ * 抢注意力 —— 而它们本来只是排序的副产品，用户扫列表时并不读它。数字短、形状统一，
+ * 扫过去成一列，不打断读标题。
+ *
+ * 今天的只给时分（今天发生的事，日期是多余的）；今年的给月/日；跨年补两位年份。
+ */
+function sessionTime(ts: number): string {
   if (!ts) return "";
-  const diff = Date.now() / 1000 - ts;
-  if (diff < 60) return "刚刚";
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
-  return `${Math.floor(diff / 86400)} 天前`;
+  const d = new Date(ts * 1000);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  const two = (n: number) => String(n).padStart(2, "0");
+  const sameDay = d.getFullYear() === now.getFullYear()
+    && d.getMonth() === now.getMonth()
+    && d.getDate() === now.getDate();
+  if (sameDay) return `${two(d.getHours())}:${two(d.getMinutes())}`;
+  const md = `${two(d.getMonth() + 1)}/${two(d.getDate())}`;
+  return d.getFullYear() === now.getFullYear() ? md : `${two(d.getFullYear() % 100)}/${md}`;
 }
 
 export default function SessionRail({
@@ -329,7 +343,7 @@ export default function SessionRail({
                         {SOURCE_LABEL[r.source as ConsoleSource]}
                       </span>
                     )}
-                    <span className="sb-sess-time">{relTime(r.updated)}</span>
+                    <span className="sb-sess-time">{sessionTime(r.updated)}</span>
                     <span
                       className="sb-sess-del"
                       title="删除会话"

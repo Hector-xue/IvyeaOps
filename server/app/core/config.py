@@ -141,18 +141,6 @@ class Settings:
     # --- Data ---
     data_dir: Path = Path(os.getenv("IVYEA_OPS_DATA_DIR", str(_ROOT / "data")))
 
-    # --- Terminal session auto-capture ---
-    # Periodically snapshot the tmux pane in the background so the user
-    # doesn't have to click the manual "save" button. SHA1-dedups against
-    # the last stored row, so an idle terminal won't bloat the DB.
-    terminal_autocapture_enabled: bool = (
-        os.getenv("IVYEA_OPS_TERMINAL_AUTOCAPTURE", "1").lower()
-        not in ("", "0", "false", "no")
-    )
-    terminal_autocapture_interval: int = int(
-        os.getenv("IVYEA_OPS_TERMINAL_AUTOCAPTURE_INTERVAL", "300")
-    )
-
 
 settings = Settings()
 

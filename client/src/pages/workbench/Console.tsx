@@ -62,6 +62,7 @@ import {
   type IvyeaSkillInfo,
 } from "../../api/ivyeaAgent";
 import { errText } from "../../lib/errText";
+import { openSettings } from "../../components/SettingsDialog";
 
 /** 老版本 agent 的自由文本叙述最多保留最近几行 —— 长任务的叙述能有几十条。 */
 const MAX_NOTES = 12;
@@ -917,7 +918,7 @@ function ConsoleInner() {
       images={images}
       onImagesChange={setImages}
       modelLabel={model}
-      onModelClick={() => navigate("/hub-settings")}
+      onModelClick={() => openSettings()}
       autoFocus={!compact}
       compact={compact}
     />

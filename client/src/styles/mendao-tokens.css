@@ -102,6 +102,16 @@
  * 50~200 当文字，浅色模式反过来 —— 同一条单调阶同时服务两边，这正是
  * agents 那些 `dark:` 配对成立的前提，不能因为是深色主题就把阶倒过来。
  */
+/* ── 品牌色 ────────────────────────────────────────────────────────────────
+ * Ivyea 的品牌绿就是 logo / favicon 里那支嫩芽的绿：#16a34a。
+ * 强调色（--acc = 可点 / 选中 / 进行中）用它，**语义蓝 --blue 保持是蓝的** ——
+ * 两者混用的话，"信息提示"和"品牌"就再也分不开了。
+ * 深色下用亮一档的 #4ade80：#16a34a 压在深底上对比度不够。 */
+:root[data-theme="mendao-light"],
+:root[data-theme="quiet-light"] { --md-c-brand: 22 163 74; }
+:root[data-theme="mendao-dark"],
+:root[data-theme="quiet-dark"]  { --md-c-brand: 74 222 128; }
+
 :root[data-theme="mendao-light"],
 :root[data-theme="quiet-light"] {
   --ag-n50:  255 255 255;   /* paper */
@@ -182,6 +192,7 @@
   --md-muted:  rgb(var(--md-c-muted));
   --md-faint:  rgb(var(--md-c-faint));
   --md-accent: rgb(var(--md-c-accent));
+  --md-brand: rgb(var(--md-c-brand));
   --md-ok:     rgb(var(--md-c-ok));
   --md-info:   rgb(var(--md-c-info));
   --md-warn:   rgb(var(--md-c-warn));

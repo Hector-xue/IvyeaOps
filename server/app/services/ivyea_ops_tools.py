@@ -486,6 +486,62 @@ async def _lingxing_operate_disable(args: dict[str, Any]) -> Any:
     return await lingxing.operate_disable()
 
 
+async def _lingxing_datasets(args: dict[str, Any]) -> Any:
+    from app.routers import lingxing
+    return await lingxing.datasets()
+
+
+async def _lingxing_read(args: dict[str, Any]) -> Any:
+    """读任意领星数据集。
+
+    补这个工具的原因：agent 原来只拿得到「大盘」和「规则引擎候选」两个**做好的结论**，
+    取不到原始数据 —— 用户在任务台问一句"UK 站上周哪个词最费钱"，它连数都取不出来。
+    数据集清单和每个数据集要哪些参数，用 lingxing_datasets 查。
+    """
+    from app.routers import lingxing
+    from app.routers.lingxing import ReadRequest
+
+    dataset = str(args.get("dataset") or "").strip()
+    if not dataset:
+        raise ValueError("dataset 必填；先用 lingxing_datasets 看有哪些数据集")
+    params = args.get("params") or {}
+    if isinstance(params, str):
+        params = json.loads(params or "{}")
+    return await lingxing.read(dataset, ReadRequest(params=params, force=bool(args.get("force"))))
+
+
+async def _lingxing_operate(args: dict[str, Any]) -> Any:
+    """发起一次领星写操作。
+
+    **它永远先建工单**，再按当前档位决定要不要当场执行：
+
+      逐项确认档 → 建完就停，等人去「工单」页点确认
+      自主执行档 → 立刻确认并执行；护栏、快照、审计、回滚一样不少
+
+    也就是说这个工具不绕过任何一道闸 —— 它只是让 agent 能走完人走的那条路。
+    """
+    from app.core import hub_settings as _hs
+    from app.routers import lingxing
+    from app.routers.lingxing import ManualTicket
+    from app.services import lingxing_operate as lxo
+
+    payload = {k: v for k, v in (args or {}).items() if v not in (None, "")}
+    ticket = await lingxing.operate_manual(ManualTicket(**payload))
+    tid = (ticket or {}).get("id") or (ticket or {}).get("ticket_id")
+    auto = not bool(_hs.get("lingxing_operate_require_human", True))
+    if not (auto and tid):
+        return {**(ticket or {}), "executed": False,
+                "note": "工单已创建，等待人工确认。当前是「逐项确认」档；"
+                        "要让我直接执行，请到「系统配置 → 领星」把执行档位切到「自主执行」。"}
+    try:
+        done = await lxo.confirm_ticket(str(tid), decided_by="agent")
+        return {**(done or {}), "executed": True,
+                "note": "已按「自主执行」档直接执行完成，可在工单页回滚。"}
+    except Exception as exc:  # noqa: BLE001
+        return {**(ticket or {}), "executed": False, "error": str(exc),
+                "note": "工单已建但执行失败，去工单页看原因。"}
+
+
 TOOLS: tuple[OpsTool, ...] = (
     OpsTool("home_list_watch", "home", "Home 监控清单", "列出 Home 页已关注的 ASIN。", _obj(), _home_list_watch),
     OpsTool("home_add_watch", "home", "添加 ASIN 监控", "把一个 ASIN 添加到 Home 监控清单。", _obj(
@@ -583,12 +639,38 @@ TOOLS: tuple[OpsTool, ...] = (
     OpsTool("monitor_services", "servmon", "服务状态", "读取服务器监控中的 systemd 服务状态。", _obj(), _monitor_services),
     OpsTool("monitor_token_usage", "servmon", "Token 用量", "读取 Token 用量和模型成本概览。", _obj(), _monitor_token_usage),
     OpsTool("skill_tools_list", "skill-hub", "Skill 工具列表", "列出 Skill Tools 板块可运行工具。", _obj(query=_str("搜索词"), category=_str("分类"), limit=_int(default=30)), _skill_tools_list),
-    OpsTool("lingxing_status", "admin", "领星状态", "读取领星集成开关和后端配置状态。", _obj(), _lingxing_status),
-    OpsTool("lingxing_dashboard", "admin", "领星广告大盘", "读取领星广告数据大盘。", _obj(sids=_str("逗号分隔 SID，空=全部"), days=_int(default=7)), _lingxing_dashboard, long_running=True),
-    OpsTool("lingxing_optimizer", "admin", "领星规则优化候选", "运行领星店铺广告规则引擎，生成候选操作。", _obj(sid=_int("店铺 SID"), days=_int(default=0)), _lingxing_optimizer, long_running=True),
-    OpsTool("lingxing_operate_tickets", "admin", "领星操作工单", "列出领星操作工单。", _obj(limit=_int(default=50)), _lingxing_operate_tickets),
-    OpsTool("lingxing_operate_enable", "admin", "开启领星操作开关", "开启领星可写态；实际写入仍需三重复核和人工确认。", _obj(), _lingxing_operate_enable, destructive=True),
-    OpsTool("lingxing_operate_disable", "admin", "关闭领星操作开关", "关闭领星可写态，恢复只读。", _obj(), _lingxing_operate_disable, destructive=True),
+    OpsTool("lingxing_status", "lingxing", "领星状态", "读取领星集成开关和后端配置状态。", _obj(), _lingxing_status),
+    OpsTool("lingxing_dashboard", "lingxing", "领星广告大盘", "读取领星广告数据大盘。", _obj(sids=_str("逗号分隔 SID，空=全部"), days=_int(default=7)), _lingxing_dashboard, long_running=True),
+    OpsTool("lingxing_optimizer", "lingxing", "领星规则优化候选", "运行领星店铺广告规则引擎，生成候选操作。", _obj(sid=_int("店铺 SID"), days=_int(default=0)), _lingxing_optimizer, long_running=True),
+    OpsTool("lingxing_datasets", "lingxing", "领星数据集清单",
+            "列出可读的领星数据集和每个数据集要哪些参数。**读数据前先看这个**。",
+            _obj(), _lingxing_datasets),
+    OpsTool("lingxing_read", "lingxing", "读领星数据",
+            "按数据集读领星原始数据：广告活动 / 广告组 / 关键词 / 定向 / 各类报表 / "
+            "搜索词报表 / FBA 库存 / ASIN 利润。**用户问任何领星的具体数据都用它**。", _obj(
+                dataset=_str("数据集 key，如 sp_search_term_report"),
+                params={"type": "object",
+                        "description": '该数据集要求的参数，如 {"sid":1863,"report_date":"2026-08-15"}'},
+                force=_str("传 1 跳过缓存直连领星")),
+            _lingxing_read, long_running=True),
+    OpsTool("lingxing_operate", "lingxing", "领星写操作",
+            "改广告：活动预算/启停、关键词竞价、定向竞价、广告组默认竞价、加词、否词。"
+            "先建工单再按档位走 —— 「逐项确认」档停下等人点，「自主执行」档直接做完（可回滚）。", _obj(
+                op_type=_str("campaign_budget / keyword_bid / target_bid / adgroup_bid / "
+                             "add_keyword / negate_keyword"),
+                sid=_int("店铺 SID"),
+                target_id=_str("要改的对象 ID（活动 / 关键词 / 定向 / 广告组）"),
+                value=_num("新数值：预算或竞价"),
+                state=_str("enabled / paused，改启停时用"),
+                campaign_id=_str("加词 / 否词时的活动 ID"),
+                ad_group_id=_str("加词 / 否词时的广告组 ID"),
+                keyword_text=_str("要加的词 / 要否的词"),
+                match_type=_str("匹配方式，如 EXACT / negativeExact"),
+                reason=_str("为什么要改 —— 会写进审计")),
+            _lingxing_operate, destructive=True, long_running=True),
+    OpsTool("lingxing_operate_tickets", "lingxing", "领星操作工单", "列出领星操作工单。", _obj(limit=_int(default=50)), _lingxing_operate_tickets),
+    OpsTool("lingxing_operate_enable", "lingxing", "开启领星操作开关", "开启领星可写态；实际写入仍需三重复核和人工确认。", _obj(), _lingxing_operate_enable, destructive=True),
+    OpsTool("lingxing_operate_disable", "lingxing", "关闭领星操作开关", "关闭领星可写态，恢复只读。", _obj(), _lingxing_operate_disable, destructive=True),
 )
 
 _TOOL_BY_NAME = {tool.name: tool for tool in TOOLS}
@@ -617,7 +699,10 @@ def list_tools(module: str = "", query: str = "", principal: dict[str, Any] | No
         if not _can_access(tool.module, principal):
             continue
         haystack = f"{tool.name} {tool.module} {tool.title} {tool.description}".lower()
-        if q and q not in haystack:
+        # **按词匹配，不是整串匹配。** 原来是 `q not in haystack`，于是 agent 很自然地
+        # 打一串关键词（"广告 预算 领星 campaign budget"）时必定返回空 —— 实测它因此
+        # 连着换了 5 种问法才找到工具，白烧好几轮。任一词命中即返回，宁可多给几个。
+        if q and not any(w in haystack for w in q.split()):
             continue
         rows.append(_public_tool(tool))
     return {

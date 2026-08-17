@@ -11,8 +11,8 @@
  * 而决定工作台里 Agent 能连哪些数据源的是 ~/.ivyea/mcp.json。
  * 这一页把两边都标明来源分区列出，不再让人以为只有一套。
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../App";
 import { ToastProvider, useToast } from "../../components/toast";
 import { useConfirm } from "../../components/ConfirmDialog";
@@ -32,11 +32,19 @@ import {
   type ConsolePreset,
   type IvyeaSkillInfo,
 } from "../../api/ivyeaAgent";
-import { listSkills, type SkillMeta } from "../../api/skill";
+import { agentSyncRun, agentSyncStatus, type AgentSyncStatus } from "../../api/skill";
 import { getSettings, patchSettings } from "../../api/settings";
 import { marketBrowse, marketStatus, type MarketItem } from "../../api/client";
 import { errText } from "../../lib/errText";
 import CommunityMarket from "./CommunityMarket";
+import { openSettings } from "../../components/SettingsDialog";
+
+// Skill 中心那三块并进来了。**懒加载**：它们加起来 1500+ 行（还带代码编辑器和文件树），
+// 直接 import 会把能力市场的首屏包一起拖大，而多数人打开这一页是去看社区市场的。
+const SkillTools = lazy(() => import("./SkillTools"));
+const IdeaSkill = lazy(() => import("./IdeaSkill"));
+const SkillBrowse = lazy(() => import("../skill/SkillBrowse"));
+const ImportGitHubDialog = lazy(() => import("../skill/ImportGitHubDialog"));
 
 type Tab = "community" | "skills" | "mcp" | "agents" | "auth";
 
@@ -70,108 +78,196 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <div className="cap-empty">{children}</div>;
 }
 
+/**
+ * 技能库挂载状态 —— 把「哪些技能任务台真能自动匹配到」摆在明面上。
+ *
+ * 从 Skill 中心「管理」页搬过来的（那个板块已并入本页）。技能库是**原地挂**给
+ * Agent 的，改完立即生效，这里只显示挂没挂上、挂了几个。
+ */
+function AgentSkillMountBar() {
+  const [st, setSt] = useState<AgentSyncStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const load = useCallback(() => {
+    agentSyncStatus().then(setSt).catch(() => setSt(null));
+  }, []);
+  useEffect(load, [load]);
+
+  const remount = async () => {
+    setBusy(true);
+    setMsg("");
+    try {
+      const r = await agentSyncRun();
+      setMsg(r.error ? `挂载失败：${r.error}` : `已挂上 ${r.count} 个技能`);
+      load();
+    } catch (e) {
+      setMsg(errText(e, "挂载失败"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!st) return null;
+  return (
+    <div className="card cap-mount">
+      <span>
+        <b>{st.count}</b> 个技能已挂给 Agent（改完即时生效）
+        <span className="cap-dim">
+          （只挂 {st.domains.join(" / ")} 分类；挂上的才能在任务台被自动匹配到，
+          其余的在「运行」里手动跑）
+        </span>
+      </span>
+      <button className="tbtn" onClick={() => void remount()} disabled={busy}>
+        {busy ? "挂载中…" : "重新挂载"}
+      </button>
+      {msg && <span className="cap-dim">{msg}</span>}
+    </div>
+  );
+}
+
 // ── 技能 ─────────────────────────────────────────────────────────────────────
+//
+// **Skill 中心整个并进这里**（2026-08-17）。此前同一批技能被列了三遍：这一页的只读
+// 卡片、Skill 中心「工具」页的可运行列表、Skill 中心「管理」页的文件浏览器 —— 还分在
+// 两个板块里，用户看到的就是"功能重复"。
+//
+// 现在只有一份列表：运行 / 创建 / 管理 是同一批技能上的三个动作，用分段控件切。
+// 顶级标签仍是 5 个，不因为并进来就膨胀。
+const SEGMENTS = [
+  { key: "run", label: "运行", hint: "填参数就能跑" },
+  { key: "create", label: "创建", hint: "一句话生成 Skill" },
+  { key: "manage", label: "管理", hint: "编辑文件 / 快照 / 回收站" },
+] as const;
+type Segment = (typeof SEGMENTS)[number]["key"];
+
+const SEG_KEY = "ivyea-ops.capabilities.skill-seg";
+
 function SkillsTab({ canRunSkillHub }: { canRunSkillHub: boolean }) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [agentSkills, setAgentSkills] = useState<IvyeaSkillInfo[]>([]);
-  const [opsSkills, setOpsSkills] = useState<SkillMeta[]>([]);
   const [agentErr, setAgentErr] = useState("");
   const [loading, setLoading] = useState(true);
-  const [q, setQ] = useState("");
+  const [showGithubImport, setShowGithubImport] = useState(false);
+
+  // 深链优先，其次记住上次停在哪一段。老的 /skill-hub?tab=create 会被重定向成
+  // ?tab=skills&seg=create，所以这里认的是 seg。
+  const [seg, setSeg] = useState<Segment>(() => {
+    const fromUrl = searchParams.get("seg");
+    if (SEGMENTS.some((x) => x.key === fromUrl)) return fromUrl as Segment;
+    const stored = localStorage.getItem(SEG_KEY);
+    return SEGMENTS.some((x) => x.key === stored) ? (stored as Segment) : "run";
+  });
+
+  useEffect(() => { localStorage.setItem(SEG_KEY, seg); }, [seg]);
+
+  const switchSeg = (next: Segment) => {
+    setSeg(next);
+    setSearchParams((prev) => {
+      const p = new URLSearchParams(prev);
+      p.set("tab", "skills");
+      p.set("seg", next);
+      if (next !== "run") p.delete("tool");   // 工具深链只属于「运行」
+      return p;
+    }, { replace: true });
+  };
 
   useEffect(() => {
     let alive = true;
-    // 没有 skill-hub 模块就别发那一发必然 403 的请求 —— 控制台里一条红色的
-    // 403 会让人以为是坏了，而这是权限设计本身。
-    Promise.allSettled([ivyeaSkills(), canRunSkillHub ? listSkills() : Promise.resolve(null)])
-      .then(([a, o]) => {
+    ivyeaSkills()
+      .then((d) => { if (alive) setAgentSkills(d?.skills || []); })
+      // 取不到要说清楚。Agent 服务刚重启时这里会 503，静默显示"0 个"会让人
+      // 以为技能库真的空了，而不是"这会儿读不到"。
+      .catch((e) => {
         if (!alive) return;
-        if (a.status === "fulfilled") setAgentSkills(a.value?.skills || []);
-        // 取不到要说清楚。Agent 服务刚重启时这里会 503，静默显示"0 个"会让人
-        // 以为技能库真的空了，而不是"这会儿读不到"。
-        else setAgentErr((a.reason as any)?.response?.status === 503
+        setAgentErr(e?.response?.status === 503
           ? "IvyeaAgent 服务未就绪，稍候刷新即可。"
-          : errText(a.reason, "读取 Agent 技能库失败。"));
-        if (o.status === "fulfilled" && o.value) setOpsSkills(o.value.skills || []);
-        setLoading(false);
-      });
+          : errText(e, "读取 Agent 技能库失败。"));
+      })
+      .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [canRunSkillHub]);
+  }, []);
 
-  const needle = q.trim().toLowerCase();
-  const agentHits = agentSkills.filter(
-    (s) => !needle || `${s.id} ${s.title} ${s.description || ""}`.toLowerCase().includes(needle));
-  const opsHits = opsSkills.filter(
-    (s) => !needle || `${s.name} ${s.description || ""} ${s.description_zh || ""}`.toLowerCase().includes(needle));
+  /** 带着技能回任务台：Console 读 ?skill= 预选 chip，用户直接说需求就行。 */
+  const useSkill = (id: string) => navigate(`/console?skill=${encodeURIComponent(id)}`);
 
-  const useSkill = (id: string) => {
-    // 带着技能回任务台：Console 读 ?skill= 预选 chip，用户直接说需求就行。
-    navigate(`/console?skill=${encodeURIComponent(id)}`);
-  };
+  // Agent 自带的那批不在 Skill 中心的库里，编辑不了、也不走参数表单 —— 它们的用法
+  // 就是"在任务台说需求"。所以单独一段，只有一个动作。
+  const agentSection = (
+    <Section
+      title="Agent 内置技能"
+      sub={`${agentSkills.length} 个 · 随 IvyeaAgent 分发，在任务台说需求时自动匹配`}
+    >
+      {loading ? <div className="cap-grid">{[0, 1, 2].map((i) => <div key={i} className="skeleton line lg" />)}</div>
+        : agentErr ? <Empty>{agentErr}</Empty>
+        : agentSkills.length === 0 ? <Empty>没有内置技能。</Empty> : (
+        <div className="cap-grid">
+          {agentSkills.map((s) => (
+            <div className="cap-card" key={s.id}>
+              <div className="cap-card-head">
+                <i>✦</i>
+                <b>{s.title || s.id}</b>
+                {s.domain && <span className="cap-tag">{s.domain}</span>}
+              </div>
+              <div className="cap-card-desc">{s.description || s.id}</div>
+              <div className="cap-card-foot">
+                <code>{s.id}</code>
+                <button className="cs-btn" onClick={() => useSkill(s.id)}>在任务台用</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
+  );
 
-  if (loading) {
-    return <div className="cap-grid">{[0, 1, 2, 3].map((i) => <div key={i} className="skeleton line lg" />)}</div>;
-  }
+  // 没有 skill-hub 模块的人只看得到内置技能：运行/创建/管理背后的接口会 403，
+  // 摆出来只是一排点不动的按钮。
+  if (!canRunSkillHub) return agentSection;
 
   return (
     <>
-      <input
-        className="inp cap-search"
-        placeholder="搜索技能…"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-      />
+      <div className="cap-seg">
+        {SEGMENTS.map((x) => (
+          <button
+            key={x.key}
+            className={"cap-seg-btn" + (seg === x.key ? " active" : "")}
+            onClick={() => switchSeg(x.key)}
+            title={x.hint}
+          >
+            {x.label}
+          </button>
+        ))}
+        <span className="cap-seg-hint">{SEGMENTS.find((x) => x.key === seg)?.hint}</span>
+      </div>
 
-      <Section
-        title="Agent 技能库"
-        sub={`${agentHits.length} 个 · ~/.ivyea/skills，Agent 跑一轮时真正会加载的就是这些`}
-      >
-        {agentErr ? <Empty>{agentErr}</Empty> : agentHits.length === 0 ? <Empty>没有匹配的技能。</Empty> : (
-          <div className="cap-grid">
-            {agentHits.map((s) => (
-              <div className="cap-card" key={s.id}>
-                <div className="cap-card-head">
-                  <i>✦</i>
-                  <b>{s.title || s.id}</b>
-                  {s.domain && <span className="cap-tag">{s.domain}</span>}
-                </div>
-                <div className="cap-card-desc">{s.description || s.id}</div>
-                <div className="cap-card-foot">
-                  <code>{s.id}</code>
-                  <button className="cs-btn" onClick={() => useSkill(s.id)}>用这个技能</button>
-                </div>
-              </div>
-            ))}
-          </div>
+      <Suspense fallback={<div className="cap-grid">{[0, 1, 2].map((i) => <div key={i} className="skeleton line lg" />)}</div>}>
+        {seg === "run" && (
+          <>
+            {agentSection}
+            <SkillTools embedded />
+          </>
         )}
-      </Section>
+        {seg === "create" && <IdeaSkill embedded />}
+        {seg === "manage" && (
+          <>
+            <AgentSkillMountBar />
+            <div style={{ marginBottom: 10 }}>
+              <button className="tbtn" style={{ fontSize: "var(--fs-10)" }}
+                      onClick={() => setShowGithubImport(true)}>
+                ⬇ 从 GitHub 导入 Skill
+              </button>
+            </div>
+            <SkillBrowse />
+          </>
+        )}
+      </Suspense>
 
-      {/* 没有 skill-hub 模块的人看不到这一段：/api/skill/list 会 403，
-          留在页面上只会是一个永远空着、还带个点不动的「去运行」的区块。 */}
-      {canRunSkillHub && (
-      <Section
-        title="Skill 中心技能"
-        sub={`${opsHits.length} 个 · 工作台数据目录下的 skills/，在「Skill 中心」里创建和运行`}
-      >
-        {opsHits.length === 0 ? <Empty>没有匹配的技能。</Empty> : (
-          <div className="cap-grid">
-            {opsHits.slice(0, 60).map((s) => (
-              <div className="cap-card" key={s.name}>
-                <div className="cap-card-head">
-                  <i>◧</i>
-                  <b>{s.name.split("/").pop()}</b>
-                  {s.category && <span className="cap-tag">{s.category}</span>}
-                </div>
-                <div className="cap-card-desc">{s.description_zh || s.description || "—"}</div>
-                <div className="cap-card-foot">
-                  <code>{s.name}</code>
-                  <button className="cs-btn" onClick={() => navigate("/skill-hub?tab=tools")}>去运行</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
+      {showGithubImport && (
+        <Suspense fallback={null}>
+          <ImportGitHubDialog onClose={() => setShowGithubImport(false)} />
+        </Suspense>
       )}
     </>
   );
@@ -560,7 +656,7 @@ function AuthTab() {
           })}
         </tbody>
       </table>
-      <button className="cs-btn" onClick={() => navigate("/hub-settings")}>去系统配置填密钥</button>
+      <button className="cs-btn" onClick={() => openSettings()}>去系统配置填密钥</button>
     </Section>
   );
 }

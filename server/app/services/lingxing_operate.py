@@ -717,7 +717,21 @@ async def batch_tickets_action(action: str, ids: List[str], *,
 
 
 async def confirm_ticket(tid: str, decided_by: str = "human", dry_run: bool = False) -> Dict[str, Any]:
-    """Human-confirm + execute. Re-checks every gate at execution time."""
+    """确认并执行。执行前把每一道闸重新过一遍。
+
+    `decided_by` 不再只是一条审计字段，它现在**决定这次确认算不算数**：
+
+      · `human`  —— 永远允许（人点的）
+      · 其它（`agent` / 自动化）—— 只有「自主执行」档才允许
+
+    档位复用已有的两个设置，不新造概念（原来 `lingxing_operate_require_human`
+    只在状态接口里显示过，从没有任何地方执行它 —— 一个写着"需要人工确认"却不生效
+    的开关，比没有这个开关更危险）：
+
+      只读     lingxing_operate_enabled = false
+      逐项确认 enabled + require_human = true   （默认，真实账号该用这档）
+      自主执行 enabled + require_human = false  （测试账号 / 明确放开时）
+    """
     async with _op_lock:
         t = get_ticket(tid)
         if not t:
@@ -726,6 +740,10 @@ async def confirm_ticket(tid: str, decided_by: str = "human", dry_run: bool = Fa
             raise _gw.LingXingError(f"工单状态 {t['status']} 不可确认")
         if not _gw.is_operate_active():
             raise _gw.LingXingError("操作开关未开启（或已超时失效）")
+        if decided_by != "human" and bool(_hs.get("lingxing_operate_require_human", True)):
+            raise _gw.LingXingError(
+                "当前是「逐项确认」档：写操作必须由人确认。"
+                "要让 Agent 自主执行，请到「系统配置 → 领星」把执行档位切到「自主执行」。")
         # re-verify guardrails at execution time (defence in depth)
         guard = check_guardrails(t["intent"])
         if not guard["ok"]:

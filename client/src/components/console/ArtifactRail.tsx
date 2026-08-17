@@ -154,7 +154,10 @@ export default function ArtifactRail({
   return (
     <aside className={"cc-rail" + (open ? " open" : "")}>
       <div className="cc-rail-tabs">
-        {TABS.map((t) => (
+        {/* **只显示真有东西的那几个。**
+            原来六个图标常驻，空会话里就是右边一竖排点不出内容的按钮 —— 看着像
+            界面没做完。会话（session）没有计数但永远有内容，所以恒显示。 */}
+        {TABS.filter((t) => t.key === "session" || counts[t.key] > 0).map((t) => (
           <button
             key={t.key}
             type="button"

@@ -74,9 +74,21 @@ export type ManagedUser = {
 export type PermModule = { key: string; label: string; sensitive: boolean };
 export type PermissionsCatalog = { modules: PermModule[]; positions: Record<string, string[]> };
 
+/**
+ * 保证"该是数组的就是数组"。
+ *
+ * 后端正常时当然是数组，但**降级路径、代理错误页、鉴权跳转**都可能塞回别的东西 ——
+ * 而调用方紧接着就是 `.map` / `.filter` / `.length`，一炸就被错误边界换成整页
+ * 「页面渲染出错」，只能刷新。用户报的"偶尔渲染失败"就是这一类。
+ * 收在 API 层比在每个页面里各写一遍 `?? []` 可靠：新页面天然就是安全的。
+ */
+function asArray<T>(v: unknown): T[] {
+  return Array.isArray(v) ? (v as T[]) : [];
+}
+
 export async function adminListUsers() {
   const { data } = await api.get<ManagedUser[]>("/auth/admin/users");
-  return data;
+  return asArray<ManagedUser>(data);
 }
 
 export async function adminSetUserStatus(uid: number, status: "active" | "suspended" | "pending") {
@@ -644,7 +656,7 @@ export type ProcessInfo = {
 
 export async function monitorProcesses() {
   const { data } = await api.get<ProcessInfo[]>("/monitor/processes");
-  return data;
+  return asArray<ProcessInfo>(data);
 }
 
 export async function stopProcess(pid?: number, service?: string) {
