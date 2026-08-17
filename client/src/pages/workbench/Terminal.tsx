@@ -26,7 +26,7 @@ import TerminalToolbar from "../../components/TerminalToolbar";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { getSettings } from "../../api/settings";
 import { errText } from "../../lib/errText";
-import { SidebarRail, TopbarActions } from "../../lib/uiSlots";
+import { TopbarActions } from "../../lib/uiSlots";
 import { useLocation } from "react-router-dom";
 
 const LEGACY_SESSION_ID = "__legacy_ttyd__";
@@ -608,12 +608,9 @@ export default function Terminal() {
       {error ? (
         <div className="card" style={{ color: "var(--red)", lineHeight: 1.8 }}>{error}</div>
       ) : (
-        <>
-        {/* 终端列表**画进左侧栏**（lib/uiSlots）：它本来就是这一页的次级导航，
-            单独占中间 260px 一列既挤终端、又让侧栏继续摆着不相干的任务台会话。
-            移动端不变 —— 那边它是个底部抽屉，不是常驻列，所以仍留在页面里。 */}
-        <SidebarRail active={isActiveBoard && !isMobileLayout}>
-          <div className="sb-term-rail">
+        // 终端列表就在这一页里，**不进主侧边栏** —— 主侧边栏是全局导航，让它在不同
+        // 板块下变成不同东西，全局导航就不再是全局的了。列表项已压成一行，这一列很窄。
+        <div className={`terminal-workbench${showSessionList ? "" : " terminal-workbench-solo"}`}>
           {showSessionList && (
               <>
                 {isMobileLayout && <div className="terminal-sheet-backdrop" onClick={() => setShowSessionList(false)} />}
@@ -671,9 +668,6 @@ export default function Terminal() {
               </>
             )}
   
-            </div>
-        </SidebarRail>
-        <div className="terminal-workbench terminal-workbench-solo">
           <section className="terminal-main card">
             <div className={`terminal-main-toolbar${isMobileLayout ? " terminal-main-toolbar-mobile-hidden" : ""}`}>
               <div>
@@ -741,7 +735,6 @@ export default function Terminal() {
             </div>
           </section>
         </div>
-        </>
       )}
     </div>
   );

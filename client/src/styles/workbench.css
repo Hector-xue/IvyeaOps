@@ -1185,8 +1185,9 @@ body::after{
 .terminal-page-title{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:0;margin-bottom:8px}
 .terminal-page-actions{font-size:var(--fs-9);color:var(--t3);text-transform:none;letter-spacing:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 /* 两列：终端列表 + 终端。第三栏「会话内容快照」已移除（2026-08-17）——
-   当时忘了改这里，右边白白空出 360px。列表收起时只剩一列，终端铺满。 */
-.terminal-workbench{flex:1;min-height:0;display:grid;grid-template-columns:260px minmax(0,1fr);gap:8px}
+   当时忘了改这里，右边白白空出 360px。列表收起时只剩一列，终端铺满。
+   列表项压成一行之后，这一列从 260px 收到 196px —— 一行文字用不了那么宽。 */
+.terminal-workbench{flex:1;min-height:0;display:grid;grid-template-columns:196px minmax(0,1fr);gap:8px}
 .terminal-workbench-solo{grid-template-columns:minmax(0,1fr)}
 .terminal-session-list,.terminal-main{min-height:0;display:flex;flex-direction:column;padding:10px 12px;background:var(--bg2);border:1px solid var(--b);border-radius:var(--r)}
 .terminal-section-title{font-size:var(--fs-10);color:var(--t3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px}
@@ -1246,7 +1247,7 @@ body::after{
 /* Slot-role badge (3-slot rolling: 当前 / 上一个 / 之前) */
 
 @media (max-width: 1200px){
-  .terminal-workbench{grid-template-columns:240px minmax(0,1fr)}
+  .terminal-workbench{grid-template-columns:180px minmax(0,1fr)}
   .terminal-workbench-solo{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width: 760px){
@@ -3354,15 +3355,6 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .tb-actions-meta{font-size:var(--fs-10);color:var(--t3);white-space:nowrap}
 .tb-actions-check{display:flex;align-items:center;gap:5px;font-size:var(--fs-10);
   color:var(--t3);cursor:pointer;white-space:nowrap}
-/* 侧栏弹性区被板块接管时，装的是那个板块的次级导航（终端列表）。
-   去掉卡片外框：它已经在侧栏里了，再套一层框就是框里有框。 */
-.sb-rail-slot{display:flex;flex-direction:column;min-height:0;height:100%}
-.sb-term-rail{display:flex;flex-direction:column;min-height:0;height:100%}
-.sb-term-rail .terminal-session-list{padding:0;border:none;background:transparent;border-radius:0}
-.sb-term-rail .terminal-section-title{padding:0 16px 6px;font-size:var(--fs-9);color:var(--t3);
-  letterSpacing:.08em}
-.sb-term-rail .terminal-session-scroll{padding:0 10px;gap:4px}
-.sb-term-rail .terminal-session-item{font-size:var(--fs-10)}
 /* ════════════════════════════════════════════════════════════════════════════
    应用级对话框（系统配置 / 使用手册）
    以前这两样是铺满整屏的不透明浮层，看着和跳到另一个页面没区别 —— 看完还得找路

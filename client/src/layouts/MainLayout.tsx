@@ -40,7 +40,7 @@ import AccountMenu from "../components/AccountMenu";
 import Icon from "../components/Icon";
 import ToolsOverlay from "../components/ToolsOverlay";
 import SessionRail from "../components/console/SessionRail";
-import { RAIL_OWNED_PATHS, RailSlotHost, TopbarSlotHost } from "../lib/uiSlots";
+import { TopbarSlotHost } from "../lib/uiSlots";
 import { BOARD_PREFS_EVENT, getPinnedBoards, pushRecentBoard } from "../lib/boardPrefs";
 import { TOURS, hasTour } from "../lib/tours";
 
@@ -493,18 +493,17 @@ export default function MainLayout() {
               </div>
 
               {/* ── 弹性区：工作区 / 会话（自己滚）─────────────────────── */}
-              {/* 弹性区：默认是任务台的会话列表；某些板块（终端）会用自己的次级
-                  导航接管它 —— 在终端页摆 15 条"广告怎么优化?"是纯噪音。 */}
+              {/* ── 弹性区：工作区 / 会话（自己滚）───────────────────────
+               *
+               * **这里永远是任务台的会话列表，不给板块接管。** 曾经让终端页把自己的
+               * 终端列表画到这儿，结果是主侧边栏在不同板块下变成不同东西 —— 全局导航
+               * 就不再是全局的了。板块自己的列表归板块自己的页面。 */}
               <div className="sb-nav-flex scroll-thin">
-                {RAIL_OWNED_PATHS.has(location.pathname) ? (
-                  <RailSlotHost />
-                ) : (
-                  <SessionRail
-                    collapsed={railCollapsed}
-                    activeSessionId={activeSessionId}
-                    onNavigate={() => isMobile && setMobileMenu(false)}
-                  />
-                )}
+                <SessionRail
+                  collapsed={railCollapsed}
+                  activeSessionId={activeSessionId}
+                  onNavigate={() => isMobile && setMobileMenu(false)}
+                />
               </div>
 
               {/* ── 收纳区：我的工具 + 全部工具入口 ───────────────────────
