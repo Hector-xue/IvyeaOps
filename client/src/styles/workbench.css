@@ -1193,12 +1193,24 @@ body::after{
 .terminal-session-scroll{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:8px}
 .terminal-session-scroll::-webkit-scrollbar{width:4px}
 .terminal-session-scroll::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
-.terminal-session-item{background:var(--bg3);border:1px solid var(--b);border-radius:var(--r);padding:10px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:6px;color:var(--t2);font-family:var(--font)}
+/* 终端列表项：**一行**。原来是四行的卡片（177px 一张），其中只有"名字 + 在不在跑"
+   有用；工作目录、最后一条输出、更新时间、以及和主区头部重复的三个按钮全部去掉，
+   前三样进 title，悬停可见。 */
+.terminal-session-item{background:transparent;border:1px solid transparent;border-radius:8px;
+  padding:6px 9px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:8px;
+  color:var(--t2);font-family:var(--font);width:100%}
+.terminal-session-item:hover{background:var(--bg3)}
+/* 状态点：颜色说完的事就不用再写一遍字。 */
+.term-dot{flex:0 0 auto;width:6px;height:6px;border-radius:999px;background:var(--t3)}
+.term-dot.live{background:var(--green,#4ade80);box-shadow:0 0 0 3px color-mix(in srgb,var(--green,#4ade80) 18%,transparent)}
+.term-dot.closed,.term-dot.archived{background:var(--t3);opacity:.5}
+.term-dot.idle{background:var(--t3)}
 .terminal-session-item:hover{border-color:var(--b2);color:var(--t)}
 .terminal-session-item.active{border-color:color-mix(in srgb, var(--acc) 35%, transparent);box-shadow:0 0 0 1px color-mix(in srgb, var(--acc) 8%, transparent) inset;background:color-mix(in srgb, var(--acc) 4%, transparent)}
 .terminal-session-item-top{display:flex;align-items:center;gap:8px}
 .terminal-session-name{flex:1;min-width:0;color:var(--t);font-size:var(--fs-11);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.terminal-session-state{font-size:var(--fs-9);padding:1px 6px;border-radius:999px;border:1px solid var(--b2);color:var(--t3);text-transform:uppercase}
+.terminal-session-state{flex:0 0 auto;font-size:var(--fs-9);color:var(--t3);opacity:.75;
+  white-space:nowrap;text-transform:none}
 .terminal-session-state.live{color:var(--acc);border-color:color-mix(in srgb, var(--acc) 25%, transparent)}
 .terminal-session-state.closed{color:var(--amber);border-color:rgba(251,191,36,.25)}
 .terminal-session-state.idle{color:var(--blue);border-color:rgba(96,165,250,.25)}
@@ -3350,7 +3362,7 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .sb-term-rail .terminal-section-title{padding:0 16px 6px;font-size:var(--fs-9);color:var(--t3);
   letterSpacing:.08em}
 .sb-term-rail .terminal-session-scroll{padding:0 10px;gap:4px}
-.sb-term-rail .terminal-session-item{padding:7px 9px;border-radius:8px;font-size:var(--fs-10)}
+.sb-term-rail .terminal-session-item{font-size:var(--fs-10)}
 /* ════════════════════════════════════════════════════════════════════════════
    应用级对话框（系统配置 / 使用手册）
    以前这两样是铺满整屏的不透明浮层，看着和跳到另一个页面没区别 —— 看完还得找路

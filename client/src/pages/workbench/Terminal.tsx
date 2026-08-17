@@ -629,34 +629,16 @@ export default function Terminal() {
                     }}
                     style={{ cursor: "pointer" }}
                   >
-                    <div className="terminal-session-item-top">
-                      <span className="terminal-session-name">主终端</span>
-                      <span className={`terminal-session-state ${ttydStatus?.active ? "live" : "closed"}`}>
-                        {ttydStatus?.active ? "运行中" : "已停止"}
-                      </span>
-                    </div>
-                    <div className="terminal-session-meta">{ttydStatus ? `服务 ${ttydStatus.status} / ${ttydStatus.substate}` : "读取状态中..."}</div>
-                    <div className="terminal-session-preview">长期常驻的 tmux 主会话，多设备复用同一画面；其它入口为临时多终端。</div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button className="tbtn" onClick={(e) => { e.stopPropagation(); window.open(ttydStatus?.url || externalTtydUrl, "_blank", "noopener,noreferrer"); }}>
-                        新窗打开
-                      </button>
-                      <button
-                        className="tbtn"
-                        disabled={ttydBusy || !!ttydStatus?.active}
-                        onClick={(e) => { e.stopPropagation(); handleLegacyAction("start").catch(() => void 0); }}
-                      >
-                        启动
-                      </button>
-                      <button
-                        className="tbtn"
-                        disabled={ttydBusy || !ttydStatus?.active}
-                        onClick={(e) => { e.stopPropagation(); handleLegacyAction("stop").catch(() => void 0); }}
-                        style={{ color: "var(--red)", borderColor: "rgba(248,113,113,.35)" }}
-                      >
-                        关闭
-                      </button>
-                    </div>
+                    {/* 一行就够：状态点 + 名字 + 状态词。
+                        原来这张卡有 177px：状态徽标下面又写一遍「服务 active / running」、
+                        一段每次都一样的固定说明、外加三个和主区头部重复的按钮。
+                        选中某个终端后，它的操作在主区头部（新窗打开/启动/停止服务），
+                        列表只负责"有哪些、哪个在跑、切到哪个"。 */}
+                    <span className={`term-dot ${ttydStatus?.active ? "live" : "closed"}`} />
+                    <span className="terminal-session-name" title="长期常驻的 tmux 主会话，多设备复用同一画面">主终端</span>
+                    <span className={`terminal-session-state ${ttydStatus?.active ? "live" : "closed"}`}>
+                      {ttydStatus?.active ? "运行中" : "已停止"}
+                    </span>
                   </div>
   
                   {sessions.map((session) => (
@@ -669,13 +651,19 @@ export default function Terminal() {
                         if (isMobileLayout) setShowSessionList(false);
                       }}
                     >
-                      <div className="terminal-session-item-top">
-                        <span className="terminal-session-name">{session.title}</span>
-                        <span className={`terminal-session-state ${session.status}`}>{session.archived ? "archived" : session.status}</span>
-                      </div>
-                      <div className="terminal-session-meta">{session.workdir || "/root"}</div>
-                      <div className="terminal-session-preview">{session.last_preview || "暂无历史"}</div>
-                      <div className="terminal-session-meta">更新于 {fmtTime(session.updated_at)}</div>
+                      {/* 同上：一行。工作目录几乎永远是 /root、最后一条输出多半是
+                          「[terminal closed] reason=shutdown」、更新时间占一整行 ——
+                          这三样都进 title，需要时悬停能看到，不占版面。 */}
+                      <span className={`term-dot ${session.archived ? "closed" : session.status}`} />
+                      <span className="terminal-session-name"
+                            title={`${session.workdir || "/root"}\n${session.last_preview || "暂无历史"}\n更新于 ${fmtTime(session.updated_at)}`}>
+                        {session.title}
+                      </span>
+                      <span className={`terminal-session-state ${session.status}`}>
+                        {session.archived ? "已归档"
+                          : session.status === "live" ? "运行中"
+                          : session.status === "idle" ? "空闲" : "已停止"}
+                      </span>
                     </button>
                   ))}
                 </div>
