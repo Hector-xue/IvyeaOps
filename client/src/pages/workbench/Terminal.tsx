@@ -105,6 +105,7 @@ export default function Terminal() {
   // 挂在顶栏上、终端列表占着侧栏。
   const isActiveBoard = useLocation().pathname === "/terminal";
   const [showSessionList, setShowSessionList] = useState(true);
+  const [listOpen, setListOpen] = useState(false);   // 顶栏的终端选择器下拉
   const [showArchived, setShowArchived] = useState(false);
   const [showMobileActionSheet, setShowMobileActionSheet] = useState(false);
   const [isMobileLayout, setIsMobileLayout] = useState(false);
@@ -468,6 +469,58 @@ export default function Terminal() {
     return normalizeHistoryText(item.content).trim().length > 0;
   }).length;
 
+  // 终端列表的内容只写一份：桌面走顶栏下拉，移动端走底部抽屉。
+  const terminalList = (
+    <div className="terminal-session-scroll">
+      <div
+        className={`terminal-session-item${activeIsLegacy ? " active" : ""}`}
+        onClick={() => {
+          setCurrentId(LEGACY_SESSION_ID);
+          localStorage.setItem(STORAGE_KEY, LEGACY_SESSION_ID);
+          if (isMobileLayout) setShowSessionList(false);
+        }}
+        style={{ cursor: "pointer" }}
+      >
+        {/* 一行就够：状态点 + 名字 + 状态词。
+            原来这张卡有 177px：状态徽标下面又写一遍「服务 active / running」、
+            一段每次都一样的固定说明、外加三个和主区头部重复的按钮。
+            选中某个终端后，它的操作在主区头部（新窗打开/启动/停止服务），
+            列表只负责"有哪些、哪个在跑、切到哪个"。 */}
+        <span className={`term-dot ${ttydStatus?.active ? "live" : "closed"}`} />
+        <span className="terminal-session-name" title="长期常驻的 tmux 主会话，多设备复用同一画面">主终端</span>
+        <span className={`terminal-session-state ${ttydStatus?.active ? "live" : "closed"}`}>
+          {ttydStatus?.active ? "运行中" : "已停止"}
+        </span>
+      </div>
+  
+      {sessions.map((session) => (
+        <button
+          key={session.id}
+          className={`terminal-session-item${session.id === currentId ? " active" : ""}`}
+          onClick={() => {
+            setCurrentId(session.id);
+            localStorage.setItem(STORAGE_KEY, session.id);
+            if (isMobileLayout) setShowSessionList(false);
+          }}
+        >
+          {/* 同上：一行。工作目录几乎永远是 /root、最后一条输出多半是
+              「[terminal closed] reason=shutdown」、更新时间占一整行 ——
+              这三样都进 title，需要时悬停能看到，不占版面。 */}
+          <span className={`term-dot ${session.archived ? "closed" : session.status}`} />
+          <span className="terminal-session-name"
+                title={`${session.workdir || "/root"}\n${session.last_preview || "暂无历史"}\n更新于 ${fmtTime(session.updated_at)}`}>
+            {session.title}
+          </span>
+          <span className={`terminal-session-state ${session.status}`}>
+            {session.archived ? "已归档"
+              : session.status === "live" ? "运行中"
+              : session.status === "idle" ? "空闲" : "已停止"}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className={`terminal-workbench-page${isMobileLayout ? " terminal-workbench-mobile" : ""}`}>
       {isMobileLayout ? (
@@ -514,6 +567,25 @@ export default function Terminal() {
            白占 44px；而顶栏那一行只有六个字，空着。 */
         <TopbarActions active={isActiveBoard}>
           <span className="tb-actions">
+            {/* 终端列表收进这个汉堡下拉 —— 它是"切换到哪个终端"用的，一天点几次，
+                却常年占着一整列。按钮上显示当前终端，不用打开也知道自己在哪。 */}
+            <span className="term-picker">
+              <button
+                className={"tbtn term-picker-btn" + (listOpen ? " active" : "")}
+                onClick={() => setListOpen((v) => !v)}
+                title="切换终端"
+              >
+                ☰ {activeIsLegacy ? "主终端" : current?.title || "未选择"} ▾
+              </button>
+              {listOpen && (
+                <>
+                  <div className="term-picker-backdrop" onClick={() => setListOpen(false)} />
+                  <div className="term-picker-menu" onClick={() => setListOpen(false)}>
+                    {terminalList}
+                  </div>
+                </>
+              )}
+            </span>
             <span className="tb-actions-meta">
               {loading ? "加载中…" : `${sessions.length} 个终端${showArchived ? "（含归档）" : ""}`}
             </span>
@@ -610,63 +682,18 @@ export default function Terminal() {
       ) : (
         // 终端列表就在这一页里，**不进主侧边栏** —— 主侧边栏是全局导航，让它在不同
         // 板块下变成不同东西，全局导航就不再是全局的了。列表项已压成一行，这一列很窄。
-        <div className={`terminal-workbench${showSessionList ? "" : " terminal-workbench-solo"}`}>
-          {showSessionList && (
-              <>
-                {isMobileLayout && <div className="terminal-sheet-backdrop" onClick={() => setShowSessionList(false)} />}
-                <aside className={`terminal-session-list card${isMobileLayout ? " terminal-mobile-sheet terminal-mobile-sheet-list" : ""}`}>
+        <div className="terminal-workbench terminal-workbench-solo">
+          {/* 移动端保留底部抽屉；桌面版这个列表已经收进顶栏的汉堡下拉，
+              页面里不再占一列。 */}
+          {isMobileLayout && showSessionList && (
+            <>
+              <div className="terminal-sheet-backdrop" onClick={() => setShowSessionList(false)} />
+              <aside className="terminal-session-list card terminal-mobile-sheet terminal-mobile-sheet-list">
                 <div className="terminal-section-title">终端列表</div>
-                <div className="terminal-session-scroll">
-                  <div
-                    className={`terminal-session-item${activeIsLegacy ? " active" : ""}`}
-                    onClick={() => {
-                      setCurrentId(LEGACY_SESSION_ID);
-                      localStorage.setItem(STORAGE_KEY, LEGACY_SESSION_ID);
-                      if (isMobileLayout) setShowSessionList(false);
-                    }}
-                    style={{ cursor: "pointer" }}
-                  >
-                    {/* 一行就够：状态点 + 名字 + 状态词。
-                        原来这张卡有 177px：状态徽标下面又写一遍「服务 active / running」、
-                        一段每次都一样的固定说明、外加三个和主区头部重复的按钮。
-                        选中某个终端后，它的操作在主区头部（新窗打开/启动/停止服务），
-                        列表只负责"有哪些、哪个在跑、切到哪个"。 */}
-                    <span className={`term-dot ${ttydStatus?.active ? "live" : "closed"}`} />
-                    <span className="terminal-session-name" title="长期常驻的 tmux 主会话，多设备复用同一画面">主终端</span>
-                    <span className={`terminal-session-state ${ttydStatus?.active ? "live" : "closed"}`}>
-                      {ttydStatus?.active ? "运行中" : "已停止"}
-                    </span>
-                  </div>
-  
-                  {sessions.map((session) => (
-                    <button
-                      key={session.id}
-                      className={`terminal-session-item${session.id === currentId ? " active" : ""}`}
-                      onClick={() => {
-                        setCurrentId(session.id);
-                        localStorage.setItem(STORAGE_KEY, session.id);
-                        if (isMobileLayout) setShowSessionList(false);
-                      }}
-                    >
-                      {/* 同上：一行。工作目录几乎永远是 /root、最后一条输出多半是
-                          「[terminal closed] reason=shutdown」、更新时间占一整行 ——
-                          这三样都进 title，需要时悬停能看到，不占版面。 */}
-                      <span className={`term-dot ${session.archived ? "closed" : session.status}`} />
-                      <span className="terminal-session-name"
-                            title={`${session.workdir || "/root"}\n${session.last_preview || "暂无历史"}\n更新于 ${fmtTime(session.updated_at)}`}>
-                        {session.title}
-                      </span>
-                      <span className={`terminal-session-state ${session.status}`}>
-                        {session.archived ? "已归档"
-                          : session.status === "live" ? "运行中"
-                          : session.status === "idle" ? "空闲" : "已停止"}
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                {terminalList}
               </aside>
-              </>
-            )}
+            </>
+          )}
   
           <section className="terminal-main card">
             <div className={`terminal-main-toolbar${isMobileLayout ? " terminal-main-toolbar-mobile-hidden" : ""}`}>
