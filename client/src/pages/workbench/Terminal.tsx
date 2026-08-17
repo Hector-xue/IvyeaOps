@@ -26,6 +26,8 @@ import TerminalToolbar from "../../components/TerminalToolbar";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { getSettings } from "../../api/settings";
 import { errText } from "../../lib/errText";
+import { SidebarRail, TopbarActions } from "../../lib/uiSlots";
+import { useLocation } from "react-router-dom";
 
 const LEGACY_SESSION_ID = "__legacy_ttyd__";
 const STORAGE_KEY = "ivyea-ops-terminal-current-session";
@@ -98,6 +100,10 @@ export default function Terminal() {
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [history, setHistory] = useState<TerminalHistoryItem[]>([]);
   const [historyTotal, setHistoryTotal] = useState(0);
+  // 终端是**常驻挂载**的板块：切走只是隐藏，组件还活着。而 portal 出去的内容不受
+  // 那个隐藏样式管 —— 不显式判断"当前是不是这一页"，你在任务台也会看到终端的按钮
+  // 挂在顶栏上、终端列表占着侧栏。
+  const isActiveBoard = useLocation().pathname === "/terminal";
   const [showSessionList, setShowSessionList] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
   const [showMobileActionSheet, setShowMobileActionSheet] = useState(false);
@@ -503,14 +509,15 @@ export default function Terminal() {
           <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleUpload} />
         </div>
       ) : (
-        /* Desktop: full page title */
-        <div className="ptitle terminal-page-title">
-          <span>/ 服务器终端 · 多终端工作台</span>
-          <span className="terminal-page-actions">
-            <span className="terminal-page-count" style={{ color: "var(--t3)" }}>
-              {loading ? "加载中..." : `${sessions.length} 个终端${showArchived ? "（含归档）" : ""}`}
+        /* 桌面：这一页的动作**挂进顶栏**（lib/uiSlots）。
+           以前这里自己画一行标题栏，把"服务器终端"这个名字在顶栏下面再写一遍，
+           白占 44px；而顶栏那一行只有六个字，空着。 */
+        <TopbarActions active={isActiveBoard}>
+          <span className="tb-actions">
+            <span className="tb-actions-meta">
+              {loading ? "加载中…" : `${sessions.length} 个终端${showArchived ? "（含归档）" : ""}`}
             </span>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--fs-10)", color: "var(--t3)", cursor: "pointer" }}>
+            <label className="tb-actions-check">
               <input
                 type="checkbox"
                 checked={showArchived}
@@ -521,13 +528,10 @@ export default function Terminal() {
             </label>
             <button className="tbtn" onClick={() => syncSessions(currentId).catch(() => void 0)}>刷新</button>
             <button className="tbtn" onClick={handleCreate} disabled={creating}>+ 开启新终端</button>
-            <button className="tbtn" onClick={() => setShowSessionList((v) => !v)}>
-              {showSessionList ? "隐藏终端列表" : "显示终端列表"}
-            </button>
             <button className="tbtn" onClick={() => fileRef.current?.click()}>📷 上传图片</button>
             <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleUpload} />
           </span>
-        </div>
+        </TopbarActions>
       )}
       {isMobileLayout && showMobileActionSheet && (
         <>
@@ -604,78 +608,84 @@ export default function Terminal() {
       {error ? (
         <div className="card" style={{ color: "var(--red)", lineHeight: 1.8 }}>{error}</div>
       ) : (
-        // 列数跟着实际渲染的列走：写死三列时，删掉「会话内容」那一栏之后右边会
-        // 空出 360px 的白 —— 栅格还按三列在留位置。
-        <div className={`terminal-workbench${showSessionList ? "" : " terminal-workbench-solo"}`}>
+        <>
+        {/* 终端列表**画进左侧栏**（lib/uiSlots）：它本来就是这一页的次级导航，
+            单独占中间 260px 一列既挤终端、又让侧栏继续摆着不相干的任务台会话。
+            移动端不变 —— 那边它是个底部抽屉，不是常驻列，所以仍留在页面里。 */}
+        <SidebarRail active={isActiveBoard && !isMobileLayout}>
+          <div className="sb-term-rail">
           {showSessionList && (
-            <>
-              {isMobileLayout && <div className="terminal-sheet-backdrop" onClick={() => setShowSessionList(false)} />}
-              <aside className={`terminal-session-list card${isMobileLayout ? " terminal-mobile-sheet terminal-mobile-sheet-list" : ""}`}>
-              <div className="terminal-section-title">终端列表</div>
-              <div className="terminal-session-scroll">
-                <div
-                  className={`terminal-session-item${activeIsLegacy ? " active" : ""}`}
-                  onClick={() => {
-                    setCurrentId(LEGACY_SESSION_ID);
-                    localStorage.setItem(STORAGE_KEY, LEGACY_SESSION_ID);
-                    if (isMobileLayout) setShowSessionList(false);
-                  }}
-                  style={{ cursor: "pointer" }}
-                >
-                  <div className="terminal-session-item-top">
-                    <span className="terminal-session-name">主终端</span>
-                    <span className={`terminal-session-state ${ttydStatus?.active ? "live" : "closed"}`}>
-                      {ttydStatus?.active ? "运行中" : "已停止"}
-                    </span>
-                  </div>
-                  <div className="terminal-session-meta">{ttydStatus ? `服务 ${ttydStatus.status} / ${ttydStatus.substate}` : "读取状态中..."}</div>
-                  <div className="terminal-session-preview">长期常驻的 tmux 主会话，多设备复用同一画面；其它入口为临时多终端。</div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button className="tbtn" onClick={(e) => { e.stopPropagation(); window.open(ttydStatus?.url || externalTtydUrl, "_blank", "noopener,noreferrer"); }}>
-                      新窗打开
-                    </button>
-                    <button
-                      className="tbtn"
-                      disabled={ttydBusy || !!ttydStatus?.active}
-                      onClick={(e) => { e.stopPropagation(); handleLegacyAction("start").catch(() => void 0); }}
-                    >
-                      启动
-                    </button>
-                    <button
-                      className="tbtn"
-                      disabled={ttydBusy || !ttydStatus?.active}
-                      onClick={(e) => { e.stopPropagation(); handleLegacyAction("stop").catch(() => void 0); }}
-                      style={{ color: "var(--red)", borderColor: "rgba(248,113,113,.35)" }}
-                    >
-                      关闭
-                    </button>
-                  </div>
-                </div>
-
-                {sessions.map((session) => (
-                  <button
-                    key={session.id}
-                    className={`terminal-session-item${session.id === currentId ? " active" : ""}`}
+              <>
+                {isMobileLayout && <div className="terminal-sheet-backdrop" onClick={() => setShowSessionList(false)} />}
+                <aside className={`terminal-session-list card${isMobileLayout ? " terminal-mobile-sheet terminal-mobile-sheet-list" : ""}`}>
+                <div className="terminal-section-title">终端列表</div>
+                <div className="terminal-session-scroll">
+                  <div
+                    className={`terminal-session-item${activeIsLegacy ? " active" : ""}`}
                     onClick={() => {
-                      setCurrentId(session.id);
-                      localStorage.setItem(STORAGE_KEY, session.id);
+                      setCurrentId(LEGACY_SESSION_ID);
+                      localStorage.setItem(STORAGE_KEY, LEGACY_SESSION_ID);
                       if (isMobileLayout) setShowSessionList(false);
                     }}
+                    style={{ cursor: "pointer" }}
                   >
                     <div className="terminal-session-item-top">
-                      <span className="terminal-session-name">{session.title}</span>
-                      <span className={`terminal-session-state ${session.status}`}>{session.archived ? "archived" : session.status}</span>
+                      <span className="terminal-session-name">主终端</span>
+                      <span className={`terminal-session-state ${ttydStatus?.active ? "live" : "closed"}`}>
+                        {ttydStatus?.active ? "运行中" : "已停止"}
+                      </span>
                     </div>
-                    <div className="terminal-session-meta">{session.workdir || "/root"}</div>
-                    <div className="terminal-session-preview">{session.last_preview || "暂无历史"}</div>
-                    <div className="terminal-session-meta">更新于 {fmtTime(session.updated_at)}</div>
-                  </button>
-                ))}
-              </div>
-            </aside>
-            </>
-          )}
-
+                    <div className="terminal-session-meta">{ttydStatus ? `服务 ${ttydStatus.status} / ${ttydStatus.substate}` : "读取状态中..."}</div>
+                    <div className="terminal-session-preview">长期常驻的 tmux 主会话，多设备复用同一画面；其它入口为临时多终端。</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button className="tbtn" onClick={(e) => { e.stopPropagation(); window.open(ttydStatus?.url || externalTtydUrl, "_blank", "noopener,noreferrer"); }}>
+                        新窗打开
+                      </button>
+                      <button
+                        className="tbtn"
+                        disabled={ttydBusy || !!ttydStatus?.active}
+                        onClick={(e) => { e.stopPropagation(); handleLegacyAction("start").catch(() => void 0); }}
+                      >
+                        启动
+                      </button>
+                      <button
+                        className="tbtn"
+                        disabled={ttydBusy || !ttydStatus?.active}
+                        onClick={(e) => { e.stopPropagation(); handleLegacyAction("stop").catch(() => void 0); }}
+                        style={{ color: "var(--red)", borderColor: "rgba(248,113,113,.35)" }}
+                      >
+                        关闭
+                      </button>
+                    </div>
+                  </div>
+  
+                  {sessions.map((session) => (
+                    <button
+                      key={session.id}
+                      className={`terminal-session-item${session.id === currentId ? " active" : ""}`}
+                      onClick={() => {
+                        setCurrentId(session.id);
+                        localStorage.setItem(STORAGE_KEY, session.id);
+                        if (isMobileLayout) setShowSessionList(false);
+                      }}
+                    >
+                      <div className="terminal-session-item-top">
+                        <span className="terminal-session-name">{session.title}</span>
+                        <span className={`terminal-session-state ${session.status}`}>{session.archived ? "archived" : session.status}</span>
+                      </div>
+                      <div className="terminal-session-meta">{session.workdir || "/root"}</div>
+                      <div className="terminal-session-preview">{session.last_preview || "暂无历史"}</div>
+                      <div className="terminal-session-meta">更新于 {fmtTime(session.updated_at)}</div>
+                    </button>
+                  ))}
+                </div>
+              </aside>
+              </>
+            )}
+  
+            </div>
+        </SidebarRail>
+        <div className="terminal-workbench terminal-workbench-solo">
           <section className="terminal-main card">
             <div className={`terminal-main-toolbar${isMobileLayout ? " terminal-main-toolbar-mobile-hidden" : ""}`}>
               <div>
@@ -742,8 +752,8 @@ export default function Terminal() {
               )}
             </div>
           </section>
-
         </div>
+        </>
       )}
     </div>
   );

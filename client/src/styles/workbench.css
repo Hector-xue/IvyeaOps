@@ -1204,7 +1204,11 @@ body::after{
 .terminal-session-state.idle{color:var(--blue);border-color:rgba(96,165,250,.25)}
 .terminal-session-meta{font-size:var(--fs-9);color:var(--t3);line-height:1.5;word-break:break-all}
 .terminal-session-preview{font-size:var(--fs-10);color:var(--t2);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;word-break:break-word}
-.terminal-main-toolbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
+/* 终端头部压成一行：标题和状态并排，不再上下两行。这一行原来占 71px，
+   而它承载的信息只有"哪个终端 + 什么状态" —— 省下的高度全给终端画面。 */
+.terminal-main-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin-bottom:8px;min-height:26px}
+.terminal-main-toolbar > div:first-child{display:flex;align-items:baseline;gap:8px;min-width:0}
 .terminal-main-toolbar-mobile-hidden{display:flex}
 /* Unified mobile bar — hidden on desktop, shown on mobile via media query */
 .terminal-unified-bar{display:none}
@@ -1216,7 +1220,7 @@ body::after{
 .terminal-mobile-menu-check{display:flex;align-items:center;gap:8px;font-size:var(--fs-10);color:var(--t3);cursor:pointer}
 .terminal-page-count{white-space:nowrap}
 .terminal-current-title{font-size:var(--fs-12);color:var(--t)}
-.terminal-current-meta{font-size:var(--fs-10);color:var(--t3);line-height:1.6}
+.terminal-current-meta{font-size:var(--fs-10);color:var(--t3);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .terminal-inline-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .terminal-pane-wrap{flex:1;min-height:0;border:1px solid var(--b);border-radius:var(--r);overflow:hidden;background:var(--term-bg)}
 .terminal-legacy-shell{height:100%;display:flex;flex-direction:column;min-height:0;background:var(--term-bg)}
@@ -3327,6 +3331,26 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 /* 会话时间：纯日期数字，比 --t3 再弱一档，并用等宽数字让它们竖着对成一列 ——
    一屏几十条时，这一列本来就不该跟标题抢注意力。 */
 
+
+/* ── 顶栏挂位 / 侧栏挂位（lib/uiSlots）──────────────────────────────────────
+   顶栏原来只有一行面包屑、46px 全宽空着，而板块自己在下面又画一行工具条把同一个
+   名字写第二遍。现在动作挂进顶栏右侧，那一行整个省掉。 */
+.tb-slot{margin-left:auto;display:flex;align-items:center;min-width:0}
+.tb-actions{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow-x:auto;
+  max-width:100%;scrollbar-width:none}
+.tb-actions::-webkit-scrollbar{display:none}
+.tb-actions-meta{font-size:var(--fs-10);color:var(--t3);white-space:nowrap}
+.tb-actions-check{display:flex;align-items:center;gap:5px;font-size:var(--fs-10);
+  color:var(--t3);cursor:pointer;white-space:nowrap}
+/* 侧栏弹性区被板块接管时，装的是那个板块的次级导航（终端列表）。
+   去掉卡片外框：它已经在侧栏里了，再套一层框就是框里有框。 */
+.sb-rail-slot{display:flex;flex-direction:column;min-height:0;height:100%}
+.sb-term-rail{display:flex;flex-direction:column;min-height:0;height:100%}
+.sb-term-rail .terminal-session-list{padding:0;border:none;background:transparent;border-radius:0}
+.sb-term-rail .terminal-section-title{padding:0 16px 6px;font-size:var(--fs-9);color:var(--t3);
+  letterSpacing:.08em}
+.sb-term-rail .terminal-session-scroll{padding:0 10px;gap:4px}
+.sb-term-rail .terminal-session-item{padding:7px 9px;border-radius:8px;font-size:var(--fs-10)}
 /* ════════════════════════════════════════════════════════════════════════════
    应用级对话框（系统配置 / 使用手册）
    以前这两样是铺满整屏的不透明浮层，看着和跳到另一个页面没区别 —— 看完还得找路

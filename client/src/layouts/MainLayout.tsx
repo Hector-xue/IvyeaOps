@@ -40,6 +40,7 @@ import AccountMenu from "../components/AccountMenu";
 import Icon from "../components/Icon";
 import ToolsOverlay from "../components/ToolsOverlay";
 import SessionRail from "../components/console/SessionRail";
+import { RAIL_OWNED_PATHS, RailSlotHost, TopbarSlotHost } from "../lib/uiSlots";
 import { BOARD_PREFS_EVENT, getPinnedBoards, pushRecentBoard } from "../lib/boardPrefs";
 import { TOURS, hasTour } from "../lib/tours";
 
@@ -492,12 +493,18 @@ export default function MainLayout() {
               </div>
 
               {/* ── 弹性区：工作区 / 会话（自己滚）─────────────────────── */}
+              {/* 弹性区：默认是任务台的会话列表；某些板块（终端）会用自己的次级
+                  导航接管它 —— 在终端页摆 15 条"广告怎么优化?"是纯噪音。 */}
               <div className="sb-nav-flex scroll-thin">
-                <SessionRail
-                  collapsed={railCollapsed}
-                  activeSessionId={activeSessionId}
-                  onNavigate={() => isMobile && setMobileMenu(false)}
-                />
+                {RAIL_OWNED_PATHS.has(location.pathname) ? (
+                  <RailSlotHost />
+                ) : (
+                  <SessionRail
+                    collapsed={railCollapsed}
+                    activeSessionId={activeSessionId}
+                    onNavigate={() => isMobile && setMobileMenu(false)}
+                  />
+                )}
               </div>
 
               {/* ── 收纳区：我的工具 + 全部工具入口 ───────────────────────
@@ -591,6 +598,10 @@ export default function MainLayout() {
           <div className="tb-path">
             <b>{path}</b>
           </div>
+          {/* 属于当前这一页的动作挂这里（lib/uiSlots）。没人挂时是个空 div，不占位置。
+              这条注释以前描述的 lib/topbarSlot 其实从没建起来 —— 于是各板块只能
+              自己再画一行工具条，把同一个板块名写两遍、白占 44px。 */}
+          <TopbarSlotHost />
         </div>
         <div className={"content" + (isFullPage(location.pathname) ? " content-fullpage" : "")}>
           {/* Persistent boards (terminal / agents) are always mounted after their
