@@ -127,7 +127,12 @@ const DEMO_PLAN = {
 };
 
 const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
-  ["/auth/me", { username: "admin", role: "admin", permissions: [] }],
+  // ?as=user —— 换成一个没被授予任何模块的注册用户。
+  // 权限相关的界面（能力市场里哪些格子该出现）只有用非管理员身份打开才验得到：
+  // require_module 对 admin 无条件放行，管理员视角下永远看不见问题。
+  ["/auth/me", () => (new URLSearchParams(location.search).get("as") === "user"
+    ? { username: "zhang", role: "user", permissions: [] }
+    : { username: "admin", role: "admin", permissions: [] })],
   ["/setup/status", { needs_setup: false, checks: {} }],
   ["/setup/update-info", {
     current: "1.6.1", latest: "1.7.0", update_available: true,
@@ -143,6 +148,18 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
     total: 189, offset: 0, has_more: true,
   }],
   ["/ivyea-agent/console/presets", { ok: true, presets: [] }],
+  // 能力市场的三个数据源。真实部署里 /skill/* 和 /skill-market/* 都挂在
+  // require_module("skill-hub") 后面，没这个模块的用户会 403 —— 前端要在
+  // 请求之前就把对应区块收起来，这里给的是**有权限时**该看到的样子。
+  ["/skill/list", { skills: [
+    { name: "amazon/ad_negative_guard", description_zh: "否词护栏：低效搜索词批量加否", category: "amazon", size_bytes: 4096 },
+    { name: "custom/weekly_review", description_zh: "账户周检清单", category: "custom", size_bytes: 2048 },
+  ], total: 2 }],
+  ["/skill-market/status", { enabled: true, reachable: true, base_url: "https://mendao.example" }],
+  ["/skill-market/skills", { total: 1, items: [
+    { slug: "ops/keyword-cluster", name: "关键词聚类", version: "1.0.0",
+      summary: "把搜索词报表聚成可执行的词簇", author: "门道社区", installed: false },
+  ] }],
   // 附图换句柄：任务台发送前会调它，图生图靠这个句柄把原图交给作图链路。
   ["/assistant/image/ref", { ref: "ivyea-ref://0000000000000abcd", bytes: 1234 }],
   ["/ivyea-agent/vision/describe", { ok: true, provider: "qwen-vl", text: "一张露营椅的主图。" }],

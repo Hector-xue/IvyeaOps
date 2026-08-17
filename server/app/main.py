@@ -100,6 +100,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("trash purge skipped: %s", e)
 
+    # Best-effort: 把 Skill 中心的 amazon 技能注册进 IvyeaAgent 的技能库，
+    # 任务台才匹配得到它们（两个库格式不同，见 services/skill_sync.py）。
+    # 幂等；失败绝不能拦住启动 —— 大不了这轮少几个可匹配的技能。
+    try:
+        from app.services.skill_sync import sync_to_agent
+        res = sync_to_agent()
+        logger.info("skill sync → agent: %s written, %s removed",
+                    res["synced"], res["removed"])
+        for err in res["errors"][:5]:
+            logger.warning("skill sync: %s", err)
+    except Exception as e:
+        logger.warning("skill sync skipped: %s", e)
+
     # Best-effort: sweep expired ASIN audit artifacts (30-day retention).
     try:
         from app.services.asin_audit import sweep_expired as _sweep_audits

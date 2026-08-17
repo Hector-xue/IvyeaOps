@@ -409,3 +409,22 @@ export function encodePath(name: string): string {
     .map(encodeURIComponent)
     .join("/");
 }
+
+/** Skill 中心 → IvyeaAgent 技能库的同步状态。同步过去的技能任务台才能自动匹配到。 */
+export interface AgentSyncStatus {
+  /** 参与同步的分类。目前只有 amazon —— 全库近百个技能推过去会淹掉匹配。 */
+  domains: string[];
+  count: number;
+  skills: { id: string; name: string; path: string }[];
+}
+
+export async function agentSyncStatus(): Promise<AgentSyncStatus> {
+  const { data } = await api.get<AgentSyncStatus>("/skill/agent-sync");
+  return data;
+}
+
+export async function agentSyncRun(): Promise<{ synced: number; removed: number; errors: string[] }> {
+  const { data } = await api.post<{ synced: number; removed: number; errors: string[] }>(
+    "/skill/agent-sync");
+  return data;
+}

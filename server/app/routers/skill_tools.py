@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from app.core.security import require_user
 from app.services import skill_repo
+from app.services import skill_sync
 
 logger = logging.getLogger("ivyea.routers.skill_tools")
 
@@ -290,7 +291,8 @@ def _skill_prompt(skill_name: str, params: dict) -> str:
     )
 
 
-async def _run_skill_agent(skill_name: str, params: dict, skill_body: str):
+async def _run_skill_agent(skill_name: str, params: dict, skill_body: str,
+                           skill_dir: str = ""):
     """用 ivyea-agent 执行一个技能，边跑边把正文流出去。
 
     两处和老实现（`hermes -z --skills <name> --yolo`）不一样，都是有意的：
@@ -299,6 +301,11 @@ async def _run_skill_agent(skill_name: str, params: dict, skill_body: str):
        Skill 中心的技能库（data_dir/skills，SKILL.md + frontmatter）和 agent 自己的
        技能库（~/.ivyea/skills，skill.json + SKILL.md）不是一套东西，按 id 去
        agent 那边查是查不到的。所以直接把 SKILL.md 正文当说明书交给它。
+
+       amazon 域的技能现在会被 `skill_sync` 连同附属文件一起同步进 agent 技能库，
+       那种情况下 `skill_dir` 有值 —— 得**告诉它目录在哪**，而不是继续说"别去找"。
+       原先那句无条件的"不要去文件系统里找"是这个割裂的创可贴：技能正文里写着
+       "运行 scripts/xxx.py"，材料却没交给它，还禁止它去拿。
 
     2. **默认只读，不复刻 `--yolo`。**
        `--yolo` 等于网页上点一个按钮，就让 agent 在无人值守的情况下随意写文件、
@@ -318,8 +325,11 @@ async def _run_skill_agent(skill_name: str, params: dict, skill_body: str):
         "system": (
             "[必须遵循的技能说明书]\n" + (skill_body or "").strip()
             + "\n\n要求：\n"
-            "1. 说明书全文已在上面，**不要去文件系统里找这个 skill 的目录**——它不在你的技能库里，找不到是正常的，白费步数。\n"
-            "2. 严格按上面的步骤执行；需要事实依据时调用工具取真实数据，不要凭空编造。\n"
+            + (f"1. 这个 skill 的文件目录是 `{skill_dir}`，说明书里提到的 scripts/、references/ "
+               "等相对路径都在它下面，需要时按绝对路径读取（**只读，不要往里写**）。\n"
+               if skill_dir else
+               "1. 说明书全文已在上面，**不要去文件系统里找这个 skill 的目录**——它不在你的技能库里，找不到是正常的，白费步数。\n")
+            + "2. 严格按上面的步骤执行；需要事实依据时调用工具取真实数据，不要凭空编造。\n"
             "3. 当前为只读模式：需要写文件或改线上数据时，把要做什么写清楚交给用户，不要尝试直接执行。"
         ),
         "plan_mode": True,          # 只读：写操作只出计划，不落地
@@ -456,7 +466,8 @@ async def run_tool(
             if runtime == "llm-only":
                 gen = _run_llm_only(detail, body.params)
             else:
-                gen = _run_skill_agent(skill_basename, body.params, detail.content_body)
+                gen = _run_skill_agent(skill_basename, body.params, detail.content_body,
+                                       skill_sync.synced_dir(detail.name))
 
             async for prov, chunk in gen:
                 if prov == "error":

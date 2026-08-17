@@ -4,10 +4,11 @@
  * 对标 MyLevis 的能力市场 / WorkBuddy 的「专家·技能·连接器」：技能、MCP、
  * 智能体、授权四类能力各占一个 tab，看得见才谈得上组合。
  *
- * 一个长期被混淆的事实在这里被摆平：**MCP 有两套注册表**。
- * 「Skill 中心」的技能库是 ~/.hermes/skills，agent 跑一轮时能加载的是
- * ~/.ivyea/skills；同理 ops 原有的 MCP 管理面板管的是 Claude Code 的
- * ~/.claude.json，而决定工作台里 Agent 能连哪些数据源的是 ~/.ivyea/mcp.json。
+ * 一个长期被混淆的事实在这里被摆平：**技能和 MCP 都有两套注册表**。
+ * 「Skill 中心」的技能库在工作台数据目录下（`{data_dir}/skills`，早年在
+ * ~/.hermes/skills，已迁走），而 agent 跑一轮时能加载的是 ~/.ivyea/skills；
+ * 同理 ops 原有的 MCP 管理面板管的是 Claude Code 的 ~/.claude.json，
+ * 而决定工作台里 Agent 能连哪些数据源的是 ~/.ivyea/mcp.json。
  * 这一页把两边都标明来源分区列出，不再让人以为只有一套。
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -70,7 +71,7 @@ function Empty({ children }: { children: React.ReactNode }) {
 }
 
 // ── 技能 ─────────────────────────────────────────────────────────────────────
-function SkillsTab() {
+function SkillsTab({ canRunSkillHub }: { canRunSkillHub: boolean }) {
   const navigate = useNavigate();
   const [agentSkills, setAgentSkills] = useState<IvyeaSkillInfo[]>([]);
   const [opsSkills, setOpsSkills] = useState<SkillMeta[]>([]);
@@ -80,19 +81,22 @@ function SkillsTab() {
 
   useEffect(() => {
     let alive = true;
-    Promise.allSettled([ivyeaSkills(), listSkills()]).then(([a, o]) => {
-      if (!alive) return;
-      if (a.status === "fulfilled") setAgentSkills(a.value?.skills || []);
-      // 取不到要说清楚。Agent 服务刚重启时这里会 503，静默显示"0 个"会让人
-      // 以为技能库真的空了，而不是"这会儿读不到"。
-      else setAgentErr((a.reason as any)?.response?.status === 503
-        ? "IvyeaAgent 服务未就绪，稍候刷新即可。"
-        : errText(a.reason, "读取 Agent 技能库失败。"));
-      if (o.status === "fulfilled") setOpsSkills(o.value?.skills || []);
-      setLoading(false);
-    });
+    // 没有 skill-hub 模块就别发那一发必然 403 的请求 —— 控制台里一条红色的
+    // 403 会让人以为是坏了，而这是权限设计本身。
+    Promise.allSettled([ivyeaSkills(), canRunSkillHub ? listSkills() : Promise.resolve(null)])
+      .then(([a, o]) => {
+        if (!alive) return;
+        if (a.status === "fulfilled") setAgentSkills(a.value?.skills || []);
+        // 取不到要说清楚。Agent 服务刚重启时这里会 503，静默显示"0 个"会让人
+        // 以为技能库真的空了，而不是"这会儿读不到"。
+        else setAgentErr((a.reason as any)?.response?.status === 503
+          ? "IvyeaAgent 服务未就绪，稍候刷新即可。"
+          : errText(a.reason, "读取 Agent 技能库失败。"));
+        if (o.status === "fulfilled" && o.value) setOpsSkills(o.value.skills || []);
+        setLoading(false);
+      });
     return () => { alive = false; };
-  }, []);
+  }, [canRunSkillHub]);
 
   const needle = q.trim().toLowerCase();
   const agentHits = agentSkills.filter(
@@ -142,9 +146,12 @@ function SkillsTab() {
         )}
       </Section>
 
+      {/* 没有 skill-hub 模块的人看不到这一段：/api/skill/list 会 403，
+          留在页面上只会是一个永远空着、还带个点不动的「去运行」的区块。 */}
+      {canRunSkillHub && (
       <Section
         title="Skill 中心技能"
-        sub={`${opsHits.length} 个 · ~/.hermes/skills，在「Skill 中心」里创建和运行`}
+        sub={`${opsHits.length} 个 · 工作台数据目录下的 skills/，在「Skill 中心」里创建和运行`}
       >
         {opsHits.length === 0 ? <Empty>没有匹配的技能。</Empty> : (
           <div className="cap-grid">
@@ -165,6 +172,7 @@ function SkillsTab() {
           </div>
         )}
       </Section>
+      )}
     </>
   );
 }
@@ -559,13 +567,26 @@ function AuthTab() {
 
 // ── 页面 ─────────────────────────────────────────────────────────────────────
 function CapabilitiesInner() {
-  const { role } = useAuth();
+  const { role, permissions } = useAuth();
   const isAdmin = role === "admin";
+
+  // 社区市场走 /api/skill-market/*，那个 router 挂在 require_module("skill-hub")
+  // 后面。没拿到这个模块的注册用户点进来只会拿到 403，而页面把它显示成
+  // 「连不上门道社区」—— 明明是权限不够，看着像社区挂了。
+  // 能力市场本身对所有人开放（看看有什么能力是无害的），所以**不是整页拦**，
+  // 只是把这一格连同它的入口收起来。
+  const canMarket = isAdmin || permissions.includes("skill-hub");
+  const tabs = useMemo(() => TABS.filter((t) => t.key !== "community" || canMarket), [canMarket]);
+
   const [tab, setTab] = useState<Tab>(() => {
     const t = new URLSearchParams(window.location.search).get("tab") as Tab | null;
-    return t && TABS.some((x) => x.key === t) ? t : "community";
+    if (t && TABS.some((x) => x.key === t)) return t;
+    return "community";
   });
-  const hint = useMemo(() => TABS.find((t) => t.key === tab)?.hint || "", [tab]);
+  // 默认页是社区市场；没权限的人要落到下一格，否则第一屏还是空的。
+  // 深链 ?tab=community 同理，不能因为地址栏里写着就放行。
+  const active: Tab = tabs.some((t) => t.key === tab) ? tab : (tabs[0]?.key ?? "skills");
+  const hint = useMemo(() => TABS.find((t) => t.key === active)?.hint || "", [active]);
 
   return (
     <div className="cap-page">
@@ -575,8 +596,8 @@ function CapabilitiesInner() {
       </div>
 
       <div className="home-tabs">
-        {TABS.map((t) => (
-          <button key={t.key} className={"home-tab" + (tab === t.key ? " active" : "")}
+        {tabs.map((t) => (
+          <button key={t.key} className={"home-tab" + (active === t.key ? " active" : "")}
                   onClick={() => setTab(t.key)}>
             <span className="home-tab-icon">{t.icon}</span>
             <span className="home-tab-label">{t.label}</span>
@@ -584,12 +605,12 @@ function CapabilitiesInner() {
         ))}
       </div>
 
-      <div className="wb-enter" key={tab}>
-        {tab === "community" && <CommunityMarket embedded />}
-        {tab === "skills" && <SkillsTab />}
-        {tab === "mcp" && <McpTab isAdmin={isAdmin} />}
-        {tab === "agents" && <AgentsTab />}
-        {tab === "auth" && <AuthTab />}
+      <div className="wb-enter" key={active}>
+        {active === "community" && <CommunityMarket embedded />}
+        {active === "skills" && <SkillsTab canRunSkillHub={canMarket} />}
+        {active === "mcp" && <McpTab isAdmin={isAdmin} />}
+        {active === "agents" && <AgentsTab />}
+        {active === "auth" && <AuthTab />}
       </div>
     </div>
   );
