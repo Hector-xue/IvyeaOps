@@ -210,8 +210,11 @@ export default function Brain() {
   const loadFiles = useCallback(async () => {
     try {
       const r = await brainFiles();
-      setFiles(r.files);
-      setSelectedPath((prev) => prev || r.files[0]?.path || "");
+      // `?? []` 不是防御性编程的形式主义：这几个字段一旦是 undefined，
+      // 下面 files.length / files.map 就会抛，而 React 的错误边界会把**整页**
+      // 换成"页面渲染出错"，只能刷新。一个字段缺失不该让整页消失。
+      setFiles(r.files ?? []);
+      setSelectedPath((prev) => prev || r.files?.[0]?.path || "");
     } catch (e: any) {
       setErr(errText(e, "文件列表加载失败"));
     }
@@ -220,7 +223,7 @@ export default function Brain() {
   const loadUploads = useCallback(async () => {
     try {
       const r = await brainUploads();
-      setUploadHistory(r.uploads);
+      setUploadHistory(r.uploads ?? []);
     } catch {
       // non-critical
     }
@@ -279,7 +282,7 @@ export default function Brain() {
     setErr(null);
     try {
       const r = await brainSearch(q, mode);
-      setResults(r.items);
+      setResults(r.items ?? []);
       setRawResult(r.raw);
       if (r.items.length === 0 && r.raw) setFlash("没有解析到标准结果，已显示原始输出。");
     } catch (e: any) {
