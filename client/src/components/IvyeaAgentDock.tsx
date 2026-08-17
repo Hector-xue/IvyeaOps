@@ -50,7 +50,10 @@ import "../styles/ivyea-agent-dock.css";
 import { errText } from "../lib/errText";
 import { useStickToBottom } from "../lib/useStickToBottom";
 
-type Tab = "chat" | "knowledge" | "status";
+// 只剩对话。悬浮球的独有价值是**不离开当前页面就能问一句**（在 Listing 干活时查条
+// 规则，切走再切回来是有成本的）；而它原来的「知识库」「状态」两个 tab 分别重复了
+// 知识库工作台和系统配置 —— 同一件事有两个入口，两边还会各自演化。
+type Tab = "chat";
 type HistoryView = "chat" | "list" | "detail";
 type ChatMessage = { role: "user" | "assistant" | "system"; text: string };
 type FabPosition = { x: number; y: number };
@@ -267,7 +270,6 @@ export default function IvyeaAgentDock() {
     if (!open) return;
     loadStatus();
     ivyeaChatSessions(30).then((data) => setSessions(data.sessions || [])).catch(() => {});
-    if (tab === "knowledge") loadKnowledge();
   }, [open, tab]);
 
   // 跟随滚动按用户意图判（wheel/touch/键），不按滚动位置判 —— 位置判据在流式
@@ -776,12 +778,6 @@ export default function IvyeaAgentDock() {
             </div>
           </header>
 
-          <nav className="ivyea-agent-tabs">
-            <button className={tab === "chat" ? "active" : ""} onClick={() => setTab("chat")}><MessageCircle size={14} />对话</button>
-            <button className={tab === "knowledge" ? "active" : ""} onClick={() => setTab("knowledge")}><Database size={14} />知识库</button>
-            <button className={tab === "status" ? "active" : ""} onClick={() => setTab("status")}><Check size={14} />状态</button>
-          </nav>
-
           {error && <div className="ivyea-agent-error">{error}</div>}
 
           {tab === "chat" && (
@@ -890,165 +886,7 @@ export default function IvyeaAgentDock() {
             </div>
           )}
 
-          {tab === "knowledge" && (
-            <div className="ivyea-agent-knowledge">
-              <div className="ivyea-agent-kb-row">
-                <div className="ivyea-agent-kb-stat"><b>{cards.length}</b><span>知识卡</span></div>
-                <div className="ivyea-agent-kb-stat"><b>{uploads.length}</b><span>上传</span></div>
-                <div className="ivyea-agent-kb-stat"><b>{watchlistCount ?? "-"}</b><span>来源</span></div>
-                <button className="ivyea-agent-mini-btn" onClick={loadKnowledge} disabled={filesLoading}>
-                  <RefreshCw size={13} className={filesLoading ? "spin" : ""} />刷新
-                </button>
-              </div>
-
-              <div className="ivyea-agent-kb-pills">
-                <div className="ivyea-agent-kb-pill">
-                  <b>对话引用</b>
-                  <span>已开启</span>
-                </div>
-                <div className="ivyea-agent-kb-pill">
-                  <b>索引</b>
-                  <span>{retrievalStatus?.chunks ?? "-"} chunks{retrievalStatus?.needs_rebuild ? " · 待同步" : ""}</span>
-                </div>
-                <div className="ivyea-agent-kb-pill">
-                  <b>Embedding</b>
-                  <span>{embeddings?.semantic_enabled ? "dense" : "local sparse"} · {embeddings?.active_backend || "-"}</span>
-                </div>
-                <button className="ivyea-agent-mini-btn" onClick={syncRetrieval} disabled={syncingRetrieval}>
-                  {syncingRetrieval ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />}同步索引
-                </button>
-              </div>
-
-              <div className="ivyea-agent-section ivyea-agent-legacy">
-                <div className="ivyea-agent-section-title"><Database size={14} />GBrain 旧知识迁移</div>
-                <div className="ivyea-agent-legacy-meta">
-                  <span>旧目录：{legacyImport?.root || "~/brain"}</span>
-                  <span>可迁移 {legacyImport?.summary?.candidate_files ?? "-"} 个</span>
-                  <span>新增 {legacyImport?.summary?.create ?? 0} / 更新 {legacyImport?.summary?.update ?? 0} / 已同步 {legacyImport?.summary?.noop ?? 0}</span>
-                </div>
-                <div className="ivyea-agent-legacy-actions">
-                  <button className="ivyea-agent-mini-btn" onClick={() => scanLegacyGbrain(false)} disabled={legacyLoading}>
-                    {legacyLoading ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />}扫描旧知识
-                  </button>
-                  <button
-                    className="ivyea-agent-primary"
-                    onClick={() => scanLegacyGbrain(true)}
-                    disabled={legacyLoading || !legacyImport || ((legacyImport.summary?.create || 0) + (legacyImport.summary?.update || 0) <= 0)}
-                  >
-                    {legacyLoading ? <Loader2 size={14} className="spin" /> : <Check size={14} />}迁移到 IvyeaAgent
-                  </button>
-                  <a className="ivyea-agent-mini-btn" href="/brain">完整工作台</a>
-                </div>
-                {legacyImport?.candidates?.slice(0, 3).map((item) => (
-                  <div className="ivyea-agent-file" key={item.card_id}>
-                    <span>{item.title || item.source_path}</span>
-                    <em>{item.action} · {item.source_path}</em>
-                  </div>
-                ))}
-              </div>
-
-              <div className="ivyea-agent-section">
-                <div className="ivyea-agent-section-title"><Upload size={14} />上传文档</div>
-                <label className="ivyea-agent-file-picker">
-                  <input ref={fileInputRef} type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-                  <span><Upload size={14} />选择文件</span>
-                  <em>{file ? file.name : "未选择文件"}</em>
-                </label>
-                <div className="ivyea-agent-grid2">
-                  <input className="ivyea-agent-input" value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} placeholder="标题" />
-                  <select className="ivyea-agent-input" value={uploadSourceType} onChange={(e) => setUploadSourceType(e.target.value)}>
-                    <option value="user">用户知识</option>
-                    <option value="official">官方摘要</option>
-                    <option value="community">社区经验</option>
-                  </select>
-                </div>
-                <input className="ivyea-agent-input" value={uploadTags} onChange={(e) => setUploadTags(e.target.value)} placeholder="标签，逗号分隔" />
-                <button className="ivyea-agent-primary" onClick={uploadFile} disabled={!file || uploading}>
-                  {uploading ? <Loader2 size={14} className="spin" /> : <Upload size={14} />}保存到知识库
-                </button>
-              </div>
-
-              <div className="ivyea-agent-section">
-                <div className="ivyea-agent-section-title"><FileText size={14} />粘贴文本</div>
-                <input className="ivyea-agent-input" value={textTitle} onChange={(e) => setTextTitle(e.target.value)} placeholder="标题" />
-                <input className="ivyea-agent-input" value={textTags} onChange={(e) => setTextTags(e.target.value)} placeholder="标签，逗号分隔" />
-                <textarea
-                  className="ivyea-agent-input ivyea-agent-textarea"
-                  value={textBody}
-                  onChange={(e) => setTextBody(e.target.value)}
-                  placeholder="粘贴运营方法论、FAQ、广告规则或复盘内容"
-                />
-                <button className="ivyea-agent-primary" onClick={saveTextKnowledge} disabled={!textBody.trim() || savingText}>
-                  {savingText ? <Loader2 size={14} className="spin" /> : <Check size={14} />}保存到知识库
-                </button>
-              </div>
-
-              <div className="ivyea-agent-section">
-                <div className="ivyea-agent-section-title"><Search size={14} />搜索 / 问答</div>
-                <div className="ivyea-agent-search">
-                  <input className="ivyea-agent-input" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && runSearch()} placeholder="搜索知识库" />
-                  <button className="ivyea-agent-mini-btn" onClick={runSearch} disabled={!query.trim() || searching}>{searching ? <Loader2 size={13} className="spin" /> : <Search size={13} />}</button>
-                </div>
-                <div className="ivyea-agent-search-actions">
-                  <button className="ivyea-agent-mini-btn" onClick={askWithKnowledge} disabled={!query.trim()}>
-                    <MessageCircle size={13} />问智能体
-                  </button>
-                </div>
-                {results.map((r, idx) => (
-                  <div className="ivyea-agent-result" key={`${r.id || idx}`}>
-                    <b>{r.title || r.id}</b>
-                    <span>{r.snippet || r.source_type || ""}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="ivyea-agent-section">
-                <div className="ivyea-agent-section-title"><FileText size={14} />最近文件</div>
-                {visibleUploads.map((u) => (
-                  <div className="ivyea-agent-file" key={u.id}>
-                    <span>{u.title || u.filename}</span>
-                    <em>{fmtSize(u.size)} · {u.import_status || "draft"}</em>
-                  </div>
-                ))}
-                {visibleCards.map((c) => (
-                  <div className="ivyea-agent-file" key={c.id}>
-                    <span>{c.title || c.id}</span>
-                    <em>{c.source_type || "user"} · {c.path || c.id}</em>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {tab === "status" && (
-            <div className="ivyea-agent-status">
-              <div className="ivyea-agent-status-card">
-                <span>连接</span>
-                <b>{online ? "已连接" : "未连接"}</b>
-              </div>
-              <div className="ivyea-agent-status-card">
-                <span>地址</span>
-                <b>{status?.base_url || "-"}</b>
-              </div>
-              <div className="ivyea-agent-status-card">
-                <span>模型</span>
-                <b>{currentModel}</b>
-              </div>
-              <div className="ivyea-agent-status-card">
-                <span>知识目录</span>
-                <b>{status?.health?.data_dir ? `${status.health.data_dir}/knowledge` : "-"}</b>
-              </div>
-              {!online && (
-                <button className="ivyea-agent-primary" onClick={startService} disabled={loadingStatus}>
-                  {loadingStatus ? <Loader2 size={14} className="spin" /> : <Power size={14} />}启动本地服务
-                </button>
-              )}
-              <button className="ivyea-agent-primary" onClick={loadStatus} disabled={loadingStatus}>
-                {loadingStatus ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}刷新状态
-              </button>
-            </div>
-          )}
-        </section>
+</section>
       )}
     </>,
     document.body,

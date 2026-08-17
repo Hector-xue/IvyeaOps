@@ -3345,6 +3345,15 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
    一屏几十条时，这一列本来就不该跟标题抢注意力。 */
 
 
+/* 知识库工作台页头一行：这个库现在什么样。原来这几个数字自己占一个「概览」标签，
+   而看一眼数字不值得切一次标签。 */
+.brain-stats{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:10px;
+  padding:8px 12px;background:var(--bg2);border:1px solid var(--b);border-radius:var(--r);
+  font-size:var(--fs-10);color:var(--t3)}
+.brain-stats b{color:var(--t);font-size:var(--fs-12);margin-right:3px}
+.brain-stats .ok{color:var(--acc)}
+.brain-stats .warn{color:var(--amber,#f59e0b)}
+.brain-gear{margin-left:auto;padding:3px 9px;font-size:var(--fs-12);line-height:1}
 /* ── 顶栏挂位 / 侧栏挂位（lib/uiSlots）──────────────────────────────────────
    顶栏原来只有一行面包屑、46px 全宽空着，而板块自己在下面又画一行工具条把同一个
    名字写第二遍。现在动作挂进顶栏右侧，那一行整个省掉。 */

@@ -251,6 +251,15 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   ["/terminal/live/sessions/s-1/history", { items: [], total: 0 }],
   ["/terminal/status", { active: true, running: true, url: "" }],
   ["/terminal/bash-history", { items: [] }],
+  // 知识库工作台：页头统计 + 四个标签。
+  ["/brain/files", { files: [
+    { path: "amazon/ads/negative.md", title: "否词护栏", category: "ads", size: 2048, mtime: 1755300000 },
+    { path: "amazon/listing/main-image.md", title: "主图合规", category: "listing", size: 1024, mtime: 1755310000 },
+    { path: "amazon/policy/vat.md", title: "VAT 税务", category: "policy", size: 4096, mtime: 1755320000 },
+  ] }],
+  ["/brain/uploads", { uploads: [] }],
+  ["/brain/chat/status", { configured: true, provider: "ivyea-agent", model: "deepseek-v4-pro" }],
+  ["/brain/overview", { ready: { db_ready: true, embed_ready: true, actions: [], hint: "" }, counts: {} }],
   ["/help/docs", { docs: [
     { name: "usage", title: "使用手册" },
     { name: "config", title: "配置说明" },
