@@ -260,6 +260,24 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   ["/brain/uploads", { uploads: [] }],
   ["/brain/chat/status", { configured: true, provider: "ivyea-agent", model: "deepseek-v4-pro" }],
   ["/brain/overview", { ready: { db_ready: true, embed_ready: true, actions: [], hint: "" }, counts: {} }],
+  // 服务器监控 / 资讯 / 分析工具：字段名照抄各自的 response model。
+  // 这三个页面此前在验证台里整页崩溃 —— 那是 mock 缺字段，不是页面坏了；
+  // 但也说明它们在真实降级场景下同样脆弱（见 CHANGELOG 的加固条目）。
+  ["/monitor/snapshot", {
+    cpu: { percent: 12.5, count: 2, load_1m: 0.4, load_5m: 0.3, load_15m: 0.2 },
+    memory: { total: 3999997952, used: 2200000000, available: 1700000000, percent: 55.1, percent_used_raw: 58.2 },
+    disk: { total: 52000000000, used: 31000000000, free: 21000000000, percent: 59.6,
+            total_hardware: 53687091200, percent_hardware: 57.7 },
+    network: { bytes_sent_total: 12000000, bytes_recv_total: 34000000,
+               bytes_sent_rate: 1200, bytes_recv_rate: 3400, interface: "eth0" },
+    uptime_seconds: 864000,
+  }],
+  ["/monitor/services", []],
+  ["/monitor/processes", []],
+  ["/monitor/logs", { lines: [] }],
+  ["/news/dates", { dates: ["2026-08-17"], latest: "2026-08-17" }],
+  ["/news/day", { date: "2026-08-17", items: [], generated_at: "", summary: "" }],
+  ["/deep-analysis/history", { items: [] }],
   ["/help/docs", { docs: [
     { name: "usage", title: "使用手册" },
     { name: "config", title: "配置说明" },

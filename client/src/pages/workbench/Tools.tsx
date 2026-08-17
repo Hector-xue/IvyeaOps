@@ -71,7 +71,7 @@ function AsinAuditPanel() {
   const loadHistory = useCallback(async () => {
     try {
       const r = await auditList(20);
-      setHistory(r.items);
+      setHistory(r.items ?? []);
     } catch {
       /* ignore */
     }

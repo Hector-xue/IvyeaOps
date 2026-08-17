@@ -253,7 +253,7 @@ export default function News() {
   const loadDates = useCallback(async () => {
     try {
       const r = await listNewsDates();
-      setDates(r);
+      setDates(r ?? { dates: [], latest: null });
       setPicked((prev) => prev ?? r.latest);
     } catch (e: any) {
       setErr(errText(e, "日期加载失败"));
@@ -283,7 +283,10 @@ export default function News() {
 
   const filtered = useMemo<NewsItem[]>(() => {
     if (!day) return [];
-    let items = cat === "all" ? day.items : day.items.filter((i) => i.category === cat);
+    // day.items 缺失时整页会被错误边界换掉。接口降级/代理错误页都可能给回别的形状，
+    // 一个字段不该让整页消失。
+    const all = Array.isArray(day.items) ? day.items : [];
+    let items = cat === "all" ? all : all.filter((i) => i.category === cat);
     if (pickedOnly) items = items.filter((i) => i.importance >= 4);
     if (activeTag) items = items.filter((i) => (i.tags ?? []).includes(activeTag));
     const kw = q.trim().toLowerCase();
