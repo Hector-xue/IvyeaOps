@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../App";
 import { MarkdownReport } from "../../lib/reportFormat";
+import { imageRef, streamChat, type ChatMsg } from "../../api/assistant";
 import { restoreSession } from "../../lib/sessionRestore";
 import { ToastProvider, useToast } from "../../components/toast";
 import { CONSOLE_NEW_EVENT, sceneChips } from "../../lib/navRegistry";
@@ -39,6 +40,7 @@ import {
   consolePresets,
   consoleWorkspaceCreate,
   consoleSessionApprovals,
+  consoleSessionImport,
   consoleSessions,
   answerResetDiscards,
   ivyeaAgentChat,
@@ -75,6 +77,17 @@ const GATE_NOTE: Record<string, string> = {
 };
 
 const PREFS_KEY = "ivyea-ops.console.prefs";
+
+/** 兜底通道（agent 掉线时）的人设。agent 在时人设由 serve 那边给。 */
+const FALLBACK_SYSTEM =
+  "你是亚马逊运营助手，用中文清晰作答；需要时用 Markdown（表格/列表/标题）写出可直接复制的文档。";
+
+/** 兜底那条注记的序号 —— 只要在同一轮里唯一即可，跟正常轮次的 noteSeq 互不相干。 */
+let noteSeqFallback = 0;
+
+/** 老 AI 问答页遗留在浏览器里的历史，任务台接手搬家（那页已并入任务台）。 */
+const LEGACY_ASSISTANT_KEY = "ivyea-ops-assistant-sessions";
+const LEGACY_IMPORTED_KEY = "ivyea-ops-assistant-imported-v1";
 
 type Turn = {
   id: string;
@@ -230,6 +243,37 @@ function ConsoleInner() {
       })
       .catch(() => void 0);
     return () => { alive = false; };
+  }, []);
+
+  // 老 AI 问答页留在 localStorage 里的历史，搬一次家进会话库。
+  //
+  // 这段原来长在 AI 问答页上，那页收进任务台后必须跟着搬 —— 否则谁的浏览器没在
+  // 那页删掉之前打开过它，那份记录就永远躺在 localStorage 里进不来了。
+  // **按 id 幂等**（服务端按 id 覆盖写），localStorage 标记只是省一次请求。
+  useEffect(() => {
+    if (localStorage.getItem(LEGACY_IMPORTED_KEY)) return;
+    let legacy: any[] = [];
+    try {
+      const raw = localStorage.getItem(LEGACY_ASSISTANT_KEY);
+      const v = raw ? JSON.parse(raw) : [];
+      legacy = (Array.isArray(v) ? v : []).filter((x) => x?.id && x.turns?.length);
+    } catch { return; }
+    if (!legacy.length) { localStorage.setItem(LEGACY_IMPORTED_KEY, "0"); return; }
+    void (async () => {
+      try {
+        const r = await consoleSessionImport("assistant", legacy.map((x) => ({
+          id: String(x.id).replace(/[^A-Za-z0-9_-]/g, ""),
+          created: Math.floor((x.updatedAt || Date.now()) / 1000),
+          messages: (x.turns || [])
+            .filter((t: any) => t?.content?.trim())
+            .map((t: any) => ({ role: t.role, content: t.content })),
+        })).filter((x) => x.id && x.messages.length));
+        localStorage.setItem(LEGACY_IMPORTED_KEY, String(r.count));
+        if (r.count) notifyConsoleSessionsChanged();
+      } catch {
+        // 不标记，下次进任务台再试
+      }
+    })();
   }, []);
 
   // ── 跟随滚动 ─────────────────────────────────────────────────────────────
@@ -455,6 +499,42 @@ function ConsoleInner() {
     }
   }, []);
 
+  /**
+   * agent 掉线时的兜底：走 `/api/assistant/chat` 的多 provider 链纯聊一轮。
+   *
+   * 能做什么要说清楚：**没有工具、没有知识检索、不进会话库**。它的意义只有一个 ——
+   * agent 没起来的时候，别让整个任务台跟着躺下，写文案问概念这类事照样能干。
+   * 返回 true = 兜底真的出了字。
+   */
+  const fallbackChat = useCallback(async (
+    prior: Turn[], text: string, aiId: string, signal: AbortSignal,
+  ): Promise<boolean> => {
+    const msgs: ChatMsg[] = [
+      { role: "system", content: FALLBACK_SYSTEM },
+      ...prior
+        .filter((t) => t.text.trim() && !t.failed)
+        .slice(-10)                       // 兜底通道没有会话库，带太多只是白烧 token
+        .map((t) => ({ role: t.role, content: t.text } as ChatMsg)),
+      { role: "user", content: text },
+    ];
+    let got = "";
+    try {
+      patchTurn(aiId, {
+        failed: false,
+        steps: [noteStep("IvyeaAgent 未就绪，这一轮走备用通道（无工具、不入会话库）", noteSeqFallback++)],
+      });
+      await streamChat(msgs, (ev) => {
+        if (ev.type === "token") {
+          got += ev.text;
+          patchTurn(aiId, { text: got });
+        }
+      }, signal);
+    } catch {
+      return false;                       // 兜底也不通：交回上层按原来的错误报
+    }
+    return got.trim().length > 0;
+  }, [patchTurn]);
+
   // ── 发一轮 ───────────────────────────────────────────────────────────────
   const send = useCallback(async (raw?: string) => {
     const text = (raw ?? composer.text).trim();
@@ -468,7 +548,10 @@ function ConsoleInner() {
       id: aiId, role: "assistant", text: "", steps: [], skills: [], approvals: [], running: true,
       metrics: { startedAt: Date.now() },
     };
-    setTurns((prev) => [...prev, userTurn, aiTurn]);
+    // 顺手把这一轮之前的上下文抓下来 —— agent 掉线时兜底通道要靠它把对话接上。
+    // 从更新函数里取而不是读 turns：send 的依赖里没有 turns，闭包读到的是旧值。
+    let priorTurns: Turn[] = [];
+    setTurns((prev) => { priorTurns = prev; return [...prev, userTurn, aiTurn]; });
     setBusy(true);
     // **把刚发出的问题顶到视野上方**，答案在它下面生长 —— 这是主流对话产品的
     // 做法，也是"我发的问题看不到了"的正解：原先直接钉在最底部，长回答一出来
@@ -497,16 +580,47 @@ function ConsoleInner() {
       if (failed.length) notify("warn", `这些引用读不到，已跳过：${failed.join("、")}`);
     }
 
-    // 图片：ops 侧视觉旁路读成文字再带下去（主脑没有视觉，图直接发过去会被 agent 拒）。
+    // 图片有两条完全不同的用途，分开处理，不要互相拖累：
+    //
+    //   看图 —— ops 侧视觉旁路读成文字再带下去（主脑没有视觉，图直接发过去会被
+    //           agent 拒）。只有 data URL 走得通：/vision/describe 明确只收
+    //           data:image/。
+    //   作图 —— 图**不进模型**。先在 ops 这边换成 ivyea-ref:// 短句柄，只把句柄
+    //           告诉 agent，它拿句柄调 image_generate 就是图生图。让 base64 穿过
+    //           工具参数是不可能的：光是抄一遍就能撑爆上下文，抄错一位图还废了。
+    //           远程地址（比如上一轮出的图）本来就能直接当原图，原样带过去。
     let visionSystem = "";
+    let imageRefSystem = "";
     if (images.length) {
-      try {
-        const d = await visionDescribe(images);
-        if (d?.text?.trim()) {
-          visionSystem = `[用户附图 —— 由视觉模型（${d.provider || "vision"}）读出的内容]\n${d.text.trim()}`;
+      const local = images.filter((u) => u.startsWith("data:"));
+      const remote = images.filter((u) => !u.startsWith("data:"));
+      if (local.length) {
+        try {
+          const d = await visionDescribe(local);
+          if (d?.text?.trim()) {
+            visionSystem = `[用户附图 —— 由视觉模型（${d.provider || "vision"}）读出的内容]\n${d.text.trim()}`;
+          }
+        } catch (e: any) {
+          notify("error", errText(e, "图片没能读出来，这一轮按纯文字继续。可在「系统配置 → AI 服务」配一个视觉模型。"));
         }
-      } catch (e: any) {
-        notify("error", errText(e, "图片没能读出来，这一轮按纯文字继续。可在「系统配置 → AI 服务」配一个视觉模型。"));
+      }
+      const handles: string[] = [];
+      for (const u of local) {
+        try {
+          const { ref } = await imageRef(u);
+          // 拿不到句柄就当没有 —— 把 undefined 拼进提示词，模型会拿着
+          // "第 1 张：undefined" 去调作图，然后报一个谁也看不懂的错。
+          if (typeof ref === "string" && ref.trim()) handles.push(ref.trim());
+        } catch {
+          // 换不到句柄只影响"拿这张图去改图"，看图那条路已经走完了，不打断这一轮。
+        }
+      }
+      handles.push(...remote);
+      if (handles.length) {
+        imageRefSystem =
+          "[用户附图的原图句柄]\n" +
+          handles.map((h, idx) => `第 ${idx + 1} 张：${h}`).join("\n") +
+          "\n要以这些图为原图作图/改图时，把对应句柄原样填进 image_generate 的 image_urls。";
       }
     }
 
@@ -573,6 +687,7 @@ function ConsoleInner() {
           system: [
             composer.system ? "[角色设定 —— 按这个身份和判断标准作答]\n" + composer.system : "",
             visionSystem,
+            imageRefSystem,
             refSystem,
           ].filter(Boolean).join("\n\n") || undefined,
           persist: true,
@@ -694,7 +809,13 @@ function ConsoleInner() {
         if (answer) { finalText = answer; patchTurn(aiId, { text: answer }); }
         else patchTurn(aiId, { failed: true, text: "这轮时间较长，后台仍在处理；完成后可在会话历史里查看。" });
       } else {
-        patchTurn(aiId, { failed: true, running: false, text: String(e?.message || "请求失败") });
+        // 连会话都没建起来、一个字也没出来 —— 多半是 agent 没起。退回
+        // /api/assistant/chat 的多 provider 兜底链，纯聊这一档至少还能用。
+        // （这条退路原来挂在 AI 问答那一页上，那页收进任务台后搬到了这里。）
+        const served = await fallbackChat(priorTurns, text, aiId, ctrl.signal);
+        if (!served) {
+          patchTurn(aiId, { failed: true, running: false, text: String(e?.message || "请求失败") });
+        }
       }
     } finally {
       finishFlush();
@@ -722,6 +843,26 @@ function ConsoleInner() {
     // images / picked 必须在依赖里：send 里读了它们。漏掉的话这个回调会闭包住
     // 旧值 —— 贴完图不打字直接发，图就丢了（之前靠"总会先打字"侥幸没暴露）。
   }, [composer, busy, sessionId, images, picked, patchTurn, notify, loadFollowUps]);
+
+  /**
+   * 点正文里的图 → 收进输入框，作为下一轮的原图。
+   *
+   * 用事件委托而不是给 MarkdownReport 传回调：那个渲染器是七八个板块共用的纯展示
+   * 组件，不该认识任务台。它只在图上留了 `data-md-img`，谁想用谁自己接。
+   */
+  const pickAnswerImage = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const src = (e.target as HTMLElement)?.dataset?.mdImg;
+    if (!src) return;
+    setImages((prev) => {
+      if (prev.includes(src)) return prev;
+      if (prev.length >= 4) {
+        notify("warn", "最多带 4 张图，先去掉一张再选。");
+        return prev;
+      }
+      notify("success", "已把这张图放进输入框，说一下要怎么改。");
+      return [...prev, src];
+    });
+  }, [notify]);
 
   const toggleFollowUps = (next: boolean) => {
     setFollowEnabled(next);
@@ -844,7 +985,10 @@ function ConsoleInner() {
                         reasoning={t.reasoning}
                       />
                       {t.text && (
-                        <div className={"cc-answer" + (t.failed ? " cc-answer-error" : "")}>
+                        <div
+                          className={"cc-answer" + (t.failed ? " cc-answer-error" : "")}
+                          onClick={pickAnswerImage}
+                        >
                           {t.failed ? t.text : <MarkdownReport text={t.text} />}
                         </div>
                       )}

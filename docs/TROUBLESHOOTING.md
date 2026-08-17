@@ -163,7 +163,7 @@ npm run build
 - 看后端日志定位：`journalctl -u ivyea-ops -n 50`（systemd）或服务窗口输出。
 
 **`vision provider apimart failed: 403` / 图片分析失败**
-**apimart 只有图片生成功能，没有文本/视觉**（调 `/v1/messages` 必 403，这是预期、不是 key 失效）。要用「AI 图片分析（识别卖点）」需配 **openai key** 或一个**支持视觉的全局兜底模型**（如 GPT‑4o 系）。apimart 仅用于「AI 生图 / 生成主图图片」。
+**apimart 只有图片生成功能，没有文本/视觉**（调 `/v1/messages` 必 403，这是预期、不是 key 失效）。要用「AI 图片分析（识别卖点）」需配 **openai key** 或一个**支持视觉的全局兜底模型**（如 GPT‑4o 系）。apimart 仅用于生图（任务台作图 / Listing 主图）。
 
 **所有 AI 板块都失败**
 配一个「全局兜底大模型」即可全站可用——这是开箱即用的关键。首启向导有这一步。

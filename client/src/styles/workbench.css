@@ -3842,6 +3842,15 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
   overflow-x:auto;font-size:.88em;line-height:1.65;margin:10px 0}
 .md-pre-lang{font-size:.8em;color:var(--t3);margin-bottom:6px;letter-spacing:.06em}
 .md-code{white-space:pre;display:block}
+/* 正文里的图片 —— 任务台出图靠它显示。整行只有一张图时走 .md-figure 的大图，
+   夹在文字里的走行内小图。点一下能收进输入框当下一轮原图，所以给 pointer。 */
+.md-figure{margin:10px 0}
+.md-img{max-width:100%;border-radius:8px;border:1px solid var(--b);cursor:pointer;
+  transition:border-color .15s,transform .15s}
+.md-img:hover{border-color:var(--acc);transform:translateY(-1px)}
+.md-img-block{display:block;max-height:520px;object-fit:contain;background:var(--bg3)}
+.md-a{color:var(--acc);text-decoration:none;border-bottom:1px solid transparent}
+.md-a:hover{border-bottom-color:var(--acc)}
 .md-table-wrap{overflow-x:auto;margin:10px 0}
 .md-table{border-collapse:collapse;width:100%;font-size:.9em}
 .md-th{text-align:left;padding:6px 12px;border-bottom:2px solid var(--acc);color:var(--t);

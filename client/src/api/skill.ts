@@ -409,3 +409,29 @@ export function encodePath(name: string): string {
     .map(encodeURIComponent)
     .join("/");
 }
+
+/**
+ * 技能库有没有挂给 IvyeaAgent。挂上的技能任务台才能自动匹配到。
+ *
+ * 是**挂目录**不是复制：Skill 中心里改完立即生效，没有同步这一步。
+ */
+export interface AgentSyncStatus {
+  /** 挂上去的分类。目前只有 amazon —— 全库近百个技能挂上去会淹掉匹配。 */
+  domains: string[];
+  /** 挂上去的目录绝对路径。 */
+  roots: string[];
+  /** agent 的配置里确实有这些目录。false = 需要点「重新挂载」。 */
+  registered: boolean;
+  count: number;
+}
+
+export async function agentSyncStatus(): Promise<AgentSyncStatus> {
+  const { data } = await api.get<AgentSyncStatus>("/skill/agent-sync");
+  return data;
+}
+
+export async function agentSyncRun(): Promise<AgentSyncStatus & { changed: boolean; error?: string }> {
+  const { data } = await api.post<AgentSyncStatus & { changed: boolean; error?: string }>(
+    "/skill/agent-sync");
+  return data;
+}

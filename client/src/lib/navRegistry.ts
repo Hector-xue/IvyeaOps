@@ -137,14 +137,8 @@ export const BOARDS: BoardEntry[] = [
   },
 
   // ── AI & 系统（旧壳第二段）────────────────────────────────────────────────
-  {
-    to: "/assistant", icon: "assistant", label: "AI 问答", group: "tools", legacySection: "AI & 系统",
-    pathLabel: "~/AI问答", ready: true,
-  },
-  {
-    to: "/imagegen", icon: "imagegen", label: "AI 生图", group: "tools", legacySection: "AI & 系统",
-    pathLabel: "~/AI生图", keepAlive: true, ready: true,
-  },
+  // AI 问答 / AI 生图不再是独立板块 —— 问答就是任务台不带工具的那一档，作图由
+  // 任务台的 image_generate 工具调同一条链路（两条路由重定向到 /console）。
   {
     to: "/brain?tab=governance", path: "/brain", icon: "brain", label: "知识库工作台",
     group: "tools", legacySection: "AI & 系统",

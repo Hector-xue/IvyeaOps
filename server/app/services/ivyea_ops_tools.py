@@ -516,7 +516,10 @@ TOOLS: tuple[OpsTool, ...] = (
                 prompt=_str("画面描述，越具体越好；中文英文都行"),
                 size=_str("尺寸，如 1024x1024 / 1024x1536", default="1024x1024"),
                 n=_int("生成张数，1-4", default=1),
-                image_urls=_arr(_str(), "参考图 URL（给了就是图生图，会保留原图内容）")),
+                image_urls=_arr(_str(), "原图（给了就是图生图/改图，会保留原图内容）。"
+                                        "用户附图时系统会给你一个 ivyea-ref:// 句柄，"
+                                        "原样填进来即可；也接受 http(s) 图片地址，"
+                                        "比如上一轮出的图 —— 那就是在它基础上继续改")),
             _image_generate, long_running=True),
     OpsTool("image_status", "tools", "作图任务状态",
             "查询 image_generate 提交的任务，完成后返回图片地址。", _obj(

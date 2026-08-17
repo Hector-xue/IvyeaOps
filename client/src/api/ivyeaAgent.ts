@@ -677,10 +677,16 @@ export const SOURCE_LABEL: Record<ConsoleSource, string> = {
   brain: "知识库",
 };
 
-/** 各来源的归属页面 —— 左栏点一条会话回到它本来的板块。 */
+/**
+ * 各来源的归属页面 —— 左栏点一条会话回到它本来的板块。
+ *
+ * assistant 指向任务台：AI 问答那一页已经并进任务台，但**来源标记要留着** ——
+ * 历史会话是按来源筛选的，把 assistant 从类型里删掉等于让那些老对话在左栏里
+ * 筛不出来。会话本身一条没动，只是都在任务台里打开。
+ */
 export const SOURCE_PATH: Record<ConsoleSource, string> = {
   console: "/console",
-  assistant: "/assistant",
+  assistant: "/console",
   brain: "/brain",
 };
 

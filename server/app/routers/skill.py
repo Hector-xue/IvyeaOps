@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from app.core.security import require_user
 from app.services import skill_repo
+from app.services import agent_skills
 from app.services import snapshot as snapshot_svc
 from app.services import git_import
 from app.services import studio_audit
@@ -769,3 +770,29 @@ def architect_prompts() -> dict:
     """Return the editable stage prompts (seeding defaults on first access)."""
     from app.services import skill_architect
     return skill_architect.list_prompts()
+
+
+# ---------------------------------------------------------------------------
+# Agent 技能库同步
+# ---------------------------------------------------------------------------
+
+
+@router.get("/agent-sync", response_model=dict)
+def agent_skills_status() -> dict:
+    """技能库有没有挂给 IvyeaAgent（挂上的技能任务台才能自动匹配到）。"""
+    return agent_skills.status()
+
+
+@router.post("/agent-sync", response_model=dict)
+def agent_skills_register(user: str = Depends(require_user)) -> dict:
+    """重新把技能库挂给 IvyeaAgent。
+
+    正常情况下开机自动挂好，**技能改完立即生效、不需要同步**。这个入口是给
+    "手工动过 agent 的 settings.json"之后重新挂上用的，幂等。
+    """
+    res = agent_skills.register_roots()
+    studio_audit.record(
+        "skill.agent_mount", actor=user, skill_name="",
+        details={"changed": res.get("changed"), "roots": res.get("roots")},
+    )
+    return {**res, **agent_skills.status()}
