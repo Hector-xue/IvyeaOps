@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 
 from app.core.security import require_user
 from app.services import skill_repo
-from app.services import skill_sync
+from app.services import agent_skills
 
 logger = logging.getLogger("ivyea.routers.skill_tools")
 
@@ -302,10 +302,9 @@ async def _run_skill_agent(skill_name: str, params: dict, skill_body: str,
        技能库（~/.ivyea/skills，skill.json + SKILL.md）不是一套东西，按 id 去
        agent 那边查是查不到的。所以直接把 SKILL.md 正文当说明书交给它。
 
-       amazon 域的技能现在会被 `skill_sync` 连同附属文件一起同步进 agent 技能库，
-       那种情况下 `skill_dir` 有值 —— 得**告诉它目录在哪**，而不是继续说"别去找"。
-       原先那句无条件的"不要去文件系统里找"是这个割裂的创可贴：技能正文里写着
-       "运行 scripts/xxx.py"，材料却没交给它，还禁止它去拿。
+       但**目录是真实存在的**（就在 Skill 中心的技能库里），所以要把绝对路径告诉它。
+       原先那句无条件的"不要去文件系统里找"是个错误的创可贴：技能正文里写着
+       "运行 scripts/xxx.py"，材料就在盘上，却既不给路径又禁止它去找。
 
     2. **默认只读，不复刻 `--yolo`。**
        `--yolo` 等于网页上点一个按钮，就让 agent 在无人值守的情况下随意写文件、
@@ -467,7 +466,7 @@ async def run_tool(
                 gen = _run_llm_only(detail, body.params)
             else:
                 gen = _run_skill_agent(skill_basename, body.params, detail.content_body,
-                                       skill_sync.synced_dir(detail.name))
+                                       agent_skills.skill_dir(detail.name))
 
             async for prov, chunk in gen:
                 if prov == "error":

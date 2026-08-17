@@ -410,12 +410,19 @@ export function encodePath(name: string): string {
     .join("/");
 }
 
-/** Skill 中心 → IvyeaAgent 技能库的同步状态。同步过去的技能任务台才能自动匹配到。 */
+/**
+ * 技能库有没有挂给 IvyeaAgent。挂上的技能任务台才能自动匹配到。
+ *
+ * 是**挂目录**不是复制：Skill 中心里改完立即生效，没有同步这一步。
+ */
 export interface AgentSyncStatus {
-  /** 参与同步的分类。目前只有 amazon —— 全库近百个技能推过去会淹掉匹配。 */
+  /** 挂上去的分类。目前只有 amazon —— 全库近百个技能挂上去会淹掉匹配。 */
   domains: string[];
+  /** 挂上去的目录绝对路径。 */
+  roots: string[];
+  /** agent 的配置里确实有这些目录。false = 需要点「重新挂载」。 */
+  registered: boolean;
   count: number;
-  skills: { id: string; name: string; path: string }[];
 }
 
 export async function agentSyncStatus(): Promise<AgentSyncStatus> {
@@ -423,8 +430,8 @@ export async function agentSyncStatus(): Promise<AgentSyncStatus> {
   return data;
 }
 
-export async function agentSyncRun(): Promise<{ synced: number; removed: number; errors: string[] }> {
-  const { data } = await api.post<{ synced: number; removed: number; errors: string[] }>(
+export async function agentSyncRun(): Promise<AgentSyncStatus & { changed: boolean; error?: string }> {
+  const { data } = await api.post<AgentSyncStatus & { changed: boolean; error?: string }>(
     "/skill/agent-sync");
   return data;
 }

@@ -15,12 +15,12 @@ import re
 import logging
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.core.security import require_user
 from app.services import skill_repo
-from app.services import skill_sync
+from app.services import agent_skills
 from app.services import snapshot as snapshot_svc
 from app.services import git_import
 from app.services import studio_audit
@@ -208,7 +208,6 @@ class OkResponse(BaseModel):
 @router.post("/item", response_model=skill_repo.SkillMeta, status_code=201)
 def create_skill_route(
     body: CreateSkillBody,
-    bg: BackgroundTasks,
     user: str = Depends(require_user),
 ) -> skill_repo.SkillMeta:
     """Create a new skill. 409 if the name already exists."""
@@ -222,7 +221,6 @@ def create_skill_route(
         "skill.create", actor=user, skill_name=body.name,
         details={"description": body.description or ""},
     )
-    bg.add_task(skill_sync.sync_quietly)
     return meta
 
 
@@ -230,7 +228,6 @@ def create_skill_route(
 def update_skill_route(
     name: str,
     body: UpdateSkillBody,
-    bg: BackgroundTasks,
     user: str = Depends(require_user),
 ) -> skill_repo.SkillMeta:
     """Overwrite SKILL.md frontmatter + body. No implicit snapshot — the UI
@@ -240,7 +237,6 @@ def update_skill_route(
         "skill.update", actor=user, skill_name=name,
         details={"body_bytes": len(body.body or "")},
     )
-    bg.add_task(skill_sync.sync_quietly)
     return meta
 
 
@@ -248,7 +244,6 @@ def update_skill_route(
 def rename_skill_route(
     name: str,
     body: RenameBody,
-    bg: BackgroundTasks,
     user: str = Depends(require_user),
 ) -> skill_repo.SkillMeta:
     """Rename a skill dir (may also move across categories)."""
@@ -257,14 +252,12 @@ def rename_skill_route(
         "skill.rename", actor=user, skill_name=name,
         details={"new_name": body.new_name},
     )
-    bg.add_task(skill_sync.sync_quietly)
     return meta
 
 
 @router.delete("/item/{name:path}", response_model=trash_svc.TrashEntry)
 def delete_skill_route(
     name: str,
-    bg: BackgroundTasks,
     user: str = Depends(require_user),
 ) -> trash_svc.TrashEntry:
     """Delete (trash) a skill. 7-day recoverable window."""
@@ -273,7 +266,6 @@ def delete_skill_route(
         "skill.delete", actor=user, skill_name=name,
         details={"trash_id": entry.id},
     )
-    bg.add_task(skill_sync.sync_quietly)
     return entry
 
 
@@ -286,7 +278,6 @@ def delete_skill_route(
 def write_skill_file(
     name: str,
     body: WriteFileBody,
-    bg: BackgroundTasks,
     user: str = Depends(require_user),
 ) -> skill_repo.FileEntry:
     """Create or overwrite a file inside a skill (NOT SKILL.md)."""
@@ -295,14 +286,12 @@ def write_skill_file(
         "skill.file_write", actor=user, skill_name=name,
         details={"path": body.path, "size": entry.size},
     )
-    bg.add_task(skill_sync.sync_quietly)
     return entry
 
 
 @router.delete("/file/{name:path}", response_model=OkResponse)
 def delete_skill_file(
     name: str,
-    bg: BackgroundTasks,
     path: str = Query(..., description="relative path inside the skill dir"),
     user: str = Depends(require_user),
 ) -> OkResponse:
@@ -312,7 +301,6 @@ def delete_skill_file(
         "skill.file_delete", actor=user, skill_name=name,
         details={"path": path},
     )
-    bg.add_task(skill_sync.sync_quietly)
     return OkResponse()
 
 
@@ -790,21 +778,21 @@ def architect_prompts() -> dict:
 
 
 @router.get("/agent-sync", response_model=dict)
-def agent_sync_status() -> dict:
-    """当前有哪些技能注册在 IvyeaAgent 的技能库里（任务台能自动匹配到的就是这些）。"""
-    return skill_sync.status()
+def agent_skills_status() -> dict:
+    """技能库有没有挂给 IvyeaAgent（挂上的技能任务台才能自动匹配到）。"""
+    return agent_skills.status()
 
 
 @router.post("/agent-sync", response_model=dict)
-def agent_sync_run(user: str = Depends(require_user)) -> dict:
-    """手动重跑一次同步。
+def agent_skills_register(user: str = Depends(require_user)) -> dict:
+    """重新把技能库挂给 IvyeaAgent。
 
-    写操作后本来就会自动同步，这个入口是给"手工动过 agent 技能库"或"想立刻确认
-    结果"的场景用的 —— 同步是幂等的，多点几次没有副作用。
+    正常情况下开机自动挂好，**技能改完立即生效、不需要同步**。这个入口是给
+    "手工动过 agent 的 settings.json"之后重新挂上用的，幂等。
     """
-    res = skill_sync.sync_to_agent()
+    res = agent_skills.register_roots()
     studio_audit.record(
-        "skill.agent_sync", actor=user, skill_name="",
-        details={"synced": res["synced"], "removed": res["removed"]},
+        "skill.agent_mount", actor=user, skill_name="",
+        details={"changed": res.get("changed"), "roots": res.get("roots")},
     )
-    return res
+    return {**res, **agent_skills.status()}
