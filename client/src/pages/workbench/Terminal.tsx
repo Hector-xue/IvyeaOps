@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 const ANSI_RE = /(\x9B|\x1B\[)[0-?]*[ -/]*[@-~]|\x1B(?:[^[\]]|\][^\x07\x1B]*(?:\x07|\x1B\\))/g;
 function stripAnsi(s: string): string {
@@ -106,6 +107,8 @@ export default function Terminal() {
   const isActiveBoard = useLocation().pathname === "/terminal";
   const [showSessionList, setShowSessionList] = useState(true);
   const [listOpen, setListOpen] = useState(false);   // 顶栏的终端选择器下拉
+  const pickerBtnRef = useRef<HTMLButtonElement>(null);
+  const [pickerRect, setPickerRect] = useState<{ bottom: number; left: number } | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [showMobileActionSheet, setShowMobileActionSheet] = useState(false);
   const [isMobileLayout, setIsMobileLayout] = useState(false);
@@ -571,19 +574,32 @@ export default function Terminal() {
                 却常年占着一整列。按钮上显示当前终端，不用打开也知道自己在哪。 */}
             <span className="term-picker">
               <button
+                ref={pickerBtnRef}
                 className={"tbtn term-picker-btn" + (listOpen ? " active" : "")}
-                onClick={() => setListOpen((v) => !v)}
+                onClick={() => {
+                  const r = pickerBtnRef.current?.getBoundingClientRect();
+                  setPickerRect(r ? { bottom: r.bottom, left: r.left } : null);
+                  setListOpen((v) => !v);
+                }}
                 title="切换终端"
               >
                 ☰ {activeIsLegacy ? "主终端" : current?.title || "未选择"} ▾
               </button>
-              {listOpen && (
+              {/* **必须 portal 到 body。** 这个按钮挂在顶栏的插槽里，而顶栏只有 40px 高、
+                  .tb-actions 上还有 overflow-x:auto（一轴 auto 另一轴也会变成 auto），
+                  绝对定位的菜单会被整块裁掉 —— DOM 里查得到，屏幕上一片空白。 */}
+              {listOpen && pickerRect && createPortal(
                 <>
                   <div className="term-picker-backdrop" onClick={() => setListOpen(false)} />
-                  <div className="term-picker-menu" onClick={() => setListOpen(false)}>
+                  <div
+                    className="term-picker-menu"
+                    style={{ top: pickerRect.bottom + 6, left: pickerRect.left }}
+                    onClick={() => setListOpen(false)}
+                  >
                     {terminalList}
                   </div>
-                </>
+                </>,
+                document.body,
               )}
             </span>
             <span className="tb-actions-meta">

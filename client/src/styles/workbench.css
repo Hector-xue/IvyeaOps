@@ -3349,8 +3349,10 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .term-picker{position:relative;display:inline-flex}
 .term-picker-btn{white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
 .term-picker-btn.active{border-color:var(--acc);color:var(--t)}
-.term-picker-backdrop{position:fixed;inset:0;z-index:60}
-.term-picker-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:61;min-width:240px;
+.term-picker-backdrop{position:fixed;inset:0;z-index:2499}
+/* portal 到 body，所以是 fixed + 由 JS 给 top/left（按钮在顶栏插槽里，
+   祖先有 overflow 和 40px 高度限制，absolute 会被裁掉）。 */
+.term-picker-menu{position:fixed;z-index:2500;min-width:240px;
   max-height:60vh;overflow-y:auto;padding:6px;background:var(--bg1);border:1px solid var(--b);
   border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.28)}
 .term-picker-menu .terminal-session-item{width:100%}
