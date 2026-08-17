@@ -63,6 +63,9 @@ const PERSISTENT_BOARDS: Record<string, () => ReactElement> = {
   "/agents": () => <Agents />,
 };
 
+/** 手机抽屉宽度。桌面默认 264，手机窄一点但要装得下导航项。 */
+const MOBILE_SB_W = 272;
+
 /** 「全部工具」分组的展开状态（本机偏好）。 */
 const TOOLS_OPEN_KEY = "ivyea-ops.sidebar.tools-open";
 
@@ -454,7 +457,11 @@ export default function MainLayout() {
       <aside
         className={"sb" + (collapsed && !mobileMenu ? " collapsed" : "") + (dragging ? " sb-dragging" : "")}
         style={isMobile
-          ? { position: "fixed", zIndex: 999, height: "100%", width: 196, minWidth: 196, overflow: "auto", left: 0, transform: mobileMenu ? "translateX(0)" : "translateX(-200px)", transition: "transform .22s cubic-bezier(.4,0,.2,1)", willChange: "transform" }
+          // 手机抽屉：**宽度和隐藏位移必须联动**。原来写死 196px 配 -200px 位移，
+          // 桌面字号上调之后这个宽度装不下导航项（实测右边缘 204 > 196，溢出 8px），
+          // 而位移一旦和宽度对不上，抽屉收起时还会露出一条边。
+          // 用 -100% 而不是具体像素，宽度以后再改也不会脱节。
+          ? { position: "fixed", zIndex: 999, height: "100%", width: MOBILE_SB_W, minWidth: MOBILE_SB_W, overflow: "auto", left: 0, transform: mobileMenu ? "translateX(0)" : "translateX(-100%)", transition: "transform .22s cubic-bezier(.4,0,.2,1)", willChange: "transform" }
           // 收起态的宽度归 CSS 的 .collapsed 管，这里只在展开时给宽度，
           // 否则拖过的宽度会把 52px 的收起态顶开。
           : (railCollapsed ? undefined : { width: sbWidth, minWidth: sbWidth })}

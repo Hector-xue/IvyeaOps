@@ -471,7 +471,7 @@ body::after{
 .sb.collapsed .sb-logo-name{display:none}
 .sb.collapsed .sb-toggle{padding:3px 8px;font-size:var(--fs-11)}
 .sb.collapsed .ns{display:none}
-.sb.collapsed .ni{justify-content:center;padding:8px 0;gap:0;border-left-width:0;border-right:2px solid transparent}
+.sb.collapsed .ni{justify-content:center;padding:8px 0;margin:1px 6px;gap:0;border-left-width:0;border-right:2px solid transparent}
 .sb.collapsed .ni.active{border-left-width:0;border-right-color:var(--acc)}
 .sb.collapsed .ni-label{display:none}
 .sb.collapsed .nb{display:none}
@@ -3001,7 +3001,10 @@ body::after{
 
 /* ── 新外壳的侧边栏增补（一级项 / 全部工具入口 / 工作区占位）─────────────── */
 /* .ni 原本只给 <a>，这里让 <button> 也能长成同一副样子。 */
-button.ni{width:100%;background:transparent;border:none;border-left:2px solid transparent;
+/* **不能是 width:100%**：.ni 有左右外边距，而百分比宽度不含外边距，两者相加
+   一定超出容器 —— 手机抽屉里实测导航项右边缘比抽屉还宽 8px。
+   用 auto + stretch：由 flex/block 布局去算，永远等于"容器减掉外边距"。 */
+button.ni{width:auto;align-self:stretch;background:transparent;border:none;border-left:2px solid transparent;
   font-family:var(--font);font-size:var(--fs-11);text-align:left;line-height:inherit}
 .ni-action{color:var(--acc)}
 .ni-action:hover{background:color-mix(in srgb,var(--acc) 8%,transparent)}
