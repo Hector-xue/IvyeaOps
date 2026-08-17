@@ -327,7 +327,7 @@ export default function Composer({
                       onClick={() => onImagesChange?.(images.filter((_, j) => j !== i))}>✕</button>
             </span>
           ))}
-          <span className="cc-img-note">图片会先被视觉模型读成文字再交给 Agent</span>
+          <span className="cc-img-note">看图会先由视觉模型读成文字；说要改图就把原图直接交给作图链路</span>
         </div>
       )}
 

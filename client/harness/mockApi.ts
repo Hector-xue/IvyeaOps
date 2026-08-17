@@ -75,6 +75,16 @@ const TURNS = [
       "",
       "---",
       "",
+      // 作图收进任务台之后，正文里会出现图片和链接 —— 这两种以前渲染器根本不认，
+      // 出的图只会显示成一串裸 URL。放进验证台，改坏了能立刻看出来。
+      "顺手按你说的风格出了一张主图：",
+      "",
+      "![生成的主图](/ivyea-logo.png)",
+      "",
+      "参考的竞品页在 [这里](https://www.amazon.com/dp/B0EXAMPLE1)，原图也留一份：",
+      "",
+      "/art/bg.png",
+      "",
       "要我把这三条改动生成待审批工单吗？",
     ].join("\n"),
   },
@@ -133,6 +143,9 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
     total: 189, offset: 0, has_more: true,
   }],
   ["/ivyea-agent/console/presets", { ok: true, presets: [] }],
+  // 附图换句柄：任务台发送前会调它，图生图靠这个句柄把原图交给作图链路。
+  ["/assistant/image/ref", { ref: "ivyea-ref://0000000000000abcd", bytes: 1234 }],
+  ["/ivyea-agent/vision/describe", { ok: true, provider: "qwen-vl", text: "一张露营椅的主图。" }],
   // 会话详情：/ivyea-agent/chat/sessions/<id>。**必须比列表那条更长**才会先命中
   // （match() 按前缀长度排序），否则打开一条会话拿到的是空列表，永远验不到会话态。
   ["/ivyea-agent/chat/sessions/", () => ({
@@ -247,10 +260,36 @@ export function installMockApi(): void {
   // 是打不开的。
   axios.defaults.adapter = async (config) => reply(config);
 
+  // ?agentdown=1 —— 装成 IvyeaAgent 没起来，用来验任务台的兜底通道。
+  // AI 问答那一页并进任务台后，"agent 掉线还能纯聊"这条退路就只剩这一个入口了，
+  // 它坏没坏在真实页面上验不到就等于没验。
+  const agentDown = new URLSearchParams(location.search).get("agentdown") === "1";
+
+  /** 一段真的 SSE —— 兜底通道读的是流，喂 JSON 它一个字也解不出来。 */
+  const sse = (chunks: string[]) => new Response(
+    new ReadableStream({
+      start(ctrl) {
+        const enc = new TextEncoder();
+        for (const t of chunks) {
+          ctrl.enqueue(enc.encode(`data: ${JSON.stringify({ type: "token", text: t, provider: "deepseek" })}\n\n`));
+        }
+        ctrl.enqueue(enc.encode(`data: ${JSON.stringify({ type: "done", provider: "deepseek" })}\n\n`));
+        ctrl.close();
+      },
+    }),
+    { status: 200, headers: { "content-type": "text/event-stream" } },
+  );
+
   // MainLayout 的健康检查走的是裸 fetch，不经过 axios 实例。
   const realFetch = window.fetch.bind(window);
   window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.toString();
+    if (url.startsWith("/api/assistant/chat")) {
+      return Promise.resolve(sse(["兜底通道", "答的这一段。"]));
+    }
+    if (agentDown && url.startsWith("/api/ivyea-agent/chat/stream")) {
+      return Promise.resolve(new Response("agent 未就绪", { status: 503 }));
+    }
     if (url.startsWith("/api/")) {
       return Promise.resolve(new Response(JSON.stringify(match(url.slice(4))), {
         status: 200, headers: { "content-type": "application/json" },

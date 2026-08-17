@@ -78,6 +78,13 @@ function MarkdownReportImpl({ text }: { text: string }) {
       continue;
     }
 
+    const only = soleImage(line);
+    if (only) {
+      elements.push(mdImage(only.src, only.alt, i, true));
+      i++;
+      continue;
+    }
+
     if (line.startsWith("# ")) {
       elements.push(<h1 key={i} className="md-h1">{line.slice(2)}</h1>);
     } else if (line.startsWith("## ")) {
@@ -115,19 +122,84 @@ function parseCells(line: string): string[] {
   return line.split("|").slice(1, -1).map((c) => c.trim());
 }
 
+/**
+ * 只放行能安全塞进 src/href 的协议。模型的输出等同于外部输入 ——
+ * `javascript:` 之类的伪协议必须在这里挡掉，不能指望调用方记得过滤。
+ */
+function safeUrl(raw: string): string {
+  const u = (raw || "").trim();
+  if (/^https?:\/\//i.test(u)) return u;
+  if (/^data:image\//i.test(u)) return u;
+  if (u.startsWith("/")) return u;   // 本站相对路径
+  return "";
+}
+
+const IMG_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|avif)(\?|#|$)/i;
+
+/** 这个地址看着是不是一张图 —— 决定裸链接渲染成图还是渲染成链接。 */
+function looksLikeImage(url: string): boolean {
+  return /^data:image\//i.test(url) || IMG_EXT.test(url);
+}
+
+/**
+ * 正文里的图片。带 `data-md-img` 是给任务台用的：它在容器上挂一个委托点击，
+ * 点一下就把这张图收进输入框当下一轮的原图。渲染器自己不认识任务台。
+ */
+function mdImage(src: string, alt: string, key: React.Key, block: boolean): React.ReactNode {
+  const img = (
+    <img
+      key={key}
+      className={block ? "md-img md-img-block" : "md-img"}
+      src={src}
+      alt={alt || "生成的图片"}
+      loading="lazy"
+      data-md-img={src}
+      title={alt || "点击可作为下一轮的原图"}
+    />
+  );
+  return block ? <div key={key} className="md-figure">{img}</div> : img;
+}
+
+/** 整行只有一张图时按大图渲染 —— 出的图挤成一行文字里的小方块等于没出。 */
+function soleImage(line: string): { src: string; alt: string } | null {
+  const t = line.trim();
+  const md = t.match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/);
+  if (md) {
+    const src = safeUrl(md[2]);
+    return src ? { src, alt: md[1] } : null;
+  }
+  const src = safeUrl(t);
+  return src && looksLikeImage(src) && !/\s/.test(t) ? { src, alt: "" } : null;
+}
+
 function renderInline(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
-  const re = /\*\*(.+?)\*\*|`(.+?)`|\*(.+?)\*/g;
+  //  ![alt](src) | [text](href) | **粗** | `码` | *斜* | 裸链接
+  const re = /!\[([^\]]*)\]\(([^)\s]+)\)|\[([^\]]+)\]\(([^)\s]+)\)|\*\*(.+?)\*\*|`(.+?)`|\*(.+?)\*|(https?:\/\/[^\s<>"'）】]+)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(text.slice(last, m.index));
-    if (m[1] !== undefined) {
-      parts.push(<strong key={m.index} style={{ color: "var(--t)", fontWeight: 600 }}>{m[1]}</strong>);
-    } else if (m[2] !== undefined) {
-      parts.push(<code key={m.index} style={{ background: "var(--bg3)", padding: "1px 5px", borderRadius: 3, fontSize: "0.88em", border: "1px solid var(--b)" }}>{m[2]}</code>);
-    } else if (m[3] !== undefined) {
-      parts.push(<em key={m.index} style={{ color: "var(--t2)", fontStyle: "italic" }}>{m[3]}</em>);
+    if (m[2] !== undefined) {
+      const src = safeUrl(m[2]);
+      parts.push(src ? mdImage(src, m[1], m.index, false) : m[0]);
+    } else if (m[4] !== undefined) {
+      const href = safeUrl(m[4]);
+      parts.push(href
+        ? <a key={m.index} className="md-a" href={href} target="_blank" rel="noreferrer noopener">{m[3]}</a>
+        : m[3]);
+    } else if (m[5] !== undefined) {
+      parts.push(<strong key={m.index} style={{ color: "var(--t)", fontWeight: 600 }}>{m[5]}</strong>);
+    } else if (m[6] !== undefined) {
+      parts.push(<code key={m.index} style={{ background: "var(--bg3)", padding: "1px 5px", borderRadius: 3, fontSize: "0.88em", border: "1px solid var(--b)" }}>{m[6]}</code>);
+    } else if (m[7] !== undefined) {
+      parts.push(<em key={m.index} style={{ color: "var(--t2)", fontStyle: "italic" }}>{m[7]}</em>);
+    } else if (m[8] !== undefined) {
+      // 裸地址：图就直接显示成图（模型经常只甩一个 URL 就不管了），其余变成可点链接。
+      const href = safeUrl(m[8]);
+      if (!href) parts.push(m[8]);
+      else if (looksLikeImage(href)) parts.push(mdImage(href, "", m.index, false));
+      else parts.push(<a key={m.index} className="md-a" href={href} target="_blank" rel="noreferrer noopener">{m[8]}</a>);
     }
     last = m.index + m[0].length;
   }
@@ -292,6 +364,8 @@ export function markdownToHtmlPage(text: string, page: HtmlPageMeta): string {
   ul li::marker{color:#16a34a}
   blockquote{border-left:3px solid #16a34a;padding:6px 0 6px 16px;color:#6b7280;font-style:italic;margin:10px 0;background:#f0fdf4;border-radius:0 4px 4px 0}
   hr{border:none;border-top:1px solid #e5e7eb;margin:20px 0}
+  .md-img{max-width:100%;border-radius:8px;border:1px solid #e5e7eb;margin:10px 0}
+  a{color:#16a34a}
   code{background:#f0fdf4;padding:2px 6px;border-radius:4px;font-family:'JetBrains Mono','Fira Code',monospace;font-size:0.87em;color:#166534;border:1px solid #bbf7d0}
   pre{background:#f8fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 18px;overflow-x:auto;margin:14px 0}
   pre .lang{font-size:10px;color:#9ca3af;letter-spacing:.06em;margin-bottom:8px;text-transform:uppercase}
@@ -496,7 +570,17 @@ function buildChartInitJs(specs: HtmlChartSpec[]): string {
 }
 
 function inlineToHtml(text: string): string {
+  // 先转义再替换：URL 里的 & 变成 &amp; 正是属性里该有的写法。
+  // 图片和链接要跟屏幕上看到的一致 —— 导出的报告里图不能丢。
   return esc(text)
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (whole, alt: string, src: string) => {
+      const u = safeUrl(src.replace(/&amp;/g, "&"));
+      return u ? `<img class="md-img" src="${esc(u)}" alt="${alt}" />` : whole;
+    })
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (whole, label: string, href: string) => {
+      const u = safeUrl(href.replace(/&amp;/g, "&"));
+      return u ? `<a href="${esc(u)}" target="_blank" rel="noreferrer noopener">${label}</a>` : whole;
+    })
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
     .replace(/`(.+?)`/g, "<code>$1</code>");

@@ -37,7 +37,7 @@ UI 里的分区：
 
 - **数据源** —— Sorftime / SIF / 卖家精灵 的 Key（带连通性测试）
 - **Hermes 兼容模型** —— 仅旧 Hermes 链路使用的主模型 + Fallback 模型
-- **应用模型** —— 全局兜底大模型（兼 AI 问答）+ AI 生图
+- **应用模型** —— 全局兜底大模型（兼任务台纯聊兜底）+ 图片生成服务
 - **智能体** —— IvyeaAgent 状态、可选外部 CLI 路径、AI 提供商顺序、自动修复
 - **飞书 / Lark 通知** —— webhook 或自建应用（app_id + app_secret + chat_id）
 - **高级 / 运维** —— CPU 报警阈值、内嵌服务地址、资讯 RSS 源等

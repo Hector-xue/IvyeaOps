@@ -30,8 +30,6 @@ const Playbook = lazy(() => import("./pages/workbench/Playbook"));
 const HubSettings = lazy(() => import("./pages/workbench/HubSettings"));
 const FreightQuote = lazy(() => import("./pages/workbench/FreightQuote"));
 const Users = lazy(() => import("./pages/workbench/Users"));
-const Assistant = lazy(() => import("./pages/workbench/Assistant"));
-const ImageGen = lazy(() => import("./pages/workbench/ImageGen"));
 const ImageTranslate = lazy(() => import("./pages/workbench/ImageTranslate"));
 const IdeaSkill = lazy(() => import("./pages/workbench/IdeaSkill"));
 const SkillTools = lazy(() => import("./pages/workbench/SkillTools"));
@@ -164,8 +162,11 @@ export default function App() {
             <Route path="market" element={<Market />} />
             <Route path="playbook" element={<Playbook />} />
             <Route path="users" element={<Users />} />
-            <Route path="assistant" element={<Assistant />} />
-            <Route path="imagegen" element={<ImageGen />} />
+            {/* AI 问答 / AI 生图已并入任务台：问答就是任务台不带工具的那一档，
+                作图由任务台的 image_generate 工具直接调同一条链路。老书签和老会话
+                链接不能 404，一律接回任务台。 */}
+            <Route path="assistant" element={<Navigate to="/console" replace />} />
+            <Route path="imagegen" element={<Navigate to="/console" replace />} />
             <Route path="image-translate" element={<ImageTranslate />} />
             <Route path="idea-skill" element={<IdeaSkill />} />
             <Route path="skill-tools" element={<SkillTools />} />

@@ -317,8 +317,59 @@ def _sweep_orphaned_jobs() -> None:
 _sweep_orphaned_jobs()
 
 
+# ── 附图引用句柄（任务台的图生图靠它）────────────────────────────────────────
+#
+# 任务台里用户贴一张图说"把它改成夜景"，agent 要把这张图当原图传给 image_generate。
+# 但 data URL 有几百 KB —— 让它穿过模型的工具调用参数是不可能的（光 base64 就能
+# 撑爆上下文，而且模型会逐字重抄，抄错一位图就废了）。
+#
+# 所以图**不进模型**：ops 这边先把它落盘换一个短句柄 `ivyea-ref://<id>`，只把句柄
+# 告诉 agent；agent 原样把句柄传回 image_generate，服务端再从盘上取回原图。
+# 模型全程没碰过图片本体。
+_REFS_DIR: Path = STUDIO_ROOT.parent / "imagegen-refs"
+_REF_SCHEME = "ivyea-ref://"
+_MAX_REF_BYTES = 12 * 1024 * 1024
+_KEEP_REFS = 200
+
+
+def _ref_file(ref_id: str) -> Path | None:
+    """句柄 → 盘上的文件。**只认自己发的 uuid-hex**，杜绝路径穿越。"""
+    ref_id = (ref_id or "").strip()
+    if not ref_id or len(ref_id) > 40 or not all(c in "0123456789abcdef" for c in ref_id):
+        return None
+    hit = sorted(_REFS_DIR.glob(f"{ref_id}.*"))
+    return hit[0] if hit else None
+
+
+def _new_ref_id() -> str:
+    """毫秒时间戳（定宽 hex）+ 随机尾巴。
+
+    **前缀是为了让文件名按时间排序**：清理旧图时不能拿 mtime 排 —— 同一毫秒内落
+    的几张图 mtime 会并列，谁被删就看文件系统心情，用户刚贴的那张也可能被清掉，
+    然后 agent 一调 image_generate 就是"附图引用已过期"。
+    """
+    return f"{int(time.time() * 1000):011x}{uuid.uuid4().hex[:5]}"
+
+
+def _prune_refs() -> None:
+    try:
+        files = sorted(_REFS_DIR.glob("*.*"), key=lambda p: p.name)
+        for p in files[:-_KEEP_REFS]:
+            p.unlink(missing_ok=True)
+    except Exception:
+        logger.debug("_prune_refs 失败（旁路，已忽略）", exc_info=True)
+
+
 async def _source_to_bytes(url: str) -> tuple[bytes, str]:
-    """Return (image_bytes, mime) from a base64 data URL or an http(s) URL."""
+    """Return (image_bytes, mime) from an ivyea-ref:// handle, a base64 data URL,
+    or an http(s) URL."""
+    if url.startswith(_REF_SCHEME):
+        path = _ref_file(url[len(_REF_SCHEME):])
+        if path is None or not path.exists():
+            raise ValueError("附图引用已过期或不存在，请重新上传原图")
+        ext = path.suffix.lstrip(".").lower()
+        mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext or 'png'}"
+        return path.read_bytes(), mime
     if url.startswith("data:"):
         head, _, b64 = url.partition(",")
         mime = head[5:].split(";")[0] or "image/png"
@@ -468,6 +519,45 @@ async def image_submit(req: ImageReq, _user: str = Depends(require_user)) -> dic
     _prune_edit_jobs()
     _persist_job(job_id)
     return {"task_id": job_id}
+
+
+class ImageRefReq(BaseModel):
+    """任务台把一张附图换成短句柄。data_url 只接受 data:image/...;base64,..."""
+    data_url: str
+
+
+@router.post("/image/ref")
+def image_ref(req: ImageRefReq, _user: str = Depends(require_user)) -> dict:
+    """把一张 data URL 附图落盘，返回 `ivyea-ref://<id>` 句柄。
+
+    返回的句柄可以原样传给 image_generate 的 image_urls 做图生图 —— 图片本体
+    留在服务器上，模型只经手这一小串字符。
+    """
+    url = (req.data_url or "").strip()
+    if not url.startswith("data:image/"):
+        raise HTTPException(400, "data_url 必须是 data:image/... 开头的 data URI")
+    head, _, b64 = url.partition(",")
+    if not b64:
+        raise HTTPException(400, "data_url 里没有 base64 内容")
+    try:
+        raw = base64.b64decode(b64)
+    except Exception:
+        raise HTTPException(400, "data_url 的 base64 解不开")
+    if not raw:
+        raise HTTPException(400, "图片是空的")
+    if len(raw) > _MAX_REF_BYTES:
+        raise HTTPException(413, "图片过大（>12MB），请压缩后再试")
+    mime = head[5:].split(";")[0] or "image/png"
+    sub = mime.split("/")[-1].lower()
+    ext = {"jpeg": "jpg", "svg+xml": "svg"}.get(sub, sub if sub.isalnum() else "png")
+    ref_id = _new_ref_id()
+    try:
+        _REFS_DIR.mkdir(parents=True, exist_ok=True)
+        (_REFS_DIR / f"{ref_id}.{ext}").write_bytes(raw)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(500, f"附图落盘失败：{e}")
+    _prune_refs()
+    return {"ref": f"{_REF_SCHEME}{ref_id}", "bytes": len(raw)}
 
 
 @router.get("/image/status")

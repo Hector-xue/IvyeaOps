@@ -20,14 +20,13 @@ import {
   type ShellMode,
 } from "../lib/navRegistry";
 // Lazy-loaded: these boards stay mounted (terminal/agents) or keep-alive
-// (market/playbook/tools/imagegen), but their code is split into its own chunk
+// (market/playbook/tools), but their code is split into its own chunk
 // and only fetched on first visit — keeps the initial bundle small.
 const Terminal = lazy(() => import("../pages/workbench/Terminal"));
 const Agents = lazy(() => import("../pages/workbench/Agents"));
 const Market = lazy(() => import("../pages/workbench/Market"));
 const Playbook = lazy(() => import("../pages/workbench/Playbook"));
 const Tools = lazy(() => import("../pages/workbench/Tools"));
-const ImageGen = lazy(() => import("../pages/workbench/ImageGen"));
 
 function BoardFallback() {
   return <div style={{ padding: 40, textAlign: "center", color: "var(--t3)", fontSize: "var(--fs-13)" }}>加载中…</div>;
@@ -55,7 +54,6 @@ const KEEP_ALIVE_BOARDS: Record<string, () => ReactElement> = {
   "/market": () => <Market />,
   "/playbook": () => <Playbook />,
   "/tools": () => <Tools />,
-  "/imagegen": () => <ImageGen />,
 };
 
 // Boards mounted forever after their first visit (WebSocket / session state).
@@ -260,7 +258,7 @@ export default function MainLayout() {
     resetBodyScrollLock();
   }, [location.pathname]);
 
-  // 长任务板块(市场调研 / 打法 / 分析工具 / AI 生图):首次访问后常驻挂载,
+  // 长任务板块(市场调研 / 打法 / 分析工具):首次访问后常驻挂载,
   // 切走再回来时正在进行的任务(轮询/流式 + UI 状态)还在,完成后也能进历史。
   const [kaVisited, setKaVisited] = useState<Set<string>>(() => new Set());
   useEffect(() => {

@@ -39,37 +39,23 @@ export function streamChat(
   });
 }
 
-export async function submitImage(prompt: string, size: string, n: number, imageUrls?: string[]): Promise<string> {
-  const body: Record<string, unknown> = { prompt, size, n };
-  if (imageUrls && imageUrls.length > 0) body.image_urls = imageUrls;
-  const r = await fetch("/api/assistant/image", {
+/**
+ * 把一张附图换成 `ivyea-ref://` 短句柄。
+ *
+ * 任务台在发送前调它：图片本体留在服务器上，只有句柄跟着这一轮进模型，agent 拿
+ * 句柄填 image_generate 的 image_urls 就是图生图。data URL 有几百 KB，让它穿过
+ * 工具调用参数是不可能的。
+ */
+export async function imageRef(dataUrl: string): Promise<{ ref: string; bytes: number }> {
+  const r = await fetch("/api/assistant/image/ref", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify(body),
+    body: JSON.stringify({ data_url: dataUrl }),
   });
   if (!r.ok) {
     const d = await r.json().catch(() => ({} as any));
     throw new Error(d.detail || `HTTP ${r.status}`);
   }
-  return (await r.json()).task_id as string;
-}
-
-export interface ImageStatus {
-  status: string;       // submitted | pending | running | completed | failed
-  progress: number;
-  images: string[];     // URLs (when completed)
-  error: string | null;
-}
-
-export async function imageStatus(taskId: string): Promise<ImageStatus> {
-  const r = await fetch(`/api/assistant/image/status?task_id=${encodeURIComponent(taskId)}`, { credentials: "include" });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
-}
-
-export async function assistantStatus(): Promise<{ deepseek: boolean; apimart: boolean }> {
-  const r = await fetch("/api/assistant/status", { credentials: "include" });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }

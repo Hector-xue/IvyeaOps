@@ -1369,13 +1369,13 @@ export default function HubSettings() {
       <Section
         title="全局兜底大模型"
         dataTour="settings-fallback"
-        desc={<>所有板块的统一文本出口，也是 AI 问答的默认模型。建议配置一个稳定的文本大模型；IvyeaAgent 主脑模型可在最上方单独指定。</>}
+        desc={<>所有板块的统一文本出口，也是 IvyeaAgent 掉线时任务台纯聊的兜底模型。建议配置一个稳定的文本大模型；IvyeaAgent 主脑模型可在最上方单独指定。</>}
         keys={["assistant_provider", "assistant_model", "assistant_api_key", "assistant_base_url"]}
         vals={vals} onSave={save}
       >
         <LLMModelBlock
           title="文本大模型"
-          hint="市场调研、打法推荐、广告分析、AI 问答等文本任务会使用它。"
+          hint="市场调研、打法推荐、广告分析，以及 IvyeaAgent 不可用时的任务台对话会使用它。"
           providerKey="assistant_provider" modelKey="assistant_model"
           apiKeyKey="assistant_api_key" baseUrlKey="assistant_base_url"
           vals={vals} set={set}
@@ -1404,13 +1404,13 @@ export default function HubSettings() {
       {/* -- 核心 4: 图片生成服务 -- */}
       <Section
         title="图片生成服务"
-        desc={<>默认走 Apimart。Apimart 不稳定/用不了时，在下方「自定义生图接口」填任意兼容 OpenAI <code>/images/generations</code> 的平台（地址 + Key + 模型名）即可切换——Listing 图片、图片翻译、AI 生图都会改用它。</>}
+        desc={<>默认走 Apimart。Apimart 不稳定/用不了时，在下方「自定义生图接口」填任意兼容 OpenAI <code>/images/generations</code> 的平台（地址 + Key + 模型名）即可切换——Listing 图片、图片翻译、任务台作图都会改用它。</>}
         keys={["apimart_key", "apimart_base", "image_model", "image_api_key", "image_base_url"]}
         vals={vals} onSave={save}
       >
         <Field
           label={<><Tag kind="rec">默认</Tag>Apimart API Key</>}
-          hint={<>不接自定义平台时用它；Listing 图片生成、图片翻译和 AI 生图共用。</>}
+          hint={<>不接自定义平台时用它；Listing 图片生成、图片翻译和任务台作图共用。</>}
         >
           <div className="hs-key-inline">
             <SecretInput value={vals.apimart_key} onChange={v => set("apimart_key", v)} placeholder="sk-..." />
