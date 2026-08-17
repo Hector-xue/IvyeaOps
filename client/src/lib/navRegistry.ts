@@ -131,10 +131,8 @@ export const BOARDS: BoardEntry[] = [
       prompt: "拉一下最近 7 天的领星广告大盘，找出高花费零转化的低效项并给出可执行的调整方案。",
     },
   },
-  {
-    to: "/skill-hub", icon: "skill", label: "Skill 中心", group: "tools", legacySection: "工具",
-    pathLabel: "~/Skill中心", admin: true, key: "skill-hub", ready: true,
-  },
+  // Skill 中心并入能力市场的「技能」标签（2026-08-17）—— 同一批技能此前被列了三遍，
+  // 还分在两个板块里。/skill-hub 重定向过去，老书签不会 404。
 
   // ── AI & 系统（旧壳第二段）────────────────────────────────────────────────
   // AI 问答 / AI 生图不再是独立板块 —— 问答就是任务台不带工具的那一档，作图由

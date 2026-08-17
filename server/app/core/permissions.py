@@ -20,7 +20,9 @@ MODULE_CATALOG: List[Dict[str, object]] = [
     {"key": "listing",   "label": "Listing 工作台", "sensitive": False},
     {"key": "image-translate", "label": "一键图片翻译", "sensitive": False},
     {"key": "tools",     "label": "分析工具",        "sensitive": False},
-    {"key": "skill-hub", "label": "Skill 中心",      "sensitive": False},
+    # 「Skill 中心」板块已并入能力市场的「技能」标签（2026-08-17）。**key 不能改** ——
+    # 它已经写进现有用户的 permissions 里，改了等于把所有人的授权作废。只改显示名。
+    {"key": "skill-hub", "label": "技能（运行 / 创建 / 管理）", "sensitive": False},
     {"key": "agents",    "label": "智能体会话",      "sensitive": True},
     {"key": "brain",     "label": "知识库工作台",     "sensitive": True},
     {"key": "terminal",  "label": "服务器终端",      "sensitive": True},
@@ -32,6 +34,8 @@ GRANTABLE_KEYS = {m["key"] for m in MODULE_CATALOG}
 
 # Modules every active registered user can always use (no grant needed). These
 # are the analytical / AI modules whose routers are open in main.py.
+# assistant / imagegen 的**页面**已并入任务台，但这两个 key 仍然有用：
+# /api/assistant/* 是作图链路和掉线兜底链的后端，任务台在用，不能收回。
 BASE_MODULES: List[str] = ["market", "playbook", "assistant", "imagegen", "freight"]
 
 # Position presets: applied as a starting point, then the admin can tweak the

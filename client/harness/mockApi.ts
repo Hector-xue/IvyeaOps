@@ -151,9 +151,37 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   // 能力市场的三个数据源。真实部署里 /skill/* 和 /skill-market/* 都挂在
   // require_module("skill-hub") 后面，没这个模块的用户会 403 —— 前端要在
   // 请求之前就把对应区块收起来，这里给的是**有权限时**该看到的样子。
+  // Skill 中心并入能力市场后，「技能」标签下的三段各自要的数据。
+  // 字段名照抄 server/app/routers/skill_tools.py 的 SkillToolListResponse / SkillToolMeta。
+  // **categories 不能漏** —— 少一个字段就是整页白屏（SkillTools 直接 Object.entries 它）。
+  ["/skill-tools/list", {
+    tools: [
+      { name: "amazon/search-term", category: "amazon", description: "Search term report analysis",
+        description_zh: "搜索词报表分析", icon: "⚡", pinned: false, has_execution: true,
+        inputs: [{ name: "asin", label: "ASIN", required: true }],
+        kind: "report", runtime: "llm-only", output_format: "markdown",
+        exportable: true, sample_params: {} },
+      { name: "amazon/market-research", category: "amazon", description: "Market research",
+        description_zh: "市场调研", icon: "◎", pinned: false, has_execution: true,
+        inputs: [], kind: "report", runtime: "llm-only", output_format: "markdown",
+        exportable: false, sample_params: {} },
+    ],
+    categories: { amazon: 2 },
+  }],
+  ["/skill-tools/runs", { runs: [] }],
+  ["/skill/stats", { total_skills: 98, total_size_bytes: 1048576,
+                     categories: { amazon: 5, research: 12 }, recently_edited: [] }],
+  ["/skill/agent-sync", { domains: ["amazon"], roots: ["/root/ivyea-ops/data/skills/amazon"],
+                          registered: true, count: 5 }],
+  // 字段名照抄 server/app/services/skill_repo.py 的 SkillMeta。
+  // updated_at 漏了的话界面上是「Invalid Date」—— 猜字段名就是这么露馅的。
   ["/skill/list", { skills: [
-    { name: "amazon/ad_negative_guard", description_zh: "否词护栏：低效搜索词批量加否", category: "amazon", size_bytes: 4096 },
-    { name: "custom/weekly_review", description_zh: "账户周检清单", category: "custom", size_bytes: 2048 },
+    { name: "amazon/ad_negative_guard", category: "amazon", description: "Negative keyword guard",
+      description_zh: "否词护栏：低效搜索词批量加否", pinned: false, editable: true,
+      source: "user", updated_at: ago(6), size_bytes: 4096, file_count: 3 },
+    { name: "custom/weekly_review", category: "custom", description: "Weekly account review",
+      description_zh: "账户周检清单", pinned: false, editable: true,
+      source: "user", updated_at: ago(30), size_bytes: 2048, file_count: 1 },
   ], total: 2 }],
   ["/skill-market/status", { enabled: true, reachable: true, base_url: "https://mendao.example" }],
   ["/skill-market/skills", { total: 1, items: [

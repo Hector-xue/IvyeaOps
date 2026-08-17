@@ -109,9 +109,9 @@ Listing 套图制作、图片翻译、市场调研、深度分析、广告优化
       <sub><strong>领星 ERP</strong>：受控写操作走「确定性护栏 + 三重复核 + 人工确认」，默认只读</sub>
     </td>
     <td align="center" width="50%">
-      <img src="docs/assets/screenshot-skill-studio.png" alt="Skill 中心：一句话生成 Skill" width="100%" />
+      <img src="docs/assets/screenshot-skill-studio.png" alt="能力市场 · 技能：一句话生成 Skill" width="100%" />
       <br />
-      <sub><strong>Skill 中心</strong>：一句话描述想法，AI 多阶段生成并自检修复成可执行 Skill</sub>
+      <sub><strong>能力市场 · 技能</strong>：一句话描述想法，AI 多阶段生成并自检修复成可执行 Skill</sub>
     </td>
   </tr>
   <tr>
@@ -145,7 +145,7 @@ Listing 套图制作、图片翻译、市场调研、深度分析、广告优化
 | **一键图片翻译** | 多站点卖家：一套图 → 多语言 → 多站点；上传或从图片工作区选图，按目标站点语言批量翻译图上文字（产品/版式/配色不变） |
 | **分析工具（深度分析）** | 竞品速查 · 关键词竞争 · Listing 重写 · 评论聚类 · 流量诊断 |
 | **领星 ERP** | 经官方 OpenAPI 接入领星：数据浏览 / 大盘 / 广告优化引擎 / 自动化建议 / 受控写操作 / 审计（见下文专章） |
-| **Skill 中心 / 想法工坊** | 一句话生成 Skill（多阶段严谨生成 + 自检修复）、Tool Spec 可视化、执行历史、审核制一键修复 |
+| **能力市场 · 技能** | 一句话生成 Skill（多阶段严谨生成 + 自检修复）、填参数直接运行、Tool Spec 可视化、执行历史、从 GitHub 导入（原「Skill 中心」已并入这里） |
 
 ### AI & 系统
 | 板块 | 说明 |

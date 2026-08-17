@@ -1,5 +1,5 @@
 import { createContext, lazy, useContext, useEffect, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ConfirmProvider } from "./components/ConfirmDialog";
@@ -33,7 +33,6 @@ const Users = lazy(() => import("./pages/workbench/Users"));
 const ImageTranslate = lazy(() => import("./pages/workbench/ImageTranslate"));
 const IdeaSkill = lazy(() => import("./pages/workbench/IdeaSkill"));
 const SkillTools = lazy(() => import("./pages/workbench/SkillTools"));
-const SkillHub = lazy(() => import("./pages/workbench/SkillHub"));
 const DeepAnalysis = lazy(() => import("./pages/workbench/DeepAnalysis"));
 const LingXing = lazy(() => import("./pages/workbench/LingXing"));
 const Console = lazy(() => import("./pages/workbench/Console"));
@@ -116,6 +115,23 @@ function RequireAuth({ children }: { children: JSX.Element }) {
   );
 }
 
+
+/**
+ * `/skill-hub` → 能力市场的「技能」标签。
+ *
+ * 老的三个标签（tools / create / manage）平移成新的分段（run / create / manage），
+ * `?tool=` 深链原样带过去 —— 那是「运行」里定位到某个具体工具用的。
+ */
+function SkillHubRedirect() {
+  const { search } = useLocation();
+  const from = new URLSearchParams(search);
+  const seg = { tools: "run", create: "create", manage: "manage" }[from.get("tab") || ""] || "run";
+  const to = new URLSearchParams({ tab: "skills", seg });
+  const tool = from.get("tool");
+  if (tool) to.set("tool", tool);
+  return <Navigate to={`/capabilities?${to}`} replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -170,7 +186,10 @@ export default function App() {
             <Route path="image-translate" element={<ImageTranslate />} />
             <Route path="idea-skill" element={<IdeaSkill />} />
             <Route path="skill-tools" element={<SkillTools />} />
-            <Route path="skill-hub" element={<SkillHub />} />
+            {/* Skill 中心已并入能力市场：同一批技能以前被列了三遍（这一页只读卡片、
+                Skill 中心的运行列表、Skill 中心的文件管理），还分在两个板块里。
+                老书签和老深链都不能 404 —— ?tab=create 要平移成 ?tab=skills&seg=create。 */}
+            <Route path="skill-hub" element={<SkillHubRedirect />} />
             <Route path="deep-analysis" element={<DeepAnalysis />} />
             <Route path="lingxing" element={<LingXing />} />
             <Route path="hub-settings" element={<HubSettings />} />

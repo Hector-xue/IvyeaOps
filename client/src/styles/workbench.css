@@ -3271,6 +3271,20 @@ button.ni{width:100%;background:transparent;border:none;border-left:2px solid tr
 .cap-page{display:flex;flex-direction:column;gap:2px}
 .cap-search{width:100%;max-width:340px;margin:10px 0 4px}
 .cap-section{margin:14px 0 18px}
+/* 「技能」标签下的分段控件 —— Skill 中心并进来之后，运行/创建/管理是同一批技能上的
+   三个动作。刻意做得比顶级标签轻：它是二级导航，抢了主标签的视觉重量就等于又多了一层"板块"。 */
+.cap-seg{display:flex;align-items:center;gap:4px;margin-bottom:14px;padding-bottom:10px;
+  border-bottom:1px solid var(--b)}
+.cap-seg-btn{padding:5px 14px;font-size:var(--fs-11);border:1px solid transparent;border-radius:6px;
+  background:transparent;color:var(--t2);cursor:pointer;transition:background .15s,color .15s}
+.cap-seg-btn:hover{background:var(--bg2);color:var(--t)}
+.cap-seg-btn.active{background:var(--bg3);border-color:var(--b);color:var(--t);font-weight:600}
+.cap-seg-hint{margin-left:6px;font-size:var(--fs-10);color:var(--t3)}
+/* 技能库挂载状态条（原 Skill 中心「管理」页那条） */
+.cap-mount{padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px;
+  flex-wrap:wrap;font-size:var(--fs-10);color:var(--t2)}
+.cap-mount b{color:var(--acc)}
+.cap-mount .tbtn{margin-left:auto;font-size:var(--fs-9)}
 .cap-section-head{display:flex;align-items:baseline;gap:10px;margin-bottom:9px;padding-bottom:6px;
   border-bottom:1px solid var(--b);flex-wrap:wrap}
 .cap-section-head b{font-size:var(--fs-125);color:var(--t)}
