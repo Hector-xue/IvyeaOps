@@ -108,6 +108,32 @@ export default function LingXingConfig() {
             : <Btn primary onClick={() => patch({ lingxing_enabled: true }, "已启用")} disabled={busy}>启用数据（只读）</Btn>}
           <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>写操作的「操作开关」在「操作执行」tab，默认关、带自动失效。</span>
         </div>
+
+        {/* 执行档位。**它决定 Agent 能不能自己动手**，所以放在总开关旁边而不是埋进高级项。
+            原来这个设置（lingxing_operate_require_human）只在状态接口里显示、从来没被
+            执行过 —— 一个写着"需要人工确认"却不生效的开关，比没有更危险。现在它是真的。 */}
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--b)",
+                      display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "var(--fs-11)", color: "var(--t2)" }}>Agent 执行档位</span>
+          <SheetSelect
+            value={s.lingxing_operate_require_human === false ? "auto" : "confirm"}
+            onChange={(v) => patch(
+              { lingxing_operate_require_human: v === "confirm" },
+              v === "confirm" ? "已切到逐项确认" : "已切到自主执行"
+            )}
+            title="Agent 执行档位"
+            style={{ ...inputStyle, width: 200 }}
+            options={[
+              { value: "confirm", label: "逐项确认（推荐）", sub: "Agent 只建工单，人点了才执行" },
+              { value: "auto", label: "自主执行", sub: "Agent 直接改，仍走护栏并可回滚" },
+            ]}
+          />
+          <span style={{ fontSize: "var(--fs-10)", color: s.lingxing_operate_require_human === false ? "var(--amber)" : "var(--t3)" }}>
+            {s.lingxing_operate_require_human === false
+              ? "⚠ 当前：在任务台让它改广告，它会直接改掉。真实账号请切回「逐项确认」。"
+              : "当前：在任务台让它改广告，它会建一张工单等你确认。"}
+          </span>
+        </div>
       </Card>
 
       {/* ④ optimization params */}
