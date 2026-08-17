@@ -84,8 +84,8 @@ export const BOARDS: BoardEntry[] = [
   // 运营驾驶舱。改造前它挂在 "/"；现在 "/" 变成按外壳模式分流的落地跳转，
   // 驾驶舱有了自己的固定地址，两套外壳都能稳定链到它。
   {
-    to: "/dashboard", icon: "home", label: "首页", group: "tools", legacySection: "工具",
-    pathLabel: "~/首页", ready: true,
+    to: "/dashboard", icon: "home", label: "运营驾驶舱", group: "tools", legacySection: "工具",
+    pathLabel: "~/运营驾驶舱", ready: true,
   },
   {
     to: "/market", icon: "market", label: "市场调研", group: "tools", legacySection: "工具",

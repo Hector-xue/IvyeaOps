@@ -22,7 +22,7 @@ const DASHBOARD_TOUR: TourStep[] = [
   },
   { sel: '[data-tour="sidebar"]', title: "左侧 = 所有板块入口", body: "「任务台」是一句话把活派给 Agent 的地方；现有板块都收在「更多工具」里，按原来的分组排列。左下角按钮可折叠侧边栏。" },
   { sel: '.sb a[href="/hub-settings"]', title: "第一步：系统配置", body: "新装后先来这里：配一个「全局兜底大模型」（DeepSeek/OpenAI 等任选）+ 数据源 Key。配好这两样，全站 AI 与数据功能就能用了。" },
-  { sel: ".home-tabs", title: "首页 · 运营驾驶舱", body: "每日盯盘面板：大盘流量 / 关键词 / 竞品监控 / 自有 ASIN / 类目大盘 五个标签页。点标签切换不同维度。" },
+  { sel: ".home-tabs", title: "运营驾驶舱", body: "每日盯盘面板：大盘流量 / 关键词 / 竞品监控 / 自有 ASIN / 类目大盘 五个标签页。点标签切换不同维度。" },
   { sel: '[data-tour="home-source"]', title: "数据源 & 站点", body: "右上角选站点和数据源（Sorftime）。切换数据源会重新加载全部数据。" },
   { sel: '[data-tour="tour-help"]', title: "随时查手册 / 重看引导", body: "📖 是使用手册（各板块详细文档）。旁边的「?」可随时重看当前板块的这个引导。" },
 ];
@@ -65,7 +65,7 @@ export const TOURS: Record<string, TourStep[]> = {
     },
     { sel: '[data-tour="sidebar"]', title: "左侧 = 所有板块入口", body: "按「工具 / AI & 系统 / 小工具 / 管理」分组。点任意一项进入对应板块；左下角按钮可折叠侧边栏。" },
     { sel: '.sb a[href="/hub-settings"]', title: "第一步：系统配置", body: "新装后先来这里：配一个「全局兜底大模型」（DeepSeek/OpenAI 等任选）+ 数据源 Key。配好这两样，全站 AI 与数据功能就能用了。" },
-    { sel: ".home-tabs", title: "首页 · 运营驾驶舱", body: "每日盯盘面板：大盘流量 / 关键词 / 竞品监控 / 自有 ASIN / 类目大盘 五个标签页。点标签切换不同维度。" },
+    { sel: ".home-tabs", title: "运营驾驶舱", body: "每日盯盘面板：大盘流量 / 关键词 / 竞品监控 / 自有 ASIN / 类目大盘 五个标签页。点标签切换不同维度。" },
     { sel: '[data-tour="home-source"]', title: "数据源 & 站点", body: "右上角选站点和数据源（Sorftime）。切换数据源会重新加载全部数据。" },
     { sel: '[data-tour="tour-help"]', title: "随时查手册 / 重看引导", body: "📖 是使用手册（各板块详细文档）。旁边的「?」可随时重看当前板块的这个引导。" },
   ],

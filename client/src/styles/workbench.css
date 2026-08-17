@@ -1873,6 +1873,21 @@ body::after{
 .listing-project-list::-webkit-scrollbar{width:3px}.listing-project-list::-webkit-scrollbar-thumb{border-radius:3px;background:var(--b2)}
 .listing-workflow-tabs{display:flex;gap:4px;margin-bottom:9px;padding:4px;border:1px solid var(--b);border-radius:8px;background:var(--bg1)}.listing-workflow-tabs button{position:relative;flex:1;height:32px;border:0;border-radius:6px;background:transparent;color:var(--t3);font:550 var(--fs-105)/1 var(--font);cursor:pointer;transition:background .15s,color .15s}.listing-workflow-tabs button:hover{color:var(--t);background:var(--bg2)}.listing-workflow-tabs button.active{background:color-mix(in srgb,var(--acc) 10%,var(--bg2));color:var(--acc);font-weight:700;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--acc) 24%,var(--b))}.listing-workflow-tabs button.active:after{content:"";position:absolute;left:28%;right:28%;bottom:2px;height:2px;border-radius:2px;background:var(--acc)}
 
+/* Listing 步骤条在手机上的适配。
+   桌面是四等分 + 写死 height:32px + line-height:1；手机上一格只有 ~84px，
+   「① 素材与洞察」放不下就换行，而固定高度加 line-height:1 会让换出去的那行
+   **直接溢出按钮盒子、和相邻的字叠在一起**（真机截图里就是这样）。
+   这里放开高度、给正常行高、字号降一档，四步仍然一屏可见。 */
+@media (max-width:760px){
+  .listing-workflow-tabs{gap:3px;padding:3px}
+  .listing-workflow-tabs button{height:auto;min-height:40px;padding:6px 3px;
+    font-size:var(--fs-9);line-height:1.3;white-space:normal;word-break:break-word}
+  .listing-workflow-tabs button.active:after{left:20%;right:20%}
+  /* 页面副标题在手机上占掉三四行，而它是说明性文字，不是操作 —— 收成两行。 */
+  .listing-page-sub{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+    overflow:hidden}
+}
+
 /* ── Listing Visual Studio ─────────────────────────────────────────────── */
 .visual-studio{--vs-radius:10px;width:100%;min-width:0;max-width:100%;display:flex;flex-direction:column;gap:12px;overflow-x:clip;color:var(--t)}
 .visual-studio,.visual-studio *{box-sizing:border-box}
@@ -3025,7 +3040,7 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .cc-hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:24px 16px 15vh;gap:20px;overflow-y:auto}
 .cc-hero-title{font-size:34px;font-weight:650;color:var(--t);margin:0;letter-spacing:-.02em;
-  line-height:1.25}
+  line-height:1.35}
 .cc-hero-sub{font-size:var(--fs-12);color:var(--t3);margin:0;text-align:center;max-width:520px;line-height:1.7}
 .cc-hero-composer{width:100%;max-width:780px;margin-top:2px}
 .cc-scenes{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:660px;
@@ -3260,7 +3275,9 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .cc-rail-meta dd{margin:0;color:var(--t2);word-break:break-all}
 
 @media (max-width:900px){
-  .cc-hero-title{font-size:24px}
+  /* 手机上标题小一档，行高给足 —— 1.25 时中文的行盒比 clientHeight 高 3px，
+     会被裁掉一线笔画。 */
+  .cc-hero-title{font-size:24px;line-height:1.35}
   .cc-rail{display:none}           /* 手机端不挤会话区 */
   .cc-thread{padding:12px 10px 6px}
   .cc-dock{padding:6px 10px 10px}
