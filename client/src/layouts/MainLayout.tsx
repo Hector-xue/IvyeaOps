@@ -32,6 +32,7 @@ function BoardFallback() {
   return <div style={{ padding: 40, textAlign: "center", color: "var(--t3)", fontSize: "var(--fs-13)" }}>加载中…</div>;
 }
 import ManualModal from "../components/ManualModal";
+import SettingsDialog, { OPEN_SETTINGS_EVENT } from "../components/SettingsDialog";
 import UpdateModal from "../components/UpdateModal";
 import Tour from "../components/Tour";
 import IvyeaAgentDock from "../components/IvyeaAgentDock";
@@ -315,6 +316,18 @@ export default function MainLayout() {
     setUpdating(true);
   };
   const [manualOpen, setManualOpen] = useState(false);
+  // 系统配置改成对话框（见 components/AppDialog）。用全局事件而不是层层传回调：
+  // 触发点散在账户菜单、花费芯片、任务台的模型行、能力市场的"去填密钥"里，
+  // 一路 prop 传下去只会把中间那些组件变成传声筒。
+  const [settingsSection, setSettingsSection] = useState<string | null>(null);
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const detail = (e as CustomEvent<{ section?: string }>).detail;
+      setSettingsSection(detail?.section || "");
+    };
+    window.addEventListener(OPEN_SETTINGS_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_SETTINGS_EVENT, onOpen);
+  }, []);
 
   // Interactive tour: auto-run a board's tour on first visit (remembered per
   // board in localStorage); replayable via the "?" button.
@@ -441,9 +454,9 @@ export default function MainLayout() {
           : (railCollapsed ? undefined : { width: sbWidth, minWidth: sbWidth })}
       >
         <div className="sb-logo">
-          <div className="sb-logo-name" title="个人工作台">
+          <div className="sb-logo-name" title="IvyeaOps">
             <img src="/ivyea-logo.png" alt="" className="sb-logo-img" />
-            <span className="sb-logo-text">个人工作台</span>
+            <span className="sb-logo-text">IvyeaOps</span>
           </div>
           <button
             className="sb-toggle"
@@ -613,6 +626,9 @@ export default function MainLayout() {
         visibility={visibility}
       />
       {manualOpen && <ManualModal onClose={() => setManualOpen(false)} />}
+      {settingsSection !== null && (
+        <SettingsDialog section={settingsSection || undefined} onClose={() => setSettingsSection(null)} />
+      )}
       {updating && <UpdateModal currentVersion={appVersion} onClose={() => setUpdating(false)} />}
       {tourOn && hasTour(location.pathname) && (
         <Tour steps={TOURS[location.pathname]} onClose={() => setTourOn(false)} />

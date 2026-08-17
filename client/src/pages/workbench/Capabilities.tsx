@@ -37,6 +37,7 @@ import { getSettings, patchSettings } from "../../api/settings";
 import { marketBrowse, marketStatus, type MarketItem } from "../../api/client";
 import { errText } from "../../lib/errText";
 import CommunityMarket from "./CommunityMarket";
+import { openSettings } from "../../components/SettingsDialog";
 
 // Skill 中心那三块并进来了。**懒加载**：它们加起来 1500+ 行（还带代码编辑器和文件树），
 // 直接 import 会把能力市场的首屏包一起拖大，而多数人打开这一页是去看社区市场的。
@@ -655,7 +656,7 @@ function AuthTab() {
           })}
         </tbody>
       </table>
-      <button className="cs-btn" onClick={() => navigate("/hub-settings")}>去系统配置填密钥</button>
+      <button className="cs-btn" onClick={() => openSettings()}>去系统配置填密钥</button>
     </Section>
   );
 }

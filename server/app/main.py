@@ -260,13 +260,10 @@ async def lifespan(app: FastAPI):
     logger.info("data dir: %s", settings.data_dir)
     logger.info("dev_mode: %s", settings.dev_mode)
 
-    # Terminal subsystem:
-    # (1) legacy tmux auto-capture for the old shared terminal page
-    # (2) new live multi-terminal session manager for the native workbench
-    try:
-        terminal.start_autocapture()
-    except Exception as e:
-        logger.warning("terminal auto-capture not started: %s", e)
+    # Terminal subsystem: live multi-terminal session manager.
+    #
+    # 「会话内容快照」连同它每 5 分钟一次的后台自动采集已于 2026-08-17 移除 ——
+    # 终端会话的留存归「外部智能体」板块管，这里再存一份 tmux 面板截图既重复又没人看。
     try:
         terminal.init_live_sessions()
         logger.info("live terminal sessions ready")
@@ -373,10 +370,6 @@ async def lifespan(app: FastAPI):
             await _task
         except (asyncio.CancelledError, Exception):
             logger.debug("_task 失败（旁路，已忽略）", exc_info=True)
-    try:
-        await terminal.stop_autocapture()
-    except Exception as e:
-        logger.warning("terminal auto-capture stop error: %s", e)
     try:
         await terminal.shutdown_live_sessions()
     except Exception as e:

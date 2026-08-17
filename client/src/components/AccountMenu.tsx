@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Icon from "./Icon";
+import { openSettings } from "./SettingsDialog";
 import { THEMES, themeLabel } from "../lib/themes";
 
 /**
@@ -117,9 +118,10 @@ export default function AccountMenu(props: AccountMenuProps) {
                 <span className="sb-menu-label">主题</span>
                 <span className="sb-menu-tail">{themeLabel(theme)} ›</span>
               </button>
-              {/* 深链到外观区。只 navigate 到 /hub-settings 会落在设置首页，
-                  用户还得自己在十几个分区里找 —— 那等于这一项没做。 */}
-              <button className="sb-menu-item" onClick={run(() => navigate("/hub-settings#appearance"))}>
+              {/* 直接落到外观区。**开对话框而不是跳页**：改字号是"顺手调一下"，
+                  不该把人从当前工作里赶出去；而且只 navigate 到设置首页的话，
+                  用户还得自己在二十来个分区里找 —— 那等于这一项没做。 */}
+              <button className="sb-menu-item" onClick={run(() => openSettings("appearance"))}>
                 <i className="sb-menu-ic"><Icon name="font" size={15} /></i>
                 <span className="sb-menu-label">字体与字号</span>
               </button>
@@ -130,7 +132,7 @@ export default function AccountMenu(props: AccountMenuProps) {
                 <span className="sb-menu-tail">{isConsoleShell ? "任务台" : "经典"} ⇄</span>
               </button>
               {isAdmin && (
-                <button className="sb-menu-item" onClick={run(() => navigate("/hub-settings"))}>
+                <button className="sb-menu-item" onClick={run(() => openSettings())}>
                   <i className="sb-menu-ic"><Icon name="settings" size={15} /></i>
                   <span className="sb-menu-label">系统配置</span>
                 </button>

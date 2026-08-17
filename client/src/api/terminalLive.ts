@@ -115,46 +115,6 @@ export type LegacySnapshot = {
 
 export type LegacySnapshotFull = LegacySnapshot & { content: string };
 
-export async function listLegacySnapshots(limit = 50, offset = 0) {
-  const { data } = await api.get<{ sessions: LegacySnapshot[]; total: number }>(
-    "/terminal/sessions",
-    { params: { limit, offset } },
-  );
-  return data;
-}
-
-export async function getLegacySnapshot(id: number) {
-  const { data } = await api.get<LegacySnapshotFull>(`/terminal/sessions/${id}`);
-  return data;
-}
-
-export async function captureLegacySnapshot(title = "") {
-  const { data } = await api.post<{ ok: boolean; id?: number; ts?: string; title?: string; skipped?: boolean; reason?: string; last_id?: number }>(
-    "/terminal/capture",
-    null,
-    { params: title ? { title } : {} },
-  );
-  return data;
-}
-
-export async function deleteLegacySnapshot(id: number) {
-  const { data } = await api.delete<{ ok: boolean }>(`/terminal/sessions/${id}`);
-  return data;
-}
-
-export async function clearLegacySnapshots() {
-  const { data } = await api.post<{ ok: boolean; removed: number }>(`/terminal/sessions/clear`);
-  return data;
-}
-
-export async function searchLegacySnapshots(q: string, limit = 50) {
-  const { data } = await api.get<{ sessions: (LegacySnapshot & { snippet: string })[]; query: string; total: number }>(
-    "/terminal/search",
-    { params: { q, limit } },
-  );
-  return data;
-}
-
 // ─── Live session snapshots ─────────────────────────────────────────────────
 // Per-session periodic captures of the pyte screen content. Cascade-delete
 // when the session is removed.
@@ -171,42 +131,6 @@ export type LiveSnapshot = {
 };
 
 export type LiveSnapshotFull = LiveSnapshot & { content: string };
-
-export async function listLiveSnapshots(sessionId: string, limit = 80, offset = 0) {
-  const { data } = await api.get<{ snapshots: LiveSnapshot[]; total: number }>(
-    `/terminal/live/sessions/${sessionId}/snapshots`,
-    { params: { limit, offset } },
-  );
-  return data;
-}
-
-export async function getLiveSnapshot(sessionId: string, snapId: number) {
-  const { data } = await api.get<LiveSnapshotFull>(
-    `/terminal/live/sessions/${sessionId}/snapshots/${snapId}`,
-  );
-  return data;
-}
-
-export async function captureLiveSnapshot(sessionId: string) {
-  const { data } = await api.post<{ ok: boolean; id?: number; ts?: string; skipped?: boolean; reason?: string; error?: string }>(
-    `/terminal/live/sessions/${sessionId}/snapshots`,
-  );
-  return data;
-}
-
-export async function deleteLiveSnapshot(sessionId: string, snapId: number) {
-  const { data } = await api.delete<{ ok: boolean }>(
-    `/terminal/live/sessions/${sessionId}/snapshots/${snapId}`,
-  );
-  return data;
-}
-
-export async function clearLiveSnapshots(sessionId: string) {
-  const { data } = await api.post<{ ok: boolean; removed: number }>(
-    `/terminal/live/sessions/${sessionId}/snapshots/clear`,
-  );
-  return data;
-}
 
 export function terminalWebSocketUrl(sessionId: string): string {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";

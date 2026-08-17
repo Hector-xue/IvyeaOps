@@ -11,19 +11,11 @@ import {
   LiveSnapshot,
   TerminalHistoryItem,
   TerminalSession,
-  captureLegacySnapshot,
-  captureLiveSnapshot,
-  clearLegacySnapshots,
-  clearLiveSnapshots,
   closeTerminalSession,
   createTerminalSession,
   deleteTerminalSession,
-  getLegacySnapshot,
   getLegacyTtydStatus,
-  getLiveSnapshot,
   getTerminalHistory,
-  listLegacySnapshots,
-  listLiveSnapshots,
   listTerminalSessions,
   startLegacyTtyd,
   stopLegacyTtyd,
@@ -72,265 +64,8 @@ function isMeaningfulInput(content: string): boolean {
   return normalizeHistoryText(content).trim().length > 0;
 }
 
-// Generic 3-slot snapshot panel. Backend keeps at most three rows per
-// session (当前 / 上一个 / 之前). The two callers (legacy ttyd main
-// terminal and per-session live PTY) supply their own adapter functions.
-type SnapshotItem = {
-  id: number;
-  ts: string;
-  size: number;
-  role?: "snap_curr" | "snap_prev" | "snap_before";
-  label?: string;
-  source?: string;  // legacy holdover; kept for older payloads
-};
-
-type SnapshotAdapter = {
-  list: () => Promise<{ items: SnapshotItem[]; total: number }>;
-  getContent: (id: number) => Promise<string>;
-  capture: () => Promise<{ ok: boolean; skipped?: boolean; reason?: string; id?: number; error?: string }>;
-  clearAll: () => Promise<void>;
-  introText: React.ReactNode;
-};
-
-function SnapshotPanel({ visible, adapter, refreshKey }: {
-  visible: boolean;
-  adapter: SnapshotAdapter;
-  refreshKey?: string;  // bumps to force reload when the adapter target changes
-}) {
-  const [items, setItems] = useState<SnapshotItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [content, setContent] = useState<string>("");
-  const [contentLoading, setContentLoading] = useState(false);
-  const [listLoading, setListLoading] = useState(false);
-  const [capturing, setCapturing] = useState(false);
-  const [msg, setMsg] = useState<string>("");
-
-  const refresh = useCallback(async () => {
-    setListLoading(true);
-    try {
-      const data = await adapter.list();
-      setItems(data.items);
-      setTotal(data.total);
-      // Use functional update so we always read the latest selectedId, not a
-      // stale closure value from when the polling interval was created.
-      setSelectedId((prev) => {
-        if (prev === null) return data.items[0]?.id ?? null;  // first load
-        const stillExists = data.items.some((s) => s.id === prev);
-        return stillExists ? prev : (data.items[0]?.id ?? null);
-      });
-    } catch (e: any) {
-      setMsg(errText(e, "加载快照列表失败"));
-      setTimeout(() => setMsg(""), 3000);
-    } finally {
-      setListLoading(false);
-    }
-  }, [adapter]);
-
-  const handleClear = async () => {
-    if (!confirm("确定清空全部 3 张快照（当前 / 上一个 / 之前）？此操作不可撤销。")) return;
-    try {
-      await adapter.clearAll();
-      setSelectedId(null);
-      await refresh();
-    } catch (e: any) {
-      setMsg(errText(e, "清空失败"));
-      setTimeout(() => setMsg(""), 3000);
-    }
-  };
-
-  // Reset when target changes (e.g. switching between live sessions).
-  useEffect(() => {
-    setItems([]);
-    setSelectedId(null);
-    setContent("");
-  }, [refreshKey]);
-
-  // Initial load + polling while panel is visible.
-  useEffect(() => {
-    if (!visible) return;
-    refresh();
-    const t = window.setInterval(refresh, LEGACY_SNAPSHOT_REFRESH_MS);
-    return () => window.clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, refreshKey]);
-
-  // Load full content for the selected snapshot.
-  useEffect(() => {
-    if (!visible || selectedId == null) {
-      setContent("");
-      return;
-    }
-    let cancelled = false;
-    setContentLoading(true);
-    adapter.getContent(selectedId)
-      .then((c) => { if (!cancelled) setContent(c || ""); })
-      .catch(() => { if (!cancelled) setContent(""); })
-      .finally(() => { if (!cancelled) setContentLoading(false); });
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, selectedId, refreshKey]);
-
-  const handleCapture = async () => {
-    setCapturing(true);
-    setMsg("");
-    try {
-      const res = await adapter.capture();
-      if (res.error) {
-        setMsg(res.error);
-      } else if (res.skipped) {
-        setMsg("画面与上次保存一致，已跳过");
-      } else if (res.ok) {
-        setMsg(res.id ? `已保存 #${res.id}` : "已保存");
-      }
-      await refresh();
-    } catch (e: any) {
-      setMsg(errText(e, "保存失败"));
-    } finally {
-      setCapturing(false);
-      setTimeout(() => setMsg(""), 3000);
-    }
-  };
-
-  const selected = items.find((s) => s.id === selectedId) || null;
-
-  // Display order: 当前 → 上一个 → 之前 (backend already returns in this order)
-  return (
-    <div className="legacy-snapshot-panel">
-      <div className="terminal-history-meta">{adapter.introText}</div>
-      <div className="legacy-snapshot-toolbar">
-        <button className="tbtn" onClick={handleCapture} disabled={capturing}>
-          {capturing ? "保存中…" : "📷 立即保存"}
-        </button>
-        <button className="tbtn" onClick={refresh} disabled={listLoading}>
-          {listLoading ? "刷新中…" : "↻ 刷新"}
-        </button>
-        <button
-          className="tbtn"
-          onClick={handleClear}
-          disabled={items.length === 0}
-          style={{ marginLeft: "auto", color: "var(--red)", borderColor: "rgba(248,113,113,.35)" }}
-          title="清空全部 3 张快照"
-        >🗑 清空</button>
-      </div>
-      {msg && <div className="legacy-snapshot-msg">{msg}</div>}
-
-      {/* Top half: fixed 3-row list */}
-      <div className="legacy-snapshot-list">
-        {listLoading && items.length === 0 ? (
-          <div className="terminal-empty">快照加载中…</div>
-        ) : items.length === 0 ? (
-          <div className="terminal-empty">还没有快照。点「立即保存」抓第一张。</div>
-        ) : items.map((s) => {
-          const label = s.label
-            || (s.role === "snap_curr" ? "当前"
-              : s.role === "snap_prev" ? "上一个"
-              : s.role === "snap_before" ? "之前" : "");
-          return (
-            <div
-              key={s.id}
-              onClick={() => setSelectedId(s.id)}
-              className={`legacy-snapshot-row${s.id === selectedId ? " active" : ""}`}
-            >
-              {label && (
-                <span className={`legacy-snapshot-slot slot-${s.role}`}>{label}</span>
-              )}
-              <span className="legacy-snapshot-ts">{fmtTime(s.ts)}</span>
-              <span className="legacy-snapshot-size">{fmtBytes(s.size)}</span>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Bottom half: selected snapshot content viewer */}
-      <div className="legacy-snapshot-viewer">
-        {selected ? (
-          <>
-            <div className="legacy-snapshot-viewer-head">
-              <span>{selected.label || `快照 #${selected.id}`}</span>
-              <span>{fmtBytes(selected.size)}</span>
-              <span>{fmtTime(selected.ts)}</span>
-            </div>
-            <div className="legacy-snapshot-viewer-body">
-              {contentLoading ? (
-                <div className="terminal-empty" style={{ padding: 12 }}>加载内容中…</div>
-              ) : content ? (
-                <pre>{content}</pre>
-              ) : (
-                <div className="terminal-empty" style={{ padding: 12 }}>该快照内容为空</div>
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="terminal-empty" style={{ padding: 20 }}>从上方列表选一张快照查看内容</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Wrapper: main-terminal (legacy tmux) snapshot view. Backend keeps at most
-// 3 snapshots per the rolling window (当前 / 上一个 / 之前).
-function LegacySnapshotPanel({ visible }: { visible: boolean }) {
-  const adapter = useMemo<SnapshotAdapter>(() => ({
-    list: async () => {
-      const r = await listLegacySnapshots(LEGACY_SNAPSHOT_LIST_LIMIT, 0);
-      const items: SnapshotItem[] = r.sessions.map((s: LegacySnapshot) => ({
-        id: s.id, ts: s.ts, size: s.size,
-        role: s.role || (
-          s.source === "snap_curr" ? "snap_curr"
-          : s.source === "snap_prev" ? "snap_prev"
-          : s.source === "snap_before" ? "snap_before" : undefined
-        ),
-        label: s.label,
-      }));
-      return { items, total: r.total };
-    },
-    getContent: async (id) => (await getLegacySnapshot(id)).content || "",
-    capture: async () => {
-      const r = await captureLegacySnapshot("");
-      return { ok: r.ok, skipped: r.skipped, reason: r.reason, id: r.id };
-    },
-    clearAll: async () => { await clearLegacySnapshots(); },
-    introText: (
-      <>
-        主终端每 5 分钟抓一次 tmux 画面到快照，<strong>固定保留 3 张</strong>：当前 / 上一个 / 之前。
-        新快照来时，旧的「上一个」会被合并到「之前」（带时间分隔符，单条上限 5MB）。点「立即保存」可立刻抓一张。
-      </>
-    ),
-  }), []);
-  return <SnapshotPanel visible={visible} adapter={adapter} refreshKey="legacy" />;
-}
-
-// Wrapper: per-session live PTY snapshot view. Same 3-slot rolling model
-// as the main terminal. Each snapshot is the ANSI-stripped ring buffer
-// (~500 lines of recent activity), so AI CLI / TUI output is preserved.
-function LiveSnapshotPanel({ visible, sessionId }: { visible: boolean; sessionId: string }) {
-  const adapter = useMemo<SnapshotAdapter>(() => ({
-    list: async () => {
-      const r = await listLiveSnapshots(sessionId, LEGACY_SNAPSHOT_LIST_LIMIT, 0);
-      const items: SnapshotItem[] = r.snapshots.map((s: LiveSnapshot) => ({
-        id: s.id, ts: s.ts, size: s.size,
-        role: s.role, label: s.label,
-      }));
-      return { items, total: r.total };
-    },
-    getContent: async (id) => (await getLiveSnapshot(sessionId, id)).content || "",
-    capture: async () => {
-      const r = await captureLiveSnapshot(sessionId);
-      return { ok: r.ok, skipped: r.skipped, reason: r.reason, id: r.id, error: r.error };
-    },
-    clearAll: async () => { await clearLiveSnapshots(sessionId); },
-    introText: (
-      <>
-        每 5 分钟自动抓该终端的近 ~500 行输出（含 AI CLI / TUI 实时内容），<strong>固定保留 3 张</strong>：当前 / 上一个 / 之前。
-        新快照来时旧的「上一个」自动合并到「之前」。终端删除时所有快照会一并清除。
-      </>
-    ),
-  }), [sessionId]);
-  return <SnapshotPanel visible={visible} adapter={adapter} refreshKey={`live-${sessionId}`} />;
-}
-
+// 「会话内容快照」已移除（2026-08-17）：终端会话的留存归「外部智能体」板块管，
+// 这里再存一份 tmux 面板截图既重复又没人看。后台每 5 分钟一次的自动采集也一并停了。
 function buildTranscript(history: TerminalHistoryItem[]): string {
   const chunks: string[] = [];
   for (const item of history) {
@@ -363,7 +98,6 @@ export default function Terminal() {
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [history, setHistory] = useState<TerminalHistoryItem[]>([]);
   const [historyTotal, setHistoryTotal] = useState(0);
-  const [showHistory, setShowHistory] = useState(true);
   const [showSessionList, setShowSessionList] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
   const [showMobileActionSheet, setShowMobileActionSheet] = useState(false);
@@ -394,7 +128,6 @@ export default function Terminal() {
   const closeMobileSheets = useCallback(() => {
     setShowMobileActionSheet(false);
     setShowSessionList(false);
-    setShowHistory(false);
   }, []);
 
   const syncSessions = useCallback(async (preferredId?: string | null) => {
@@ -484,7 +217,6 @@ export default function Terminal() {
         closeMobileSheets();
       } else {
         setShowSessionList(true);
-        setShowHistory(true);
         setShowMobileActionSheet(false);
       }
     };
@@ -739,8 +471,7 @@ export default function Terminal() {
             className={`tbtn terminal-unified-chip${showSessionList ? " active" : ""}`}
             onClick={() => {
               setShowMobileActionSheet(false);
-              setShowHistory(false);
-              setShowSessionList((prev) => !prev);
+                        setShowSessionList((prev) => !prev);
             }}
           >
             ≡
@@ -757,16 +488,6 @@ export default function Terminal() {
                   : "idle"}
             </span>
           </div>
-          <button
-            className={`tbtn terminal-unified-chip${showHistory ? " active" : ""}`}
-            onClick={() => {
-              setShowMobileActionSheet(false);
-              setShowSessionList(false);
-              setShowHistory((prev) => !prev);
-            }}
-          >
-            内容
-          </button>
           <button className="tbtn terminal-unified-chip" onClick={handleCreate} disabled={creating}>
             +
           </button>
@@ -774,8 +495,7 @@ export default function Terminal() {
             className={`tbtn terminal-unified-chip${showMobileActionSheet ? " active" : ""}`}
             onClick={() => {
               setShowSessionList(false);
-              setShowHistory(false);
-              setShowMobileActionSheet((prev) => !prev);
+                        setShowMobileActionSheet((prev) => !prev);
             }}
           >
             ⋯
@@ -803,9 +523,6 @@ export default function Terminal() {
             <button className="tbtn" onClick={handleCreate} disabled={creating}>+ 开启新终端</button>
             <button className="tbtn" onClick={() => setShowSessionList((v) => !v)}>
               {showSessionList ? "隐藏终端列表" : "显示终端列表"}
-            </button>
-            <button className="tbtn" onClick={() => setShowHistory((v) => !v)}>
-              {showHistory ? "隐藏会话内容" : "显示会话内容"}
             </button>
             <button className="tbtn" onClick={() => fileRef.current?.click()}>📷 上传图片</button>
             <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleUpload} />
@@ -1024,26 +741,6 @@ export default function Terminal() {
             </div>
           </section>
 
-          {showHistory && (
-            <>
-              {isMobileLayout && <div className="terminal-sheet-backdrop" onClick={() => setShowHistory(false)} />}
-              <aside className={`terminal-history-panel card${isMobileLayout ? " terminal-mobile-sheet terminal-mobile-sheet-history" : ""}`}>
-              <div className="terminal-section-title">
-                会话内容
-                <span style={{ marginLeft: 8, color: "var(--t3)", fontSize: "var(--fs-10)" }}>
-                  {activeIsLegacy ? "主终端快照" : current ? "会话快照" : ""}
-                </span>
-              </div>
-              {activeIsLegacy ? (
-                <LegacySnapshotPanel visible={activeIsLegacy} />
-              ) : current ? (
-                <LiveSnapshotPanel visible={!activeIsLegacy} sessionId={current.id} />
-              ) : (
-                <div className="terminal-empty" style={{ padding: 20 }}>选择左侧任一终端查看快照</div>
-              )}
-            </aside>
-            </>
-          )}
         </div>
       )}
     </div>

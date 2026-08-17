@@ -239,6 +239,15 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   // 系统状态卡。视觉那行是三档链（1 主脑直读 / 2 旁路 / 3 本地 CV），
   // 用 ?vt=1|2|3 切档来验徽标与文案——默认给 T3，因为它是最容易被误当成
   // "功能坏了"的那一档，也是最需要盯住渲染的。
+  // 使用手册对话框：文档目录 + 正文。
+  ["/help/docs", { docs: [
+    { name: "usage", title: "使用手册" },
+    { name: "config", title: "配置说明" },
+    { name: "troubleshooting", title: "故障排查" },
+  ] }],
+  ["/help/doc/", (url: string) => ({
+    markdown: `# ${url.split("/").pop()}\n\n这是验证台里的示例文档正文。\n\n- 一条\n- 两条\n`,
+  })],
   ["/settings/health", () => {
     const tier = Number(new URLSearchParams(location.search).get("vt") || 3) as 0 | 1 | 2 | 3;
     const label = { 1: "主脑直读", 2: "视觉旁路 · Qwen/Qwen3-VL-30B-A3B-Instruct",
