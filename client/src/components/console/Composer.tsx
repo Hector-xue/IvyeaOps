@@ -103,7 +103,6 @@ export default function Composer({
 }) {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [rows, setRows] = useState(1);
 
   // ── `/` 命令与 `@` 引用 ────────────────────────────────────────────────────
   // 触发规则：光标前最后一个 token 以 / 或 @ 开头，且它处在行首或空白之后。
@@ -197,14 +196,26 @@ export default function Composer({
     if (autoFocus) taRef.current?.focus();
   }, [autoFocus]);
 
-  // 自适应高度：最多长到 8 行，超过就内部滚动。
+  /**
+   * 自适应高度：最多长到 8 行，超过就内部滚动。
+   *
+   * 两个坑，都踩过：
+   * ① **量之前必须先把 min-height 摘掉。** scrollHeight 取的是 max(内容, 盒子内高)，
+   *    首屏那只输入框有 min-height:72px，量出来的永远是 72 起步 —— 而不是内容的高度。
+   * ② **不能再由这个高度反推 rows。** 上一版还顺手 `setRows(next/20)`：rows 抬高了
+   *    盒子的固有高度 → 下一次量到更大的 scrollHeight → rows 又变大……每敲一个字
+   *    输入框就长一截（实测 106→132→185px，最后顶到 200 上限）。高度这里已经显式
+   *    设了，rows 恒为 1 就够。
+   */
   useEffect(() => {
     const el = taRef.current;
     if (!el) return;
+    const keepMin = el.style.minHeight;
+    el.style.minHeight = "0px";
     el.style.height = "auto";
     const next = Math.min(el.scrollHeight, compact ? 160 : 200);
     el.style.height = next + "px";
-    setRows(Math.max(1, Math.round(next / 20)));
+    el.style.minHeight = keepMin;   // 交还给 CSS：真正的下限还是它说了算
   }, [value.text, compact]);
 
   const submit = () => {
@@ -347,7 +358,7 @@ export default function Composer({
         className="cc-input scroll-thin"
         value={value.text}
         placeholder={placeholder}
-        rows={rows}
+        rows={1}
         onChange={onInput}
         onKeyDown={onKeyDown}
         onPaste={onPaste}

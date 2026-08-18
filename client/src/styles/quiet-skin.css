@@ -96,7 +96,9 @@ html[data-skin="quiet"] .cc-thread-wrap::after {
   content: '';
   position: absolute;
   left: 0; right: 0; bottom: 0;
-  height: 30px;
+  /* 44 而不是 30：30px 的渐隐吃不掉一整行 16px/1.8 的正文，滚到底下的那行会被
+     齐刷刷切一刀，看着像"输入框压住了字"。要让它是**化开**的，就得比一行高。 */
+  height: 44px;
   pointer-events: none;
   background: linear-gradient(to bottom, transparent, var(--bg));
 }
@@ -286,11 +288,22 @@ html[data-skin="quiet"] .cc-bubble {
 
 /* 6.4 执行过程：去掉外框；展开后用**左侧一条发丝竖线**表达层级，而不是盒子。
        竖线是"这些属于上一行"的最轻量表达 —— 一根线，不是四根。 */
-html[data-skin="quiet"] .cs-timeline { background: transparent !important; }
+/* 边框要**真的去掉**而不只是透明：留着那 1px 会把整条活动行往里挤 1px，
+   于是它和下面的回答差一个像素对不齐（量出来是 472 : 471）。 */
+html[data-skin="quiet"] .cs-timeline { background: transparent !important; border-width: 0 !important; }
+/* 活动行左对齐到正文列。cs-live-main 的 11px 内边距是给 hover 底色留的呼吸，
+   框还在的时候看不出来；静谧把框去掉之后，它就变成一段没有来由的缩进 —— 上面的
+   提问、下面的回答都从 0 开始，只有这一行往里缩。用负 margin 把**字**拉回 0，
+   hover 底色照样有内边距。 */
+html[data-skin="quiet"] .cs-live-main {
+  padding-left: 8px;
+  margin-left: -8px;
+  border-radius: 8px;
+}
 html[data-skin="quiet"] .cs-log-wrap {
   border-top: none !important;
   border-left: 1px solid var(--b) !important;
-  margin-left: 11px;
+  margin-left: 6px;   /* 竖线走在图标那一列的正下方 */
   padding-left: 12px;
 }
 html[data-skin="quiet"] .cs-args {
@@ -315,20 +328,50 @@ html[data-skin="quiet"] .cc-stats { gap: 4px 18px; opacity: .8; }
    就是这么干净。标题再大一档撑住这块留白；场景入口从"带框胶囊"改成**无框
    文字行**（ChatGPT 的「撰写或编辑 / 搜索网页」就是这个形态）—— 一排五个
    描边胶囊等于把刚去掉的框又摆回首屏正中。 */
-html[data-skin="quiet"] .cc-hero { gap: 20px; }
+html[data-skin="quiet"] .cc-hero { gap: 22px; }
+html[data-skin="quiet"] .cc-hero-brand { gap: 16px; }
 html[data-skin="quiet"] .cc-hero-title { font-size: 32px; letter-spacing: -.015em; }
 html[data-skin="quiet"] .cc-hero-composer { max-width: 760px; }
+
+/* 首屏输入器：半径再大一档（会话态那只仍是 22px），并且**允许它有投影**。
+   静谧的通则是"表面不浮起"，这里是唯一的例外 —— 整屏就这一个等你动手的地方，
+   它得从光晕里浮出来，否则一块白底套一圈浅线，和背景是糊在一起的。 */
+html[data-skin="quiet"] .cc-hero-composer .cc-composer {
+  border-radius: 26px !important;
+  box-shadow: 0 10px 34px rgb(0 0 0 / .06), 0 2px 8px rgb(0 0 0 / .035);
+}
+html[data-skin="quiet"] .cc-hero-composer .cc-composer:focus-within {
+  /* 首屏这只框一进页面就是聚焦态，满饱和的绿边会盖过标题（会话态那只不受影响）。 */
+  border-color: color-mix(in srgb, var(--acc) 42%, var(--b)) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--acc) 11%, transparent),
+              0 12px 36px rgb(0 0 0 / .08);
+}
+
+/* 深色下光晕和投影都得换算：7% 的绿铺在近黑底上等于没有，黑影投在黑底上同理。
+   深色里"浮起来"靠的是更亮的一档面 + 更深的一层影。 */
+html[data-theme="quiet-dark"] .cc-hero {
+  background-image:
+    radial-gradient(46% 26% at 50% 55%, color-mix(in srgb, var(--acc) 12%, transparent) 0%, transparent 100%),
+    radial-gradient(27% 16% at 50% 54%, color-mix(in srgb, var(--acc) 8%, transparent) 0%, transparent 100%);
+}
+html[data-theme="quiet-dark"] .cc-hero-composer .cc-composer {
+  box-shadow: 0 12px 40px rgb(0 0 0 / .45);
+}
+
+/* 场景入口：无框文字行，居中排一行。
+   曾经是两列网格 —— 5 个入口会剩一个落单挂在左下角，版面就歪了；而条数本身
+   随权限变（sceneChips 按可见性算），任何写死的列数都会在某个账号下塌掉。 */
 html[data-skin="quiet"] .cc-scenes {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(190px, 1fr));
-  gap: 2px 28px;
-  max-width: 560px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 6px;
+  max-width: 720px;
 }
 html[data-skin="quiet"] .cc-scene {
-  justify-content: flex-start;
-  gap: 9px;
-  padding: 9px 12px;
-  border-radius: 10px !important;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px !important;
   background: transparent !important;
   color: var(--t2) !important;
 }
@@ -338,7 +381,7 @@ html[data-skin="quiet"] .cc-scene:hover {
   transform: none !important;
 }
 @media (max-width: 640px) {
-  html[data-skin="quiet"] .cc-scenes { grid-template-columns: 1fr; max-width: 100%; }
+  html[data-skin="quiet"] .cc-scenes { max-width: 100%; }
 }
 
 
@@ -360,6 +403,12 @@ html[data-skin="quiet"] .md-tr { border-bottom: 1px solid var(--b) !important; }
 html[data-skin="quiet"] .md-bullet { color: var(--t3) !important; }
 html[data-skin="quiet"] .md-quote { border-left-color: var(--b2) !important; font-style: normal; }
 html[data-skin="quiet"] .md-hr { border-top-color: var(--b) !important; }
+/* 段间距。基线是 6px 的 .md-gap —— 在 16px/1.8 的正文里，段与段之间几乎贴着，
+   一屏下来就是一堵字墙（用户的原话是"凌乱"）。对比 ChatGPT：它的段距接近一个
+   整行。列表项之间同理松一档。 */
+html[data-skin="quiet"] .md-gap { height: 15px; }
+html[data-skin="quiet"] .md-li { line-height: 1.8; margin: 3px 0; }
+html[data-skin="quiet"] .md-quote { margin: 10px 0; padding: 2px 0 2px 14px; }
 
 
 /* ── ⑧ 侧栏项：选中态由左侧色条改为整块淡底 ──────────────────────────────

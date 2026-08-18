@@ -372,6 +372,42 @@ export function installMockApi(): void {
     { status: 200, headers: { "content-type": "text/event-stream" } },
   );
 
+  /**
+   * 一段**会跑一阵子**的 agent 流。运行态（活动行在转、思考流一句句冒出来）此前在
+   * 验证台里根本复现不出来 —— 而任务台最容易被改坏的恰恰是这一段。
+   * 节奏按真实一轮铺：先思考 ~6s，再一步工具，最后才吐正文。
+   */
+  const agentStream = () => {
+    const enc = new TextEncoder();
+    const beat = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    return new Response(new ReadableStream({
+      async start(ctrl) {
+        const send = (event: string, data: unknown) =>
+          ctrl.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        send("start", { session_id: "s-live", turn_id: "t-live", model: "deepseek-v4-pro" });
+        const think = [
+          "用户问的是广告花费为什么涨了。",
+          "先确认口径：是同比还是环比，",
+          "再看是点击涨了还是单次点击成本涨了。",
+          "手里没有报表，得先查数据源。",
+        ];
+        for (const t of think) { await beat(1500); send("reasoning", { text: t }); }
+        await beat(900);
+        send("step", { type: "step", id: "s1", seq: 1, phase: "tool", name: "读取报表",
+                       tool: "read_report", status: "running" });
+        await beat(2200);
+        send("step", { type: "step", id: "s1", seq: 1, phase: "tool", name: "读取报表",
+                       tool: "read_report", status: "ok", ms: 2200 });
+        await beat(600);
+        for (const t of ["先说结论：", "这一周花费涨了 34%，", "其中 28% 来自单次点击成本上升。"]) {
+          await beat(500); send("token", { text: t });
+        }
+        send("final", { session_id: "s-live", turn_id: "t-live" });
+        ctrl.close();
+      },
+    }), { status: 200, headers: { "content-type": "text/event-stream" } });
+  };
+
   // MainLayout 的健康检查走的是裸 fetch，不经过 axios 实例。
   const realFetch = window.fetch.bind(window);
   window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
@@ -379,8 +415,9 @@ export function installMockApi(): void {
     if (url.startsWith("/api/assistant/chat")) {
       return Promise.resolve(sse(["兜底通道", "答的这一段。"]));
     }
-    if (agentDown && url.startsWith("/api/ivyea-agent/chat/stream")) {
-      return Promise.resolve(new Response("agent 未就绪", { status: 503 }));
+    if (url.startsWith("/api/ivyea-agent/chat/stream")) {
+      if (agentDown) return Promise.resolve(new Response("agent 未就绪", { status: 503 }));
+      return Promise.resolve(agentStream());
     }
     if (url.startsWith("/api/")) {
       return Promise.resolve(new Response(JSON.stringify(match(url.slice(4))), {

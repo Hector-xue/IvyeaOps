@@ -436,7 +436,12 @@ body::after{
  * 会话不再被板块列表挤下去。
  */
 .sb-nav-console{display:flex;flex-direction:column;overflow:hidden;padding:6px 0 0}
-.sb-nav-fixed{flex-shrink:0}
+/* **必须是 flex 列。** 下面 button.ni 用的是 `width:auto + align-self:stretch`
+   （见那条注释：不能用 100%，.ni 带左右外边距会撑出容器）—— 而 stretch 只在
+   flex 容器里成立。这里原来是块级容器，于是 Chrome 按"按钮盒"给 <button> 量
+   fit-content：「新建任务」「全部工具」**整行只有文字那一小块能点**，同类的 <a>
+   却是铺满的；.ni-count 的 margin-left:auto 也推不动，数量就贴在标题后面。 */
+.sb-nav-fixed{flex-shrink:0;display:flex;flex-direction:column;align-items:stretch}
 /* min-height:0 是必须的：flex 子项默认 min-height:auto，不写的话它会被内容撑高，
    overflow 永远不生效，三段式就退化回一条长滚动。 */
 .sb-nav-flex{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column}
@@ -461,6 +466,7 @@ body::after{
   display:inline-flex;align-items:center;justify-content:center}
 .ni .ic svg{display:block}
 .ni-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+
 .nb{margin-left:auto;font-size:var(--fs-9);padding:1px 5px;background:color-mix(in srgb, var(--acc) 12%, transparent);color:var(--acc);border-radius:8px}
 .dot{width:5px;height:5px;border-radius:50%;background:var(--acc);flex-shrink:0;animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
@@ -3037,15 +3043,44 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
    其余一律往后退**。原来标题 26px、输入框 720px、场景芯片和输入框几乎等重，
    三样东西在抢同一个焦点。现在拉开：标题 34px，输入框 780px 并整体上移一点
    （视觉重心略高于几何中心才不显得"沉在底部"），场景芯片退成弱提示。 */
+/* 首屏是每天都要经过的地方，它只需要说清一件事：**从这里开始**。所以版面按
+   「一团光 → 一行字 → 一个大输入框 → 一排轻入口」四层收拢，其余全部退到背景里。
+   光晕用 background-image 而不是绝对定位的伪元素 —— .cc-hero 自己是滚动容器，
+   任何超出它宽度的子元素都会立刻长出一条横向滚动条。 */
 .cc-hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:24px 16px 15vh;gap:20px;overflow-y:auto}
+  padding:24px 16px 11vh;gap:22px;overflow-y:auto;
+  background-repeat:no-repeat;
+  /* 光晕**只罩输入框那一带**，不能铺到标题行：站标是一张不透明白底的 PNG，
+     一旦它下面的页面被染上一点色，那块白底就会现出一个方块。 */
+  background-image:
+    radial-gradient(46% 26% at 50% 55%, color-mix(in srgb,var(--acc) 7%,transparent) 0%, transparent 100%),
+    radial-gradient(27% 16% at 50% 54%, color-mix(in srgb,var(--acc) 5%,transparent) 0%, transparent 100%)}
 .cc-hero-title{font-size:34px;font-weight:650;color:var(--t);margin:0;letter-spacing:-.02em;
   line-height:1.35}
 .cc-hero-sub{font-size:var(--fs-12);color:var(--t3);margin:0;text-align:center;max-width:520px;line-height:1.7}
-.cc-hero-composer{width:100%;max-width:780px;margin-top:2px}
-.cc-scenes{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:660px;
-  margin-top:4px;opacity:.9}
-.cc-scene{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--b);
+.cc-hero-composer{width:100%;max-width:760px;margin-top:2px}
+
+/* 首屏输入器 —— 会话态那只贴底的窄条不适合当主角。这里把它放大成"一块地方"：
+   三行左右的起步高度、更大的圆角、更厚的留白，加一层比页面高一档的投影，
+   让它从光晕里浮起来。会话态（.compact）完全不受影响。 */
+.cc-hero-composer .cc-composer{padding:16px 16px 12px;border-radius:24px;
+  box-shadow:0 10px 34px rgb(0 0 0 / .07), 0 2px 8px rgb(0 0 0 / .04)}
+/* 首屏这只框是**默认聚焦**的（autoFocus），所以"聚焦态"就是它每天的样子 ——
+   拿满饱和度的强调色描一圈 24px 的大边会盖过标题。改成淡一档的边 + 一圈更淡的
+   光晕：焦点仍然看得出来，但它不再是整屏最响的东西。 */
+.cc-hero-composer .cc-composer:focus-within{
+  border-color:color-mix(in srgb,var(--acc) 45%,var(--b));
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--acc) 11%,transparent), 0 12px 36px rgb(0 0 0 / .09)}
+.cc-hero-composer .cc-input{min-height:72px}
+.cc-hero-composer .cc-bar{margin-top:10px;gap:7px}
+.cc-hero-composer .cc-send{width:38px;height:38px;font-size:var(--fs-13)}
+
+/* 场景入口：一排可点的文字，居中排一行。原来是两列网格，5 个入口必然剩下一个
+   落单挂在左下角 —— 版面立刻歪掉；数量还会随权限变（这张表是按可见性算的）。
+   居中换行对任何条数都成立。 */
+.cc-scenes{display:flex;flex-wrap:wrap;gap:6px 10px;justify-content:center;max-width:720px;
+  margin-top:2px}
+.cc-scene{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border:1px solid var(--b);
   border-radius:999px;background:var(--bg1);color:var(--t2);font-family:var(--font);font-size:var(--fs-11);
   cursor:pointer;transition:color var(--dur) var(--ease),border-color var(--dur) var(--ease),
   background-color var(--dur) var(--ease),transform var(--dur) var(--ease)}
@@ -3092,8 +3127,17 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
   cursor:pointer;text-align:left;overflow:hidden;
   transition:color var(--dur) var(--ease),background-color var(--dur) var(--ease)}
 .cs-live-main:hover{color:var(--t2);background:var(--bg2)}
-.cs-live-icon{color:var(--acc);flex-shrink:0;display:inline-block}
-.cs-live-icon.spinning{animation:cs-spin 1.1s linear infinite}
+/* 活动行前面**只有一枚图标**。原来是"绿色 ⟳ 在转 + 紧跟一枚 ✻/工具图标"两枚
+   并排，转的那枚还和它描述的事情无关。现在跑的时候转的就是当前这件事自己的
+   图标（思考是紫色 ✻），结束了才变成 ✓。宽度钉死，免得 ✻↔✓ 换字形时整行左右跳。 */
+.cs-live-icon{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
+  width:14px;height:14px;color:var(--t3);font-style:normal;line-height:1}
+.cs-live-icon.cs-live-done{color:var(--acc)}
+.cs-live-icon.cs-live-think{color:var(--purple)}
+.cs-live-icon.spinning{animation:cs-spin 2.4s linear infinite}
+/* 工具图标多是 emoji，转起来很怪 —— 它们改成呼吸。 */
+.cs-live-icon.breathing{animation:cs-breathe 1.6s var(--ease) infinite}
+@keyframes cs-breathe{0%,100%{opacity:.45}50%{opacity:1}}
 /* 新一行从下方滑入 = 上一行被"顶掉"。key 变了 React 会重挂载，动画自然重放。 */
 .cs-live-text{display:flex;align-items:center;gap:6px;min-width:0;flex:1;
   animation:cs-live-in .18s var(--ease)}
@@ -3159,7 +3203,7 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 /* 减少动效偏好：位移动画全关。这条流是持续在动的，晕动症用户尤其受不了。 */
 @media (prefers-reduced-motion: reduce){
   .cs-live-text{animation:none}
-  .cs-live-icon.spinning{animation:none}
+  .cs-live-icon.spinning,.cs-live-icon.breathing{animation:none}
 }
 
 /* 「加载更早的对话」—— 长会话按轮分页，顶部的入口 */
@@ -3171,8 +3215,13 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .cc-earlier button:disabled{cursor:default;opacity:.6}
 
 /* ── 会话统计条（钉在输入框下方）──────────────────────────────────────────── */
-.cc-stats{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:6px 2px 0;
+/* 统计条跟着输入框走：输入框是居中的一栏，它就该居中，而不是从左边缘起排。 */
+.cc-stats{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
+  gap:4px 12px;padding:7px 2px 0;
   font-size:var(--fs-10);color:var(--t3);font-variant-numeric:tabular-nums}
+.cc-stats-toggle{display:inline-flex;align-items:center;gap:4px;padding:0 2px;border:none;
+  background:transparent;color:var(--t3);font-family:var(--font);font-size:inherit;cursor:pointer}
+.cc-stats-toggle:hover{color:var(--t2)}
 .cc-stat{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;cursor:default}
 .cc-stat + .cc-stat{padding-left:12px;border-left:1px solid var(--b)}
 .cc-stat-k{color:var(--t3);opacity:.75}
@@ -3376,8 +3425,11 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .sb-ws-del{opacity:0;font-size:var(--fs-9);color:var(--t3);flex-shrink:0;padding:0 2px;transition:opacity var(--dur) var(--ease)}
 .sb-ws-title:hover .sb-ws-del{opacity:1}
 .sb-ws-del:hover{color:var(--red)}
-.sb-sess{display:flex;align-items:center;gap:6px;padding:4px 12px 4px 24px;cursor:pointer;
-  color:var(--t2);font-size:var(--fs-105);border-left:2px solid transparent;
+/* 会话行。标题走**正文色**而不是次级色 —— 这是一列"要读的东西"，不是元信息；
+   对比 ChatGPT 的会话列表，它的条目就是近黑。行高也松一档（4→6px）：一屏三十
+   条挤在 29px 行距里，扫起来是一片糊。 */
+.sb-sess{display:flex;align-items:center;gap:6px;padding:6px 12px 6px 24px;cursor:pointer;
+  color:var(--t);font-size:var(--fs-105);border-left:2px solid transparent;
   transition:color var(--dur) var(--ease),background-color var(--dur) var(--ease)}
 .sb-sess:hover{color:var(--t);background:var(--bg2)}
 .sb-sess.active{color:var(--acc);border-left-color:var(--acc);
@@ -3396,7 +3448,6 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .sb-tools-tree{padding:2px 0 6px}
 .sb-tools-tree .ni{padding-left:26px;font-size:var(--fs-11)}
 .sb-tools-group{padding:8px 18px 3px;font-size:var(--fs-9);color:var(--t3);letter-spacing:.08em}
-.ni-more{color:var(--t3);font-size:var(--fs-10);padding-left:26px}
 /* 顶栏的终端选择器（汉堡下拉）。列表本身一天点几次，不该常年占一整列。 */
 .term-picker{position:relative;display:inline-flex}
 .term-picker-btn{white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
@@ -3819,26 +3870,30 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
    使用频率是"一个月一次"，却天天占着视野。这一块把它们全收进来：账户行只
    露两行字（名字 / 版本·用量）+ 一个齿轮，其余全在菜单里。
    ════════════════════════════════════════════════════════════════════════════ */
-.sb-acct-wrap{position:relative;padding:8px;flex-shrink:0}
-.sb-acct{display:flex;align-items:center;gap:9px;width:100%;padding:7px 8px;
+/* 账户区。原来外 8px + 内 7px + 26px 头像 + 两行文字 ≈ 58px，在侧栏最底下顶出
+   很大一块，比 ChatGPT 同位置高出一截。压到 ≈46px：内外边距各收一档、头像 26→22。 */
+.sb-acct-wrap{position:relative;padding:4px 8px 6px;flex-shrink:0}
+.sb-acct{display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px;
   border:1px solid transparent;border-radius:8px;background:transparent;
   color:var(--t2);font-family:var(--font);cursor:pointer;text-align:left;
   transition:background-color var(--dur,.14s) var(--ease,ease),border-color var(--dur,.14s) var(--ease,ease)}
 .sb-acct:hover,.sb-acct.open{background:var(--bg2);color:var(--t)}
 /* 头像位装的是 Ivyea logo（见 AccountMenu 里的说明：这个位置点不出上传头像，
    就不该摆一个看起来能换、其实换不了的首字母占位符）。 */
-.sb-acct-avatar{position:relative;flex-shrink:0;width:26px;height:26px;border-radius:8px;
+.sb-acct-avatar{position:relative;flex-shrink:0;width:22px;height:22px;border-radius:7px;
   display:inline-flex;align-items:center;justify-content:center;overflow:visible}
-.sb-acct-avatar img{width:26px;height:26px;border-radius:8px;object-fit:contain;display:block}
+.sb-acct-avatar img{width:22px;height:22px;border-radius:7px;object-fit:contain;display:block}
 /* 有新版本时头像挂红点 —— 用户不需要认识这个点，就知道该点进去看看。 */
 .sb-acct-dot{position:absolute;top:-1px;right:-1px;width:8px;height:8px;border-radius:50%;
   background:var(--red);box-shadow:0 0 0 2px var(--bg1)}
 .sb-acct-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+/* 两行文字继承的是正文行高（≈1.6），两行加起来 45px —— 账户区那点高度大半是它撑的。
+   这一块是"看一眼就知道是谁 + 版本几"，行高收到 1.25 足够。 */
 .sb-acct-name{font-size:var(--fs-11);color:var(--t);white-space:nowrap;overflow:hidden;
-  text-overflow:ellipsis}
+  text-overflow:ellipsis;line-height:1.25}
 /* 副标题就是版本号的落点：顺眼扫到，不占一个独立控件位。 */
 .sb-acct-sub{font-size:var(--fs-9);color:var(--t3);white-space:nowrap;overflow:hidden;
-  text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+  text-overflow:ellipsis;font-variant-numeric:tabular-nums;line-height:1.25}
 .sb-acct-cost{font-variant-numeric:tabular-nums}
 .sb-acct-gear{font-style:normal;flex-shrink:0;color:var(--t3);display:inline-flex;align-items:center}
 .sb-acct:hover .sb-acct-gear{color:var(--t2)}

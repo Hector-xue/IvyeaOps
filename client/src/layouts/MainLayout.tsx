@@ -532,9 +532,6 @@ export default function MainLayout() {
                             {g.items.map(renderNavItem)}
                           </div>
                         ))}
-                        <button className="ni ni-more" onClick={() => setToolsOverlay(true)}>
-                          <span className="ni-label">在浮层里打开　⌘K</span>
-                        </button>
                       </div>
                     )}
                   </>

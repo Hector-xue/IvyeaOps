@@ -123,9 +123,21 @@ export default function SessionRail({
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    const h = () => void load();
+    let retry = 0;
+    const h = (e: Event) => {
+      const want = (e as CustomEvent<{ expectId?: string }>).detail?.expectId;
+      void load().then(() => {
+        // 新会话是 agent 侧落库的，「开始」事件比落库早一拍：这一次取回来可能还没有它。
+        // 补取一次（只补一次，避免开着一个失败的会话在那儿空转）。
+        if (!want) return;
+        window.clearTimeout(retry);
+        retry = window.setTimeout(() => {
+          setRows((prev) => { if (!prev.some((r) => r.id === want)) void load(); return prev; });
+        }, 1500);
+      });
+    };
     window.addEventListener(CONSOLE_SESSIONS_CHANGED, h);
-    return () => window.removeEventListener(CONSOLE_SESSIONS_CHANGED, h);
+    return () => { window.clearTimeout(retry); window.removeEventListener(CONSOLE_SESSIONS_CHANGED, h); };
   }, [load]);
 
   useEffect(() => {

@@ -76,6 +76,33 @@ if (probe) {
   }, 2500);
 }
 
+// ?overflow=1 —— 找出**谁把页面撑宽了**。窄屏下出现横向滚动条时，肉眼只能看到
+// 最外层被撑开，看不出源头在哪一层。这里从 body 往下走，报告所有右边界越过视口
+// 的元素，并带上它自己的 min-width / width —— 撑宽的那一层通常就是链条里
+// **最深的那个**（再往里的孩子只是跟着被拉宽）。
+if (q.get("overflow") === "1") {
+  setTimeout(() => {
+    const vw = document.documentElement.clientWidth;
+    const rows: string[] = [];
+    document.querySelectorAll<HTMLElement>("body *").forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.right <= vw + 0.5) return;
+      const cs = getComputedStyle(el);
+      if (cs.position === "fixed" || cs.position === "absolute") return;  // 浮层不算撑宽
+      const name = el.tagName.toLowerCase()
+        + (el.className && typeof el.className === "string" ? "." + el.className.trim().split(/\s+/).join(".") : "");
+      rows.push(
+        `${name.slice(0, 60).padEnd(62)} right=${r.right.toFixed(0)} w=${r.width.toFixed(0)}` +
+        ` min-w=${cs.minWidth} flex=${cs.flex} overflow-x=${cs.overflowX}`,
+      );
+    });
+    const pre = document.createElement("pre");
+    pre.style.cssText = "position:fixed;left:-9999px";
+    pre.textContent = `OVERFLOW_BEGIN\nviewport=${vw}\n` + rows.join("\n") + "\nOVERFLOW_END";
+    document.body.appendChild(pre);
+  }, 2500);
+}
+
 // 真实入口。放在最后 import：它内部会立刻跑主题启动逻辑并 render。
 import("../src/main");
 

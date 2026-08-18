@@ -57,6 +57,10 @@ def test_self_check_returns_matrix(monkeypatch):
 
 
 def test_upgrade_agent_prefers_self_update_and_restarts(monkeypatch):
+    # **必须钉死**：upgrade_agent 会去 GitHub API 取最新 release tag，取不到就直接
+    # ok=False 中止。不钉的话这条用例的成败取决于跑测试时的网络和 API 限流 ——
+    # 实测 macOS runner 上被限流，同一个 PR 里 ubuntu/windows 全过、macOS 两条齐挂。
+    monkeypatch.setattr(svc, "latest_agent_version", lambda: "v1.15.0")
     monkeypatch.setattr(svc, "_find_ivyea_cli", lambda: "/root/.local/bin/ivyea")
     monkeypatch.setattr(svc, "_venv_python", lambda cli: "/usr/bin/python")
     versions = iter(["1.0.23", "1.0.24"])
@@ -78,6 +82,7 @@ def test_upgrade_agent_prefers_self_update_and_restarts(monkeypatch):
 
 
 def test_upgrade_agent_falls_back_to_pip_when_self_update_unavailable(monkeypatch):
+    monkeypatch.setattr(svc, "latest_agent_version", lambda: "v1.15.0")   # 同上，别出网
     monkeypatch.setattr(svc, "_find_ivyea_cli", lambda: "/root/.local/bin/ivyea")
     monkeypatch.setattr(svc, "_venv_python", lambda cli: "/usr/bin/python")
     versions = iter(["1.0.23", "1.0.24"])
