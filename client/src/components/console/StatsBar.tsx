@@ -12,8 +12,12 @@
  * 这里会排出「用时 — 首字 — — 缓存命中 — 输入 — · 输出 —」六个破折号钉在输入框
  * 底下——那是一整行噪声，还把真正有数的第一项（几轮几步）淹掉了。所以：**没有值的
  * 项直接不出现**，一旦模型服务商开始回报，它自己就长出来。
+ *
+ * **全部细账默认就摊开，而且永远只占一行。** 以前默认只露两项、其余藏在「细账」
+ * 按钮后面 —— 一轮跑完想知道钱花在哪还得再点一下，而那个按钮本身也占着位置。
+ * 现在整行由 DockMeta 统一按宽度缩字号（见那个组件），装不下就把字缩小，
+ * 绝不换行 —— 换行会把输入框整块往上顶。
  */
-import { useState } from "react";
 import type { TurnStats } from "../../lib/turnStats";
 
 function fmtTokens(n: number): string {
@@ -33,11 +37,6 @@ function fmtDuration(ms: number): string {
 }
 
 export default function StatsBar({ stats }: { stats: TurnStats }) {
-  /*
-   * 默认只露两项。八项数字一字排开钉在输入框底下，一行放不下会折成两行，
-   * 那是输入区最不该有的东西 —— 它是诊断，不是控件。想看细账点一下就全出来。
-   */
-  const [open, setOpen] = useState(false);
   if (!stats.turns) return null;
 
   const items: { label: string; value: string; title: string }[] = [];
@@ -70,32 +69,21 @@ export default function StatsBar({ stats }: { stats: TurnStats }) {
     label: "缓存命中", value: `${Math.round(stats.cacheHitRate * 100)}%`,
     title: "命中提示词缓存的输入 token 占比。由模型服务商回报；不回报这项的模型按 0 计",
   });
+  // 单位「tok」只写在提示里：这一项本来就是最长的一条，两个 tok 占掉的宽度
+  // 会逼着整行再缩一档字号，而没有人会把这两个数误读成别的东西。
   if (stats.promptTokens !== undefined) items.push({
-    label: "", value: `输入 ${fmtTokens(stats.promptTokens)} tok · 输出 ${fmtTokens(stats.completionTokens || 0)} tok`,
-    title: "本会话累计 token 用量（由模型服务商回报）",
+    label: "", value: `输入 ${fmtTokens(stats.promptTokens)} · 输出 ${fmtTokens(stats.completionTokens || 0)}`,
+    title: "本会话累计 token 用量：输入 / 输出（由模型服务商回报）",
   });
-
-  const shown = open ? items : items.slice(0, 2);
 
   return (
     <div className="cc-stats" role="status" aria-label="会话统计">
-      {shown.map((it, i) => (
+      {items.map((it, i) => (
         <span className="cc-stat" key={i} title={it.title}>
           {it.label && <span className="cc-stat-k">{it.label}</span>}
           <span className="cc-stat-v">{it.value}</span>
         </span>
       ))}
-      {items.length > 2 && (
-        <button
-          type="button"
-          className="cc-stats-toggle"
-          onClick={() => setOpen((v) => !v)}
-          title={open ? "收起细账" : "展开这一会话的耗时与用量细账"}
-        >
-          {open ? "收起" : "细账"}
-          <span>{open ? "⌃" : "⌄"}</span>
-        </button>
-      )}
     </div>
   );
 }

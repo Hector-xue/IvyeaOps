@@ -3253,16 +3253,15 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 
 /* ── 会话统计条（钉在输入框下方）──────────────────────────────────────────── */
 /* 统计条跟着输入框走：输入框是居中的一栏，它就该居中，而不是从左边缘起排。 */
-/* 统计条比芯片再小一档（.76em：quiet 12.2px / 经典 9.9px）。它是**诊断**，
-   不是控件 —— 和芯片一样大的话，输入框底下就成了两行同等重量的字。 */
-.cc-stats{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
-  gap:4px 12px;padding:0;
-  font-size:.76em;color:var(--t3);font-variant-numeric:tabular-nums}
-.cc-stats-toggle{display:inline-flex;align-items:center;gap:4px;padding:0 2px;border:none;
-  background:transparent;color:var(--t3);font-family:var(--font);font-size:inherit;cursor:pointer}
-.cc-stats-toggle:hover{color:var(--t2)}
+/* 统计条比芯片再小一档，字号由外面那层 DockMeta 按宽度定（--meta-fs，起点 .76em：
+   quiet 12.2px / 经典 9.9px）。它是**诊断**，不是控件 —— 和芯片一样大的话，
+   输入框底下就成了两行同等重量的字。
+   **一行到底**：nowrap + 每项 nowrap，装不下由 DockMeta 缩字号，不靠折行解决。 */
+.cc-stats{display:flex;flex-wrap:nowrap;align-items:center;justify-content:center;
+  gap:0 10px;padding:0;min-width:0;
+  font-size:inherit;color:var(--t3);font-variant-numeric:tabular-nums}
 .cc-stat{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;cursor:default}
-.cc-stat + .cc-stat{padding-left:12px;border-left:1px solid var(--b)}
+.cc-stat + .cc-stat{padding-left:10px;border-left:1px solid var(--b)}
 .cc-stat-k{color:var(--t3);opacity:.75}
 .cc-stat-v{color:var(--t2)}
 
@@ -3368,14 +3367,23 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 /* ── 上下文进度条 ─────────────────────────────────────────────────────────
  * 钉在输入框下面那一行，和会话统计条并排。默认只有一条 44px 的细条 + 一个百分比，
  * 点开才是细账 —— 它是"要用的时候才看"的东西，不该常驻占一行字。 */
-/* 进度条 + 统计条：**整行居中**，宽度随内容长短自适应（flex 居中天然如此）。
-   输入框是居中的一栏，它底下这行从左边缘起排就永远和输入框对不齐。 */
-.cc-dock-meta{display:flex;align-items:center;justify-content:center;gap:14px;
-  flex-wrap:wrap;margin-top:8px}
+/* 进度条 + 统计条：**整行居中、永不换行**，宽度随内容长短自适应（flex 居中天然如此）。
+   输入框是居中的一栏，它底下这行从左边缘起排就永远和输入框对不齐。
+   字号是 JS 量出来的（components/console/DockMeta）：装不下就一档档缩，
+   折行会把输入框整块往上顶 —— 那是这一行最不该干的事。 */
+.cc-dock-meta{display:flex;align-items:center;justify-content:flex-start;gap:12px;
+  flex-wrap:nowrap;min-width:0;overflow-x:auto;overflow-y:hidden;white-space:nowrap;
+  margin-top:8px;font-size:var(--meta-fs,.76em);scrollbar-width:none}
+.cc-dock-meta::-webkit-scrollbar{height:0}
+/* 居中用两侧 auto 外边距，而不是 justify-content:center。
+   两者在装得下时效果一样，但**溢出时不一样**：居中的 flex 会把开头那一截推到
+   滚动区外面、永远够不着（手机竖屏 + 七项统计就会到这一步），auto 外边距不会。 */
+.cc-dock-meta > :first-child{margin-left:auto}
+.cc-dock-meta > :last-child{margin-right:auto}
 .cc-ctx{position:relative;display:inline-flex;align-items:center;flex:0 0 auto}
-.cc-ctx-trigger{display:inline-flex;align-items:center;gap:7px;padding:2px 6px;border:none;border-radius:8px;
-  background:transparent;cursor:pointer;font-family:var(--font);color:var(--t3);font-size:.76em;
-  transition:background-color var(--dur) var(--ease),color var(--dur) var(--ease)}
+.cc-ctx-trigger{display:inline-flex;align-items:center;gap:6px;padding:2px 6px;border:none;border-radius:8px;
+  background:transparent;cursor:pointer;font-family:var(--font);color:var(--t3);font-size:inherit;
+  white-space:nowrap;transition:background-color var(--dur) var(--ease),color var(--dur) var(--ease)}
 .cc-ctx-trigger:hover{background:var(--bg2);color:var(--t2)}
 .cc-ctx-track{display:flex;width:46px;height:5px;border-radius:3px;background:var(--bg3);overflow:hidden}
 .cc-ctx-track.big{width:100%;height:7px;border-radius:4px;margin:2px 0 10px}
@@ -3387,13 +3395,20 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 /* 快满了就换个颜色说话 —— 到这一步用户是需要行动的（新开一轮 / 压缩） */
 .cc-ctx.level-warn .cc-ctx-num{color:var(--amber)}
 .cc-ctx.level-crit .cc-ctx-num{color:var(--red);font-weight:600}
-.cc-ctx-pop{position:absolute;bottom:calc(100% + 8px);left:0;z-index:60;width:270px;padding:12px 13px 10px;
+/* 细账浮层：字号用回全局刻度（它是独立面板，跟着上面那行缩到 9px 就没法读了），
+   位置由 JS 量出来（portal 到 body）—— 留在那一行里会被它的 overflow 裁掉。
+   z-index 与 SheetSelect 的浮层同档：浮层压住一切，反正一点外面就消失。 */
+.cc-ctx-pop{font-size:var(--fs-11);position:fixed;z-index:10050;width:300px;padding:12px 14px 10px;
   border:1px solid var(--b);border-radius:14px;background:var(--bg1);
   box-shadow:0 14px 40px rgb(0 0 0 / .16), 0 2px 8px rgb(0 0 0 / .06);
   animation:mkt-dd-in .14s ease-out}
-.cc-ctx-pop-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
-.cc-ctx-pop-title{font-size:var(--fs-115);color:var(--t);font-weight:600}
-.cc-ctx-pop-total{font-size:var(--fs-105);color:var(--t3);font-variant-numeric:tabular-nums}
+/* 标题行**不许换行**：字号刻度在「静谧」这类主题里被放大过，标题一折行，
+   下面的条形图和列表跟着往下走，整个浮层看起来是散的。 */
+.cc-ctx-pop-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  flex-wrap:nowrap;white-space:nowrap}
+.cc-ctx-pop-title{font-size:var(--fs-115);color:var(--t);font-weight:600;white-space:nowrap}
+.cc-ctx-pop-total{font-size:var(--fs-105);color:var(--t3);font-variant-numeric:tabular-nums;
+  white-space:nowrap}
 .cc-ctx-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
 .cc-ctx-list li{display:flex;align-items:center;gap:8px;font-size:var(--fs-11);color:var(--t2)}
 .cc-ctx-dot{width:9px;height:9px;border-radius:3px;flex:0 0 auto;font-style:normal}

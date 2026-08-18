@@ -31,6 +31,7 @@ import { aggregateStats, type TurnMetrics } from "../../lib/turnStats";
 import StepTimeline, { type MatchedSkill } from "../../components/console/StepTimeline";
 import StatsBar from "../../components/console/StatsBar";
 import ContextMeter from "../../components/console/ContextMeter";
+import DockMeta from "../../components/console/DockMeta";
 import ApprovalCard from "../../components/console/ApprovalCard";
 import Composer, { approvalPayload, type ApprovalMode, type ComposerRef, type ComposerValue } from "../../components/console/Composer";
 import ArtifactRail, { type RailApproval, type RailTodo } from "../../components/console/ArtifactRail";
@@ -1054,11 +1055,12 @@ function ConsoleInner() {
             <div className="cc-dock">
               {composerNode(true)}
               {/* 进度条和统计条同一行：它们回答的是同一类问题（这轮花了多少），
-                  分两行钉在输入框底下会把对话区又压掉一截。 */}
-              <div className="cc-dock-meta">
+                  分两行钉在输入框底下会把对话区又压掉一截。DockMeta 保证这一行
+                  **永远不换行**（装不下就缩字号）—— 折行会把输入框整块往上顶。 */}
+              <DockMeta>
                 <ContextMeter usage={ctxUsage} />
                 <StatsBar stats={sessionStats} />
-              </div>
+              </DockMeta>
             </div>
           </>
         )}

@@ -11,7 +11,8 @@
  *    看着精确、来路不明的数诚实。
  * ③ 细账要能回答"该动哪里"：系统提示词 / 工具 / 对话消息三档分开列。
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import type { IvyeaContextUsage } from "../../api/ivyeaAgent";
 
 /** 三档的配色。和条形图里的分段一一对应，细账靠这个点认。 */
@@ -30,13 +31,43 @@ export function fmtTok(n: number): string {
 
 export default function ContextMeter({ usage }: { usage?: IvyeaContextUsage | null }) {
   const [open, setOpen] = useState(false);
+  const [popStyle, setPopStyle] = useState<CSSProperties>({});
   const wrapRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * 细账浮层 **portal 到 body**，而不是留在这一行里。
+   * 那一行是 `overflow:hidden`（它要保证自己永远只有一行、装不下就缩字号），
+   * 留在里面的绝对定位浮层会被整块裁掉 —— 点了像没反应。
+   * 和 SheetSelect 同一条路数：量触发器的位置，用 fixed 摆上去。
+   */
+  const place = useCallback(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const width = 300;
+    const left = Math.max(8, Math.min(Math.round(r.left), window.innerWidth - width - 8));
+    setPopStyle({ position: "fixed", left, bottom: Math.round(window.innerHeight - r.top + 8), width });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    place();
+    const onMove = () => place();
+    window.addEventListener("scroll", onMove, true);
+    window.addEventListener("resize", onMove);
+    return () => {
+      window.removeEventListener("scroll", onMove, true);
+      window.removeEventListener("resize", onMove);
+    };
+  }, [open, place]);
 
   // 点外面收起。细账是个浮层，不给出路的话它会一直挡着底下的统计条。
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (!wrapRef.current?.contains(t) && !popRef.current?.contains(t)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("mousedown", onDown);
@@ -80,8 +111,9 @@ export default function ContextMeter({ usage }: { usage?: IvyeaContextUsage | nu
         <span className="cc-ctx-num">{pct < 1 ? "<1" : pct.toFixed(pct < 10 ? 1 : 0)}%</span>
       </button>
 
-      {open && (
-        <div className="cc-ctx-pop" role="dialog" aria-label="上下文用量细账">
+      {open && createPortal(
+        <div className="cc-ctx-pop" role="dialog" aria-label="上下文用量细账"
+             ref={popRef} style={popStyle}>
           <div className="cc-ctx-pop-head">
             <span className="cc-ctx-pop-title">上下文已用 {pct < 1 ? "<1" : pct.toFixed(pct < 10 ? 1 : 0)}%</span>
             <span className="cc-ctx-pop-total">~{fmtTok(used)} / {fmtTok(window_)}</span>
@@ -108,7 +140,8 @@ export default function ContextMeter({ usage }: { usage?: IvyeaContextUsage | nu
             按字符估算，非服务商回报值{usage.model ? ` · ${usage.model}` : ""}
             {pct >= 70 && <b>　窗口快满了，新开一轮会更快也更准</b>}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
