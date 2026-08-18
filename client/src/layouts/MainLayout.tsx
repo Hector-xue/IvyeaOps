@@ -484,14 +484,19 @@ export default function MainLayout() {
           {isConsoleShell ? (
             <>
               {/*
-               * 三段式：固定区 / 弹性区（会话）/ 收纳区。
+               * 两段式：**只冻结「新建任务」这一栏，其余全在同一条滚动里**
+               * （对标 DeepSeek Harness 的侧栏）。
                *
-               * 改造前这里是**一条长滚动**，会话排在最尾 —— 实测 1440×900 下第一条
-               * 会话在 961px，视口才 813px，首屏 0 条可见。会话是这个外壳的主角，
-               * 得让它拿走中间那块可伸缩的空间；板块是"偶尔打开的目录"，沉到底部。
+               * 上一版是三段式（固定区 / 会话弹性区 / 收纳区），两个毛病都被用户点名：
+               * ① 「全部工具」一展开，固定区就长到 949px —— 比整条 nav（791px）还高，
+               *    而 nav 是 overflow:hidden，于是会话区被压成 0 高、工具树自己也滚不动，
+               *    整块目录只能看见前几行（实测值，见 harness 探针）。
+               * ② 收起「全部工具」时，能滚的只有下半截（会话那块自己滚），
+               *    上半截的一级项和工具入口跟着钉死 —— 一条侧栏两种滚动行为。
+               * 现在固定区里只剩「新建任务」这一个按钮，它高度恒定，撑不爆任何东西。
                */}
-              {/* ── 固定区：新建任务 + 一级项 ───────────────────────────── */}
-              <div className="sb-nav-fixed">
+              {/* ── 冻结区：只有「新建任务」──────────────────────────────── */}
+              <div className="sb-nav-top">
                 <button
                   className="ni ni-action"
                   onClick={startNewTask}
@@ -501,6 +506,10 @@ export default function MainLayout() {
                   <i className="ic"><Icon name="new-task" /></i>
                   <span className="ni-label">新建任务</span>
                 </button>
+              </div>
+
+              {/* ── 滚动区：一级项 / 全部工具 / 会话 / 我的工具，一条滚到底 ── */}
+              <div className="sb-nav-scroll scroll-thin">
                 {primary.map(renderNavItem)}
 
                 {/* 「全部工具」跟在定时任务后面，做成可展开的分组 —— 它是导航的一部分，
@@ -536,31 +545,22 @@ export default function MainLayout() {
                     )}
                   </>
                 )}
-              </div>
 
-              {/* ── 弹性区：工作区 / 会话（自己滚）─────────────────────── */}
-              {/* ── 弹性区：工作区 / 会话（自己滚）───────────────────────
-               *
-               * **这里永远是任务台的会话列表，不给板块接管。** 曾经让终端页把自己的
-               * 终端列表画到这儿，结果是主侧边栏在不同板块下变成不同东西 —— 全局导航
-               * 就不再是全局的了。板块自己的列表归板块自己的页面。 */}
-              <div className="sb-nav-flex scroll-thin">
+                {/* 工作区 / 会话。
+                 *
+                 * **这里永远是任务台的会话列表，不给板块接管。** 曾经让终端页把自己的
+                 * 终端列表画到这儿，结果是主侧边栏在不同板块下变成不同东西 —— 全局导航
+                 * 就不再是全局的了。板块自己的列表归板块自己的页面。 */}
                 <SessionRail
                   collapsed={railCollapsed}
                   activeSessionId={activeSessionId}
                   onNavigate={() => isMobile && setMobileMenu(false)}
                 />
-              </div>
 
-              {/* ── 收纳区：我的工具 + 全部工具入口 ───────────────────────
-               *
-               * 这里原本是「更多工具」折叠组：展开 18 个板块占 774px，把上面
-               * 那块会话区整个挤到折叠线以下。现在整份目录搬进了浮层
-               * （components/ToolsOverlay），侧栏只留一个入口和一个数量。
-               */}
-              {/* 底部只留「我的工具」（钉住的板块和技能）。「全部工具」已经移到
-                  定时任务下面 —— 它是导航，不是账户区的附属品。 */}
-              <div className="sb-nav-dock">{pinnedGroup}</div>
+                {/* 「我的工具」（钉住的板块和技能）跟着一起滚 —— 用户要的是
+                    "只冻结新建任务那一栏"，多钉一块在底下就又变成两种滚动行为了。 */}
+                <div className="sb-nav-dock">{pinnedGroup}</div>
+              </div>
             </>
           ) : (
             <>

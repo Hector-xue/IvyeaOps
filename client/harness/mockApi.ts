@@ -384,7 +384,13 @@ export function installMockApi(): void {
       async start(ctrl) {
         const send = (event: string, data: unknown) =>
           ctrl.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-        send("start", { session_id: "s-live", turn_id: "t-live", model: "deepseek-v4-pro" });
+        send("start", { session_id: "s-live", turn_id: "t-live", model: "deepseek-v4-pro",
+                        approval: "none", read_only: true });
+        // 上下文用量：真 agent 在第一个 token 之前就发一份，收尾再发一份（见
+        // service.chat_stream）。验证台不铺这条，上下文进度条就永远验不到。
+        send("context", { used: 9860, window: 128000, percent: 7.7, estimated: true,
+                          model: "deepseek-v4-pro",
+                          breakdown: { system: 1520, tools: 6910, messages: 1430 } });
         const think = [
           "用户问的是广告花费为什么涨了。",
           "先确认口径：是同比还是环比，",
@@ -402,7 +408,12 @@ export function installMockApi(): void {
         for (const t of ["先说结论：", "这一周花费涨了 34%，", "其中 28% 来自单次点击成本上升。"]) {
           await beat(500); send("token", { text: t });
         }
-        send("final", { session_id: "s-live", turn_id: "t-live" });
+        send("final", { session_id: "s-live", turn_id: "t-live",
+                        usage: { prompt_tokens: 9860, completion_tokens: 178,
+                                 prompt_cache_hit_tokens: 0, llm_ms: 2500 },
+                        context: { used: 11240, window: 128000, percent: 8.8, estimated: true,
+                                   model: "deepseek-v4-pro",
+                                   breakdown: { system: 1520, tools: 6910, messages: 2810 } } });
         ctrl.close();
       },
     }), { status: 200, headers: { "content-type": "text/event-stream" } });

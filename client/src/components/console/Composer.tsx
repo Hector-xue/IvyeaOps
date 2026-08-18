@@ -6,7 +6,15 @@
  * （workspace / plan_mode+approval / skill / 模型），选了就真的按那个跑。
  */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import Icon from "../Icon";
 import SheetSelect from "../SheetSelect";
+import {
+  APPROVAL_MODES,
+  APPROVAL_INFO,
+  approvalFromWire,
+  approvalPayload,
+  type ApprovalMode,
+} from "../../lib/approvalModes";
 import type { ConsolePreset, IvyeaSkillInfo } from "../../api/ivyeaAgent";
 
 /** `@` 引用的一条：把知识库里的东西真的带进本轮，而不只是在文字里提一嘴。 */
@@ -15,19 +23,12 @@ export type ComposerRef = { id: string; title: string; path: string };
 /** `/` 菜单里的一条命令。 */
 type SlashItem = { key: string; label: string; hint?: string; run: () => void };
 
-/** 审批档位 → payload。只读是今天的默认语义，逐项审批需要 agent ≥ v1.9。 */
-export type ApprovalMode = "readonly" | "ask";
-
-export const APPROVAL_MODES: { value: ApprovalMode; label: string; hint: string }[] = [
-  { value: "readonly", label: "只读建议", hint: "Agent 只分析和给方案，绝不改动任何线上数据" },
-  { value: "ask", label: "逐项审批", hint: "需要写入时停下来问你，确认后才执行" },
-];
-
-export function approvalPayload(mode: ApprovalMode): { plan_mode: boolean; approval: "none" | "remote" } {
-  return mode === "ask"
-    ? { plan_mode: false, approval: "remote" }
-    : { plan_mode: true, approval: "none" };
-}
+/*
+ * 审批三档的定义搬到了 lib/approvalModes —— 任务台、能力市场的预设表、这里三处
+ * 都要用同一套档位，各写一份必然走偏。这里只做转出口，老的引用路径不用改。
+ */
+export { APPROVAL_MODES, approvalPayload };
+export type { ApprovalMode };
 
 export type ComposerValue = {
   text: string;
@@ -129,12 +130,12 @@ export default function Composer({
       items.push({
         key: "preset:" + p.name,
         label: `预设 · ${p.name}`,
-        hint: [p.skill, p.approval === "remote" ? "逐项审批" : "只读", p.workspace].filter(Boolean).join(" · "),
-        // 预设存的是**线上语义**（none/remote），composer 用的是界面档位
-        // （readonly/ask）。两边别混：存 remote 是因为那才是发给 agent 的值。
+        hint: [p.skill, APPROVAL_INFO[approvalFromWire(p.approval)].label, p.workspace].filter(Boolean).join(" · "),
+        // 预设存的是**线上语义**（none/remote/auto），composer 用的是界面档位
+        // （readonly/ask/full）。两边别混，换算统一走 approvalFromWire。
         run: () => onChange({
           skill: p.skill,
-          approval: p.approval === "remote" ? "ask" : "readonly",
+          approval: approvalFromWire(p.approval),
           ...(p.workspace ? { workspace: p.workspace } : {}),
           // 有人设才挂芯片；没写人设的预设不该凭空多出一枚
           preset: p.system ? p.name : "",
@@ -291,10 +292,6 @@ export default function Composer({
     if (fileRef.current) fileRef.current.value = "";
   };
 
-  const skillOptions = [
-    { value: "", label: "自动选技能" },
-    ...skills.map((s) => ({ value: s.id, label: s.title || s.id, sub: s.domain })),
-  ];
   // **新建入口放进这个下拉里**。此前它只在左栏的「工作区 +」上 —— 而用户想切
   // 工作区时点的是这里，点开却只有"默认工作区"一个选项、也没有别的出口，
   // 看起来就是个坏掉的控件。要在用户产生意图的地方给出路，而不是让他去别处找。
@@ -306,6 +303,10 @@ export default function Composer({
     })),
     { value: NEW_WS, label: "＋ 新建工作区…", sub: "绑一个目录，Agent 的文件操作就在那里面" },
   ];
+
+  // 档位配色：只读安静、审批放行提醒、完全放行警示。**危险的那档必须一眼看出来**，
+  // 否则用户会在没意识到的情况下让 Agent 直接改线上数据。
+  const approvalTone = APPROVAL_INFO[value.approval]?.tone || "calm";
 
   return (
     <div className={"cc-composer" + (compact ? " compact" : "")}>
@@ -366,82 +367,90 @@ export default function Composer({
         onDragOver={(e) => e.preventDefault()}
         onBlur={() => window.setTimeout(() => setMenu(null), 120)}
       />
+      {/*
+        * 底栏分左右两组：左边是"这一轮怎么跑"（工作区 / 审批档位 / 人设），
+        * 右边是"用谁跑、发不发"（模型 / 发送）。此前它们挤在一条 flex 里靠一个
+        * spacer 分开，芯片一多就换行、发送键被顶到第二行 —— 对标图里那条底栏
+        * 永远是一行，因为两组各自成块。
+        */}
       <div className="cc-bar">
-        <button
-          type="button"
-          className="cc-chip cc-chip-icon"
-          title="添加文件到知识库，然后就能直接问它的内容"
-          onClick={() => fileRef.current?.click()}
-          disabled={!onAttach || attaching}
-        >
-          {attaching ? <span className="spin" /> : "+"}
-        </button>
-        <input ref={fileRef} type="file" style={{ display: "none" }} onChange={pickFile} />
-
-        <SheetSelect
-          className="cc-chip xsel-compact"
-          title="工作区 —— 决定 Agent 在哪个目录里读写文件"
-          value={value.workspace}
-          onChange={(v) => { if (v === NEW_WS) onNewWorkspace?.(); else onChange({ workspace: v }); }}
-          options={workspaceOptions}
-          ariaLabel="工作区"
-        />
-        <SheetSelect
-          className={"cc-chip xsel-compact" + (value.approval === "ask" ? " cc-chip-warn" : "")}
-          title="审批档位"
-          value={value.approval}
-          onChange={(v) => onChange({ approval: v as ApprovalMode })}
-          options={APPROVAL_MODES.map((m) => ({ value: m.value, label: m.label, sub: m.hint }))}
-          ariaLabel="审批档位"
-        />
-        <SheetSelect
-          className="cc-chip xsel-compact"
-          title="使用技能"
-          value={value.skill}
-          onChange={(v) => onChange({ skill: v })}
-          options={skillOptions}
-          ariaLabel="技能"
-        />
-        {value.preset && (
-          /*
-           * 人设**必须可见**。一段看不见的系统提示在悄悄改变回答的口吻和判断标准，
-           * 用户只会觉得"今天的 Agent 怪怪的"却不知道为什么。所以套用预设后摆一枚
-           * 芯片说明现在带着谁，并且能一键摘掉。
-           */
-          <span className="cc-chip cc-chip-preset" title={value.system || value.preset}>
-            <i>◉</i>
-            {value.preset}
-            <button
-              type="button"
-              className="cc-chip-x"
-              title="取消套用这个预设的人设"
-              onClick={() => onChange({ preset: "", system: "" })}
-            >✕</button>
-          </span>
-        )}
-        <button
-          type="button"
-          className="cc-chip cc-chip-model"
-          onClick={onModelClick}
-          title="当前主脑模型 · 点击去「系统配置」切换"
-        >
-          <span className="cc-chip-label">{modelLabel || "模型未配置"}</span>
-        </button>
-
-        <div className="cc-bar-spacer" />
-        {busy && onStop ? (
-          <button type="button" className="cc-send cc-stop" onClick={onStop} title="停止本轮">■</button>
-        ) : (
+        <div className="cc-bar-left">
           <button
             type="button"
-            className="cc-send"
-            onClick={submit}
-            disabled={busy || !value.text.trim()}
-            title="发送（Enter）"
+            className="cc-chip cc-chip-icon"
+            title="添加文件到知识库，然后就能直接问它的内容"
+            onClick={() => fileRef.current?.click()}
+            disabled={!onAttach || attaching}
           >
-            ➤
+            {attaching ? <span className="spin" /> : <Icon name="attach" size={15} />}
           </button>
-        )}
+          <input ref={fileRef} type="file" style={{ display: "none" }} onChange={pickFile} />
+
+          <SheetSelect
+            className="cc-chip xsel-compact"
+            title="工作区 —— 决定 Agent 在哪个目录里读写文件"
+            value={value.workspace}
+            onChange={(v) => { if (v === NEW_WS) onNewWorkspace?.(); else onChange({ workspace: v }); }}
+            options={workspaceOptions}
+            ariaLabel="工作区"
+            leading={<Icon name="file" size={14} />}
+            dropdownClassName="cc-sheet"
+          />
+          <SheetSelect
+            className={"cc-chip xsel-compact cc-chip-mode tone-" + approvalTone}
+            title={"审批档位 —— " + APPROVAL_INFO[value.approval].hint}
+            value={value.approval}
+            onChange={(v) => onChange({ approval: v as ApprovalMode })}
+            options={APPROVAL_MODES.map((m) => ({ value: m.value, label: m.label, sub: m.hint }))}
+            ariaLabel="审批档位"
+            leading={<Icon name={"mode-" + value.approval} size={14} />}
+            dropdownClassName="cc-sheet cc-sheet-mode"
+          />
+          {value.preset && (
+            /*
+             * 人设**必须可见**。一段看不见的系统提示在悄悄改变回答的口吻和判断标准，
+             * 用户只会觉得"今天的 Agent 怪怪的"却不知道为什么。所以套用预设后摆一枚
+             * 芯片说明现在带着谁，并且能一键摘掉。
+             */
+            <span className="cc-chip cc-chip-preset" title={value.system || value.preset}>
+              <i>◉</i>
+              {value.preset}
+              <button
+                type="button"
+                className="cc-chip-x"
+                title="取消套用这个预设的人设"
+                onClick={() => onChange({ preset: "", system: "" })}
+              >✕</button>
+            </span>
+          )}
+        </div>
+
+        <div className="cc-bar-right">
+          <button
+            type="button"
+            className="cc-chip cc-chip-model"
+            onClick={onModelClick}
+            title="当前主脑模型 · 点击去「系统配置」切换"
+          >
+            <Icon name="model" size={14} />
+            <span className="cc-chip-label">{modelLabel || "模型未配置"}</span>
+          </button>
+          {busy && onStop ? (
+            <button type="button" className="cc-send cc-stop" onClick={onStop} title="停止本轮">
+              <Icon name="stop" size={14} strokeWidth={3} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="cc-send"
+              onClick={submit}
+              disabled={busy || !value.text.trim()}
+              title="发送（Enter）"
+            >
+              <Icon name="send" size={17} strokeWidth={2.4} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

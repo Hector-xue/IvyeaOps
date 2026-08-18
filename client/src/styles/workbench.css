@@ -427,13 +427,13 @@ body::after{
 .sb-toggle{background:transparent;border:1px solid var(--b);border-radius:var(--r);color:var(--t3);cursor:pointer;font-size:var(--fs-9);padding:2px 6px;font-family:var(--font);flex-shrink:0;transition:all .1s}
 .sb-toggle:hover{color:var(--t);border-color:var(--b2)}
 .sb nav{flex:1;overflow-y:auto;padding:6px 0}
-/* ── 新外壳侧边栏：三段式 ────────────────────────────────────────────────
+/* ── 新外壳侧边栏：冻结「新建任务」+ 一条滚动 ─────────────────────────────
  * 经典外壳仍走上面那条"整条滚动"的规则，一行不动。
  *
- * 这里改成 固定 / 弹性 / 收纳 三段，是因为改造前会话排在一条长滚动的最尾：
- * 「更多工具」展开后占 774px，而视口才 813px —— 首屏一条会话都看不见，
- * 可会话恰恰是这个外壳的主角。现在弹性区吃掉剩余高度并自己滚，
- * 会话不再被板块列表挤下去。
+ * 这里只把顶部那一栏钉住，剩下的（一级项 / 全部工具 / 会话 / 我的工具）在同一条
+ * 滚动里。上一版是三段式，两个毛病：「全部工具」一展开固定区就长到 949px（比整条
+ * nav 还高），会话区被压成 0 高、工具树自己也滚不动；收起时又只有下半截能滚。
+ * 冻结区里只留一个高度恒定的按钮，这两种情况都不会再出现。
  */
 .sb-nav-console{display:flex;flex-direction:column;overflow:hidden;padding:6px 0 0}
 /* **必须是 flex 列。** 下面 button.ni 用的是 `width:auto + align-self:stretch`
@@ -441,11 +441,13 @@ body::after{
    flex 容器里成立。这里原来是块级容器，于是 Chrome 按"按钮盒"给 <button> 量
    fit-content：「新建任务」「全部工具」**整行只有文字那一小块能点**，同类的 <a>
    却是铺满的；.ni-count 的 margin-left:auto 也推不动，数量就贴在标题后面。 */
-.sb-nav-fixed{flex-shrink:0;display:flex;flex-direction:column;align-items:stretch}
+.sb-nav-top{flex-shrink:0;display:flex;flex-direction:column;align-items:stretch;padding-bottom:4px}
 /* min-height:0 是必须的：flex 子项默认 min-height:auto，不写的话它会被内容撑高，
-   overflow 永远不生效，三段式就退化回一条长滚动。 */
-.sb-nav-flex{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column}
-.sb-nav-dock{flex-shrink:0;border-top:1px solid var(--b)}
+   overflow 永远不生效，整条侧栏就退化成"谁也滚不动"。 */
+.sb-nav-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  display:flex;flex-direction:column;align-items:stretch}
+.sb-nav-scroll::-webkit-scrollbar{width:0}
+.sb-nav-dock{flex-shrink:0;margin-top:6px;border-top:1px solid var(--b)}
 /* 「全部工具」上的板块数量：说明"东西一个都没丢，都在里面" */
 .ni-count{margin-left:auto;font-size:var(--fs-9);color:var(--t3);background:var(--bg3);
   border-radius:99px;padding:0 5px;line-height:1.7}
@@ -2898,6 +2900,33 @@ body::after{
 .xsel-option.active .xsel-option-sub{color:var(--acc)}
 .xsel-option:disabled{opacity:.4;cursor:not-allowed}
 .xsel-option:disabled:hover{background:transparent;color:var(--t2)}
+/* 勾默认不出现：站点选择器那种一行一个国旗的列表加个勾只会更挤。
+   任务台的档位浮层（.cc-sheet）才需要它 —— 那里的"当前选中"必须一眼看到。 */
+.xsel-option-check{display:none}
+
+/* ── .cc-sheet：任务台芯片的浮层 ───────────────────────────────────────────
+ * 和站点选择器分开写，因为两边的 sub 根本不是一种东西：那边是"美国"（跟在代码后
+ * 同一行才对），这边是一整句解释。上一版共用一套 nowrap 样式，结果档位说明被裁成
+ * 「Agent 只分析和给方案，绝不改…」——最该说清的那半句永远看不到。 */
+.xsel-dropdown.cc-sheet{max-width:300px;padding:6px;border-radius:14px;border-color:var(--b);
+  box-shadow:0 14px 40px rgb(0 0 0 / .16), 0 2px 8px rgb(0 0 0 / .06)}
+.cc-sheet .xsel-option{display:grid;grid-template-columns:1fr auto;align-items:start;gap:2px 10px;
+  white-space:normal;padding:9px 11px;border-radius:10px}
+.cc-sheet .xsel-option-label{grid-column:1;grid-row:1;font-size:var(--fs-115);font-weight:600;color:var(--t)}
+.cc-sheet .xsel-option-sub{grid-column:1;grid-row:2;font-size:var(--fs-10);color:var(--t3);
+  line-height:1.6;white-space:normal;flex:none}
+.cc-sheet .xsel-option-check{grid-column:2;grid-row:1;display:inline-flex;color:var(--acc);
+  font-size:var(--fs-11);opacity:0}
+.cc-sheet .xsel-option:hover{background:var(--bg2)}
+.cc-sheet .xsel-option.active{background:color-mix(in srgb,var(--acc) 9%,transparent)}
+.cc-sheet .xsel-option.active .xsel-option-label{color:var(--acc)}
+.cc-sheet .xsel-option.active .xsel-option-sub{color:var(--t3)}
+.cc-sheet .xsel-option.active .xsel-option-check{opacity:1}
+/* 审批档位：越往下越危险，让选项自己说出这件事 */
+.cc-sheet-mode .xsel-option:nth-child(2) .xsel-option-label{color:var(--amber)}
+.cc-sheet-mode .xsel-option:nth-child(3) .xsel-option-label{color:var(--red)}
+.cc-sheet-mode .xsel-option.active:nth-child(2){background:color-mix(in srgb,var(--amber) 10%,transparent)}
+.cc-sheet-mode .xsel-option.active:nth-child(3){background:color-mix(in srgb,var(--red) 10%,transparent)}
 
 @media (max-width: 680px){
   .xsel-sheet-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);z-index:1000}
@@ -3269,22 +3298,91 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
   font-size:var(--fs-125);line-height:1.65;resize:none;outline:none;min-height:24px;max-height:200px;
   overflow-y:auto;display:block}
 .cc-input::placeholder{color:var(--t3)}
-.cc-bar{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
+/* 底栏：左右两组，**永不换行**。
+   原来是一条 flex + flex-wrap:wrap + 一个 spacer —— 芯片一多（套了人设、模型名长）
+   就换行，发送键被顶到第二行，输入框凭空高一截。现在左组可挤压（overflow 隐藏），
+   右组固定，一行永远装得下。 */
+.cc-bar{display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:nowrap}
+.cc-bar-left{display:flex;align-items:center;gap:6px;min-width:0;flex:1 1 auto;overflow:hidden}
+.cc-bar-right{display:flex;align-items:center;gap:8px;flex:0 0 auto;margin-left:auto}
 .cc-bar-spacer{flex:1 1 auto;min-width:8px}
-.cc-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border:1px solid var(--b);
-  border-radius:999px;background:var(--bg2);color:var(--t2);font-family:var(--font);font-size:var(--fs-105);
-  cursor:pointer;transition:all var(--dur) var(--ease);max-width:190px}
-.cc-chip:hover{color:var(--t);border-color:var(--b2)}
-.cc-chip.cc-chip-icon{padding:3px 10px;justify-content:center;min-width:28px}
+/* 芯片改成"无框、悬停才浮起来"：一行四五个带框胶囊会把输入框搞成一个仪表盘，
+   而它们只是这一轮的参数。形状交给图标，边框留给真正要提醒的档位。 */
+.cc-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid transparent;
+  border-radius:999px;background:transparent;color:var(--t2);font-family:var(--font);font-size:var(--fs-105);
+  cursor:pointer;transition:background-color var(--dur) var(--ease),color var(--dur) var(--ease),
+  border-color var(--dur) var(--ease);max-width:190px;line-height:1.4}
+.cc-chip:hover{color:var(--t);background:var(--bg2)}
+.cc-chip svg{flex:0 0 auto;opacity:.85}
+.cc-chip .xsel-leading{display:inline-flex;align-items:center;flex:0 0 auto}
+.cc-chip.cc-chip-icon{padding:0;justify-content:center;width:30px;height:30px;min-width:30px;color:var(--t3)}
+.cc-chip.cc-chip-icon:hover{color:var(--t)}
 .cc-chip.cc-chip-icon:disabled{opacity:.45;cursor:not-allowed}
+/* 审批档位：**危险的那一档必须一眼认出来**。只读安静（跟其它芯片一样），
+   审批放行描一圈琥珀，完全放行填一层红 —— 用户不该在没注意到的情况下让
+   Agent 直接改线上数据。 */
+.cc-chip-mode.tone-warn{color:var(--amber);
+  border-color:color-mix(in srgb,var(--amber) 40%,transparent);
+  background:color-mix(in srgb,var(--amber) 8%,transparent)}
+.cc-chip-mode.tone-warn:hover{background:color-mix(in srgb,var(--amber) 14%,transparent);color:var(--amber)}
+.cc-chip-mode.tone-danger{color:var(--red);font-weight:600;
+  border-color:color-mix(in srgb,var(--red) 45%,transparent);
+  background:color-mix(in srgb,var(--red) 10%,transparent)}
+.cc-chip-mode.tone-danger:hover{background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)}
+.cc-chip-mode svg{opacity:1}
+/* 老类名留着：quiet 皮肤和历史用法还在引它 */
 .cc-chip-warn{border-color:rgba(245,158,11,.45);color:var(--amber)}
-.cc-chip-model{max-width:230px}
-.cc-send{width:30px;height:30px;border-radius:50%;border:none;background:var(--acc);color:var(--bg);
-  font-size:var(--fs-12);cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;
-  justify-content:center;transition:all var(--dur) var(--ease)}
-.cc-send:hover:not(:disabled){filter:brightness(1.1)}
-.cc-send:disabled{opacity:.35;cursor:not-allowed}
-.cc-send.cc-stop{background:var(--red);color:var(--on-acc)}
+.cc-chip-model{max-width:230px;color:var(--t3);font-size:var(--fs-10)}
+.cc-chip-model:hover{color:var(--t2)}
+/* 发送键：圆、实心、图标居中。禁用态不用 opacity 掏空（那会连图标一起变灰糊），
+   改成灰底 + 弱前景 —— 形状还在，只是"现在还不能点"。 */
+.cc-send{width:34px;height:34px;border-radius:50%;border:none;background:var(--acc);color:var(--on-acc);
+  cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
+  transition:background-color var(--dur) var(--ease),transform var(--dur) var(--ease),
+  box-shadow var(--dur) var(--ease);box-shadow:0 1px 3px color-mix(in srgb,var(--acc) 35%,transparent)}
+.cc-send:hover:not(:disabled){filter:brightness(1.06);transform:translateY(-1px);
+  box-shadow:0 3px 10px color-mix(in srgb,var(--acc) 38%,transparent)}
+.cc-send:active:not(:disabled){transform:translateY(0)}
+.cc-send:disabled{background:var(--bg3);color:var(--t3);box-shadow:none;cursor:not-allowed}
+.cc-send.cc-stop{background:var(--red);color:var(--on-acc);box-shadow:none}
+
+/* ── 上下文进度条 ─────────────────────────────────────────────────────────
+ * 钉在输入框下面那一行，和会话统计条并排。默认只有一条 44px 的细条 + 一个百分比，
+ * 点开才是细账 —— 它是"要用的时候才看"的东西，不该常驻占一行字。 */
+.cc-dock-meta{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:6px}
+.cc-ctx{position:relative;display:inline-flex;align-items:center;flex:0 0 auto}
+.cc-ctx-trigger{display:inline-flex;align-items:center;gap:7px;padding:3px 7px;border:none;border-radius:8px;
+  background:transparent;cursor:pointer;font-family:var(--font);color:var(--t3);font-size:var(--fs-10);
+  transition:background-color var(--dur) var(--ease),color var(--dur) var(--ease)}
+.cc-ctx-trigger:hover{background:var(--bg2);color:var(--t2)}
+.cc-ctx-track{display:flex;width:46px;height:5px;border-radius:3px;background:var(--bg3);overflow:hidden}
+.cc-ctx-track.big{width:100%;height:7px;border-radius:4px;margin:2px 0 10px}
+.cc-ctx-seg{display:block;height:100%;font-style:normal;min-width:0}
+.cc-ctx-seg.seg-sys{background:var(--t3)}
+.cc-ctx-seg.seg-tools{background:var(--purple)}
+.cc-ctx-seg.seg-msgs{background:var(--blue)}
+.cc-ctx-num{font-variant-numeric:tabular-nums}
+/* 快满了就换个颜色说话 —— 到这一步用户是需要行动的（新开一轮 / 压缩） */
+.cc-ctx.level-warn .cc-ctx-num{color:var(--amber)}
+.cc-ctx.level-crit .cc-ctx-num{color:var(--red);font-weight:600}
+.cc-ctx-pop{position:absolute;bottom:calc(100% + 8px);left:0;z-index:60;width:270px;padding:12px 13px 10px;
+  border:1px solid var(--b);border-radius:14px;background:var(--bg1);
+  box-shadow:0 14px 40px rgb(0 0 0 / .16), 0 2px 8px rgb(0 0 0 / .06);
+  animation:mkt-dd-in .14s ease-out}
+.cc-ctx-pop-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.cc-ctx-pop-title{font-size:var(--fs-115);color:var(--t);font-weight:600}
+.cc-ctx-pop-total{font-size:var(--fs-105);color:var(--t3);font-variant-numeric:tabular-nums}
+.cc-ctx-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.cc-ctx-list li{display:flex;align-items:center;gap:8px;font-size:var(--fs-11);color:var(--t2)}
+.cc-ctx-dot{width:9px;height:9px;border-radius:3px;flex:0 0 auto;font-style:normal}
+.cc-ctx-dot.seg-sys{background:var(--t3)}
+.cc-ctx-dot.seg-tools{background:var(--purple)}
+.cc-ctx-dot.seg-msgs{background:var(--blue)}
+.cc-ctx-k{flex:1 1 auto;min-width:0}
+.cc-ctx-v{color:var(--t3);font-variant-numeric:tabular-nums}
+.cc-ctx-foot{margin-top:9px;padding-top:8px;border-top:1px solid var(--b);
+  font-size:var(--fs-95);color:var(--t3);line-height:1.6}
+.cc-ctx-foot b{color:var(--amber);font-weight:600}
 
 /* ── 右侧产物栏 ──────────────────────────────────────────────────────────── */
 /* 右侧产物栏。没打开面板时它只是一条窄图标带 —— 去掉左边那条实线，
@@ -3327,6 +3425,13 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
   /* 手机上标题小一档，行高给足 —— 1.25 时中文的行盒比 clientHeight 高 3px，
      会被裁掉一线笔画。 */
   .cc-hero-title{font-size:24px;line-height:1.35}
+  /* 底栏在 390px 宽下装不下"附件+工作区+档位+模型+发送"：桌面靠左组 overflow
+     隐藏来保一行，手机上那会**把审批档位裁掉**——恰恰是最不能看不见的那一个。
+     所以手机上允许折行，并把模型名收成一个图标（它只是个跳转入口，不是开关）。 */
+  .cc-bar{flex-wrap:wrap;row-gap:6px}
+  .cc-bar-left{overflow:visible;flex-wrap:wrap}
+  .cc-chip-model .cc-chip-label{display:none}
+  .cc-chip-model{padding:5px 8px}
   .cc-rail{display:none}           /* 手机端不挤会话区 */
   .cc-thread{padding:12px 10px 6px}
   .cc-dock{padding:6px 10px 10px}
@@ -3612,12 +3717,15 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .sb-ws-hint{padding:1px 12px 5px;font-size:var(--fs-9);color:var(--t3);line-height:1.5}
 
 /* ── composer 的 / 命令与 @ 引用 ─────────────────────────────────────────── */
-.cc-menu{position:absolute;bottom:calc(100% + 6px);left:0;right:0;max-height:280px;overflow-y:auto;
-  border:1px solid var(--b2);border-radius:var(--r);background:var(--bg1);box-shadow:var(--elev-1);
-  padding:4px;z-index:60}
-.cc-menu-head{font-size:var(--fs-95);color:var(--t3);padding:4px 8px 6px;letter-spacing:.06em}
-.cc-menu-item{display:flex;align-items:center;gap:8px;width:100%;padding:5px 9px;border:none;
-  border-radius:var(--r);background:transparent;color:var(--t2);font-family:var(--font);font-size:var(--fs-115);
+/* 和芯片的下拉浮层（.cc-sheet）保持同一套观感：大圆角、软投影、行更松。
+   两个浮层都从同一只输入框里长出来，长得不一样只会显得是两个人做的。 */
+.cc-menu{position:absolute;bottom:calc(100% + 8px);left:0;right:0;max-height:300px;overflow-y:auto;
+  border:1px solid var(--b);border-radius:14px;background:var(--bg1);
+  box-shadow:0 14px 40px rgb(0 0 0 / .16), 0 2px 8px rgb(0 0 0 / .06);
+  padding:6px;z-index:60;animation:mkt-dd-in .14s ease-out}
+.cc-menu-head{font-size:var(--fs-95);color:var(--t3);padding:5px 9px 7px;letter-spacing:.06em}
+.cc-menu-item{display:flex;align-items:center;gap:10px;width:100%;padding:8px 11px;border:none;
+  border-radius:10px;background:transparent;color:var(--t2);font-family:var(--font);font-size:var(--fs-115);
   cursor:pointer;text-align:left}
 .cc-menu-item:hover,.cc-menu-item.active{background:color-mix(in srgb,var(--acc) 10%,transparent);
   color:var(--t)}
