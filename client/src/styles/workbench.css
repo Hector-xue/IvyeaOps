@@ -2890,7 +2890,14 @@ body::after{
 }
 .xsel-wrap:focus-visible{outline:2px solid color-mix(in srgb, var(--acc) 50%, transparent);outline-offset:1px}
 
-.xsel-dropdown{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;width:max-content;max-width:280px;max-height:320px;overflow-y:auto;background:var(--bg1);border:1px solid var(--b);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.25);z-index:300;padding:4px;animation:mkt-dd-in .15s ease-out}
+/* z-index 必须**盖过任何对话框**。
+ * 这只浮层是 portal 到 <body> 上的（不然会被 overflow 祖先裁掉），所以它和对话框
+ * 是同级兄弟，谁在上面只看 z-index。原来是 300，而「系统配置」弹窗是 9000 ——
+ * 于是弹窗里的字体选择器点开之后，浮层**画在弹窗背面**：箭头翻成 ▴ 了、
+ * `elementFromPoint` 却打在弹窗的卡片上，用户看到的就是"点了没反应"。
+ * 取 10050：比 confirm(9999) 和图片灯箱(10000) 还高一档 —— 一只已经打开的下拉
+ * 本来就该压住一切，而且它随外点击/Esc 立刻消失，压不住谁。 */
+.xsel-dropdown{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;width:max-content;max-width:280px;max-height:320px;overflow-y:auto;background:var(--bg1);border:1px solid var(--b);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.25);z-index:10050;padding:4px;animation:mkt-dd-in .15s ease-out}
 .xsel-option{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border-radius:5px;border:none;background:transparent;color:var(--t2);cursor:pointer;font-size:var(--fs-12);font-family:var(--font);text-align:left;transition:background .1s;white-space:nowrap}
 .xsel-option:hover{background:var(--bg2);color:var(--t)}
 .xsel-option.active{background:color-mix(in srgb, var(--acc) 10%, transparent);color:var(--acc)}
@@ -2929,8 +2936,9 @@ body::after{
 .cc-sheet-mode .xsel-option.active:nth-child(3){background:color-mix(in srgb,var(--red) 10%,transparent)}
 
 @media (max-width: 680px){
-  .xsel-sheet-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);z-index:1000}
-  .xsel-sheet{position:fixed;left:0;right:0;bottom:0;z-index:1001;background:var(--bg1);border-radius:18px 18px 0 0;padding:0 0 calc(env(safe-area-inset-bottom,0px) + 16px);box-shadow:0 -8px 40px rgba(0,0,0,.4);animation:sheet-up .22s ease-out;max-height:72vh;display:flex;flex-direction:column}
+  /* 手机抽屉同理：它也是 portal 到 body 的，1000 会被 9000 的设置弹窗压住。 */
+  .xsel-sheet-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);z-index:10050}
+  .xsel-sheet{position:fixed;left:0;right:0;bottom:0;z-index:10051;background:var(--bg1);border-radius:18px 18px 0 0;padding:0 0 calc(env(safe-area-inset-bottom,0px) + 16px);box-shadow:0 -8px 40px rgba(0,0,0,.4);animation:sheet-up .22s ease-out;max-height:72vh;display:flex;flex-direction:column}
   .xsel-sheet-handle{width:40px;height:4px;border-radius:999px;background:rgba(255,255,255,.15);margin:12px auto 0;flex:0 0 auto}
   .xsel-sheet-title{font-size:var(--fs-12);color:var(--t3);letter-spacing:.1em;text-align:center;padding:12px 16px 8px;flex:0 0 auto}
   .xsel-sheet-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:8px 16px 16px;overflow-y:auto}
