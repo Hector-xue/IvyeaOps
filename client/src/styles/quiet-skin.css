@@ -200,6 +200,17 @@ html[data-skin="quiet"] .cs-approval {
 }
 html[data-skin="quiet"] .cs-approval.cs-destructive { border-color: var(--amber) !important; }
 html[data-skin="quiet"] .cc-chip-warn { border: 1px solid var(--amber) !important; }
+/* 审批档位芯片同理：只读那档可以无形（它就是默认），另外两档是"有风险"，
+   边框和那层浅底都得留住 —— 上面 ⑤ 那条把所有 .cc-chip 的底色扒光了，
+   不在这里补回来的话，「完全放行」在简约皮肤下只剩一行红字，和普通芯片一样轻。 */
+html[data-skin="quiet"] .cc-chip-mode.tone-warn {
+  border: 1px solid color-mix(in srgb, var(--amber) 55%, transparent) !important;
+  background: color-mix(in srgb, var(--amber) 9%, transparent) !important;
+}
+html[data-skin="quiet"] .cc-chip-mode.tone-danger {
+  border: 1px solid color-mix(in srgb, var(--red) 55%, transparent) !important;
+  background: color-mix(in srgb, var(--red) 10%, transparent) !important;
+}
 /* 「有新版本」现在是账户行头像上那颗红点 + 菜单里那一行变红（见 .sb-acct-dot /
    .sb-menu-item.has-update），不再是一个带框按钮 —— 它们本身就没有边框可留。 */
 

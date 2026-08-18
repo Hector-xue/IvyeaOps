@@ -98,8 +98,11 @@ class ChatBody(BaseModel):
     # 要模型的思考流（agent ≥ v1.10.3）。默认关，且为 False 时从下发 payload 里剔除 ——
     # 老 daemon 看到的 payload 与改动前逐字一致。
     stream_reasoning: bool = False
-    # "none" = 维持今天的只读语义；"remote" = 写操作弹前端审批卡（agent ≥ v1.9）。
-    approval: str = Field(default="none", pattern="^(none|remote)$")
+    # 审批三档（agent ≥ v1.16）：
+    #   none   = 只读，写操作一律不落地（维持今天的默认语义）
+    #   remote = 逐项审批，每个写操作弹前端确认卡（agent ≥ v1.9）
+    #   auto   = 完全放行，用户已为这一轮一次性授权，写操作不再弹卡
+    approval: str = Field(default="none", pattern="^(none|remote|auto)$")
     # 会话来自哪个板块。**ops 自用**，_chat_payload 会把它剔掉再下发 ——
     # agent 不认识这个字段，带过去只会当成未知参数。
     source: str = Field(default="console", pattern="^(console|assistant|brain)$")
@@ -785,7 +788,8 @@ def console_session_import(body: ConsoleImportBody,
 class ConsolePresetBody(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     skill: str = Field(default="", max_length=200)
-    approval: str = Field(default="none", pattern="^(none|remote)$")
+    # 与任务台的三档一致：none 只读 / remote 逐项审批 / auto 完全放行
+    approval: str = Field(default="none", pattern="^(none|remote|auto)$")
     workspace: str = Field(default="", max_length=120)
     # 人设：整段进这一轮的系统提示。上限比 note 大得多，但不能没有 ——
     # 它每轮都要占上下文。

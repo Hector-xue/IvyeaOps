@@ -5,6 +5,7 @@ import {
   MessageCircleQuestion, Newspaper, Palette, PanelLeftClose, PanelLeftOpen, Plus,
   Settings, Ship, Sparkles, SquarePen, Target, Terminal, TrendingDown, Type, Users,
   Timer, History, Flag, Search, X, Pin,
+  ArrowUp, Cpu, Eye, Paperclip, Square, ShieldCheck, Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -74,6 +75,15 @@ const ICONS: Record<string, LucideIcon> = {
   todo: ListChecks,
   flag: Flag,
   history: History,
+  // ── 任务台输入器 ──
+  attach: Paperclip,
+  send: ArrowUp,
+  stop: Square,
+  model: Cpu,
+  // 审批三档，一档一个形状：看 / 盾 / 闪电。颜色会被主题改，形状不会。
+  "mode-readonly": Eye,
+  "mode-ask": ShieldCheck,
+  "mode-full": Zap,
   // ── 场景 ──
   "ad-waste": TrendingDown,
 };

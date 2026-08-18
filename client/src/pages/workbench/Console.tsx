@@ -30,6 +30,8 @@ import { useStickToBottom } from "../../lib/useStickToBottom";
 import { aggregateStats, type TurnMetrics } from "../../lib/turnStats";
 import StepTimeline, { type MatchedSkill } from "../../components/console/StepTimeline";
 import StatsBar from "../../components/console/StatsBar";
+import ContextMeter from "../../components/console/ContextMeter";
+import DockMeta from "../../components/console/DockMeta";
 import ApprovalCard from "../../components/console/ApprovalCard";
 import Composer, { approvalPayload, type ApprovalMode, type ComposerRef, type ComposerValue } from "../../components/console/Composer";
 import ArtifactRail, { type RailApproval, type RailTodo } from "../../components/console/ArtifactRail";
@@ -56,6 +58,7 @@ import {
   ivyeaSkills,
   visionDescribe,
   type ConsolePreset,
+  type IvyeaContextUsage,
   type IvyeaFileChange,
   type IvyeaPermissionRequest,
   type IvyeaSkillInfo,
@@ -156,6 +159,9 @@ function ConsoleInner() {
   const [model, setModel] = useState("");
   const [readOnly, setReadOnly] = useState(true);
   const [usage, setUsage] = useState<any>(null);
+  // 本会话的上下文占用。agent 每轮发两次（开跑前 + 收尾），老 agent 一次都不发 ——
+  // 那就整块不显示，绝不自己编一个百分比。
+  const [ctxUsage, setCtxUsage] = useState<IvyeaContextUsage | null>(null);
   const [todos, setTodos] = useState<RailTodo[]>([]);
   const [railApprovals, setRailApprovals] = useState<RailApproval[]>([]);
   // 本会话 Agent 改过的文件。同一路径被改多次时**保留每一次** —— 折叠成一条会让
@@ -334,6 +340,7 @@ function ConsoleInner() {
     setFileChanges([]);
     setFollowUps([]);
     setUsage(null);
+    setCtxUsage(null);
     setBusy(false);
     setEarlier({ hasMore: false, from: 0, loading: false });
     setComposer((c) => ({ ...c, text: "" }));
@@ -371,6 +378,10 @@ function ConsoleInner() {
     let alive = true;
     setLoadingSession(true);
     abortRef.current?.abort();
+    // 切会话先把上一条的数**清掉**再拉新的。留着不清是最糟的一种错：进度条和用量
+    // 看起来有效，其实说的是刚才那条会话 —— 用户不会怀疑一个显示着数字的控件。
+    setCtxUsage(null);
+    setUsage(null);
     ivyeaChatSession(urlSession)
       .then((d) => {
         if (!alive) return;
@@ -379,6 +390,9 @@ function ConsoleInner() {
         setTurns(page.turns.map((t) => ({ ...t, id: uid() })));
         setEarlier({ hasMore: page.hasMore, from: page.from, loading: false });
         setSessionId(urlSession);
+        // 历史会话的上下文占用由详情接口带回来（老 agent 没有这个字段 → 保持不显示）。
+        setCtxUsage((d?.session?.context as IvyeaContextUsage | undefined) || null);
+        if (d?.session?.usage) setUsage(d.session.usage);
         setFollowUps([]);
         setTodos([]);
         setFileChanges([]);
@@ -711,6 +725,7 @@ function ConsoleInner() {
             if (d?.model) setModel(typeof d.model === "string" ? d.model : d.model?.model || "");
             if (typeof d?.read_only === "boolean") setReadOnly(d.read_only);
           },
+          onContext: (d) => setCtxUsage(d),
           onSkillMatch: (d) => {
             patchTurn(aiId, { skills: (d?.skills || []) as MatchedSkill[] });
           },
@@ -784,6 +799,8 @@ function ConsoleInner() {
             if (d?.session_id) setSessionId(d.session_id);
             if (Array.isArray(d?.todos)) setTodos(d.todos);
             if (d?.usage) { setUsage(d.usage); turnUsage = d.usage; }
+            // 收尾这一份算的是"本轮结束后"的位置 —— 下一轮就是从这里起步的。
+            if (d?.context) setCtxUsage(d.context as IvyeaContextUsage);
             // final.text 是引证门通过后的规范文本，整体替换 —— 流式期间的中间草稿
             // （引证重写前）不留脏文本。
             if (d?.text) { finalText = String(d.text); patchTurn(aiId, { text: finalText }); }
@@ -1037,7 +1054,13 @@ function ConsoleInner() {
             </div>
             <div className="cc-dock">
               {composerNode(true)}
-              <StatsBar stats={sessionStats} />
+              {/* 进度条和统计条同一行：它们回答的是同一类问题（这轮花了多少），
+                  分两行钉在输入框底下会把对话区又压掉一截。DockMeta 保证这一行
+                  **永远不换行**（装不下就缩字号）—— 折行会把输入框整块往上顶。 */}
+              <DockMeta>
+                <ContextMeter usage={ctxUsage} />
+                <StatsBar stats={sessionStats} />
+              </DockMeta>
             </div>
           </>
         )}

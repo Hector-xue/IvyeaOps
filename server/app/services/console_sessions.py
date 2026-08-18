@@ -362,8 +362,8 @@ def save_preset(name: str, principal: str, *, skill: str = "", approval: str = "
     clean = (name or "").strip()
     if not clean:
         raise ValueError("预设名不能为空")
-    if approval not in ("none", "remote"):
-        raise ValueError("审批档位只能是 none 或 remote")
+    if approval not in ("none", "remote", "auto"):
+        raise ValueError("审批档位只能是 none（只读）、remote（逐项审批）或 auto（完全放行）")
     row = {
         "name": clean[:120], "principal": principal or "", "skill": (skill or "")[:200],
         "approval": approval, "workspace": (workspace or "")[:120],

@@ -133,6 +133,18 @@ def test_opt_in_fields_reach_the_daemon_when_set():
     assert payload["plan_mode"] is False
 
 
+def test_approval_tiers_pass_through_and_junk_is_rejected():
+    """审批三档必须原样到达 daemon：none 剔除（只读是默认）、remote 逐项审批、
+    auto 完全放行。**脏值要在入口就打回**——放行档位判错的方向不能是"多做"。"""
+    assert "approval" not in mod._chat_payload(mod.ChatBody(message="hi", approval="none"))
+    for tier in ("remote", "auto"):
+        payload = mod._chat_payload(mod.ChatBody(message="hi", approval=tier, plan_mode=False))
+        assert payload["approval"] == tier and payload["plan_mode"] is False
+    for bad in ("yolo", "AUTO", "approve-all", "bypass"):
+        with pytest.raises(Exception):
+            mod.ChatBody(message="hi", approval=bad)
+
+
 def test_stream_reasoning_is_opt_in_and_actually_reaches_the_daemon():
     """思考流开关必须真的传下去 —— ChatBody 是白名单，漏一个字段的表现是
     "前端明明发了，界面上却什么都没有"，而且没有任何报错指向这里。

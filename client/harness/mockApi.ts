@@ -193,13 +193,27 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   ["/ivyea-agent/vision/describe", { ok: true, provider: "qwen-vl", text: "一张露营椅的主图。" }],
   // 会话详情：/ivyea-agent/chat/sessions/<id>。**必须比列表那条更长**才会先命中
   // （match() 按前缀长度排序），否则打开一条会话拿到的是空列表，永远验不到会话态。
-  ["/ivyea-agent/chat/sessions/", () => ({
-    ok: true,
-    session: {
-      id: "s3", model: "deepseek-v4-pro", messages: TURNS,
-      total_turns: 2, has_more: false,
-    },
-  })],
+  // 会话详情带 context：真 agent 在这里回一份"整条会话占了多少上下文"
+  // （service._public_session_detail），进度条打开历史会话时就靠它。
+  // used 按会话 id 派生，好让"切会话要换成另一条的数"这件事在验证台里看得出来。
+  ["/ivyea-agent/chat/sessions/", (url: string) => {
+    const id = decodeURIComponent((url.split("/ivyea-agent/chat/sessions/")[1] || "").split("?")[0]);
+    const seed = [...id].reduce((n, c) => n + c.charCodeAt(0), 0);
+    const messages = 4000 + (seed % 40) * 700;
+    return {
+      ok: true,
+      session: {
+        id: id || "s3", model: "deepseek-v4-pro", messages: TURNS,
+        total_turns: 2, has_more: false,
+        context: {
+          used: 1520 + 6910 + messages, window: 128000,
+          percent: Number((((1520 + 6910 + messages) * 100) / 128000).toFixed(2)),
+          estimated: true, model: "deepseek-v4-pro",
+          breakdown: { system: 1520, tools: 6910, messages },
+        },
+      },
+    };
+  }],
   ["/ivyea-agent/chat/sessions", { ok: true, sessions: [] }],
   ["/ivyea-agent/status", { ok: true, model: "deepseek-v4-pro", ready: true }],
   ["/ivyea-agent/skills", { ok: true, skills: [] }],
@@ -384,7 +398,13 @@ export function installMockApi(): void {
       async start(ctrl) {
         const send = (event: string, data: unknown) =>
           ctrl.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-        send("start", { session_id: "s-live", turn_id: "t-live", model: "deepseek-v4-pro" });
+        send("start", { session_id: "s-live", turn_id: "t-live", model: "deepseek-v4-pro",
+                        approval: "none", read_only: true });
+        // 上下文用量：真 agent 在第一个 token 之前就发一份，收尾再发一份（见
+        // service.chat_stream）。验证台不铺这条，上下文进度条就永远验不到。
+        send("context", { used: 9860, window: 128000, percent: 7.7, estimated: true,
+                          model: "deepseek-v4-pro",
+                          breakdown: { system: 1520, tools: 6910, messages: 1430 } });
         const think = [
           "用户问的是广告花费为什么涨了。",
           "先确认口径：是同比还是环比，",
@@ -402,7 +422,12 @@ export function installMockApi(): void {
         for (const t of ["先说结论：", "这一周花费涨了 34%，", "其中 28% 来自单次点击成本上升。"]) {
           await beat(500); send("token", { text: t });
         }
-        send("final", { session_id: "s-live", turn_id: "t-live" });
+        send("final", { session_id: "s-live", turn_id: "t-live",
+                        usage: { prompt_tokens: 9860, completion_tokens: 178,
+                                 prompt_cache_hit_tokens: 0, llm_ms: 2500 },
+                        context: { used: 11240, window: 128000, percent: 8.8, estimated: true,
+                                   model: "deepseek-v4-pro",
+                                   breakdown: { system: 1520, tools: 6910, messages: 2810 } } });
         ctrl.close();
       },
     }), { status: 200, headers: { "content-type": "text/event-stream" } });

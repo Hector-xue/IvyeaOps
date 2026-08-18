@@ -46,6 +46,11 @@ export type IvyeaChatSessionDetail = {
   steps?: IvyeaStepEvent[];
   /** 本页涉及的技能命中，anchor 是该轮第一个 call_id。 */
   skill_matches?: { anchor: string; skills: MatchedSkillRow[] }[];
+  /**
+   * 这条会话现在占多少上下文（agent ≥ v1.16）。**按整份存档算，不是按这一页** ——
+   * 打开历史会话时进度条就靠它，不必等用户再问一句才长出来。
+   */
+  context?: IvyeaContextUsage;
   /** 按轮分页的游标。老 agent 不回这个字段 —— 那就当成"只有这一页"。 */
   turns?: { total: number; from: number; to: number; has_more: boolean };
 };
@@ -345,6 +350,23 @@ export async function ivyeaAwaitSessionAnswer(
 }
 
 /** 一次 agent 轮次的入参。字段与 agent serve 的 /v1/chat/stream 一一对应。 */
+/**
+ * 上下文占用快照（agent 的 context 事件 / final.context）。
+ *
+ * used 是**估算**（estimated=true）：服务商回报的 prompt_tokens 只说得清"上一次
+ * 调用花了多少"，而进度条要在这一轮发出去之前就说得出话。分三档是因为满了之后
+ * 该动的地方完全不同：系统提示词大 = 人设太长，工具大 = 挂了全量工具，
+ * 对话消息大 = 该压缩历史了。
+ */
+export type IvyeaContextUsage = {
+  used: number;
+  window: number;
+  percent: number;
+  breakdown: { system: number; tools: number; messages: number };
+  estimated?: boolean;
+  model?: string;
+};
+
 export type IvyeaChatPayload = {
   message: string;
   session_id?: string;
@@ -357,8 +379,12 @@ export type IvyeaChatPayload = {
   skill?: string;
   /** 让 serve 按用户问题自动匹配 skill 并回发 skill_match 事件。 */
   auto_skill?: boolean;
-  /** "none"=沿用只读语义（默认）；"remote"=写操作走前端审批卡。 */
-  approval?: "none" | "remote";
+  /**
+   * 审批三档（线上语义，界面档位见 lib/approvalModes）：
+   * "none"=只读（默认）；"remote"=写操作弹前端审批卡；"auto"=完全放行、不再弹卡。
+   * **必须和 plan_mode 成对**：agent 那边 execute = 放开 && !plan_mode。
+   */
+  approval?: "none" | "remote" | "auto";
   /** 工作区（沙箱目录 / 上下文分组）。 */
   workspace?: string;
   turn_id?: string;
@@ -473,6 +499,11 @@ export async function ivyeaAgentChatStream(
      */
     onAnswerReset?: (data: { reason?: string }) => void;
     /**
+     * 本轮的上下文占用（agent ≥ v1.16）：进度条画的就是它。
+     * 老 agent 不发这条 —— 进度条整块不出现，而不是画一个编出来的百分比。
+     */
+    onContext?: (data: IvyeaContextUsage) => void;
+    /**
      * 模型的思考流（agent ≥ v1.10.3，且 payload 里带 stream_reasoning）。
      * 只有会思考的模型（deepseek-reasoner / claude / codex / gemini）才有；
      * 主脑不吐思考时这条永远不来，活动行退回显示工具步骤。
@@ -525,6 +556,7 @@ export async function ivyeaAgentChatStream(
     else if (event === "reasoning") {
       handlers.onReasoning?.(typeof data === "string" ? { text: data } : data || {});
     }
+    else if (event === "context") handlers.onContext?.(data);
     else if (event === "step") handlers.onStep?.(data);
     else if (event === "skill_match") handlers.onSkillMatch?.(data);
     else if (event === "file_change") handlers.onFileChange?.(data);
@@ -1154,7 +1186,9 @@ export async function consoleSessionImport(
 
 /** 智能体预设：一套"这类活按这么跑"的设置（技能 + 审批档位 + 工作区）。按用户隔离。 */
 export type ConsolePreset = {
-  name: string; skill: string; approval: "none" | "remote";
+  name: string; skill: string;
+  /** 线上语义的审批档位，见 lib/approvalModes。 */
+  approval: "none" | "remote" | "auto";
   workspace: string;
   /** 人设/判断标准。套用时整段并进这一轮的系统提示。 */
   system: string;

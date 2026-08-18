@@ -265,7 +265,7 @@ export default function ArtifactRail({
 
           {open === "approval" && (
             approvals.length === 0
-              ? <Empty>本轮没有需要确认的写操作。切到「逐项审批」后，Agent 想改动线上数据时会在这里留痕。</Empty>
+              ? <Empty>本轮没有需要确认的写操作。切到「审批放行」后，Agent 想改动线上数据时会在这里留痕。</Empty>
               : (
                 <ul className="cc-rail-approvals">
                   {approvals.map((a, i) => {
@@ -289,7 +289,9 @@ export default function ArtifactRail({
             <dl className="cc-rail-meta">
               <dt>会话</dt><dd>{sessionId || "未开始"}</dd>
               <dt>模型</dt><dd>{model || "—"}</dd>
-              <dt>模式</dt><dd>{readOnly === false ? "逐项审批（可写）" : "只读建议"}</dd>
+              {/* 只读与否由 start 事件回报（read_only），它是**服务端的事实**，
+                  比输入框上那枚芯片更可信 —— 芯片是"我想怎么跑"，这里是"实际怎么跑的"。 */}
+              <dt>模式</dt><dd>{readOnly === false ? "可写（审批放行 / 完全放行）" : "只读"}</dd>
               {usage && (
                 <>
                   <dt>用量</dt>

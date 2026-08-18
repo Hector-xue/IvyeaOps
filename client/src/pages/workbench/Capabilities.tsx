@@ -36,6 +36,7 @@ import { agentSyncRun, agentSyncStatus, type AgentSyncStatus } from "../../api/s
 import { getSettings, patchSettings } from "../../api/settings";
 import { marketBrowse, marketStatus, type MarketItem } from "../../api/client";
 import { errText } from "../../lib/errText";
+import { APPROVAL_MODES, approvalLabel, type ApprovalWire } from "../../lib/approvalModes";
 import CommunityMarket from "./CommunityMarket";
 import { openSettings } from "../../components/SettingsDialog";
 
@@ -449,7 +450,7 @@ function PresetsSection() {
   const [spaces, setSpaces] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({
-    name: "", skill: "", approval: "none" as "none" | "remote",
+    name: "", skill: "", approval: "none" as ApprovalWire,
     workspace: "", system: "", note: "",
   });
 
@@ -471,7 +472,7 @@ function PresetsSection() {
     try {
       await consolePresetSave(draft);
       setAdding(false);
-      setDraft({ name: "", skill: "", approval: "none", workspace: "", system: "", note: "" });
+      setDraft({ name: "", skill: "", approval: "none" as ApprovalWire, workspace: "", system: "", note: "" });
       await load();
       notifyConsolePresetsChanged();
       toast("success", "预设已保存");
@@ -505,7 +506,7 @@ function PresetsSection() {
                   {r.system || <span className="cap-dim">无</span>}
                 </td>
                 <td>{r.skill ? <code>{r.skill}</code> : <span className="cap-dim">不限定</span>}</td>
-                <td>{r.approval === "remote" ? "逐项审批" : "只读建议"}</td>
+                <td>{approvalLabel(r.approval)}</td>
                 <td>{r.workspace || <span className="cap-dim">默认</span>}</td>
                 <td><button className="tbtn danger" onClick={() => void drop(r.name)}>删除</button></td>
               </tr>
@@ -522,10 +523,13 @@ function PresetsSection() {
             <option value="">不限定技能</option>
             {skills.map((k) => <option key={k.id} value={k.id}>{k.title || k.id}</option>)}
           </select>
+          {/* 档位从 lib/approvalModes 取 —— 任务台加了「完全放行」，这里必须跟着有，
+              否则同一个概念在两个页面对不上。 */}
           <select className="inp" value={draft.approval}
-                  onChange={(e) => setDraft({ ...draft, approval: e.target.value as "none" | "remote" })}>
-            <option value="none">只读建议</option>
-            <option value="remote">逐项审批（可写）</option>
+                  onChange={(e) => setDraft({ ...draft, approval: e.target.value as ApprovalWire })}>
+            {APPROVAL_MODES.map((m) => (
+              <option key={m.wire} value={m.wire}>{m.label} —— {m.hint}</option>
+            ))}
           </select>
           <select className="inp" value={draft.workspace} onChange={(e) => setDraft({ ...draft, workspace: e.target.value })}>
             <option value="">默认工作区</option>

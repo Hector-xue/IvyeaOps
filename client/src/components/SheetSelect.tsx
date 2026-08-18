@@ -40,6 +40,15 @@ export interface SheetSelectProps {
   /** 透传到触发器的内联样式，保留 flex/宽度布局 */
   style?: CSSProperties;
   ariaLabel?: string;
+  /** 触发器上、标签之前的图标。任务台的芯片靠它认档位，不是装饰。 */
+  leading?: ReactNode;
+  /**
+   * 透传到浮层/抽屉的类名。
+   * **必须能分场景**：站点选择器的 sub 是国家名（"US 美国"，同一行才对），
+   * 任务台档位的 sub 是一整句解释（必须换行、否则被裁成"绝不改…"）。
+   * 一套样式满足不了两边，所以让调用方指定。
+   */
+  dropdownClassName?: string;
 }
 
 function normalize(opt: RawOption): SheetOption {
@@ -62,6 +71,8 @@ export default function SheetSelect({
   className,
   style,
   ariaLabel,
+  leading,
+  dropdownClassName,
 }: SheetSelectProps) {
   const [open, setOpen] = useState(false);
   const [ddStyle, setDdStyle] = useState<CSSProperties>({});
@@ -161,6 +172,7 @@ export default function SheetSelect({
         }
       }}
     >
+      {leading && <span className="xsel-leading">{leading}</span>}
       {curFlag && (
         <span className="xsel-flag">
           <img src={curFlag} alt="" />
@@ -177,7 +189,8 @@ export default function SheetSelect({
           {createPortal(
             <div
               ref={ddRef}
-              className="xsel-dropdown hide-mobile-picker"
+              className={"xsel-dropdown hide-mobile-picker"
+                + (dropdownClassName ? " " + dropdownClassName : "")}
               role="listbox"
               style={ddStyle}
               onMouseDown={(e) => e.stopPropagation()}
@@ -200,6 +213,7 @@ export default function SheetSelect({
                     {f && <img className="xsel-option-flag" src={f} alt="" />}
                     <span className="xsel-option-label">{o.label ?? o.value}</span>
                     {o.sub && <span className="xsel-option-sub">{o.sub}</span>}
+                    <span className="xsel-option-check" aria-hidden>✓</span>
                   </button>
                 );
               })}
@@ -209,7 +223,8 @@ export default function SheetSelect({
 
           {/* 手机端底部抽屉（portal 到 body，避免被 overflow/transform 祖先裁剪或错位） */}
           {createPortal(
-          <div className="show-mobile-picker" ref={sheetRef}>
+          <div className={"show-mobile-picker" + (dropdownClassName ? " " + dropdownClassName : "")}
+               ref={sheetRef}>
             <div
               className="xsel-sheet-backdrop"
               onClick={(e) => {

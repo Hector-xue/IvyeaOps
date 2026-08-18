@@ -334,6 +334,13 @@ def test_saving_same_name_updates_instead_of_duplicating():
     assert len(rows) == 1 and rows[0]["skill"] == "ads-v2" and rows[0]["approval"] == "none"
 
 
+def test_preset_accepts_the_full_allow_tier():
+    """任务台有三档（只读 / 审批放行 / 完全放行），预设必须存得下第三档 ——
+    存不下的话，同一个概念在两个页面对不上。"""
+    cs.save_preset("无人值守巡检", "alice@x.com", skill="ads", approval="auto")
+    assert cs.list_presets("alice@x.com")[0]["approval"] == "auto"
+
+
 def test_preset_rejects_blank_name_and_bad_approval():
     with pytest.raises(ValueError):
         cs.save_preset("   ", "alice@x.com")
