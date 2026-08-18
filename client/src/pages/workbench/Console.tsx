@@ -377,6 +377,10 @@ function ConsoleInner() {
     let alive = true;
     setLoadingSession(true);
     abortRef.current?.abort();
+    // 切会话先把上一条的数**清掉**再拉新的。留着不清是最糟的一种错：进度条和用量
+    // 看起来有效，其实说的是刚才那条会话 —— 用户不会怀疑一个显示着数字的控件。
+    setCtxUsage(null);
+    setUsage(null);
     ivyeaChatSession(urlSession)
       .then((d) => {
         if (!alive) return;
@@ -385,6 +389,9 @@ function ConsoleInner() {
         setTurns(page.turns.map((t) => ({ ...t, id: uid() })));
         setEarlier({ hasMore: page.hasMore, from: page.from, loading: false });
         setSessionId(urlSession);
+        // 历史会话的上下文占用由详情接口带回来（老 agent 没有这个字段 → 保持不显示）。
+        setCtxUsage((d?.session?.context as IvyeaContextUsage | undefined) || null);
+        if (d?.session?.usage) setUsage(d.session.usage);
         setFollowUps([]);
         setTodos([]);
         setFileChanges([]);

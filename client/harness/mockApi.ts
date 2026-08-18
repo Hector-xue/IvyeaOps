@@ -193,13 +193,27 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   ["/ivyea-agent/vision/describe", { ok: true, provider: "qwen-vl", text: "一张露营椅的主图。" }],
   // 会话详情：/ivyea-agent/chat/sessions/<id>。**必须比列表那条更长**才会先命中
   // （match() 按前缀长度排序），否则打开一条会话拿到的是空列表，永远验不到会话态。
-  ["/ivyea-agent/chat/sessions/", () => ({
-    ok: true,
-    session: {
-      id: "s3", model: "deepseek-v4-pro", messages: TURNS,
-      total_turns: 2, has_more: false,
-    },
-  })],
+  // 会话详情带 context：真 agent 在这里回一份"整条会话占了多少上下文"
+  // （service._public_session_detail），进度条打开历史会话时就靠它。
+  // used 按会话 id 派生，好让"切会话要换成另一条的数"这件事在验证台里看得出来。
+  ["/ivyea-agent/chat/sessions/", (url: string) => {
+    const id = decodeURIComponent((url.split("/ivyea-agent/chat/sessions/")[1] || "").split("?")[0]);
+    const seed = [...id].reduce((n, c) => n + c.charCodeAt(0), 0);
+    const messages = 4000 + (seed % 40) * 700;
+    return {
+      ok: true,
+      session: {
+        id: id || "s3", model: "deepseek-v4-pro", messages: TURNS,
+        total_turns: 2, has_more: false,
+        context: {
+          used: 1520 + 6910 + messages, window: 128000,
+          percent: Number((((1520 + 6910 + messages) * 100) / 128000).toFixed(2)),
+          estimated: true, model: "deepseek-v4-pro",
+          breakdown: { system: 1520, tools: 6910, messages },
+        },
+      },
+    };
+  }],
   ["/ivyea-agent/chat/sessions", { ok: true, sessions: [] }],
   ["/ivyea-agent/status", { ok: true, model: "deepseek-v4-pro", ready: true }],
   ["/ivyea-agent/skills", { ok: true, skills: [] }],

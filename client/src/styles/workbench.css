@@ -3253,9 +3253,11 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 
 /* ── 会话统计条（钉在输入框下方）──────────────────────────────────────────── */
 /* 统计条跟着输入框走：输入框是居中的一栏，它就该居中，而不是从左边缘起排。 */
+/* 统计条比芯片再小一档（.76em：quiet 12.2px / 经典 9.9px）。它是**诊断**，
+   不是控件 —— 和芯片一样大的话，输入框底下就成了两行同等重量的字。 */
 .cc-stats{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
-  gap:4px 12px;padding:7px 2px 0;
-  font-size:var(--fs-10);color:var(--t3);font-variant-numeric:tabular-nums}
+  gap:4px 12px;padding:0;
+  font-size:.76em;color:var(--t3);font-variant-numeric:tabular-nums}
 .cc-stats-toggle{display:inline-flex;align-items:center;gap:4px;padding:0 2px;border:none;
   background:transparent;color:var(--t3);font-family:var(--font);font-size:inherit;cursor:pointer}
 .cc-stats-toggle:hover{color:var(--t2)}
@@ -3316,10 +3318,17 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .cc-bar-spacer{flex:1 1 auto;min-width:8px}
 /* 芯片改成"无框、悬停才浮起来"：一行四五个带框胶囊会把输入框搞成一个仪表盘，
    而它们只是这一轮的参数。形状交给图标，边框留给真正要提醒的档位。 */
+/* **字号用 em，相对输入框的正文取比例，不从全局刻度里取一档。**
+ * 全局那张表在 quiet / 门道两套主题里被压成 4 档：--fs-105（芯片）和 --fs-10
+ * （模型名）落进**同一档 14.5px** —— 所以"把模型名调小一档"在这些主题里等于没写，
+ * 而 14.5px 的芯片紧挨着 16px 的正文，看着像第二行正文，整条底栏压过了输入区本身。
+ * 取 .82em：quiet 下 13.1px、经典主题下 10.7px（原来 10.5px，几乎不动）。 */
 .cc-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid transparent;
-  border-radius:999px;background:transparent;color:var(--t2);font-family:var(--font);font-size:var(--fs-105);
+  border-radius:999px;background:transparent;color:var(--t2);font-family:var(--font);font-size:.82em;
   cursor:pointer;transition:background-color var(--dur) var(--ease),color var(--dur) var(--ease),
   border-color var(--dur) var(--ease);max-width:190px;line-height:1.4}
+/* 下拉小箭头也跟着芯片缩，否则它比标签还大 */
+.cc-chip .xsel-caret{font-size:.85em}
 .cc-chip:hover{color:var(--t);background:var(--bg2)}
 .cc-chip svg{flex:0 0 auto;opacity:.85}
 .cc-chip .xsel-leading{display:inline-flex;align-items:center;flex:0 0 auto}
@@ -3340,7 +3349,9 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .cc-chip-mode svg{opacity:1}
 /* 老类名留着：quiet 皮肤和历史用法还在引它 */
 .cc-chip-warn{border-color:rgba(245,158,11,.45);color:var(--amber)}
-.cc-chip-model{max-width:230px;color:var(--t3);font-size:var(--fs-10)}
+/* 模型名和左边那几枚芯片**同一个字号**，层级差别交给颜色和字重去表达 ——
+   一行里两种小字号只会显得是没对齐。 */
+.cc-chip-model{max-width:230px;color:var(--t3)}
 .cc-chip-model:hover{color:var(--t2)}
 /* 发送键：圆、实心、图标居中。禁用态不用 opacity 掏空（那会连图标一起变灰糊），
    改成灰底 + 弱前景 —— 形状还在，只是"现在还不能点"。 */
@@ -3357,10 +3368,13 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 /* ── 上下文进度条 ─────────────────────────────────────────────────────────
  * 钉在输入框下面那一行，和会话统计条并排。默认只有一条 44px 的细条 + 一个百分比，
  * 点开才是细账 —— 它是"要用的时候才看"的东西，不该常驻占一行字。 */
-.cc-dock-meta{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:6px}
+/* 进度条 + 统计条：**整行居中**，宽度随内容长短自适应（flex 居中天然如此）。
+   输入框是居中的一栏，它底下这行从左边缘起排就永远和输入框对不齐。 */
+.cc-dock-meta{display:flex;align-items:center;justify-content:center;gap:14px;
+  flex-wrap:wrap;margin-top:8px}
 .cc-ctx{position:relative;display:inline-flex;align-items:center;flex:0 0 auto}
-.cc-ctx-trigger{display:inline-flex;align-items:center;gap:7px;padding:3px 7px;border:none;border-radius:8px;
-  background:transparent;cursor:pointer;font-family:var(--font);color:var(--t3);font-size:var(--fs-10);
+.cc-ctx-trigger{display:inline-flex;align-items:center;gap:7px;padding:2px 6px;border:none;border-radius:8px;
+  background:transparent;cursor:pointer;font-family:var(--font);color:var(--t3);font-size:.76em;
   transition:background-color var(--dur) var(--ease),color var(--dur) var(--ease)}
 .cc-ctx-trigger:hover{background:var(--bg2);color:var(--t2)}
 .cc-ctx-track{display:flex;width:46px;height:5px;border-radius:3px;background:var(--bg3);overflow:hidden}

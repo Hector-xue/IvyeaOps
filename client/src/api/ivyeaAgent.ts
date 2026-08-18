@@ -46,6 +46,11 @@ export type IvyeaChatSessionDetail = {
   steps?: IvyeaStepEvent[];
   /** 本页涉及的技能命中，anchor 是该轮第一个 call_id。 */
   skill_matches?: { anchor: string; skills: MatchedSkillRow[] }[];
+  /**
+   * 这条会话现在占多少上下文（agent ≥ v1.16）。**按整份存档算，不是按这一页** ——
+   * 打开历史会话时进度条就靠它，不必等用户再问一句才长出来。
+   */
+  context?: IvyeaContextUsage;
   /** 按轮分页的游标。老 agent 不回这个字段 —— 那就当成"只有这一页"。 */
   turns?: { total: number; from: number; to: number; has_more: boolean };
 };
