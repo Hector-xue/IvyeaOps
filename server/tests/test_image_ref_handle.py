@@ -105,3 +105,23 @@ def test_image_generate_tool_accepts_a_handle(monkeypatch):
         {"prompt": "改成夜景", "image_urls": ["ivyea-ref://deadbeef"]}))
     assert seen["urls"] == ["ivyea-ref://deadbeef"]
     assert out["task_id"] == "edit_x"
+
+
+def test_same_millisecond_handles_keep_their_order(monkeypatch):
+    """同一毫秒内落的图也要有严格先后 —— 否则"刚贴的那张"会被当成最旧的删掉。
+
+    这条曾经只在 CI 的快机器上偶发：6 张图全落进同一毫秒，文件名前缀相同，
+    排序退回到随机尾巴，`refs[-1]` 被清掉，一调 image_generate 就是"引用已过期"。
+    """
+    monkeypatch.setattr(assistant.time, "time", lambda: 1_700_000_000.0)   # 时间钉死
+    monkeypatch.setattr(assistant, "_KEEP_REFS", 3)
+
+    refs = [assistant.image_ref(assistant.ImageRefReq(data_url=DATA_URL), _user="t")["ref"]
+            for _ in range(6)]
+    assert len(list(assistant._REFS_DIR.glob("*.png"))) == 3
+    # 活下来的必须是最后三张，尤其最后一张
+    raw, _ = asyncio.run(assistant._source_to_bytes(refs[-1]))
+    assert raw == base64.b64decode(PNG)
+    for stale in refs[:3]:
+        with pytest.raises(ValueError, match="附图引用"):
+            asyncio.run(assistant._source_to_bytes(stale))

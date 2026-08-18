@@ -6,6 +6,7 @@ no filesystem. Safe to expose to registered (non-admin) users.
 from __future__ import annotations
 
 import asyncio
+import itertools
 import logging
 import base64
 import json
@@ -341,14 +342,24 @@ def _ref_file(ref_id: str) -> Path | None:
     return hit[0] if hit else None
 
 
+#: 进程内自增序号。见 _new_ref_id —— 毫秒级时间戳不足以给同一批图定先后。
+_REF_SEQ = itertools.count()
+
+
 def _new_ref_id() -> str:
-    """毫秒时间戳（定宽 hex）+ 随机尾巴。
+    """毫秒时间戳（定宽 hex）+ 进程内自增序号 + 随机尾巴。
 
     **前缀是为了让文件名按时间排序**：清理旧图时不能拿 mtime 排 —— 同一毫秒内落
     的几张图 mtime 会并列，谁被删就看文件系统心情，用户刚贴的那张也可能被清掉，
     然后 agent 一调 image_generate 就是"附图引用已过期"。
+
+    **但毫秒本身也不够细。** 一次贴 6 张图在快机器上会全落进同一毫秒，那时前缀
+    完全相同，排序退回到那条随机尾巴 —— 刚贴的那张照样可能排在最前面被当成"最旧的"
+    删掉，正是上面这段注释想避免的事，只是从 mtime 挪到了文件名。CI 上偶发复现
+    （同一个 PR 里 ubuntu 两个 py 版本齐挂、macOS/Windows 全过，就是这个时序差）。
+    加一个进程内自增序号，同一毫秒内也有严格先后。
     """
-    return f"{int(time.time() * 1000):011x}{uuid.uuid4().hex[:5]}"
+    return f"{int(time.time() * 1000):011x}{next(_REF_SEQ) & 0xFFFF:04x}{uuid.uuid4().hex[:5]}"
 
 
 def _prune_refs() -> None:
