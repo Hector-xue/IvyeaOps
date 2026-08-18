@@ -1,0 +1,29 @@
+# 仓库根的 lint 门禁（server/ 另有自己的一份，就近生效，不受这里影响）
+#
+# 为什么需要这一份：CI 的 `ruff check` 是**在仓库根**跑的，而根目录此前没有配置 ——
+# 于是 client/、scripts/、skills/ 这些目录吃的是 ruff 的**默认规则集**。默认集会随
+# ruff 版本变：0.16 起 I001 / BLE001 / S110 这些也默认开了，仓库一个字没改，门禁
+# 却能一夜变红（实测根目录 46 条，其中 30 条来自 skills/ 下的外部技能脚本）。
+# 门禁的判据必须由仓库自己写死，不能交给工具的默认值。
+#
+# 规则集与 server/ruff.toml 保持同一条原则：**只收录当前零违规的规则**，
+# 一旦变红必然是这次改动引入的。
+
+target-version = "py39"
+line-length = 120
+extend-exclude = [
+    "build", "dist", "data", ".venv", "node_modules", "*.bak.*",
+    # 技能市场装进来的**外部技能脚本**。它们是随技能包一起分发的第三方代码
+    # （zach-search-term-report-analyzer / amazon-ad-campaign-optimization-xlsx …），
+    # 我们不改它们的风格，也不该拿本仓库的门禁去卡它们 —— 真要改，改的是上游。
+    "skills",
+]
+
+[lint]
+select = [
+    "F",     # pyflakes：未定义名、重复定义、未用导入 —— 真 bug 层
+    "E9",    # 语法/IO 错误
+    "B005",  # strip() 传多字符串
+    "B018",  # 没有效果的表达式语句
+    "C4",    # 多余的推导式/集合调用
+]
