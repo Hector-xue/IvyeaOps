@@ -3037,15 +3037,44 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
    其余一律往后退**。原来标题 26px、输入框 720px、场景芯片和输入框几乎等重，
    三样东西在抢同一个焦点。现在拉开：标题 34px，输入框 780px 并整体上移一点
    （视觉重心略高于几何中心才不显得"沉在底部"），场景芯片退成弱提示。 */
+/* 首屏是每天都要经过的地方，它只需要说清一件事：**从这里开始**。所以版面按
+   「一团光 → 一行字 → 一个大输入框 → 一排轻入口」四层收拢，其余全部退到背景里。
+   光晕用 background-image 而不是绝对定位的伪元素 —— .cc-hero 自己是滚动容器，
+   任何超出它宽度的子元素都会立刻长出一条横向滚动条。 */
 .cc-hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:24px 16px 15vh;gap:20px;overflow-y:auto}
+  padding:24px 16px 11vh;gap:22px;overflow-y:auto;
+  background-repeat:no-repeat;
+  /* 光晕**只罩输入框那一带**，不能铺到标题行：站标是一张不透明白底的 PNG，
+     一旦它下面的页面被染上一点色，那块白底就会现出一个方块。 */
+  background-image:
+    radial-gradient(46% 26% at 50% 55%, color-mix(in srgb,var(--acc) 7%,transparent) 0%, transparent 100%),
+    radial-gradient(27% 16% at 50% 54%, color-mix(in srgb,var(--acc) 5%,transparent) 0%, transparent 100%)}
 .cc-hero-title{font-size:34px;font-weight:650;color:var(--t);margin:0;letter-spacing:-.02em;
   line-height:1.35}
 .cc-hero-sub{font-size:var(--fs-12);color:var(--t3);margin:0;text-align:center;max-width:520px;line-height:1.7}
-.cc-hero-composer{width:100%;max-width:780px;margin-top:2px}
-.cc-scenes{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:660px;
-  margin-top:4px;opacity:.9}
-.cc-scene{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--b);
+.cc-hero-composer{width:100%;max-width:760px;margin-top:2px}
+
+/* 首屏输入器 —— 会话态那只贴底的窄条不适合当主角。这里把它放大成"一块地方"：
+   三行左右的起步高度、更大的圆角、更厚的留白，加一层比页面高一档的投影，
+   让它从光晕里浮起来。会话态（.compact）完全不受影响。 */
+.cc-hero-composer .cc-composer{padding:16px 16px 12px;border-radius:24px;
+  box-shadow:0 10px 34px rgb(0 0 0 / .07), 0 2px 8px rgb(0 0 0 / .04)}
+/* 首屏这只框是**默认聚焦**的（autoFocus），所以"聚焦态"就是它每天的样子 ——
+   拿满饱和度的强调色描一圈 24px 的大边会盖过标题。改成淡一档的边 + 一圈更淡的
+   光晕：焦点仍然看得出来，但它不再是整屏最响的东西。 */
+.cc-hero-composer .cc-composer:focus-within{
+  border-color:color-mix(in srgb,var(--acc) 45%,var(--b));
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--acc) 11%,transparent), 0 12px 36px rgb(0 0 0 / .09)}
+.cc-hero-composer .cc-input{min-height:72px}
+.cc-hero-composer .cc-bar{margin-top:10px;gap:7px}
+.cc-hero-composer .cc-send{width:38px;height:38px;font-size:var(--fs-13)}
+
+/* 场景入口：一排可点的文字，居中排一行。原来是两列网格，5 个入口必然剩下一个
+   落单挂在左下角 —— 版面立刻歪掉；数量还会随权限变（这张表是按可见性算的）。
+   居中换行对任何条数都成立。 */
+.cc-scenes{display:flex;flex-wrap:wrap;gap:6px 10px;justify-content:center;max-width:720px;
+  margin-top:2px}
+.cc-scene{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border:1px solid var(--b);
   border-radius:999px;background:var(--bg1);color:var(--t2);font-family:var(--font);font-size:var(--fs-11);
   cursor:pointer;transition:color var(--dur) var(--ease),border-color var(--dur) var(--ease),
   background-color var(--dur) var(--ease),transform var(--dur) var(--ease)}
@@ -3396,7 +3425,6 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .sb-tools-tree{padding:2px 0 6px}
 .sb-tools-tree .ni{padding-left:26px;font-size:var(--fs-11)}
 .sb-tools-group{padding:8px 18px 3px;font-size:var(--fs-9);color:var(--t3);letter-spacing:.08em}
-.ni-more{color:var(--t3);font-size:var(--fs-10);padding-left:26px}
 /* 顶栏的终端选择器（汉堡下拉）。列表本身一天点几次，不该常年占一整列。 */
 .term-picker{position:relative;display:inline-flex}
 .term-picker-btn{white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
