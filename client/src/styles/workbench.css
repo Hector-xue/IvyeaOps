@@ -436,7 +436,12 @@ body::after{
  * 会话不再被板块列表挤下去。
  */
 .sb-nav-console{display:flex;flex-direction:column;overflow:hidden;padding:6px 0 0}
-.sb-nav-fixed{flex-shrink:0}
+/* **必须是 flex 列。** 下面 button.ni 用的是 `width:auto + align-self:stretch`
+   （见那条注释：不能用 100%，.ni 带左右外边距会撑出容器）—— 而 stretch 只在
+   flex 容器里成立。这里原来是块级容器，于是 Chrome 按"按钮盒"给 <button> 量
+   fit-content：「新建任务」「全部工具」**整行只有文字那一小块能点**，同类的 <a>
+   却是铺满的；.ni-count 的 margin-left:auto 也推不动，数量就贴在标题后面。 */
+.sb-nav-fixed{flex-shrink:0;display:flex;flex-direction:column;align-items:stretch}
 /* min-height:0 是必须的：flex 子项默认 min-height:auto，不写的话它会被内容撑高，
    overflow 永远不生效，三段式就退化回一条长滚动。 */
 .sb-nav-flex{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column}
@@ -461,6 +466,7 @@ body::after{
   display:inline-flex;align-items:center;justify-content:center}
 .ni .ic svg{display:block}
 .ni-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+
 .nb{margin-left:auto;font-size:var(--fs-9);padding:1px 5px;background:color-mix(in srgb, var(--acc) 12%, transparent);color:var(--acc);border-radius:8px}
 .dot{width:5px;height:5px;border-radius:50%;background:var(--acc);flex-shrink:0;animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
@@ -3209,8 +3215,13 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .cc-earlier button:disabled{cursor:default;opacity:.6}
 
 /* ── 会话统计条（钉在输入框下方）──────────────────────────────────────────── */
-.cc-stats{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:6px 2px 0;
+/* 统计条跟着输入框走：输入框是居中的一栏，它就该居中，而不是从左边缘起排。 */
+.cc-stats{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
+  gap:4px 12px;padding:7px 2px 0;
   font-size:var(--fs-10);color:var(--t3);font-variant-numeric:tabular-nums}
+.cc-stats-toggle{display:inline-flex;align-items:center;gap:4px;padding:0 2px;border:none;
+  background:transparent;color:var(--t3);font-family:var(--font);font-size:inherit;cursor:pointer}
+.cc-stats-toggle:hover{color:var(--t2)}
 .cc-stat{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;cursor:default}
 .cc-stat + .cc-stat{padding-left:12px;border-left:1px solid var(--b)}
 .cc-stat-k{color:var(--t3);opacity:.75}
@@ -3859,26 +3870,30 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
    使用频率是"一个月一次"，却天天占着视野。这一块把它们全收进来：账户行只
    露两行字（名字 / 版本·用量）+ 一个齿轮，其余全在菜单里。
    ════════════════════════════════════════════════════════════════════════════ */
-.sb-acct-wrap{position:relative;padding:8px;flex-shrink:0}
-.sb-acct{display:flex;align-items:center;gap:9px;width:100%;padding:7px 8px;
+/* 账户区。原来外 8px + 内 7px + 26px 头像 + 两行文字 ≈ 58px，在侧栏最底下顶出
+   很大一块，比 ChatGPT 同位置高出一截。压到 ≈46px：内外边距各收一档、头像 26→22。 */
+.sb-acct-wrap{position:relative;padding:4px 8px 6px;flex-shrink:0}
+.sb-acct{display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px;
   border:1px solid transparent;border-radius:8px;background:transparent;
   color:var(--t2);font-family:var(--font);cursor:pointer;text-align:left;
   transition:background-color var(--dur,.14s) var(--ease,ease),border-color var(--dur,.14s) var(--ease,ease)}
 .sb-acct:hover,.sb-acct.open{background:var(--bg2);color:var(--t)}
 /* 头像位装的是 Ivyea logo（见 AccountMenu 里的说明：这个位置点不出上传头像，
    就不该摆一个看起来能换、其实换不了的首字母占位符）。 */
-.sb-acct-avatar{position:relative;flex-shrink:0;width:26px;height:26px;border-radius:8px;
+.sb-acct-avatar{position:relative;flex-shrink:0;width:22px;height:22px;border-radius:7px;
   display:inline-flex;align-items:center;justify-content:center;overflow:visible}
-.sb-acct-avatar img{width:26px;height:26px;border-radius:8px;object-fit:contain;display:block}
+.sb-acct-avatar img{width:22px;height:22px;border-radius:7px;object-fit:contain;display:block}
 /* 有新版本时头像挂红点 —— 用户不需要认识这个点，就知道该点进去看看。 */
 .sb-acct-dot{position:absolute;top:-1px;right:-1px;width:8px;height:8px;border-radius:50%;
   background:var(--red);box-shadow:0 0 0 2px var(--bg1)}
 .sb-acct-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+/* 两行文字继承的是正文行高（≈1.6），两行加起来 45px —— 账户区那点高度大半是它撑的。
+   这一块是"看一眼就知道是谁 + 版本几"，行高收到 1.25 足够。 */
 .sb-acct-name{font-size:var(--fs-11);color:var(--t);white-space:nowrap;overflow:hidden;
-  text-overflow:ellipsis}
+  text-overflow:ellipsis;line-height:1.25}
 /* 副标题就是版本号的落点：顺眼扫到，不占一个独立控件位。 */
 .sb-acct-sub{font-size:var(--fs-9);color:var(--t3);white-space:nowrap;overflow:hidden;
-  text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+  text-overflow:ellipsis;font-variant-numeric:tabular-nums;line-height:1.25}
 .sb-acct-cost{font-variant-numeric:tabular-nums}
 .sb-acct-gear{font-style:normal;flex-shrink:0;color:var(--t3);display:inline-flex;align-items:center}
 .sb-acct:hover .sb-acct-gear{color:var(--t2)}

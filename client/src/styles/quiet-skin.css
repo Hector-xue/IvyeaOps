@@ -96,7 +96,9 @@ html[data-skin="quiet"] .cc-thread-wrap::after {
   content: '';
   position: absolute;
   left: 0; right: 0; bottom: 0;
-  height: 30px;
+  /* 44 而不是 30：30px 的渐隐吃不掉一整行 16px/1.8 的正文，滚到底下的那行会被
+     齐刷刷切一刀，看着像"输入框压住了字"。要让它是**化开**的，就得比一行高。 */
+  height: 44px;
   pointer-events: none;
   background: linear-gradient(to bottom, transparent, var(--bg));
 }

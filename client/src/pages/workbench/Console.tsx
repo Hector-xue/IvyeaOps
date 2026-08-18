@@ -700,7 +700,14 @@ function ConsoleInner() {
         {
           onFileChange: (d) => setFileChanges((prev) => [...prev, d]),
           onStart: (d) => {
-            if (d?.session_id) { liveSid = d.session_id; setSessionId(d.session_id); }
+            if (d?.session_id) {
+              // 新会话要**立刻**进左栏。原来只在整轮跑完时广播一次，而一轮动辄几分钟——
+              // 这段时间里左栏看不见这条会话，用户只能刷新整页才看到它。
+              // 带上 id：左栏取回来发现还没有这条（agent 侧刚落库，有一拍延迟）会自己再取一次。
+              if (d.session_id !== liveSid) notifyConsoleSessionsChanged(d.session_id);
+              liveSid = d.session_id;
+              setSessionId(d.session_id);
+            }
             if (d?.model) setModel(typeof d.model === "string" ? d.model : d.model?.model || "");
             if (typeof d?.read_only === "boolean") setReadOnly(d.read_only);
           },

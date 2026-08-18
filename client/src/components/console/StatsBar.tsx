@@ -13,6 +13,7 @@
  * 底下——那是一整行噪声，还把真正有数的第一项（几轮几步）淹掉了。所以：**没有值的
  * 项直接不出现**，一旦模型服务商开始回报，它自己就长出来。
  */
+import { useState } from "react";
 import type { TurnStats } from "../../lib/turnStats";
 
 function fmtTokens(n: number): string {
@@ -32,6 +33,11 @@ function fmtDuration(ms: number): string {
 }
 
 export default function StatsBar({ stats }: { stats: TurnStats }) {
+  /*
+   * 默认只露两项。八项数字一字排开钉在输入框底下，一行放不下会折成两行，
+   * 那是输入区最不该有的东西 —— 它是诊断，不是控件。想看细账点一下就全出来。
+   */
+  const [open, setOpen] = useState(false);
   if (!stats.turns) return null;
 
   const items: { label: string; value: string; title: string }[] = [];
@@ -69,14 +75,27 @@ export default function StatsBar({ stats }: { stats: TurnStats }) {
     title: "本会话累计 token 用量（由模型服务商回报）",
   });
 
+  const shown = open ? items : items.slice(0, 2);
+
   return (
     <div className="cc-stats" role="status" aria-label="会话统计">
-      {items.map((it, i) => (
+      {shown.map((it, i) => (
         <span className="cc-stat" key={i} title={it.title}>
           {it.label && <span className="cc-stat-k">{it.label}</span>}
           <span className="cc-stat-v">{it.value}</span>
         </span>
       ))}
+      {items.length > 2 && (
+        <button
+          type="button"
+          className="cc-stats-toggle"
+          onClick={() => setOpen((v) => !v)}
+          title={open ? "收起细账" : "展开这一会话的耗时与用量细账"}
+        >
+          {open ? "收起" : "细账"}
+          <span>{open ? "⌃" : "⌄"}</span>
+        </button>
+      )}
     </div>
   );
 }

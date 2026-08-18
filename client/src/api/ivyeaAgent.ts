@@ -745,8 +745,13 @@ export async function consoleWorkspaceDelete(name: string) {
 /** 左栏需要刷新会话列表时广播它（发完一轮、改名、删除…）。 */
 export const CONSOLE_SESSIONS_CHANGED = "ivyea-ops:console-sessions-changed";
 
-export function notifyConsoleSessionsChanged() {
-  window.dispatchEvent(new CustomEvent(CONSOLE_SESSIONS_CHANGED));
+/**
+ * @param expectId 期望这一次刷新之后能在列表里看到的会话 id。会话是 agent 侧落库的，
+ *   「开始」事件到得比落库早一拍 —— 左栏取回来没看见它，就按这个 id 再补取一次，
+ *   而不是让用户去刷新整页。
+ */
+export function notifyConsoleSessionsChanged(expectId?: string) {
+  window.dispatchEvent(new CustomEvent(CONSOLE_SESSIONS_CHANGED, { detail: { expectId } }));
 }
 
 /**
