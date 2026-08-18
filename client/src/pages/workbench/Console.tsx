@@ -20,7 +20,6 @@ import { ToastProvider, useToast } from "../../components/toast";
 import { CONSOLE_NEW_EVENT, sceneChips } from "../../lib/navRegistry";
 import Icon from "../../components/Icon";
 import {
-  formatMs,
   mergeStep,
   noteStep,
   primeOpsToolLabels,
@@ -993,11 +992,13 @@ function ConsoleInner() {
                           {t.failed ? t.text : <MarkdownReport text={t.text} />}
                         </div>
                       )}
-                      {t.running && !t.text && (
-                        <div className="cc-thinking">
-                          <span className="spin" /> 正在处理{t.elapsedMs ? ` · ${formatMs(t.elapsedMs)}` : ""}
-                        </div>
-                      )}
+                      {/*
+                        * 这里原来还有一行「⟳ 正在处理 · 12.3s」。它和上面那条活动行
+                        * **说的是同一件事**：活动行左边在转、右边的 tail 就是同一个
+                        * 12.3s，两行叠在一起只是把同一个状态说了两遍，而且两行的左
+                        * 缩进还对不齐（活动行有 11px 内边距，这行没有）。运行态的
+                        * 唯一指示就是活动行。
+                        */}
                       {(t.approvals || []).map(({ req, decision }) => (
                         <ApprovalCard
                           key={req.request_id}

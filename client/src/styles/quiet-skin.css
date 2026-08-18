@@ -286,11 +286,22 @@ html[data-skin="quiet"] .cc-bubble {
 
 /* 6.4 执行过程：去掉外框；展开后用**左侧一条发丝竖线**表达层级，而不是盒子。
        竖线是"这些属于上一行"的最轻量表达 —— 一根线，不是四根。 */
-html[data-skin="quiet"] .cs-timeline { background: transparent !important; }
+/* 边框要**真的去掉**而不只是透明：留着那 1px 会把整条活动行往里挤 1px，
+   于是它和下面的回答差一个像素对不齐（量出来是 472 : 471）。 */
+html[data-skin="quiet"] .cs-timeline { background: transparent !important; border-width: 0 !important; }
+/* 活动行左对齐到正文列。cs-live-main 的 11px 内边距是给 hover 底色留的呼吸，
+   框还在的时候看不出来；静谧把框去掉之后，它就变成一段没有来由的缩进 —— 上面的
+   提问、下面的回答都从 0 开始，只有这一行往里缩。用负 margin 把**字**拉回 0，
+   hover 底色照样有内边距。 */
+html[data-skin="quiet"] .cs-live-main {
+  padding-left: 8px;
+  margin-left: -8px;
+  border-radius: 8px;
+}
 html[data-skin="quiet"] .cs-log-wrap {
   border-top: none !important;
   border-left: 1px solid var(--b) !important;
-  margin-left: 11px;
+  margin-left: 6px;   /* 竖线走在图标那一列的正下方 */
   padding-left: 12px;
 }
 html[data-skin="quiet"] .cs-args {
@@ -390,6 +401,12 @@ html[data-skin="quiet"] .md-tr { border-bottom: 1px solid var(--b) !important; }
 html[data-skin="quiet"] .md-bullet { color: var(--t3) !important; }
 html[data-skin="quiet"] .md-quote { border-left-color: var(--b2) !important; font-style: normal; }
 html[data-skin="quiet"] .md-hr { border-top-color: var(--b) !important; }
+/* 段间距。基线是 6px 的 .md-gap —— 在 16px/1.8 的正文里，段与段之间几乎贴着，
+   一屏下来就是一堵字墙（用户的原话是"凌乱"）。对比 ChatGPT：它的段距接近一个
+   整行。列表项之间同理松一档。 */
+html[data-skin="quiet"] .md-gap { height: 15px; }
+html[data-skin="quiet"] .md-li { line-height: 1.8; margin: 3px 0; }
+html[data-skin="quiet"] .md-quote { margin: 10px 0; padding: 2px 0 2px 14px; }
 
 
 /* ── ⑧ 侧栏项：选中态由左侧色条改为整块淡底 ──────────────────────────────

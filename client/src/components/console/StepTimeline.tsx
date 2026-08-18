@@ -156,13 +156,23 @@ export default function StepTimeline({
           aria-expanded={open}
           title={open ? "收起执行过程" : "展开执行过程"}
         >
-          <span className={"cs-live-icon" + (running ? " spinning" : "")}>
-            {running ? "⟳" : "✓"}
+          {/*
+            * 前面只留**一枚**图标。原来是"绿色 ⟳ 在转"外加紧跟着的 ✻/工具图标两枚，
+            * 转的那枚还和它描述的事情没关系 —— 用户读到的是"一个绿圈在转，旁边不知
+            * 为何还有个紫色星号"。现在跑的时候转/呼吸的就是当前这件事自己的图标，
+            * 收尾了才换成 ✓。
+            */}
+          <span
+            className={
+              "cs-live-icon"
+              + (running ? (live?.thinking ? " spinning cs-live-think" : " breathing") : " cs-live-done")
+            }
+          >
+            {running ? (live?.icon || "✻") : "✓"}
           </span>
           {live ? (
             /* key 换了就重新挂载 —— 新一行从下方滑入，视觉上"顶掉"上一行。 */
             <span className={"cs-live-text" + (live.thinking ? " cs-live-think" : "")} key={live.key}>
-              <i className="cs-icon">{live.icon}</i>
               <span className="cs-live-label">{live.label}</span>
               {live.detail && <span className="cs-live-detail">{live.detail}</span>}
             </span>

@@ -3121,8 +3121,17 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
   cursor:pointer;text-align:left;overflow:hidden;
   transition:color var(--dur) var(--ease),background-color var(--dur) var(--ease)}
 .cs-live-main:hover{color:var(--t2);background:var(--bg2)}
-.cs-live-icon{color:var(--acc);flex-shrink:0;display:inline-block}
-.cs-live-icon.spinning{animation:cs-spin 1.1s linear infinite}
+/* 活动行前面**只有一枚图标**。原来是"绿色 ⟳ 在转 + 紧跟一枚 ✻/工具图标"两枚
+   并排，转的那枚还和它描述的事情无关。现在跑的时候转的就是当前这件事自己的
+   图标（思考是紫色 ✻），结束了才变成 ✓。宽度钉死，免得 ✻↔✓ 换字形时整行左右跳。 */
+.cs-live-icon{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
+  width:14px;height:14px;color:var(--t3);font-style:normal;line-height:1}
+.cs-live-icon.cs-live-done{color:var(--acc)}
+.cs-live-icon.cs-live-think{color:var(--purple)}
+.cs-live-icon.spinning{animation:cs-spin 2.4s linear infinite}
+/* 工具图标多是 emoji，转起来很怪 —— 它们改成呼吸。 */
+.cs-live-icon.breathing{animation:cs-breathe 1.6s var(--ease) infinite}
+@keyframes cs-breathe{0%,100%{opacity:.45}50%{opacity:1}}
 /* 新一行从下方滑入 = 上一行被"顶掉"。key 变了 React 会重挂载，动画自然重放。 */
 .cs-live-text{display:flex;align-items:center;gap:6px;min-width:0;flex:1;
   animation:cs-live-in .18s var(--ease)}
@@ -3188,7 +3197,7 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 /* 减少动效偏好：位移动画全关。这条流是持续在动的，晕动症用户尤其受不了。 */
 @media (prefers-reduced-motion: reduce){
   .cs-live-text{animation:none}
-  .cs-live-icon.spinning{animation:none}
+  .cs-live-icon.spinning,.cs-live-icon.breathing{animation:none}
 }
 
 /* 「加载更早的对话」—— 长会话按轮分页，顶部的入口 */
@@ -3405,8 +3414,11 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .sb-ws-del{opacity:0;font-size:var(--fs-9);color:var(--t3);flex-shrink:0;padding:0 2px;transition:opacity var(--dur) var(--ease)}
 .sb-ws-title:hover .sb-ws-del{opacity:1}
 .sb-ws-del:hover{color:var(--red)}
-.sb-sess{display:flex;align-items:center;gap:6px;padding:4px 12px 4px 24px;cursor:pointer;
-  color:var(--t2);font-size:var(--fs-105);border-left:2px solid transparent;
+/* 会话行。标题走**正文色**而不是次级色 —— 这是一列"要读的东西"，不是元信息；
+   对比 ChatGPT 的会话列表，它的条目就是近黑。行高也松一档（4→6px）：一屏三十
+   条挤在 29px 行距里，扫起来是一片糊。 */
+.sb-sess{display:flex;align-items:center;gap:6px;padding:6px 12px 6px 24px;cursor:pointer;
+  color:var(--t);font-size:var(--fs-105);border-left:2px solid transparent;
   transition:color var(--dur) var(--ease),background-color var(--dur) var(--ease)}
 .sb-sess:hover{color:var(--t);background:var(--bg2)}
 .sb-sess.active{color:var(--acc);border-left-color:var(--acc);

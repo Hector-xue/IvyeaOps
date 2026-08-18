@@ -7,6 +7,11 @@
  *
  * **算不出来就显示「—」，绝不显示 0。** 与 CostChip 同一条判断：一个假的 0 比一个
  * 诚实的「—」危险得多 —— 用户会把"没测到"读成"没花"。
+ *
+ * 但"没测到就不显示这一项"和"把没测到的显示成 0"是两回事。老 agent 一项都不回报时，
+ * 这里会排出「用时 — 首字 — — 缓存命中 — 输入 — · 输出 —」六个破折号钉在输入框
+ * 底下——那是一整行噪声，还把真正有数的第一项（几轮几步）淹掉了。所以：**没有值的
+ * 项直接不出现**，一旦模型服务商开始回报，它自己就长出来。
  */
 import type { TurnStats } from "../../lib/turnStats";
 
@@ -35,8 +40,8 @@ export default function StatsBar({ stats }: { stats: TurnStats }) {
     label: "", value: `${stats.turns} 轮 · ${stats.steps} 步`,
     title: "本会话的问答轮数与 Agent 执行的步数（不含规划/汇报类步骤）",
   });
-  items.push({
-    label: "用时", value: stats.elapsedMs ? fmtDuration(stats.elapsedMs) : "—",
+  if (stats.elapsedMs) items.push({
+    label: "用时", value: fmtDuration(stats.elapsedMs),
     title: "各轮从发出到收尾的挂钟时间之和",
   });
   // LLM 耗时只有新版 agent 会回报。老 agent 连着时整项不出现 —— 显示一个「—」会让人
@@ -47,22 +52,20 @@ export default function StatsBar({ stats }: { stats: TurnStats }) {
       title: "纯模型时间（不含工具执行）。它和总用时的差额就是工具花掉的时间",
     });
   }
-  items.push({
-    label: "首字", value: stats.firstTokenMs !== undefined ? `${(stats.firstTokenMs / 1000).toFixed(1)}s` : "—",
+  if (stats.firstTokenMs !== undefined) items.push({
+    label: "首字", value: `${(stats.firstTokenMs / 1000).toFixed(1)}s`,
     title: "从发出到第一个字出现的平均耗时（端到端，含检索注入与首次工具调用）",
   });
-  items.push({
-    label: "", value: stats.tokensPerSec !== undefined ? `${Math.round(stats.tokensPerSec)} tok/s` : "—",
+  if (stats.tokensPerSec !== undefined) items.push({
+    label: "", value: `${Math.round(stats.tokensPerSec)} tok/s`,
     title: "输出速度：输出 token ÷ 正文流式时长",
   });
-  items.push({
-    label: "缓存命中", value: stats.cacheHitRate !== undefined ? `${Math.round(stats.cacheHitRate * 100)}%` : "—",
+  if (stats.cacheHitRate !== undefined) items.push({
+    label: "缓存命中", value: `${Math.round(stats.cacheHitRate * 100)}%`,
     title: "命中提示词缓存的输入 token 占比。由模型服务商回报；不回报这项的模型按 0 计",
   });
-  items.push({
-    label: "", value: stats.promptTokens !== undefined
-      ? `输入 ${fmtTokens(stats.promptTokens)} tok · 输出 ${fmtTokens(stats.completionTokens || 0)} tok`
-      : "输入 — · 输出 —",
+  if (stats.promptTokens !== undefined) items.push({
+    label: "", value: `输入 ${fmtTokens(stats.promptTokens)} tok · 输出 ${fmtTokens(stats.completionTokens || 0)} tok`,
     title: "本会话累计 token 用量（由模型服务商回报）",
   });
 
