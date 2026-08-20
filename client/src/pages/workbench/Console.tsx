@@ -106,6 +106,14 @@ type Turn = {
   /** 这一轮是从存档里恢复出来的，不是这次页面跑的 —— 它身上没有计时/用量，
    *  统计条据此避免把它算两遍（落盘那份已经把它算进去了）。 */
   restored?: boolean;
+  /**
+   * 这一轮有几个写操作被「只读」档挡下了（agent ≥ v1.16.2 回报）。
+   *
+   * 它必须在界面上说出来：只读档下写操作是**直接拒绝**的，不会产生任何待审批项。
+   * 用户看到的是模型转述的一句"被拦截"，然后跑去「待审批」页空等 —— 真实反馈是
+   * "经常跑一半说被拦截，待审批那一页也从来没看到任何审批项"。
+   */
+  readonlyBlocked?: number;
   failed?: boolean;
   /**
    * 模型思考流的最近一段（agent ≥ v1.10.3 且本轮要了 stream_reasoning）。
@@ -891,6 +899,9 @@ function ConsoleInner() {
             if (d?.text) cancelFlush();
             else finishFlush();
             if (d?.session_id) setSessionId(d.session_id);
+            if (typeof d?.readonly_blocked === "number" && d.readonly_blocked > 0) {
+              patchTurn(aiId, { readonlyBlocked: d.readonly_blocked });
+            }
             if (Array.isArray(d?.todos)) setTodos(d.todos);
             if (d?.usage) { setUsage(d.usage); turnUsage = d.usage; }
             // 收尾这一份算的是"本轮结束后"的位置 —— 下一轮就是从这里起步的。
@@ -1130,6 +1141,25 @@ function ConsoleInner() {
                         * 缩进还对不齐（活动行有 11px 内边距，这行没有）。运行态的
                         * 唯一指示就是活动行。
                         */}
+                      {/*
+                        * 只读档挡下了写操作 —— 这不是出错，也不会有待审批项。
+                        * 说清楚是哪一档挡的、去哪儿换，比让用户对着"被拦截"三个字
+                        * 猜半天强。按钮直接把档位换掉，换完他自己重发。
+                        */}
+                      {!!t.readonlyBlocked && (
+                        <div className="cc-blocked">
+                          <span className="cc-blocked-mark">⊘</span>
+                          <span>
+                            这一轮有 {t.readonlyBlocked} 个写操作被「只读」档挡下了。
+                            只读档只分析、不改动，**也不会产生待审批项** —— 待审批页看不到东西是正常的。
+                            要真执行，把档位换成「审批放行」（每次写入问你一下）再发一遍。
+                          </span>
+                          <button type="button" className="cc-blocked-btn"
+                                  onClick={() => patch({ approval: "ask" })}>
+                            换成「审批放行」
+                          </button>
+                        </div>
+                      )}
                       {(t.approvals || []).map(({ req, decision }) => (
                         <ApprovalCard
                           key={req.request_id}

@@ -3212,20 +3212,23 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 /* 折叠开关：常驻一行，带图标带文字带"收起/展开"。 */
 /* 高度写死。里面那株常春藤是个 SVG，挂载/卸载时会把这一行撑高一两像素 ——
    而它是整条叙述的第一行，撑高一次，底下每一行跟着挪一次（实测 4px）。 */
-.af-head{display:flex;align-items:center;gap:7px;width:100%;height:26px;padding:0 6px;
+.af-head{display:flex;align-items:center;gap:7px;width:100%;height:26px;padding:0 6px 0 0;
   border:none;border-radius:var(--r);background:transparent;cursor:pointer;text-align:left;
   overflow:hidden;white-space:nowrap;
   font-family:var(--font);font-size:var(--fs-10);color:var(--t3)}
 .af-head:hover{background:var(--bg2);color:var(--t2)}
 .af-head-ivy{display:inline-flex;align-items:center;justify-content:center;
-  flex-shrink:0;width:1.2em;height:1.2em;line-height:0;color:var(--ivy)}
+  flex-shrink:0;width:34px;height:1.2em;line-height:0;color:var(--ivy)}
 .af-head-dot{font-style:normal}
 .af-head-label{color:var(--t2)}
 .af-head-meta{color:var(--t3)}
 .af-head-toggle{margin-left:auto;color:var(--t3);opacity:.9}
 
-.af-body{display:flex;flex-direction:column;padding-left:4px;
-  border-left:1px solid var(--b);margin-left:10px}
+/* 左边那条竖线从**图标列的中间**穿下去，行内所有内容跟着同一条网格线走。
+   之前是 head 一个缩进、body 另一个缩进、状态点和图标各占一个不固定的宽度，
+   于是每行的文字起点都差几个像素 —— 用户的原话是"参差不齐"。 */
+.af-body{display:flex;flex-direction:column;padding-left:12px;margin-left:9px;
+  border-left:1px solid var(--b)}
 .af-more{align-self:flex-start;margin:2px 0 2px 6px;padding:1px 8px;border-radius:999px;
   border:1px dashed var(--b2);background:transparent;color:var(--t3);cursor:pointer;
   font-family:var(--font);font-size:var(--fs-95)}
@@ -3233,19 +3236,29 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 
 .af-item{display:flex;flex-direction:column}
 /* 一行：恒定高度、绝不换行。**任何改动都不许让它变成多行** —— 见文件头。 */
-.af-line{display:flex;align-items:center;gap:6px;width:100%;height:22px;padding:0 6px;
+/* 固定五列：状态 / 图标 / 类型 / 摘要 / 耗时。
+   **用网格不用 flex**：思考行没有状态点，flex 下它后面的每一列都会整体左移一格，
+   一屏看下来就是参差不齐（用户原话）。网格里空着的那一格照样占位，天然对齐。 */
+.af-line{display:grid;grid-template-columns:12px 16px 4.8em minmax(0,1fr) auto;
+  align-items:center;gap:6px;width:100%;height:22px;padding:0 6px 0 0;
   border:none;background:transparent;cursor:pointer;text-align:left;overflow:hidden;
   white-space:nowrap;font-family:var(--font);font-size:var(--fs-10);color:var(--t3);
   border-radius:var(--r)}
 button.af-line:hover{background:var(--bg2)}
-.af-icon{flex-shrink:0;width:1em;text-align:center;font-style:normal}
-.af-icon-live{display:inline-flex;align-items:center;justify-content:center;
-  height:1.2em;line-height:0;color:var(--ivy)}
-.af-kind{flex-shrink:0;color:var(--t2)}
-.af-sep{flex-shrink:0;opacity:.5}
+/* 别再给它 line-height:0 —— 那会让这一格的高度塌成 0，字跑到行外面去、
+   同一行里其他列跟着量歪（实测思考行的类型名被挤成 18px，"思考"被截成"思·"）。 */
+.af-icon{display:flex;align-items:center;justify-content:center;
+  text-align:center;font-style:normal;line-height:1}
+
+/* 装 SVG 的那一格才需要 line-height:0（SVG 是替换元素，行盒会给它垫基线空间）。 */
+.af-icon-live{display:flex;align-items:center;justify-content:center;
+  line-height:0;color:var(--ivy)}
+/* 类型名定宽：不定宽的话"思考""搜索内容""执行命令"后面的分隔点和正文各起各的，
+   整块读起来就是一堆没对齐的短语。定宽之后它们是一列，摘要也是一列。 */
+.af-kind{color:var(--t2);overflow:hidden;text-overflow:ellipsis}
 /* 摘要是唯一可以被挤掉的部分 —— 类型名和状态永远留着。 */
-.af-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.af-ms{flex-shrink:0;margin-left:auto;padding-left:8px;opacity:.75}
+.af-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.af-ms{padding-left:8px;opacity:.75;text-align:right}
 .af-badge{flex-shrink:0;padding:0 5px;border-radius:3px;border:1px solid var(--amber);
   color:var(--amber);font-size:var(--fs-85)}
 .af-think .af-icon{color:var(--t3)}
@@ -3253,90 +3266,27 @@ button.af-line:hover{background:var(--bg2)}
 .af-args{margin:0 0 3px 26px;padding:6px 8px;max-height:220px;overflow:auto;
   border:1px solid var(--b);border-radius:var(--r);background:var(--bg2);
   color:var(--t3);font-size:var(--fs-95);white-space:pre-wrap;word-break:break-all}
-.af-mark{flex-shrink:0;width:9px;text-align:center;font-size:var(--fs-9)}
+.af-mark{display:flex;align-items:center;justify-content:center;
+  text-align:center;font-size:var(--fs-9)}
 .af-ok{color:var(--acc)}
 .af-err{color:var(--red)}
 .af-blocked{color:var(--amber)}
 .af-run{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ivy);
   animation:cs-breathe 1.4s var(--ease) infinite}
 
-.cc-user{display:flex;justify-content:flex-end}
-.cc-bubble{max-width:min(78%,640px);padding:8px 12px;border-radius:10px 10px 2px 10px;
-  background:color-mix(in srgb,var(--acc) 12%,var(--bg2));border:1px solid var(--b);
-  color:var(--t);font-size:var(--fs-12);line-height:1.7;white-space:pre-wrap;word-break:break-word}
-.cc-ai{display:flex;flex-direction:column;gap:8px;max-width:min(92%,860px)}
-
-/* ── 执行叙述（components/console/ActivityFeed.tsx）───────────────────────
-   一轮任务在对话区里长出来的时间线：一段人话 + 一行工具摘要，交替往下。
-   左边一条竖线把整段串起来 —— 它是"这一轮的过程"，视觉上要是一件东西。 */
-.af{display:flex;flex-direction:column;gap:2px;position:relative;
-  margin:2px 0 4px;padding-left:14px;font-size:var(--fs-105);line-height:1.7}
-.af::before{content:"";position:absolute;left:3px;top:6px;bottom:6px;width:1px;
-  background:linear-gradient(to bottom,var(--b2),color-mix(in srgb,var(--b) 40%,transparent))}
-.af-more{align-self:flex-start;margin-bottom:2px;padding:1px 8px;border-radius:999px;
-  border:1px dashed var(--b2);background:transparent;color:var(--t3);cursor:pointer;
-  font-family:var(--font);font-size:var(--fs-95)}
-.af-more:hover{color:var(--t2);border-color:var(--t3)}
-
-/* 思考：正文一档的颜色，因为它**是话**，是这条时间线上信息量最大的东西。 */
-.af-think{display:flex;gap:8px;align-items:flex-start;padding:3px 0}
-.af-think p{margin:0;color:var(--t2);white-space:pre-wrap;word-break:break-word}
-.af-dot{flex-shrink:0;width:9px;height:9px;margin-top:.55em;margin-left:-14px;
-  border-radius:50%;background:var(--b2);box-shadow:0 0 0 3px var(--bg)}
-.af-dot-skill{width:auto;height:auto;background:none;box-shadow:none;color:var(--ivy);
-  margin-top:0;margin-left:-16px;font-size:var(--fs-10)}
-.af-skills p{color:var(--t3)}
-/* 正在想的那一段：左边是生长的常春藤，字色提到正文档 —— 它是此刻正在发生的事。 */
-.af-live p{color:var(--t)}
-.af-dot-live{width:auto;height:auto;background:none;box-shadow:none;
-  margin-top:.15em;margin-left:-18px;font-size:var(--fs-11)}
-
-/* 一批常规工具折成的一行。 */
-.af-group{display:flex;flex-direction:column}
-.af-group-head{display:flex;align-items:center;gap:7px;width:100%;padding:2px 0;
-  background:transparent;border:none;cursor:pointer;text-align:left;
-  font-family:var(--font);font-size:var(--fs-10);color:var(--t3)}
-.af-group-head:hover{color:var(--t2)}
-.af-group-icon{flex-shrink:0;margin-left:-14px;width:9px;text-align:center;
-  font-style:normal;color:var(--t3);background:var(--bg)}
-.af-spin{animation:cs-spin 1.6s linear infinite;color:var(--ivy)}
-.af-group-text{white-space:nowrap;flex-shrink:0}
-.af-group-now{color:var(--ivy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.af-caret{margin-left:auto;padding-left:8px;opacity:.7;flex-shrink:0}
-.af-group-body{margin:2px 0 4px;padding-left:6px;border-left:1px solid var(--b);
-  max-height:40vh;overflow-y:auto}
-
-/* 单独成行的步骤（写操作 / 子 agent / MCP / 板块 / 计划）。 */
-.af-single{padding:1px 0}
-.af-single .af-row-head{margin-left:-14px;padding-left:0}
-.af-row{font-size:var(--fs-10)}
-.af-row-head{display:flex;align-items:center;gap:7px;width:100%;padding:2px 0;
-  background:transparent;border:none;cursor:pointer;text-align:left;
-  font-family:var(--font);font-size:var(--fs-10);color:var(--t3)}
-.af-row-head:hover{color:var(--t2)}
-.af-row-icon{flex-shrink:0;font-style:normal;width:9px;text-align:center;background:var(--bg)}
-.af-row-title{color:var(--t2);white-space:nowrap;flex-shrink:0}
-.af-row-detail{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.af-row-ms{margin-left:auto;padding-left:8px;flex-shrink:0;opacity:.8}
-.af-badge{flex-shrink:0;padding:0 5px;border-radius:3px;border:1px solid var(--amber);
-  color:var(--amber);font-size:var(--fs-85)}
-.af-args{margin:2px 0 4px 16px;padding:6px 8px;max-height:220px;overflow:auto;
-  border:1px solid var(--b);border-radius:var(--r);background:var(--bg2);
-  color:var(--t3);font-size:var(--fs-95);white-space:pre-wrap;word-break:break-all}
-.af-mark{flex-shrink:0;width:9px;text-align:center;font-size:var(--fs-9)}
-.af-ok{color:var(--acc)}
-.af-err{color:var(--red)}
-.af-blocked{color:var(--amber)}
-.af-run{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ivy);
-  animation:cs-breathe 1.4s var(--ease) infinite}
-
-/* 收尾那一行：第几步 · 用时。跑着的时候它钉在叙述最下面，紧挨着输入框。 */
-.af-foot{display:flex;align-items:center;gap:6px;padding:2px 0;margin-left:-14px;
-  color:var(--t3);font-size:var(--fs-95)}
-.af-foot-ivy{display:inline-flex;align-items:center;font-size:var(--fs-11);color:var(--ivy)}
 .cc-answer{font-size:var(--fs-12);line-height:1.8;color:var(--t2);border:1px solid var(--b);
   border-radius:var(--r);background:var(--bg1);padding:10px 13px}
 .cc-answer-error{color:var(--red);border-color:rgba(248,113,113,.35);white-space:pre-wrap}
+/* 「只读档挡下了写操作」的提示。用琥珀色不用红色：这不是故障，是档位选择。 */
+.cc-blocked{display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+  padding:7px 11px;border:1px solid color-mix(in srgb,var(--amber) 45%,var(--b));
+  border-radius:var(--r);background:color-mix(in srgb,var(--amber) 8%,var(--bg1));
+  color:var(--t2);font-size:var(--fs-10);line-height:1.7}
+.cc-blocked-mark{flex-shrink:0;color:var(--amber);font-size:var(--fs-11)}
+.cc-blocked-btn{flex-shrink:0;margin-left:auto;padding:2px 10px;border-radius:var(--r);
+  border:1px solid var(--amber);background:transparent;color:var(--amber);cursor:pointer;
+  font-family:var(--font);font-size:var(--fs-95)}
+.cc-blocked-btn:hover{background:color-mix(in srgb,var(--amber) 16%,transparent)}
 .cc-thinking{display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-11);color:var(--t3)}
 
 /* ── 步骤时间线 ──────────────────────────────────────────────────────────── */

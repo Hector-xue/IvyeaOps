@@ -146,6 +146,19 @@ async function run() {
     assert.equal(await visibleCount(send, ".af-line"), STEP_COUNT + 1,
                  "点开之后 192 步 + 1 段思考 = 193 行，一件事一行");
 
+    // ── 1b. 每一列在所有行里都从同一个 x 起 ───────────────────────────────
+    // 用户原话："好乱啊，感觉参差不齐"。根因是思考行没有状态点，flex 布局下它后面
+    // 的每一列都整体左移一格。改网格之后这里钉死：类型名、摘要各自只有一个起点。
+    const cols = await evaluate(send, `(() => {
+      const pick = (sel) => [...document.querySelectorAll(".af-line " + sel)]
+        .map((el) => Math.round(el.getBoundingClientRect().x));
+      return { kind: [...new Set(pick(".af-kind"))], text: [...new Set(pick(".af-text"))],
+               icon: [...new Set(pick(".af-icon"))] };
+    })()`);
+    assert.equal(cols.kind.length, 1, `类型名必须只有一个起点：${JSON.stringify(cols.kind)}`);
+    assert.equal(cols.icon.length, 1, `图标必须只有一个起点：${JSON.stringify(cols.icon)}`);
+    assert.equal(cols.text.length, 1, `摘要必须只有一个起点：${JSON.stringify(cols.text)}`);
+
     // ── 2. 一行绝不换行：内容再长也是省略号，不是第二行 ─────────────────────
     await evaluate(send, `window.__longthink(), true`);
     await delay(150);

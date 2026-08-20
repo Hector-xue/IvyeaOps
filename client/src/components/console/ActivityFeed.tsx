@@ -89,8 +89,7 @@ function StepLine({ step }: { step: ConsoleStep }) {
         <StatusMark status={step.status} />
         <i className="af-icon">{step.icon}</i>
         <span className="af-kind">{step.title}</span>
-        {step.detail && <span className="af-sep">·</span>}
-        {step.detail && <span className="af-text">{oneLine(step.detail)}</span>}
+        <span className="af-text">{step.detail ? `· ${oneLine(step.detail)}` : ""}</span>
         {step.destructive && <span className="af-badge">写操作</span>}
         {/* 计划/汇报类不显示耗时：todo_write 就几毫秒，那个数说明不了任何事。 */}
         {step.phase !== "plan" && step.ms !== undefined && (
@@ -133,8 +132,10 @@ export default function ActivityFeed({
         <span className="af-head-ivy">{running ? <IvyGrow /> : <i className="af-head-dot">⌁</i>}</span>
         <span className="af-head-label">执行过程</span>
         <span className="af-head-meta">
-          {realSteps > 0 ? `${realSteps} 步` : running ? "正在准备" : ""}
-          {elapsedMs !== undefined ? ` · ${formatMs(elapsedMs)}` : ""}
+          {/* 用 filter 拼，别用固定的分隔符：0 步的时候原来会拼出孤零零一个
+              "· 5.4s"，看着像前面掉了什么东西。 */}
+          {[realSteps > 0 ? `${realSteps} 步` : (running ? "正在准备" : ""),
+            elapsedMs !== undefined ? formatMs(elapsedMs) : ""].filter(Boolean).join(" · ")}
         </span>
         <span className="af-head-toggle">{collapsed ? "展开 ⌄" : "收起 ⌃"}</span>
       </button>
@@ -151,10 +152,10 @@ export default function ActivityFeed({
               return (
                 <div className="af-item" key={item.key}>
                   <div className="af-line af-think" title={item.text}>
+                    <span className="af-mark">{"\u00a0"}</span>
                     <i className="af-icon">✻</i>
                     <span className="af-kind">思考</span>
-                    <span className="af-sep">·</span>
-                    <span className="af-text">{oneLine(item.text)}</span>
+                    <span className="af-text">· {oneLine(item.text)}</span>
                   </div>
                 </div>
               );
@@ -163,10 +164,10 @@ export default function ActivityFeed({
               return (
                 <div className="af-item" key={item.key}>
                   <div className="af-line af-think">
+                    <span className="af-mark">{"\u00a0"}</span>
                     <i className="af-icon">✦</i>
                     <span className="af-kind">技能</span>
-                    <span className="af-sep">·</span>
-                    <span className="af-text">{item.skills.map((s) => s.title).join("、")}</span>
+                    <span className="af-text">· {item.skills.map((s) => s.title).join("、")}</span>
                   </div>
                 </div>
               );
@@ -177,10 +178,10 @@ export default function ActivityFeed({
           {live && (
             <div className="af-item" key="live">
               <div className="af-line af-think af-live">
+                <span className="af-mark">{"\u00a0"}</span>
                 <i className="af-icon af-icon-live"><IvyGrow /></i>
                 <span className="af-kind">思考</span>
-                <span className="af-sep">·</span>
-                <span className="af-text">{live}</span>
+                <span className="af-text">· {live}</span>
               </div>
             </div>
           )}
