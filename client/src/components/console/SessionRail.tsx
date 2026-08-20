@@ -127,13 +127,14 @@ export default function SessionRail({
     const h = (e: Event) => {
       const want = (e as CustomEvent<{ expectId?: string }>).detail?.expectId;
       void load().then(() => {
-        // 新会话是 agent 侧落库的，「开始」事件比落库早一拍：这一次取回来可能还没有它。
-        // 补取一次（只补一次，避免开着一个失败的会话在那儿空转）。
+        // 补取一次（只补一次，避免开着一个失败的会话在那儿空转）。两件事都要等：
+        //   · 新会话是 agent 侧落库的，「开始」事件比落库早一拍，这一次可能还没有它；
+        //   · 标题是这一轮跑完后由模型起的（服务端后台线程），比这次取回来晚几秒。
+        // 所以**不管行在不在都补一次** —— 只看"在不在"的话，标题永远要等下次刷新
+        // 才更新，用户看到的还是那句"帮我看下这个"。
         if (!want) return;
         window.clearTimeout(retry);
-        retry = window.setTimeout(() => {
-          setRows((prev) => { if (!prev.some((r) => r.id === want)) void load(); return prev; });
-        }, 1500);
+        retry = window.setTimeout(() => { void load(); }, 3500);
       });
     };
     window.addEventListener(CONSOLE_SESSIONS_CHANGED, h);

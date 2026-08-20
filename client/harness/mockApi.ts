@@ -205,6 +205,16 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
       session: {
         id: id || "s3", model: "deepseek-v4-pro", messages: TURNS,
         total_turns: 2, has_more: false,
+        // 整条会话的累计账（agent ≥ v1.16.1 落盘的那份）。**历史会话的统计条全靠它**
+        // ——恢复出来的轮次身上没有计时/用量，不铺这条就永远验不到"打开旧会话也看得见
+        // 用时/输入/输出"。
+        // ?nostats=1 —— 装成**这次改动之前存下的老会话**（没有累计账）。统计条这时
+        // 必须退回"几轮几步"，而不是整块空白：为了新增一项弄丢已有的那项是最糟的。
+        ...(new URLSearchParams(location.search).get("nostats") === "1" ? {} : {
+          stats: { turns: 2, steps: 5, elapsed_ms: 78_400,
+                   usage: { prompt_tokens: 24_600, completion_tokens: 1_180,
+                            prompt_cache_hit_tokens: 12_300, llm_ms: 31_500 } },
+        }),
         context: {
           used: 1520 + 6910 + messages, window: 128000,
           percent: Number((((1520 + 6910 + messages) * 100) / 128000).toFixed(2)),
@@ -405,19 +415,52 @@ export function installMockApi(): void {
         send("context", { used: 9860, window: 128000, percent: 7.7, estimated: true,
                           model: "deepseek-v4-pro",
                           breakdown: { system: 1520, tools: 6910, messages: 1430 } });
+        // Agent 自己排的计划：先播一份（对应 agent 的 todo_write → todos 事件），
+        // 跑到一半再播一份把第一条划掉。状态坞的"接下来要干什么"读的就是它。
+        send("step", { type: "step", id: "p1", seq: 0, phase: "plan", name: "todo_write",
+                       status: "ok", ms: 12 });
+        send("todos", { todos: [
+          { content: "确认数据源与口径", status: "in_progress" },
+          { content: "拉搜索词报表，找浪费最集中的词根", status: "pending" },
+          { content: "给出否词与竞价的具体动作", status: "pending" },
+        ] });
+        // 两批思考、两批工具 —— 叙述的形状就是"想 → 做 → 想 → 做"，
+        // 验证台不铺成这样就验不到执行叙述（上一版把整轮压成一行，正是因为
+        // 假流里只有一批，看不出铺开之后会长成什么样）。
         const think = [
           "用户问的是广告花费为什么涨了。",
           "先确认口径：是同比还是环比，",
           "再看是点击涨了还是单次点击成本涨了。",
           "手里没有报表，得先查数据源。",
         ];
-        for (const t of think) { await beat(1500); send("reasoning", { text: t }); }
-        await beat(900);
+        for (const t of think) { await beat(1200); send("reasoning", { text: t }); }
+        await beat(700);
+        // 一批常规工具：界面上应该折成"搜索 2 次 · 读了 2 个文件 · 跑了 1 条命令"
+        for (const [i, st] of [["grep", "搜索内容"], ["glob", "查找文件"],
+                               ["read_file", "读取文件"], ["read_file", "读取文件"],
+                               ["run_command", "执行命令"]].entries()) {
+          send("step", { type: "step", id: "b" + i, seq: i, phase: "tool", name: st[0],
+                         status: "running" });
+          await beat(160);
+          send("step", { type: "step", id: "b" + i, seq: i, phase: "tool", name: st[0],
+                         status: "ok", ms: 160 });
+        }
+        await beat(500);
+        for (const t of ["数据源确认了：只有 sorftime，没有广告报表拉取工具。",
+                         "那就先用本地那份搜索词报表跑，缺的字段回头再补。"]) {
+          await beat(900); send("reasoning", { text: t });
+        }
+        await beat(600);
         send("step", { type: "step", id: "s1", seq: 1, phase: "tool", name: "读取报表",
                        tool: "read_report", status: "running" });
         await beat(2200);
         send("step", { type: "step", id: "s1", seq: 1, phase: "tool", name: "读取报表",
                        tool: "read_report", status: "ok", ms: 2200 });
+        send("todos", { todos: [
+          { content: "确认数据源与口径", status: "completed" },
+          { content: "拉搜索词报表，找浪费最集中的词根", status: "in_progress" },
+          { content: "给出否词与竞价的具体动作", status: "pending" },
+        ] });
         await beat(600);
         for (const t of ["先说结论：", "这一周花费涨了 34%，", "其中 28% 来自单次点击成本上升。"]) {
           await beat(500); send("token", { text: t });

@@ -4,6 +4,8 @@ from __future__ import annotations
 import base64
 import json as _json
 import logging
+import re
+import asyncio
 import threading as _threading
 import time as _time
 from typing import Annotated, Any
@@ -420,6 +422,60 @@ def _approval_owner(request_id: str) -> str | None:
     return principal
 
 
+# 自动生成的会话标题最多这么长。左栏一行放得下，多了只会被裁成省略号。
+_TITLE_MAX = 18
+
+_TITLE_PROMPT = (
+    "给下面这段对话起一个标题。要求：\n"
+    "1. 只输出标题本身，不要引号、不要句号、不要「标题：」之类的前缀\n"
+    "2. 中文，不超过 14 个字\n"
+    "3. 概括这段对话在**做什么**，而不是复述用户的第一句话\n\n"
+    "用户：{ask}\n\n助手：{answer}\n"
+)
+
+
+def _auto_title_session(session_id: str) -> None:
+    """给会话起个名字 —— 按**内容**起，而不是拿第一条指令顶上去。
+
+    左栏此前显示的是用户打的第一句话。可第一句话往往是"帮我看下这个""继续"
+    "这个报错怎么回事"，十条会话有六条长得一模一样，列表因此变成一堆认不出来的
+    重复项 —— 用户只能一条条点开找。ChatGPT 那种"看完这一轮再起名"的做法之所以
+    有用，就是因为标题说的是**这段对话在做什么**。
+
+    只在标题还空着时做一次；生成失败就什么也不改（列表自动退回显示第一句话，
+    和改动前一样）。整个过程在后台线程里跑，绝不挡住这一轮的回答。
+    """
+    try:
+        row = console_sessions.session_row(session_id)
+        if row is None or str(row.get("title") or "").strip():
+            return                      # 手动改过名 / 已经起过名 —— 不覆盖
+        detail = svc.chat_session(session_id, turns=1, before=1)
+        msgs = ((detail or {}).get("session") or {}).get("messages") or []
+        ask = answer = ""
+        for m in msgs:
+            role, content = str(m.get("role") or ""), str(m.get("content") or "")
+            if role == "user" and not ask:
+                ask = console_sessions.clean_preview(content)
+            elif role == "assistant" and content.strip() and not answer:
+                answer = content
+        if not ask.strip():
+            return
+        from app.services.ai_synthesis_service import generate_text
+        raw = asyncio.run(generate_text(
+            _TITLE_PROMPT.format(ask=ask[:600], answer=answer[:800] or "（这一轮还没有正文）"),
+            inject_retrieval=False))
+        # 模型偶尔会连着解释一起吐出来 —— 只取第一行，并把包裹用的标点剥掉。
+        # [K1] 这类引用标记也要清掉：关了检索注入之后正常不会再有，但真漏出来一个，
+        # 标题就会变成"…无法读取[K2"这种半截样子（实测过一次）。
+        title = re.sub(r"\s*\[K\d+\]?\s*$", "",
+                       (raw or "").strip().splitlines()[0]).strip().strip('"\'「」『』 　:：')
+        if not title or len(title) > _TITLE_MAX * 2:
+            return                      # 明显不是个标题（吐了一整段）→ 宁可不改
+        console_sessions.update_session(session_id, title=title[:_TITLE_MAX])
+    except Exception:  # noqa: BLE001 — 起名失败只是列表里显示第一句话，不值得打扰用户
+        return
+
+
 def _tee_session_events(chunks: Any, principal: str, workspace: str = "",
                         source: str = "console", persist: bool = True) -> Any:
     """原样转发 SSE 字节，同时从流里捞两件 ops 需要记账的事：
@@ -432,52 +488,61 @@ def _tee_session_events(chunks: Any, principal: str, workspace: str = "",
     而弄坏转发会直接毁掉整轮对话。
     """
     buf = b""
-    for chunk in chunks:
-        yield chunk
-        try:
-            buf += chunk
-            while b"\n\n" in buf:
-                frame, buf = buf.split(b"\n\n", 1)
-                is_start = b"event: start" in frame
-                is_req = b"permission_request" in frame
-                is_timeout = b"permission_timeout" in frame
-                if not (is_start or is_req or is_timeout):
-                    continue
-                for line in frame.split(b"\n"):
-                    if not line.startswith(b"data:"):
+    live_sid = ""
+    try:
+        for chunk in chunks:
+            yield chunk
+            try:
+                buf += chunk
+                while b"\n\n" in buf:
+                    frame, buf = buf.split(b"\n\n", 1)
+                    is_start = b"event: start" in frame
+                    is_req = b"permission_request" in frame
+                    is_timeout = b"permission_timeout" in frame
+                    if not (is_start or is_req or is_timeout):
                         continue
-                    data = _json.loads(line[5:].strip().decode("utf-8", "replace"))
-                    if is_start:
-                        sid = str(data.get("session_id") or "")
-                        # persist=False 的轮次 agent 不落盘（跟进建议、各处的一次性
-                        # 调用都走这条）。照样建索引的话，就会攒下一堆指向不存在会话
-                        # 的孤儿行 —— 界面上看不见（列表要和 agent 实存的对得上），
-                        # 但只增不减。
-                        if sid and persist:
-                            console_sessions.register_session(sid, principal, workspace, source)
-                        continue
-                    rid = str(data.get("request_id") or "")
-                    if not rid:
-                        continue
-                    if is_timeout:
-                        # 超时被自动拒 —— 这也是一条要留下的决定，而且是最容易
-                        # 被忽略的那种（没人点，但那一步确实没执行）。
-                        console_sessions.record_approval_decision(rid, "timeout")
-                        continue
-                    _remember_approval_owner(rid, principal)
-                    title = str(data.get("title") or "")
-                    console_sessions.record_approval_request(
-                        rid, str(data.get("session_id") or ""), principal,
-                        title, str(data.get("op_type") or ""))
-                    # 推一条到用户配的渠道。**这是"手机上审批"能成立的前提** ——
-                    # 人不在电脑前时，没有这条推送他根本不知道有东西在等他，
-                    # agent 就会一直卡到超时被自动拒。
-                    _notify_approval(title, str(data.get("op_type") or ""))
-            # 单帧异常大（final 会带整段会话）时别把内存吃着不放
-            if len(buf) > 2_000_000:
-                buf = buf[-4096:]
-        except Exception:  # noqa: BLE001 — 记账失败绝不能影响转发
-            buf = b""
+                    for line in frame.split(b"\n"):
+                        if not line.startswith(b"data:"):
+                            continue
+                        data = _json.loads(line[5:].strip().decode("utf-8", "replace"))
+                        if is_start:
+                            sid = str(data.get("session_id") or "")
+                            # persist=False 的轮次 agent 不落盘（跟进建议、各处的一次性
+                            # 调用都走这条）。照样建索引的话，就会攒下一堆指向不存在会话
+                            # 的孤儿行 —— 界面上看不见（列表要和 agent 实存的对得上），
+                            # 但只增不减。
+                            if sid and persist:
+                                console_sessions.register_session(sid, principal, workspace, source)
+                                live_sid = sid
+                            continue
+                        rid = str(data.get("request_id") or "")
+                        if not rid:
+                            continue
+                        if is_timeout:
+                            # 超时被自动拒 —— 这也是一条要留下的决定，而且是最容易
+                            # 被忽略的那种（没人点，但那一步确实没执行）。
+                            console_sessions.record_approval_decision(rid, "timeout")
+                            continue
+                        _remember_approval_owner(rid, principal)
+                        title = str(data.get("title") or "")
+                        console_sessions.record_approval_request(
+                            rid, str(data.get("session_id") or ""), principal,
+                            title, str(data.get("op_type") or ""))
+                        # 推一条到用户配的渠道。**这是"手机上审批"能成立的前提** ——
+                        # 人不在电脑前时，没有这条推送他根本不知道有东西在等他，
+                        # agent 就会一直卡到超时被自动拒。
+                        _notify_approval(title, str(data.get("op_type") or ""))
+                # 单帧异常大（final 会带整段会话）时别把内存吃着不放
+                if len(buf) > 2_000_000:
+                    buf = buf[-4096:]
+            except Exception:  # noqa: BLE001 — 记账失败绝不能影响转发
+                buf = b""
+    finally:
+        # 这一轮转发完了（正常收尾、用户中断、断链都会走到这里）才给会话起名：
+        # 起名要读这一轮的正文、还要调一次模型 —— 放在流里做等于让用户多等。
+        if live_sid:
+            _threading.Thread(target=_auto_title_session, args=(live_sid,),
+                              name="console-auto-title", daemon=True).start()
 
 
 def _resolve_workspace(body: ChatBody, user: str) -> tuple[dict[str, Any], str]:
@@ -807,6 +872,14 @@ def console_pending_approvals(info: dict[str, Any] = Depends(require_user_info))
     **只返回自己的**：principal 直接取自会话身份，不接受查询参数指定别人。
     """
     principal, _ = _principal_info(info)
+    # 先对账再取：agent 报的"还在等"是唯一真相，我们这张表只是流水账。不对账的话
+    # 页面关掉/断链/agent 重启留下的僵尸卡片会一直挂在这里，点了只会 409。
+    try:
+        console_sessions.expire_stale_approvals(svc.pending_permissions())
+    except Exception:  # noqa: BLE001 — 对账失败不能让整页打不开
+        # 大不了多显示一张过期卡片；但要留下痕迹，否则"待审批莫名其妙没清干净"
+        # 会变成一个查不出来的问题。
+        logger.debug("待审批对账失败", exc_info=True)
     return {"ok": True, "approvals": console_sessions.pending_approvals(principal)}
 
 

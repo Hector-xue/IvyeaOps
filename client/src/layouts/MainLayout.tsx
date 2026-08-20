@@ -401,6 +401,19 @@ export default function MainLayout() {
     ? (new URLSearchParams(location.search).get("session") || "")
     : "";
 
+  // 侧边栏「任务台」要记得刚才开着的那条会话。
+  //
+  // 死链接 /console 的毛病是：去别的板块转一圈再点回来，落地的是**空白新任务** ——
+  // 会话数据一条没少，但用户看到的是自己刚发的指令不见了，于是又打一遍。任务台
+  // 自己把会话写进了地址栏（Console 的 onStart），这里只是把它记住、原样带回去。
+  //
+  // 只在**停留在任务台时**同步，包含记成空串：「新建任务」和删除会话都会把地址栏
+  // 清干净，那一刻这里也就跟着忘掉旧会话，不会再把它拽回来。
+  const [lastConsoleSession, setLastConsoleSession] = useState("");
+  useEffect(() => {
+    if (location.pathname === "/console") setLastConsoleSession(activeSessionId);
+  }, [location.pathname, activeSessionId]);
+
   const versionLabel = appVersion.startsWith("v") ? appVersion : `v${appVersion}`;
   const hasUpdate = !!updateInfo?.update_available;
   const updateTitle = updateInfo
@@ -410,7 +423,9 @@ export default function MainLayout() {
   const renderNavItem = (b: BoardEntry) => (
     <NavLink
       key={b.to}
-      to={b.to}
+      to={b.to === "/console" && lastConsoleSession
+        ? `/console?session=${encodeURIComponent(lastConsoleSession)}`
+        : b.to}
       end={b.to === "/"}
       className={({ isActive }) => "ni" + (isActive ? " active" : "")}
       title={railCollapsed ? b.label : undefined}

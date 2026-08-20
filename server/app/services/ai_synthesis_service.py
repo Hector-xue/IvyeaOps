@@ -822,7 +822,8 @@ async def _stream_apimart(prompt: str) -> AsyncGenerator[str, None]:
                     raise RuntimeError(f"apimart error: {event.get('error', event)}")
 
 
-async def generate_text(prompt: str, skip_agent: bool = False) -> str:
+async def generate_text(prompt: str, skip_agent: bool = False,
+                        inject_retrieval: bool = True) -> str:
     """Plain text-only LLM generation — NO tools, NO Sorftime MCP.
 
     For tasks that just need the model to write text (e.g. authoring a
@@ -836,7 +837,10 @@ async def generate_text(prompt: str, skip_agent: bool = False) -> str:
     if not skip_agent and "ivyea-agent" in _text_provider_chain():
         try:
             parts: list[str] = []
-            async for chunk in _stream_ivyea_agent(prompt):
+            # inject_retrieval=False 给的是**要被机器读的输出**（标题、JSON）：
+            # 开着检索注入时 agent 会在正文后面缀上 [K1] 之类的引用标记，
+            # 一条 14 字的标题能被它顶掉三分之一（实测起出来的名字末尾挂着 "[K2"）。
+            async for chunk in _stream_ivyea_agent(prompt, inject_retrieval=inject_retrieval):
                 parts.append(chunk)
             text = "".join(parts).strip()
             if text:

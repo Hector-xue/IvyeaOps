@@ -183,6 +183,35 @@ jobs:
           cp "IvyeaOps-${TAG}.zip" "IvyeaOps.zip"   # 版本无关的稳定名，供 releases/latest/download 一键下载
           ls -lh "IvyeaOps-${TAG}.zip" "IvyeaOps.zip"
 
+      - name: 从 CHANGELOG 取本版说明
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+          # 取 `## [vX.Y.Z]` 到下一个 `## [` 之间那一段。**取不到就让发版失败**：
+          # 一个没有"新增了什么、修复了什么"的 Release，对使用者等于没发。
+          awk -v tag="$TAG" '
+            $0 ~ "^## \\[" tag "\\]" { flag = 1; next }
+            flag && /^## \[/ { exit }
+            flag { print }
+          ' CHANGELOG.md > CHANGELOG_SECTION.md
+          if [ ! -s CHANGELOG_SECTION.md ]; then
+            echo "::error::CHANGELOG.md 里没有 $TAG 这一节。发版前要把 Unreleased 改成本版号。"
+            exit 1
+          fi
+          echo "取到 $(wc -l < CHANGELOG_SECTION.md) 行版本说明"
+
+      - name: 拼出发版说明（本版改动 + 安装说明）
+        run: |
+          set -euo pipefail
+          {
+            cat CHANGELOG_SECTION.md
+            echo
+            echo "---"
+            echo
+            cat .github/release-body.md
+          } > RELEASE_NOTES.md
+          head -3 RELEASE_NOTES.md
+
       - name: Create / update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -192,26 +221,7 @@ jobs:
           files: |
             IvyeaOps-${{ steps.tag.outputs.tag }}.zip
             IvyeaOps.zip
-          body: |
-            **预构建发行包** —— 已包含编译好的前端 `client/dist` 和 Windows Python 3.12 后端依赖包 `server/vendor/wheels`。
-            Windows 安装脚本会优先从预置 wheelhouse 离线安装后端依赖；如果用户是源码包、Python 版本不匹配或离线包缺失，
-            会自动回退在线 pip 安装。安装脚本检测到已自带前端，会**跳过 Node 安装与前端构建**（含小内存机的 swap 步骤）。
-
-            ### Windows 用户（无需安装 Node）
-            下载下方 `IvyeaOps.zip` → 解压 → 双击「安装 IvyeaOps.bat」。
-
-            ### Linux / macOS（尤其小内存服务器，免构建免 swap）
-            ```bash
-            curl -L https://github.com/Hector-xue/IvyeaOps/releases/latest/download/IvyeaOps.zip -o IvyeaOps.zip
-            unzip IvyeaOps.zip && cd IvyeaOps && bash scripts/install.sh
-            ```
-
-            ### Windows x64 免 Python 版
-            如果不想安装 Python，可下载 `IvyeaOps-Windows-x64.zip` → 解压 → 双击 `IvyeaOpsServer.exe`。启动后会出现控制窗口，关闭窗口即停止服务；更新可在侧边栏点击「更新」或双击「更新 IvyeaOps Windows x64.bat」。
-
-            ### 开发者
-            也可 `git clone` 源码自行构建（需 Node 18+ 与 ≥2G 内存）。
-
+          body_path: RELEASE_NOTES.md
   build-windows-x64:
     name: Build Windows x64 exe bundle
     runs-on: windows-latest

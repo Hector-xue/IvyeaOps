@@ -23,7 +23,7 @@ const outfile = path.join(work, "turnStats.mjs");
 const build = spawnSync("npx", ["esbuild", "src/lib/turnStats.ts", "--format=esm", `--outfile=${outfile}`],
                         { cwd: path.resolve("."), encoding: "utf8" });
 if (build.status !== 0) throw new Error(build.stderr || build.stdout || "bundle failed");
-const { aggregateStats } = await import(pathToFileURL(outfile).href);
+const { aggregateStats, mergeStats } = await import(pathToFileURL(outfile).href);
 
 const step = (phase) => ({ key: Math.random().toString(36), seq: 0, phase, name: "x", title: "x", icon: "x", status: "ok" });
 
@@ -82,6 +82,48 @@ const step = (phase) => ({ key: Math.random().toString(36), seq: 0, phase, name:
 {
   const s = aggregateStats([]);
   assert.deepEqual(s, { turns: 0, steps: 0, elapsedMs: 0 });
+}
+
+// ── 落盘的累计账 + 本次页面跑的轮 ────────────────────────────────────────
+// 打开历史会话时统计条上那些数就是这么来的：恢复出来的轮身上没有计时/用量，
+// 全靠服务端那份累计。这一块算错的后果是用户看到别人的账。
+{
+  const base = { turns: 3, steps: 7, elapsed_ms: 90_000,
+                 usage: { prompt_tokens: 30_000, completion_tokens: 1_200,
+                          prompt_cache_hit_tokens: 15_000, llm_ms: 40_000 } };
+  // 只恢复、没再问：数就是落盘那份
+  const restoredOnly = mergeStats(base, aggregateStats([]));
+  assert.equal(restoredOnly.turns, 3);
+  assert.equal(restoredOnly.steps, 7);
+  assert.equal(restoredOnly.elapsedMs, 90_000);
+  assert.equal(restoredOnly.promptTokens, 30_000);
+  assert.equal(restoredOnly.completionTokens, 1_200);
+  assert.equal(restoredOnly.llmMs, 40_000);
+  assert.equal(restoredOnly.cacheHitRate, 0.5, "缓存命中是比例，要按 token 重算不是相加");
+  // 首字延迟落盘那份没有 —— 没测到就不显示，不能编一个
+  assert.equal(restoredOnly.firstTokenMs, undefined);
+
+  // 在历史会话里又问了一轮：两边相加，且**不重复计数**（恢复的轮不进 live）
+  const live = aggregateStats([{
+    elapsedMs: 10_000, steps: [step("tool")],
+    metrics: { startedAt: 0, firstTokenAt: 500, lastTokenAt: 2500,
+               usage: { prompt_tokens: 10_000, completion_tokens: 300, llm_ms: 5_000 } },
+  }]);
+  const merged = mergeStats(base, live);
+  assert.equal(merged.turns, 4, "3 轮落盘 + 1 轮刚跑");
+  assert.equal(merged.steps, 8);
+  assert.equal(merged.elapsedMs, 100_000);
+  assert.equal(merged.promptTokens, 40_000);
+  assert.equal(merged.llmMs, 45_000);
+  assert.equal(merged.firstTokenMs, 500, "这一轮测到的首字延迟照实带上");
+}
+
+// ── 老 agent：没有累计账 —— 行为必须和改动前一模一样 ──────────────────────
+{
+  const live = aggregateStats([{ elapsedMs: 1_000, steps: [step("tool")] }]);
+  assert.deepEqual(mergeStats(null, live), live);
+  assert.deepEqual(mergeStats(undefined, live), live);
+  assert.deepEqual(mergeStats({}, live), live);
 }
 
 await rm(work, { recursive: true, force: true }).catch(() => {});
