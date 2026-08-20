@@ -876,8 +876,10 @@ def console_pending_approvals(info: dict[str, Any] = Depends(require_user_info))
     # 页面关掉/断链/agent 重启留下的僵尸卡片会一直挂在这里，点了只会 409。
     try:
         console_sessions.expire_stale_approvals(svc.pending_permissions())
-    except Exception:
-        pass          # 对账失败不能让整页打不开 —— 大不了多显示一张过期卡片
+    except Exception:  # noqa: BLE001 — 对账失败不能让整页打不开
+        # 大不了多显示一张过期卡片；但要留下痕迹，否则"待审批莫名其妙没清干净"
+        # 会变成一个查不出来的问题。
+        logger.debug("待审批对账失败", exc_info=True)
     return {"ok": True, "approvals": console_sessions.pending_approvals(principal)}
 
 
