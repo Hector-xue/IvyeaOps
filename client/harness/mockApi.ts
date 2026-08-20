@@ -424,14 +424,33 @@ export function installMockApi(): void {
           { content: "拉搜索词报表，找浪费最集中的词根", status: "pending" },
           { content: "给出否词与竞价的具体动作", status: "pending" },
         ] });
+        // 两批思考、两批工具 —— 叙述的形状就是"想 → 做 → 想 → 做"，
+        // 验证台不铺成这样就验不到执行叙述（上一版把整轮压成一行，正是因为
+        // 假流里只有一批，看不出铺开之后会长成什么样）。
         const think = [
           "用户问的是广告花费为什么涨了。",
           "先确认口径：是同比还是环比，",
           "再看是点击涨了还是单次点击成本涨了。",
           "手里没有报表，得先查数据源。",
         ];
-        for (const t of think) { await beat(1500); send("reasoning", { text: t }); }
-        await beat(900);
+        for (const t of think) { await beat(1200); send("reasoning", { text: t }); }
+        await beat(700);
+        // 一批常规工具：界面上应该折成"搜索 2 次 · 读了 2 个文件 · 跑了 1 条命令"
+        for (const [i, st] of [["grep", "搜索内容"], ["glob", "查找文件"],
+                               ["read_file", "读取文件"], ["read_file", "读取文件"],
+                               ["run_command", "执行命令"]].entries()) {
+          send("step", { type: "step", id: "b" + i, seq: i, phase: "tool", name: st[0],
+                         status: "running" });
+          await beat(160);
+          send("step", { type: "step", id: "b" + i, seq: i, phase: "tool", name: st[0],
+                         status: "ok", ms: 160 });
+        }
+        await beat(500);
+        for (const t of ["数据源确认了：只有 sorftime，没有广告报表拉取工具。",
+                         "那就先用本地那份搜索词报表跑，缺的字段回头再补。"]) {
+          await beat(900); send("reasoning", { text: t });
+        }
+        await beat(600);
         send("step", { type: "step", id: "s1", seq: 1, phase: "tool", name: "读取报表",
                        tool: "read_report", status: "running" });
         await beat(2200);

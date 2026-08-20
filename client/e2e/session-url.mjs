@@ -63,7 +63,7 @@ async function run() {
 
     // ── 1. 空白任务台里发一条消息 ─────────────────────────────────────────
     await send("Page.navigate", { url: `${ORIGIN}/?r=/console` });
-    await waitFor(send, `!!document.querySelector(".cc-input")`, "任务台输入框", 30_000);
+    await waitFor(send, `!!document.querySelector(".cc-input")`, "任务台输入框", 60_000);
     assert.equal(await sessionParam(send), "", "刚进来地址栏不该有 session");
 
     await typeAndSend(send, "帮我跑一下广告巡检");

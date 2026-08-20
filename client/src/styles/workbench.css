@@ -3138,6 +3138,9 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
    scrollTop，和 useStickToBottom 的判断打架（用户明明停在上面，位置却在动）。 */
 .cc-thread{flex:1;min-height:0;overflow-y:auto;overflow-anchor:none;padding:16px 18px 8px;
   display:flex;flex-direction:column;gap:14px}
+/* 内容不满一屏时贴底：正在跑的叙述长在最下面，紧挨着输入框；空白留在上面。
+   内容超过一屏时 margin-top:auto 自动失效，照常从上往下滚。 */
+.cc-thread-inner{margin-top:auto;display:flex;flex-direction:column;gap:14px}
 .cc-tobottom{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);
   display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:999px;
   border:1px solid var(--b);background:var(--bg1);color:var(--t2);cursor:pointer;
@@ -3198,6 +3201,75 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
   background:color-mix(in srgb,var(--acc) 12%,var(--bg2));border:1px solid var(--b);
   color:var(--t);font-size:var(--fs-12);line-height:1.7;white-space:pre-wrap;word-break:break-word}
 .cc-ai{display:flex;flex-direction:column;gap:8px;max-width:min(92%,860px)}
+
+/* ── 执行叙述（components/console/ActivityFeed.tsx）───────────────────────
+   一轮任务在对话区里长出来的时间线：一段人话 + 一行工具摘要，交替往下。
+   左边一条竖线把整段串起来 —— 它是"这一轮的过程"，视觉上要是一件东西。 */
+.af{display:flex;flex-direction:column;gap:2px;position:relative;
+  margin:2px 0 4px;padding-left:14px;font-size:var(--fs-105);line-height:1.7}
+.af::before{content:"";position:absolute;left:3px;top:6px;bottom:6px;width:1px;
+  background:linear-gradient(to bottom,var(--b2),color-mix(in srgb,var(--b) 40%,transparent))}
+.af-more{align-self:flex-start;margin-bottom:2px;padding:1px 8px;border-radius:999px;
+  border:1px dashed var(--b2);background:transparent;color:var(--t3);cursor:pointer;
+  font-family:var(--font);font-size:var(--fs-95)}
+.af-more:hover{color:var(--t2);border-color:var(--t3)}
+
+/* 思考：正文一档的颜色，因为它**是话**，是这条时间线上信息量最大的东西。 */
+.af-think{display:flex;gap:8px;align-items:flex-start;padding:3px 0}
+.af-think p{margin:0;color:var(--t2);white-space:pre-wrap;word-break:break-word}
+.af-dot{flex-shrink:0;width:9px;height:9px;margin-top:.55em;margin-left:-14px;
+  border-radius:50%;background:var(--b2);box-shadow:0 0 0 3px var(--bg)}
+.af-dot-skill{width:auto;height:auto;background:none;box-shadow:none;color:var(--ivy);
+  margin-top:0;margin-left:-16px;font-size:var(--fs-10)}
+.af-skills p{color:var(--t3)}
+/* 正在想的那一段：左边是生长的常春藤，字色提到正文档 —— 它是此刻正在发生的事。 */
+.af-live p{color:var(--t)}
+.af-dot-live{width:auto;height:auto;background:none;box-shadow:none;
+  margin-top:.15em;margin-left:-18px;font-size:var(--fs-11)}
+
+/* 一批常规工具折成的一行。 */
+.af-group{display:flex;flex-direction:column}
+.af-group-head{display:flex;align-items:center;gap:7px;width:100%;padding:2px 0;
+  background:transparent;border:none;cursor:pointer;text-align:left;
+  font-family:var(--font);font-size:var(--fs-10);color:var(--t3)}
+.af-group-head:hover{color:var(--t2)}
+.af-group-icon{flex-shrink:0;margin-left:-14px;width:9px;text-align:center;
+  font-style:normal;color:var(--t3);background:var(--bg)}
+.af-spin{animation:cs-spin 1.6s linear infinite;color:var(--ivy)}
+.af-group-text{white-space:nowrap;flex-shrink:0}
+.af-group-now{color:var(--ivy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.af-caret{margin-left:auto;padding-left:8px;opacity:.7;flex-shrink:0}
+.af-group-body{margin:2px 0 4px;padding-left:6px;border-left:1px solid var(--b);
+  max-height:40vh;overflow-y:auto}
+
+/* 单独成行的步骤（写操作 / 子 agent / MCP / 板块 / 计划）。 */
+.af-single{padding:1px 0}
+.af-single .af-row-head{margin-left:-14px;padding-left:0}
+.af-row{font-size:var(--fs-10)}
+.af-row-head{display:flex;align-items:center;gap:7px;width:100%;padding:2px 0;
+  background:transparent;border:none;cursor:pointer;text-align:left;
+  font-family:var(--font);font-size:var(--fs-10);color:var(--t3)}
+.af-row-head:hover{color:var(--t2)}
+.af-row-icon{flex-shrink:0;font-style:normal;width:9px;text-align:center;background:var(--bg)}
+.af-row-title{color:var(--t2);white-space:nowrap;flex-shrink:0}
+.af-row-detail{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.af-row-ms{margin-left:auto;padding-left:8px;flex-shrink:0;opacity:.8}
+.af-badge{flex-shrink:0;padding:0 5px;border-radius:3px;border:1px solid var(--amber);
+  color:var(--amber);font-size:var(--fs-85)}
+.af-args{margin:2px 0 4px 16px;padding:6px 8px;max-height:220px;overflow:auto;
+  border:1px solid var(--b);border-radius:var(--r);background:var(--bg2);
+  color:var(--t3);font-size:var(--fs-95);white-space:pre-wrap;word-break:break-all}
+.af-mark{flex-shrink:0;width:9px;text-align:center;font-size:var(--fs-9)}
+.af-ok{color:var(--acc)}
+.af-err{color:var(--red)}
+.af-blocked{color:var(--amber)}
+.af-run{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ivy);
+  animation:cs-breathe 1.4s var(--ease) infinite}
+
+/* 收尾那一行：第几步 · 用时。跑着的时候它钉在叙述最下面，紧挨着输入框。 */
+.af-foot{display:flex;align-items:center;gap:6px;padding:2px 0;margin-left:-14px;
+  color:var(--t3);font-size:var(--fs-95)}
+.af-foot-ivy{display:inline-flex;align-items:center;font-size:var(--fs-11);color:var(--ivy)}
 .cc-answer{font-size:var(--fs-12);line-height:1.8;color:var(--t2);border:1px solid var(--b);
   border-radius:var(--r);background:var(--bg1);padding:10px 13px}
 .cc-answer-error{color:var(--red);border-color:rgba(248,113,113,.35);white-space:pre-wrap}

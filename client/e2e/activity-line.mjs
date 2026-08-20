@@ -1,14 +1,18 @@
 /**
- * 「执行过程只占一行」的浏览器 E2E。
+ * 「执行叙述铺开，但铺不爆页面」的浏览器 E2E。
  *
- * 这条用例存在的理由：上一版把一轮里的每一步都铺开渲染，192 步的任务能把整页糊满、
- * 把回答挤出屏幕，而收起它的开关是行尾一个 9px 的箭头，用户根本看不出那是个按钮。
- * 这三件事——**只显示一行**、**开关看得见点得着**、**展开后不许把页面撑爆**——
- * 全是渲染后才成立的属性：JSX 快照测不出高度，jsdom 没有布局，只有真实浏览器
- * 拿真实 CSS 排完版才能证明。
+ * 这条用例的历史值得写下来，因为它拦的是**同一个错的两个方向**：
+ *   · 最早：一轮里每一步都铺开渲染 —— 192 步能把整页糊满，把回答挤出屏幕。
+ *   · 上一版矫枉过正：整轮压成**一行**，只显示最后半句话 —— 用户盯着屏幕，
+ *     既不知道刚才那 15 步干了什么，也不知道接下来要干什么（真实投诉）。
+ * 现在的解法是**聚合**：连续的常规工具折成一行并按类型计数，写操作/子 agent/
+ * MCP/计划这些"各自是一件事"的步骤才单独成行。所以 192 步 → 一行，而一段思考、
+ * 一次写文件都看得见。
  *
- * 跑的是 src/components/console/StepTimeline.tsx + src/styles/workbench.css 的真实代码
- * （esbuild 打包进 harness）。
+ * 三件事只有真实浏览器排完版才证得了：铺出来占几行、展开后不许把页面撑爆、
+ * 折叠开关看得见点得着。
+ *
+ * 跑的是 src/components/console/ActivityFeed.tsx + src/styles/workbench.css 的真实代码。
  *
  * 跑：node e2e/activity-line.mjs
  */
@@ -17,7 +21,6 @@ import { spawnSync } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 
 import { WsCDP, chromeArgs, click, delay, evaluate, waitFor } from "./cdp.mjs";
 
@@ -27,26 +30,22 @@ const STEP_COUNT = 192;
 const HARNESS = `
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
-import StepTimeline from "../src/components/console/StepTimeline";
+import ActivityFeed from "../src/components/console/ActivityFeed";
 import "../src/styles/workbench.css";
 
 const STEP_COUNT = ${STEP_COUNT};
 
+const NAMES = ["run_command", "read_file", "grep", "list_dir"];
+
 function makeSteps(n, runningLast) {
   const out = [];
   for (let i = 0; i < n; i++) {
+    const name = NAMES[i % NAMES.length];
     out.push({
-      key: "s" + i,
-      seq: i,
-      phase: "tool",
-      name: "run_command",
-      title: "执行命令",
-      icon: "⚙",
-      detail: "npm --version #" + i,
+      key: "s" + i, seq: i, phase: "tool", name,
+      title: name, icon: "⊙", detail: "#" + i,
       status: runningLast && i === n - 1 ? "running" : "ok",
-      ms: 624,
-      at: Date.now() - (n - i) * 1000,
-      args: { command: "npm --version" },
+      ms: 624, at: Date.now() - (n - i) * 1000, args: { command: "npm --version" },
     });
   }
   return out;
@@ -55,16 +54,25 @@ function makeSteps(n, runningLast) {
 function App() {
   const [steps, setSteps] = useState(() => makeSteps(STEP_COUNT, true));
   const [running, setRunning] = useState(true);
-  // 用例从外面驱动状态变化，模拟流式过程中新步骤不断到达
+  const [thoughts, setThoughts] = useState([
+    { seq: 0, text: "先把现状查清楚：这一批工具是用来确认数据源的。" },
+  ]);
   window.__push = () => setSteps((prev) => [...prev, {
     key: "extra-" + prev.length, seq: prev.length, phase: "tool", name: "run_command",
-    title: "最新一步", icon: "⚙", detail: "tasklist", status: "running", at: Date.now(),
+    title: "最新一步", icon: "⊙", detail: "tasklist", status: "running", at: Date.now(),
   }]);
+  window.__write = () => setSteps((prev) => [...prev, {
+    key: "w-" + prev.length, seq: prev.length, phase: "tool", name: "write_file",
+    title: "写入文件", icon: "⊙", detail: "IvyGrow.tsx", status: "ok", ms: 12, at: Date.now(),
+  }]);
+  window.__think = () => setThoughts((prev) => [...prev,
+    { seq: STEP_COUNT, text: "查完了，接下来把结论写进文件。" }]);
   window.__finish = () => { setRunning(false); setSteps((prev) => prev.map((s) => ({ ...s, status: "ok" }))); };
 
   return (
     <div style={{ width: "900px", padding: "16px" }}>
-      <StepTimeline steps={steps} skills={[]} elapsedMs={1183200} running={running} />
+      <ActivityFeed steps={steps} thoughts={thoughts} skills={[]}
+                    elapsedMs={1183200} running={running} />
     </div>
   );
 }
@@ -76,7 +84,6 @@ const PAGE = `<!doctype html><html><body style="margin:0"><div id="root"></div>
 <link rel="stylesheet" href="./bundle.css">
 <script type="module" src="./bundle.js"></script></body></html>`;
 
-/** 可见元素个数 —— display:none / 高度为 0 的不算。 */
 const visibleCount = (send, selector) => evaluate(send, `(() => {
   return [...document.querySelectorAll("${selector}")]
     .filter((el) => el.getBoundingClientRect().height > 0).length;
@@ -89,10 +96,11 @@ const rectOf = (send, selector) => evaluate(send, `(() => {
   return { w: r.width, h: r.height };
 })()`);
 
+const textOf = (send, selector) => evaluate(send,
+  `(document.querySelector("${selector}")?.textContent || "").trim()`);
+
 async function run() {
-  const work = await mkdtemp(path.join(os.tmpdir(), "ivyea-activity-e2e-"));
-  // 入口必须落在 client/ 里面：放 /tmp 的话 esbuild 找不到 react / react-dom，
-  // 也解析不到 ../src。跑完在 finally 里删掉。
+  const work = await mkdtemp(path.join(os.tmpdir(), "ivyea-feed-e2e-"));
   const entry = path.resolve("e2e/.activity-harness.jsx");
   await writeFile(entry, HARNESS, "utf8");
   const bundle = spawnSync("npx", ["esbuild", entry, "--bundle", "--format=esm", "--jsx=automatic",
@@ -104,7 +112,7 @@ async function run() {
   if (bundle.status !== 0) throw new Error(bundle.stderr || bundle.stdout || "harness bundle failed");
   await writeFile(path.join(work, "index.html"), PAGE, "utf8");
 
-  const profile = await mkdtemp(path.join(os.tmpdir(), "ivyea-activity-profile-"));
+  const profile = await mkdtemp(path.join(os.tmpdir(), "ivyea-feed-profile-"));
   const { cdp, chrome } = await WsCDP.launch(chromeArgs(profile));
   try {
     const { targetId } = await cdp.send("Target.createTarget", { url: "about:blank" });
@@ -115,75 +123,60 @@ async function run() {
       if (s === sessionId) errors.push(params.exceptionDetails?.text || "browser exception");
     });
     await Promise.all([send("Page.enable"), send("Runtime.enable")]);
-    // 视口高度决定 40vh 的绝对值，钉死它这条断言才有意义
     await send("Emulation.setDeviceMetricsOverride",
-               { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
-    await send("Page.navigate", { url: pathToFileURL(path.join(work, "index.html")).href });
-    await waitFor(send, `!!document.querySelector(".cs-timeline")`, "timeline");
+               { width: 1200, height: 800, deviceScaleFactor: 1, mobile: false });
+    await send("Page.navigate", { url: "file://" + path.join(work, "index.html") });
+    await waitFor(send, `!!document.querySelector(".af")`, "执行叙述", 20_000);
 
-    // ── 1. 192 步，页面上只有一行 ──────────────────────────────────────────
-    assert.equal(await visibleCount(send, ".cs-live-text"), 1, "活动行必须有且只有一行");
-    assert.equal(await visibleCount(send, ".cs-row"), 0,
-                 "收起时一条步骤日志都不该渲染（上一版正是在这里把 192 步全铺开的）");
-    const collapsed = await rectOf(send, ".cs-timeline");
-    assert.ok(collapsed.h <= 60,
-              `收起态整块不该超过一行的高度（实测 ${collapsed.h}px）`);
-
-    // ── 2. 展开开关必须看得见、点得着 ──────────────────────────────────────
-    const toggle = await rectOf(send, ".cs-toggle");
-    assert.ok(toggle, "得有一个展开按钮");
-    assert.ok(toggle.h >= 28, `按钮高度至少 28px（实测 ${toggle.h}px）`);
-    assert.ok(toggle.w >= 40, `按钮宽度至少 40px，得放得下文字（实测 ${toggle.w}px）`);
-    assert.ok(String(await evaluate(send, `document.querySelector(".cs-toggle").textContent`)).includes("展开"),
-              "按钮上要有文字，不能只有一个箭头");
-
-    // ── 3. 展开：全部步骤都在，但面板不许把页面撑爆 ────────────────────────
-    await click(send, ".cs-toggle");        // 真·点击：坐标点得中才算数
-    await waitFor(send, `document.querySelectorAll(".cs-row").length > 0`, "log rows");
-    assert.equal(await visibleCount(send, ".cs-row"), STEP_COUNT,
-                 "展开后每一步都要能翻到");
-    const log = await rectOf(send, ".cs-log");
-    assert.ok(log.h <= 900 * 0.4 + 2, `日志面板不得超过 40vh（900×0.4=360，实测 ${log.h}px）`);
-    const scrollable = await evaluate(send, `(() => {
-      const el = document.querySelector(".cs-log");
-      return el.scrollHeight > el.clientHeight + 10;
-    })()`);
-    assert.ok(scrollable, "192 步应当是在面板内部滚动，而不是把页面撑长");
-
-    // ── 4. 收起后回到一行 ──────────────────────────────────────────────────
-    await click(send, ".cs-toggle");
-    await waitFor(send, `document.querySelectorAll(".cs-row").length === 0`, "collapsed again");
-    assert.equal(await visibleCount(send, ".cs-live-text"), 1, "收起后仍然只有一行");
-
-    // ── 5. 新一步到达时，活动行显示的是**最新**那一步 ──────────────────────
-    await evaluate(send, `window.__push()`);
-    await delay(300);
-    const liveText = await evaluate(send, `document.querySelector(".cs-live-text").textContent`);
-    assert.ok(String(liveText).includes("最新一步"),
-              `活动行要跟着换成最新一步（实测「${liveText}」）`);
-    assert.equal(await visibleCount(send, ".cs-live-text"), 1, "换行之后也还是只有一行");
-
-    // ── 6. 结束后：仍是一行，且给出总账 ────────────────────────────────────
-    await evaluate(send, `window.__finish()`);
-    await delay(200);
-    assert.equal(await visibleCount(send, ".cs-live-text"), 1, "结束后仍然只有一行");
-    const tail = await evaluate(send, `document.querySelector(".cs-live-tail").textContent`);
-    assert.ok(String(tail).includes("步"), `结束后要给出总步数（实测「${tail}」）`);
-
-    assert.deepEqual(errors, []);
-    process.stdout.write("activity line browser E2E passed\n");
-  } finally {
-    try { chrome.kill("SIGKILL"); } catch { /* ignore */ }
-    await delay(200);        // 等 Chrome 真的放下 profile 里的文件句柄
-    // 清理失败不许盖掉真正的失败原因（ENOTEMPTY 会把断言错误顶掉）
-    for (const target of [profile, work]) {
-      await rm(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch(() => {});
+    // ── 1. 192 步只折成**一行**，而且那一行说得出都干了什么 ────────────────
+    assert.equal(await visibleCount(send, ".af-group"), 1, "连续的常规工具要折成一行");
+    const summary = await textOf(send, ".af-group-text");
+    for (const need of ["跑了", "读了", "搜索"]) {
+      assert.ok(summary.includes(need), `摘要要按类型说清楚：${JSON.stringify(summary)}`);
     }
-    await rm(path.resolve("e2e/.activity-harness.jsx"), { force: true }).catch(() => {});
+    assert.ok(/48/.test(summary), `192 步按四类平分，每类 48：${JSON.stringify(summary)}`);
+
+    // 整条叙述在没展开时必须很矮 —— 它是一条叙述，不是一面芯片墙
+    const feed = await rectOf(send, ".af");
+    assert.ok(feed.h < 220, `没展开时不该超过 220px，实际 ${feed.h}px`);
+
+    // ── 2. 思考是人话，独立成行 ─────────────────────────────────────────
+    assert.equal(await visibleCount(send, ".af-think"), 1);
+    assert.ok((await textOf(send, ".af-think p")).includes("先把现状查清楚"));
+
+    // ── 3. 写文件不许被折进计数里 —— 它是独立的一件事 ─────────────────────
+    await evaluate(send, `window.__think(), window.__write(), true`);
+    await delay(150);
+    assert.equal(await visibleCount(send, ".af-single"), 1, "写操作单独成行");
+    assert.ok((await textOf(send, ".af-single")).includes("IvyGrow.tsx"), "写了哪个文件要看得见");
+    assert.equal(await visibleCount(send, ".af-think"), 2, "第二段思考跟着出现");
+
+    // ── 4. 展开那一批：能看，但不许把页面撑爆 ────────────────────────────
+    await click(send, ".af-group-head");
+    await waitFor(send, `document.querySelectorAll(".af-row").length > 100`, "展开", 10_000);
+    const body = await rectOf(send, ".af-group-body");
+    assert.ok(body.h <= 800 * 0.4 + 2, `展开的日志自己滚，最多 40vh，实际 ${body.h}px`);
+    const scrollable = await evaluate(send, `(() => {
+      const el = document.querySelector(".af-group-body");
+      return el.scrollHeight - el.clientHeight;
+    })()`);
+    assert.ok(scrollable > 100, "展开后是一块可翻的日志，不是把页面顶长");
+
+    // ── 5. 跑完之后：不再有转的图标，收尾行消失 ──────────────────────────
+    await click(send, ".af-group-head");          // 收起
+    await evaluate(send, `window.__finish(), true`);
+    await delay(200);
+    assert.equal(await visibleCount(send, ".af-foot"), 0, "跑完就不该再有『第几步·用时』那行");
+    assert.equal(await visibleCount(send, ".af-spin"), 0, "跑完了不许还有图标在转");
+
+    assert.deepEqual(errors, [], "页面不能抛异常");
+    process.stdout.write("activity feed browser E2E passed\n");
+  } finally {
+    chrome.kill("SIGKILL");
+    await rm(entry, { force: true }).catch(() => {});
+    await rm(work, { recursive: true, force: true }).catch(() => {});
+    await rm(profile, { recursive: true, force: true }).catch(() => {});
   }
 }
 
-run().catch((error) => {
-  process.stderr.write(`${error.stack || error.message}\n`);
-  process.exit(1);
-});
+await run();

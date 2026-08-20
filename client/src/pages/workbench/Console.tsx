@@ -28,7 +28,7 @@ import {
 } from "../../lib/stepLabels";
 import { useStickToBottom } from "../../lib/useStickToBottom";
 import { aggregateStats, mergeStats, type ServerStats, type TurnMetrics } from "../../lib/turnStats";
-import StepTimeline, { type MatchedSkill } from "../../components/console/StepTimeline";
+import ActivityFeed, { type MatchedSkill, type Thought } from "../../components/console/ActivityFeed";
 import StatsBar from "../../components/console/StatsBar";
 import ContextMeter from "../../components/console/ContextMeter";
 import DockMeta from "../../components/console/DockMeta";
@@ -113,12 +113,22 @@ type Turn = {
    * 一轮思考几万字全存进 state 会让每次 patch 都拷一遍大字符串。
    */
   reasoning?: string;
+  /**
+   * 思考按**批**成段：两次工具调用之间的所有思考合成一段人话。
+   *
+   * 不按句切 —— 模型的思考流是连续的，按句切会碎成几百条，铺出来是一面字墙。
+   * 一批就是一个自然的单元："想完了，去做这几件事"，正好对上后面那一行工具摘要。
+   * seq 记的是冲刷时已经有多少步，靠它和步骤穿插排序（时钟对不齐，见 ActivityFeed）。
+   */
+  thoughts?: Thought[];
   /** 这一轮的计时与用量，喂给底部统计条。 */
   metrics?: TurnMetrics;
 };
 
 /** 思考流只保留尾部这么多字符 —— 活动行只显示最后一句，多存无用。 */
 const REASONING_TAIL = 400;
+/** 一轮里最多留多少段思考。再多界面上也翻不完，而 state 每次 patch 都要拷一遍。 */
+const THOUGHTS_MAX = 60;
 
 type Prefs = {
   workspace: string; approval: ApprovalMode; skill: string;
@@ -701,6 +711,9 @@ function ConsoleInner() {
       // 思考流走同一帧：它比正文更碎（模型逐字想），一条一次 setState 会把
       // 活动行刷成每秒几十次重绘。只留尾部，活动行只看最后一句。
       if (think) {
+        // reasoning 现在装的是**还没成段的那一段**：它边想边显示，想完（去调工具了）
+        // 就被 flushThought 收成一段落进 thoughts。留尾部上限是因为一段想太长时
+        // 界面上也只读得完最后那几行，而每次 patch 都要拷一遍整串。
         patchTurn(aiId, (t) => ({
           reasoning: ((t.reasoning || "") + think).slice(-REASONING_TAIL),
         }));
@@ -714,6 +727,22 @@ function ConsoleInner() {
     const finishFlush = () => {
       if (flushRaf) window.cancelAnimationFrame(flushRaf);
       flushTokens();
+    };
+    /**
+     * 把"到此为止想的这一段"收成叙述里的一条。
+     *
+     * 触发点是**它开始动手**（下一个 step 到达）或这一轮收尾 —— 那才是一段思考
+     * 真正结束的时刻。按句号切会把一段完整的推理碎成几十条，铺在页面上是字墙。
+     */
+    const flushThought = () => {
+      finishFlush();                       // 先把还在缓冲里的思考落地，别丢半句
+      patchTurn(aiId, (t) => {
+        const text = (t.reasoning || "").trim();
+        if (!text) return {};
+        const rows = [...(t.thoughts || []), { seq: (t.steps || []).length, text }];
+        // 一轮里思考段数有上限：几百段时界面自己会折叠，但 state 也不该无限长。
+        return { thoughts: rows.slice(-THOUGHTS_MAX), reasoning: "" };
+      });
     };
 
     try {
@@ -772,6 +801,10 @@ function ConsoleInner() {
             patchTurn(aiId, { skills: (d?.skills || []) as MatchedSkill[] });
           },
           onStep: (ev) => {
+            // 先把"想到现在为止的这一段"收成一条，再记这一步 —— 顺序就是叙述的顺序：
+            // 想 → 做 → 想 → 做。收在这里而不是收在思考流里，是因为"这一批想完了"
+            // 的唯一可靠信号就是它开始动手了。
+            flushThought();
             patchTurn(aiId, (t) => ({ steps: mergeStep(t.steps || [], stepFromEvent(ev)) }));
           },
           // 计划**当场**落地：原来只在 onFinal 收一次，于是"接下来要干什么"要等这一轮
@@ -898,6 +931,7 @@ function ConsoleInner() {
       }
     } finally {
       finishFlush();
+      flushThought();          // 最后一批思考后面没有 step 了，收尾时收进去
       window.clearInterval(tick);
       // 这一轮完了通知左栏再取一次：预览、时间要更新，而标题是服务端跑完这一轮才
       // 由模型起的（SessionRail 收到这条会延后再补取一次，正好接住它）。
@@ -1045,6 +1079,14 @@ function ConsoleInner() {
           <>
             <div className="cc-thread-wrap">
               <div className="cc-thread scroll-thin" ref={bodyRef}>
+                {/*
+                  * 内层这一圈是为了**把内容顶到底部**（margin-top:auto）。
+                  * 对话短的时候，内容原本贴在页面最上面，中间空出一大片 —— 而正在跑
+                  * 的执行叙述恰恰长在最下面，于是用户盯着的输入框上方是一片空白，
+                  * 要抬头去屏幕顶上找状态。内容不满一屏时贴底，超过一屏时 auto 失效、
+                  * 照常滚动，两种情况都对。
+                  */}
+                <div className="cc-thread-inner">
                 {earlier.hasMore && (
                   <div className="cc-earlier">
                     <button type="button" onClick={() => void loadEarlier()} disabled={earlier.loading}>
@@ -1059,12 +1101,13 @@ function ConsoleInner() {
                     </div>
                   ) : (
                     <div className="cc-ai wb-enter" key={t.id}>
-                      <StepTimeline
+                      <ActivityFeed
                         steps={t.steps || []}
+                        thoughts={t.thoughts || []}
                         skills={t.skills || []}
                         elapsedMs={t.elapsedMs}
                         running={t.running}
-                        reasoning={t.reasoning}
+                        liveThought={t.reasoning}
                       />
                       {t.text && (
                         <div
@@ -1101,6 +1144,7 @@ function ConsoleInner() {
                     onPick={(q) => void send(q)}
                   />
                 )}
+                </div>
               </div>
               {/* 脱离底部才出现 —— 跟随已经关掉了，得给一条回去的路。 */}
               {!atBottom && (
@@ -1114,7 +1158,7 @@ function ConsoleInner() {
               {/* 跑起来之后，"现在在干什么 / 接下来干什么"钉在输入框上方，不随对话滚走。
                   长任务里对话区早就滚出去几屏了，把状态留在那上面等于没有状态。 */}
               <LiveDock
-                running={busy}
+                running={busy && !atBottom}
                 steps={liveTurn?.steps || []}
                 reasoning={liveTurn?.reasoning || ""}
                 elapsedMs={liveTurn?.elapsedMs}
