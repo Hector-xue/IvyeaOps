@@ -3225,30 +3225,44 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 /* 常春藤生长 —— 思考中的那枚图标（见 components/console/IvyGrow.tsx）。
    一个 2.8s 的循环：藤先画出来，三片叶子依次冒头，长满后整体轻轻褪一下再从头长。
    尺寸用 em，跟着所在位置的字号走。 */
-.ivy-grow{width:1.15em;height:1.15em;overflow:visible;color:var(--ivy)}
+.ivy-grow{width:1.15em;height:1.15em;overflow:visible;color:var(--ivy);
+  /* 整株一起淡入淡出。**淡出必须放在容器上**：让藤和叶各自淡出的话，它们的
+     animation-delay 不同，收尾时会先掉藤、剩三片叶子浮在半空 —— 看起来是散架，
+     不是"长完了重新长"（截图实拍过一次）。 */
+  animation:ivy-cycle 2.8s var(--ease) infinite}
 .ivy-stem{stroke:currentColor;stroke-width:1.7;
   stroke-dasharray:26;stroke-dashoffset:26;
   animation:ivy-stem 2.8s var(--ease) infinite}
+/* 三片叶子的先后**写进各自的关键帧百分比**，不用 animation-delay。
+   用 delay 的话每片叶子的时间线都比藤晚一截，循环回到起点时藤已经重画、叶子还停在
+   上一轮长好的样子 —— 那一帧看起来是三片叶子浮在半空（实拍验证过）。同一条时间线
+   才锁得住相位。 */
 .ivy-leaf{fill:currentColor;opacity:0;transform-box:fill-box;transform-origin:center;
-  animation:ivy-leaf 2.8s var(--ease) infinite}
-.ivy-leaf-1{animation-delay:.42s}
-.ivy-leaf-2{animation-delay:.78s}
-.ivy-leaf-3{animation-delay:1.14s}
+  animation-duration:2.8s;animation-timing-function:var(--ease);
+  animation-iteration-count:infinite}
+.ivy-leaf-1{animation-name:ivy-leaf-1}
+.ivy-leaf-2{animation-name:ivy-leaf-2}
+.ivy-leaf-3{animation-name:ivy-leaf-3}
+@keyframes ivy-cycle{0%{opacity:0}8%{opacity:1}86%{opacity:1}100%{opacity:0}}
 @keyframes ivy-stem{
   0%{stroke-dashoffset:26}
-  46%{stroke-dashoffset:0}
-  84%{stroke-dashoffset:0;opacity:1}
-  100%{stroke-dashoffset:0;opacity:0}
+  46%,100%{stroke-dashoffset:0}
 }
-@keyframes ivy-leaf{
-  0%,6%{opacity:0;transform:scale(.3)}
-  26%{opacity:1;transform:scale(1)}
-  84%{opacity:1;transform:scale(1)}
-  100%{opacity:0;transform:scale(1)}
+@keyframes ivy-leaf-1{
+  0%,14%{opacity:0;transform:scale(.3)}
+  24%,100%{opacity:1;transform:scale(1)}
+}
+@keyframes ivy-leaf-2{
+  0%,25%{opacity:0;transform:scale(.3)}
+  35%,100%{opacity:1;transform:scale(1)}
+}
+@keyframes ivy-leaf-3{
+  0%,36%{opacity:0;transform:scale(.3)}
+  46%,100%{opacity:1;transform:scale(1)}
 }
 /* 有人把系统动效关了 —— 那就只显示长好的样子，别硬闪。 */
 @media (prefers-reduced-motion:reduce){
-  .ivy-stem,.ivy-leaf{animation:none;stroke-dashoffset:0;opacity:1;transform:none}
+  .ivy-grow,.ivy-stem,.ivy-leaf{animation:none;stroke-dashoffset:0;opacity:1;transform:none}
 }
 .cs-live-icon.cs-live-think{color:var(--ivy)}
 .cs-live-icon.spinning{animation:cs-spin 2.4s linear infinite}
