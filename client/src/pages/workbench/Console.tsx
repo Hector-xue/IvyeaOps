@@ -721,6 +721,19 @@ function ConsoleInner() {
               if (d.session_id !== liveSid) notifyConsoleSessionsChanged(d.session_id);
               liveSid = d.session_id;
               setSessionId(d.session_id);
+              // 新会话的 id 此前只存进内存 state，没进网址。切换页面再切回时组件重建，
+              // 找不到该恢复哪条会话，界面回空白 —— 用户会以为指令没发出去，然后把
+              // 同一句话再打一遍（真实投诉就是这么来的）。把 id 同步写进 URL，让
+              // 「新建会话」和「点历史会话」走同一套 ?session= 恢复逻辑。
+              //
+              // replace 不污染后退历史；读的是 window.location 而不是渲染闭包里的
+              // urlSession —— 这个回调活在流里，闭包是发消息那一刻的旧值。地址栏已经
+              // 指向这条会话时（在历史会话里继续问）就不写，省掉每轮一次白折腾。
+              // 恢复 effect 那边 urlSession===sessionId 会直接 return，不会重复拉取、
+              // 也不会 abort 掉正在跑的这一轮（e2e/session-url.mjs 钉住了这一条）。
+              if (new URLSearchParams(window.location.search).get("session") !== d.session_id) {
+                navigate(`/console?session=${encodeURIComponent(d.session_id)}`, { replace: true });
+              }
             }
             if (d?.model) setModel(typeof d.model === "string" ? d.model : d.model?.model || "");
             if (typeof d?.read_only === "boolean") setReadOnly(d.read_only);
@@ -795,7 +808,14 @@ function ConsoleInner() {
             }));
           },
           onFinal: (d) => {
-            cancelFlush();
+            // final 到达时，手里常常还攥着没落地的一帧 token —— 收尾那几个字和 final
+            // 多半在**同一个网络分片**里到，rAF 还没来得及跑。所以这里分两种走法：
+            //   · final 自带规范文本（引证门通过后的终稿）→ 草稿作废，整体替换；
+            //   · final 不带文本（老 agent、兜底通道）→ 必须把那一帧**补落地**。
+            // 原来两种情况都 cancelFlush()，而 cancelFlush 会把 pending 清空 ——
+            // 于是不带文本的那一档，回答的最后一句就凭空少了。
+            if (d?.text) cancelFlush();
+            else finishFlush();
             if (d?.session_id) setSessionId(d.session_id);
             if (Array.isArray(d?.todos)) setTodos(d.todos);
             if (d?.usage) { setUsage(d.usage); turnUsage = d.usage; }
