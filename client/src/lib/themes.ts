@@ -48,6 +48,11 @@ export const THEMES: readonly ThemeDef[] = [
   // 的接线块）：浅色 #4078f2、深色 #61afef。
   { id: "mendao-light",  name: "门道·浅", icon: "▤", accent: "#16a34a", mode: "light" },
   { id: "mendao-dark",   name: "门道·深", icon: "▥", accent: "#4ade80", mode: "dark"  },
+  // 琉璃两套：静谧的形状 + 冷中性调色板 + 材质/高度/动效三层。
+  // accent 和静谧、门道同为品牌绿 —— **这是故意的**：logo 不该被主题改色，
+  // --acc 也不该。三者在选择器里靠图标区分（◌ 透光 / ◍ 半实）。
+  { id: "lucent-light",  name: "琉璃·浅", icon: "◌", accent: "#16a34a", mode: "light" },
+  { id: "lucent-dark",   name: "琉璃·深", icon: "◍", accent: "#4ade80", mode: "dark"  },
   { id: "dark",          name: "暗夜",   icon: "🌲", accent: "#4ade80", mode: "dark"  },
   { id: "deep-space",    name: "星渊",   icon: "🌌", accent: "#4d8fff", mode: "dark"  },
   { id: "smoke-gold",    name: "烟金",   icon: "✦",  accent: "#f0a030", mode: "dark"  },
@@ -129,11 +134,17 @@ export function themeLabel(id: string): string {
 /**
  * 形状皮肤。`data-theme` 管配色，`data-skin` 管形状（圆角/阴影/边框/背景画）。
  *
- * 三种皮肤，各自绑死在自己的主题上，**都不是可以自由组合的开关**：
+ * 四种皮肤，各自绑死在自己的主题上，**都不是可以自由组合的开关**：
  *
  * · `flat`    门道两套。直角 + 归零阴影，线条是它的骨架。styles/mendao-skin.css
  * · `quiet`   静谧两套。保留圆角，**删掉绝大多数边框**，靠留白和表面色差分层。
  *             styles/quiet-skin.css
+ * · `lucent`  琉璃两套。形状**共用 quiet-skin.css 那一层**（选择器写成
+ *             `html:is([data-skin=quiet],[data-skin=lucent])`），在它之上加
+ *             材质 / 高度 / 动效三层：styles/lucent-skin.css。
+ *             分成两个 skin 值而不是复用 "quiet"，是因为 quiet 里有一条
+ *             `* { backdrop-filter: none !important }` —— 琉璃的材质正是靠
+ *             backdrop-filter 活的，同名就会被那条通配符静默扫死。
  * · `classic` 其余 16 套。原样。
  *
  * 为什么不能自由组合：旧 16 套的四级表面是半透明的、层次靠底下那张背景画叠
@@ -141,10 +152,11 @@ export function themeLabel(id: string): string {
  * 同理 —— 边框正是那 16 套唯一还在分隔容器的东西。要真支持得为 16 套各补
  * 四个不透明表面值再逐套调，那是另一件事。
  */
-export function themeSkin(id: string | null | undefined): "flat" | "quiet" | "classic" {
+export function themeSkin(id: string | null | undefined): "flat" | "quiet" | "lucent" | "classic" {
   const themeId = getTheme(id).id;
   if (themeId.startsWith("mendao-")) return "flat";
   if (themeId.startsWith("quiet-")) return "quiet";
+  if (themeId.startsWith("lucent-")) return "lucent";
   return "classic";
 }
 

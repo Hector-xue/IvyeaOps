@@ -28,7 +28,12 @@ _CSS = _CLIENT / "src" / "styles" / "workbench.css"
 _TS = _CLIENT / "src" / "lib" / "themes.ts"
 
 
-_TOKENS = _CLIENT / "src" / "styles" / "mendao-tokens.css"
+# 调色板文件。**新增一套自带调色板的主题时要往这里加一行** —— 少加的表现是
+# "`var(--acc)` 引用了未定义的变量"，看着像 CSS 写错了，其实是这条清单没跟上。
+_TOKEN_FILES = [
+    _CLIENT / "src" / "styles" / "mendao-tokens.css",   # 门道 + 静谧
+    _CLIENT / "src" / "styles" / "lucent-tokens.css",   # 琉璃
+]
 
 # 选择器里的主题名：`[data-theme=light]` 和 `[data-theme="mendao-light"]` 都要认
 _SEL = re.compile(r"\[data-theme=\"?([\w-]+)\"?\]")
@@ -71,7 +76,8 @@ def _resolve(value: str, scope: dict[str, str], depth: int = 0) -> str:
 def _css_themes() -> dict[str, dict[str, str]]:
     """每套主题**最终生效**的变量值（已展开 var 间接层）。"""
     raw: dict[str, dict[str, str]] = {}
-    _collect(_TOKENS.read_text(encoding="utf-8"), raw)
+    for tokens in _TOKEN_FILES:
+        _collect(tokens.read_text(encoding="utf-8"), raw)
     css = _CSS.read_text(encoding="utf-8")
     # 主题块全在文件开头的调色板区，正文样式里不会再出现 [data-theme=] 选择器。
     #

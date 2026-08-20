@@ -368,6 +368,75 @@
   --fs-135:18.5px;--fs-14:18.5px;--fs-15:18.5px;--fs-16:18.5px;
 }
 
+/* ══ 琉璃 · 材质风 ═════════════════════════════════════════════════════════
+ *
+ * 调色板在 styles/lucent-tokens.css（--lc-* 前缀），形状层复用静谧的
+ * styles/quiet-skin.css，材质/高度/动效的增量在 styles/lucent-skin.css。
+ * 这一块只做**接线**：把 ops 自己的变量名指过去。
+ *
+ * 和静谧那一块逐行对应，**只有四处不同**：
+ *
+ * ① **--acc 是品牌绿，但 --acc-ink 换成了 brand-text。**
+ *    #16a34a 压在纯白上 3.3:1 —— 当底色（按钮底、指示点、进度条）没问题，
+ *    当**文字**（选中的侧栏项、可点的链接、强调数字）就不够。ops 里
+ *    `color:var(--acc)` 和 `background:var(--acc)` 都大量存在，一个值不可能
+ *    同时对两边成立，所以拆成两支：--acc 管填充、--acc-ink 管文字。
+ *    深色下两者同值（亮绿在近黑底上 10.8:1，本来就够）。
+ *
+ * ② **--b 走 hair、--b2 走 rule**，比静谧再退一档。
+ *    静谧里活下来的边框要"能看见但不抢眼"；琉璃在此之上还有材质那圈
+ *    0.5px 内描边在表达边界，所以常规线可以更细，把 rule 让给
+ *    hover / focus 那一档用。
+ *
+ * ③ **字号刻度：正文 15px，元信息档比静谧密一档（12.5 / 13.5）。**
+ *    静谧把小字从 8~9px 一路抬到 13px 解决了可读性，代价是一屏看到的行变少。
+ *    琉璃的解法是把"字太小"和"看得少"拆开 —— **正文尺度不退**（15px），
+ *    只让元信息档（时间戳、单位、面包屑）回到 12.5/13.5。这两档承载的是
+ *    "扫一眼"的信息，不是"读"的信息。
+ *
+ * ④ **--r 走 --r-md（12px）而不是一个拍脑袋的全局值。**
+ *    全站 1219 处引用 --r，它实际上就是"卡片档"的半径。其余四档由
+ *    lucent-skin.css 按元素点名分配。
+ * ═══════════════════════════════════════════════════════════════════════ */
+[data-theme="lucent-light"],
+[data-theme="lucent-dark"]{
+  /* 四级表面：全部不透明（半透明只出现在材质那四档里，见 lucent-tokens.css） */
+  --bg:var(--lc-canvas);--bg1:var(--lc-paper);--bg2:var(--lc-wash);--bg3:var(--lc-sink);
+  /* 线：见 ② */
+  --b:var(--lc-hair);--b2:var(--lc-rule);--brd:var(--b);
+  /* 三级文字 */
+  --t:var(--lc-ink);--t2:var(--lc-muted);--t3:var(--lc-faint);
+  /* 强调色：填充与文字分家，见 ① */
+  --acc:var(--lc-brand);
+  --acc-ink:var(--lc-brand-text);
+  /* 语义色一一对应 */
+  --blue:var(--lc-info);--amber:var(--lc-warn);--red:var(--lc-accent);
+  --purple:var(--lc-hint);--cyan:var(--lc-calm);
+  /* 系统黑体（等宽留给数字、代码和元信息） */
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+  --sans:var(--font);
+  /* 背景画三件套：关掉。层次由材质和高度承担，不由一张画承担 —— 而且那张画
+     会从每一块玻璃底下透上来，等于给所有浮层糊了一层花纹。 */
+  --grain-opacity:0;
+  --warm-glow:transparent;
+  --bg-cover:var(--lc-canvas);
+  /* 终端：底用 sink（灰阶最深那档）、正文用语法色里的字符串绿。
+     浅色下终端不该是一块死黑 —— 那是整屏唯一一个反色的洞。 */
+  --term-bg:var(--lc-sink);
+  --term-bar:var(--lc-rule);
+  --term-fg:rgb(var(--lc-c-syn-str));
+  /* 压在强调色上的前景。--acc 是实心品牌绿，压在上面的应该是内容区底色。 */
+  --on-acc:var(--lc-canvas);
+  --on-acc-ink:var(--lc-canvas);
+  /* 卡片档半径，见 ④ */
+  --r:var(--r-md);
+  /* 字号刻度，见 ③ */
+  --fs-7:12.5px;--fs-75:12.5px;--fs-8:12.5px;--fs-85:12.5px;--fs-9:12.5px;--fs-95:12.5px;
+  --fs-10:13.5px;--fs-105:13.5px;--fs-11:13.5px;
+  --fs-115:15px;--fs-12:15px;--fs-125:15px;--fs-13:15px;
+  --fs-135:18.5px;--fs-14:18.5px;--fs-15:18.5px;--fs-16:18.5px;
+}
+
 /* ─────────────────────────────────────────────────────────────────
    GLOBAL BASE — painting faintly visible under theme color overlay
    Layer stack (back → front):
