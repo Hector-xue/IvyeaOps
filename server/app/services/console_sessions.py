@@ -229,6 +229,16 @@ def can_access(session_id: str, principal: str, is_admin: bool) -> bool:
     return bool(row and row["principal"] == (principal or ""))
 
 
+def session_row(session_id: str) -> dict[str, Any] | None:
+    """索引里的那一行（没有就是 None）。自动起名要先看标题是不是还空着 ——
+    用户手动改过的名字**绝不能被模型覆盖**。"""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM console_sessions WHERE session_id = ?", (session_id or "",)
+        ).fetchone()
+    return dict(row) if row else None
+
+
 def update_session(session_id: str, *, title: str | None = None,
                    workspace: str | None = None) -> None:
     sets, args = [], []
@@ -442,6 +452,43 @@ def pending_approvals(principal: str, limit: int = 50) -> list[dict[str, Any]]:
             (principal or "", max(1, min(int(limit or 50), 200))),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def expire_stale_approvals(live_request_ids: list[str] | None,
+                           max_age: float = 900.0) -> int:
+    """把**已经不可能再被点**的待审批行销账，返回销掉几条。
+
+    这张表是流水账：只有决策帧或 permission_timeout 帧回到 ops 才会写 decision。
+    可这三种情况下这两种帧都不会来 ——
+      · 用户直接关掉页面（agent 侧看到 client_gone，就地按拒绝收摊）
+      · 传输断链
+      · agent 重启（阻塞的队列随进程一起没了）
+    于是会话都结束几天了，「待审批」里还挂着一张点了只会 409 的僵尸卡片。
+
+    ``live_request_ids`` 是 agent 报上来的"此刻真的还在等"的集合，它是唯一的真相；
+    传 None 表示**问不到**（老 agent / agent 没起），那就只按年龄兜底 —— 绝不能把
+    问不到当成空集，那会一把清掉真正等着的审批。
+
+    年龄阈值默认 900s：agent 侧的审批超时是 600s，多留 5 分钟余量，免得把一条刚
+    发出、还在正常等待的审批判死。
+    """
+    now = time.time()
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT request_id, requested_at FROM console_approvals WHERE decision = ''"
+        ).fetchall()
+        stale = []
+        for r in rows:
+            rid = str(r["request_id"])
+            aged = (now - float(r["requested_at"] or 0)) > max_age
+            gone = live_request_ids is not None and rid not in live_request_ids
+            if aged or gone:
+                stale.append(rid)
+        for rid in stale:
+            conn.execute(
+                "UPDATE console_approvals SET decision = 'expired', decided_at = ?"
+                " WHERE request_id = ? AND decision = ''", (now, rid))
+    return len(stale)
 
 
 def session_approvals(session_id: str, limit: int = 100) -> list[dict[str, Any]]:

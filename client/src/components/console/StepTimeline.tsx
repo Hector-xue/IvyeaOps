@@ -19,6 +19,7 @@
  *   跟随），别在这里另写一份按滚动位置判的。
  */
 import { useMemo, useRef, useState } from "react";
+import IvyGrow from "./IvyGrow";
 import { formatMs, type ConsoleStep } from "../../lib/stepLabels";
 import useStickToBottom from "../../lib/useStickToBottom";
 
@@ -165,10 +166,11 @@ export default function StepTimeline({
           <span
             className={
               "cs-live-icon"
-              + (running ? (live?.thinking ? " spinning cs-live-think" : " breathing") : " cs-live-done")
+              + (running ? (live?.thinking ? " cs-live-think" : " breathing") : " cs-live-done")
             }
           >
-            {running ? (live?.icon || "✻") : "✓"}
+            {/* 思考态换成会生长的常春藤：它自带循环动画，不需要外面再给个 spinning。 */}
+            {running ? (live?.thinking ? <IvyGrow /> : (live?.icon || "✻")) : "✓"}
           </span>
           {live ? (
             /* key 换了就重新挂载 —— 新一行从下方滑入，视觉上"顶掉"上一行。 */

@@ -18,33 +18,12 @@
  * 跑：node e2e/session-url.mjs
  */
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
 import { WsCDP, chromeArgs, click, delay, evaluate, waitFor } from "./cdp.mjs";
-
-const ORIGIN = "http://127.0.0.1:5199";
-
-/** 起验证台的 vite，等它真的能响应了再往下走。 */
-async function startHarness() {
-  const vite = spawn("npx", ["vite", "--config", "vite.harness.config.ts"],
-                     { cwd: path.resolve("."), stdio: ["ignore", "pipe", "pipe"] });
-  let log = "";
-  vite.stdout.on("data", (c) => { log += c.toString("utf8"); });
-  vite.stderr.on("data", (c) => { log += c.toString("utf8"); });
-  const deadline = Date.now() + 60_000;
-  while (Date.now() < deadline) {
-    try {
-      const r = await fetch(ORIGIN + "/", { signal: AbortSignal.timeout(2000) });
-      if (r.ok) return vite;
-    } catch { /* 还没起来 */ }
-    if (vite.exitCode !== null) throw new Error(`vite 退出了(${vite.exitCode})：${log.slice(-2000)}`);
-    await delay(300);
-  }
-  throw new Error(`验证台 60s 内没起来：${log.slice(-2000)}`);
-}
+import { ORIGIN, startHarness } from "./harnessServer.mjs";
 
 const sessionParam = (send) => evaluate(send,
   `new URLSearchParams(location.search).get("session") || ""`);
@@ -111,6 +90,22 @@ async function run() {
     assert.ok(afterReload.some((t) => t.includes("帮我跑一下广告巡检")),
               `刷新后指令要还在：${JSON.stringify(afterReload)}`);
     assert.equal(await sessionParam(send), "s-live", "刷新后地址栏要保住 session");
+
+    // 历史会话的统计条：用时 / 输入 / 输出 长期都在，不是只有正在对话时才有。
+    // 这些数只可能来自服务端落盘的累计账 —— 恢复出来的轮次身上什么都没有。
+    const meta = await evaluate(send, `document.querySelector(".cc-stats, .dock-meta, .cc-dock")?.innerText || ""`);
+    for (const need of ["用时", "输入", "输出"]) {
+      assert.ok(meta.includes(need), `历史会话也要看得到「${need}」：${JSON.stringify(meta)}`);
+    }
+
+    // 老会话（这次改动之前存下的，没有累计账）：统计条要退回"几轮几步"，不能空白。
+    await send("Page.navigate", { url: `${ORIGIN}/console?session=s3&nostats=1` });
+    await waitFor(send, `document.querySelectorAll(".cc-bubble").length > 0`, "老会话载入", 30_000);
+    const legacyMeta = await evaluate(send, `document.querySelector(".cc-dock")?.innerText || ""`);
+    assert.ok(/\d+ 轮/.test(legacyMeta),
+              `没有累计账的老会话也要显示几轮几步：${JSON.stringify(legacyMeta)}`);
+    await send("Page.navigate", { url: `${ORIGIN}/console?session=s-live` });
+    await waitFor(send, `document.querySelectorAll(".cc-bubble").length > 0`, "回到新会话", 30_000);
 
     // ── 5. 切到别的板块，再从侧边栏点回任务台 ────────────────────────────
     // 这就是用户投诉里的那条路。侧边栏「任务台」是个死链接 /console 的话，

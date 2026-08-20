@@ -53,6 +53,11 @@
      **on-acc 不是"白色"，是"压在强调色上的前景色"**：`.ap-approve` 那类
      深底白字的按钮，白色是因为底是强调色，不是因为它想要白。名字说清这件事，
      门道主题才知道该给什么值。 */
+  /* 常春藤绿 —— 品牌色，不跟主题强调色走。
+     它标的是"这是 Ivyea 在想"，和主题选了什么颜色无关（就像 logo 不该被主题改色）。
+     基础值取比品牌原值亮一档，因为 18 套主题里绝大多数是暗底；浅底那几套下面压回
+     官网在用的 #5B9334。 */
+  --ivy:#6DAF3F;
   --term-bg:#000;        /* 终端/shell 的实心底 */
   --term-bar:#1a1a1a;    /* 终端工具条与分隔线 */
   --term-fg:#00ff88;     /* 终端正文（那个经典的荧光绿）*/
@@ -75,6 +80,7 @@
 }
 /* ── Moonstone (light) ── */
 [data-theme=light]{
+  --ivy:#5B9334;
   --bg:rgba(240,240,238,.70);--bg1:rgba(255,255,255,.76);--bg2:rgba(248,248,246,.72);--bg3:rgba(239,239,237,.68);
   --b:#dededb;--b2:#c8c8c4;--brd:var(--b);
   --t:#111111;--t2:#555550;--t3:#a0a09a;
@@ -3141,6 +3147,52 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .cc-tobottom:hover{color:var(--t);border-color:color-mix(in srgb,var(--acc) 45%,var(--b));
   background:color-mix(in srgb,var(--acc) 8%,var(--bg1));transform:translateX(-50%) translateY(-1px)}
 .cc-dock{flex-shrink:0;padding:8px 18px 12px;border-top:1px solid var(--b);background:var(--bg)}
+/* ── 实时状态坞（components/console/LiveDock.tsx）─────────────────────────
+   钉在输入框正上方，不随对话滚走。一行说完三件事：在干什么 / 接下来干什么 /
+   进行到哪。展开是 Agent 自己排的计划。 */
+.ld{display:flex;align-items:stretch;gap:6px;margin-bottom:7px;flex-wrap:wrap;
+  border:1px solid color-mix(in srgb,var(--ivy) 34%,var(--b));border-radius:var(--r);
+  background:color-mix(in srgb,var(--ivy) 7%,var(--bg1));
+  animation:ld-in .2s var(--ease)}
+@keyframes ld-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.ld-main{flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:6px 10px;
+  background:transparent;border:none;cursor:pointer;text-align:left;
+  font-family:var(--font);font-size:var(--fs-10);color:var(--t2)}
+.ld-icon{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
+  width:1.3em;height:1.3em}
+.ld-think{color:var(--ivy)}
+.ld-work{color:var(--t2)}
+/* 「在干什么」可以被挤窄，但**永远保留一段**：它是这一条存在的理由。 */
+.ld-now{display:flex;align-items:baseline;gap:6px;min-width:6em;flex:1 1 auto;overflow:hidden}
+.ld-label{color:var(--t);white-space:nowrap;flex-shrink:0}
+.ld-detail{color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+/* 「接下来」先被挤掉 —— 它是加分项，当前状态才是必需品。 */
+.ld-next{display:flex;align-items:baseline;gap:5px;min-width:0;flex:0 1 auto;overflow:hidden;
+  color:var(--ivy)}
+.ld-arrow{flex-shrink:0;opacity:.75}
+.ld-next-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.ld-tail{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0;
+  padding-left:8px;color:var(--t3);font-size:var(--fs-95);white-space:nowrap}
+.ld-count{color:var(--ivy)}
+.ld-caret{opacity:.8}
+.ld-stop{flex-shrink:0;margin:6px 8px 6px 0;padding:0 12px;border-radius:var(--r);
+  border:1px solid var(--b2);background:var(--bg2);color:var(--t2);cursor:pointer;
+  font-family:var(--font);font-size:var(--fs-95)}
+.ld-stop:hover{border-color:var(--red);color:var(--red)}
+/* 展开的计划。给个上限并自己滚 —— 20 条待办不能把输入框顶出屏幕。 */
+.ld-plan{flex-basis:100%;margin:0;padding:4px 12px 8px 12px;list-style:none;
+  max-height:168px;overflow-y:auto;border-top:1px solid var(--b);
+  font-size:var(--fs-95);line-height:1.75}
+.ld-plan li{display:flex;gap:8px;align-items:baseline}
+.ld-plan i{font-style:normal;flex-shrink:0;width:1em;text-align:center}
+.ld-t-done{color:var(--t3);text-decoration:line-through;text-decoration-color:var(--b2)}
+.ld-t-doing{color:var(--t)}
+.ld-t-doing i{color:var(--ivy)}
+.ld-t-todo{color:var(--t2)}
+@media (max-width:640px){
+  /* 窄屏先舍弃"接下来"和步数，保住"在干什么"和停止键。 */
+  .ld-next,.ld-tail span:not(.ld-caret):not(.ld-count){display:none}
+}
 .cc-user{display:flex;justify-content:flex-end}
 .cc-bubble{max-width:min(78%,640px);padding:8px 12px;border-radius:10px 10px 2px 10px;
   background:color-mix(in srgb,var(--acc) 12%,var(--bg2));border:1px solid var(--b);
@@ -3170,7 +3222,35 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .cs-live-icon{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
   width:14px;height:14px;color:var(--t3);font-style:normal;line-height:1}
 .cs-live-icon.cs-live-done{color:var(--acc)}
-.cs-live-icon.cs-live-think{color:var(--purple)}
+/* 常春藤生长 —— 思考中的那枚图标（见 components/console/IvyGrow.tsx）。
+   一个 2.8s 的循环：藤先画出来，三片叶子依次冒头，长满后整体轻轻褪一下再从头长。
+   尺寸用 em，跟着所在位置的字号走。 */
+.ivy-grow{width:1.15em;height:1.15em;overflow:visible;color:var(--ivy)}
+.ivy-stem{stroke:currentColor;stroke-width:1.7;
+  stroke-dasharray:26;stroke-dashoffset:26;
+  animation:ivy-stem 2.8s var(--ease) infinite}
+.ivy-leaf{fill:currentColor;opacity:0;transform-box:fill-box;transform-origin:center;
+  animation:ivy-leaf 2.8s var(--ease) infinite}
+.ivy-leaf-1{animation-delay:.42s}
+.ivy-leaf-2{animation-delay:.78s}
+.ivy-leaf-3{animation-delay:1.14s}
+@keyframes ivy-stem{
+  0%{stroke-dashoffset:26}
+  46%{stroke-dashoffset:0}
+  84%{stroke-dashoffset:0;opacity:1}
+  100%{stroke-dashoffset:0;opacity:0}
+}
+@keyframes ivy-leaf{
+  0%,6%{opacity:0;transform:scale(.3)}
+  26%{opacity:1;transform:scale(1)}
+  84%{opacity:1;transform:scale(1)}
+  100%{opacity:0;transform:scale(1)}
+}
+/* 有人把系统动效关了 —— 那就只显示长好的样子，别硬闪。 */
+@media (prefers-reduced-motion:reduce){
+  .ivy-stem,.ivy-leaf{animation:none;stroke-dashoffset:0;opacity:1;transform:none}
+}
+.cs-live-icon.cs-live-think{color:var(--ivy)}
 .cs-live-icon.spinning{animation:cs-spin 2.4s linear infinite}
 /* 工具图标多是 emoji，转起来很怪 —— 它们改成呼吸。 */
 .cs-live-icon.breathing{animation:cs-breathe 1.6s var(--ease) infinite}
@@ -3182,7 +3262,7 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .cs-live-label{color:var(--t2);white-space:nowrap;flex-shrink:0}
 .cs-live-detail{color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 /* 思考和"调了什么工具"是两回事，颜色上分开 */
-.cs-live-think .cs-icon,.cs-live-think .cs-live-label{color:var(--purple)}
+.cs-live-think .cs-icon,.cs-live-think .cs-live-label{color:var(--ivy)}
 .cs-live-tail{margin-left:auto;padding-left:10px;color:var(--t3);white-space:nowrap;flex-shrink:0;
   font-variant-numeric:tabular-nums}
 /* 折叠开关：上一版是行尾一个 9px 的 ▾，无边框无背景，用户根本看不出这块能收起。 */

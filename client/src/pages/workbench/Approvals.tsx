@@ -120,7 +120,12 @@ export default function Approvals() {
               </div>
             )}
 
-            <button className="ap-link" onClick={() => navigate("/console")}>
+            {/* 带上会话 id —— 光跳 /console 落地的是空白新任务，等于什么上下文也没看到。
+                任务台认地址栏的 ?session=，和左栏点开一条历史会话走同一条路。 */}
+            <button className="ap-link"
+                    onClick={() => navigate(a.session_id
+                      ? `/console?session=${encodeURIComponent(a.session_id)}`
+                      : "/console")}>
               去看完整上下文 →
             </button>
           </div>

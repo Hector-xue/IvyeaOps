@@ -27,7 +27,7 @@ import {
   type ConsoleStep,
 } from "../../lib/stepLabels";
 import { useStickToBottom } from "../../lib/useStickToBottom";
-import { aggregateStats, type TurnMetrics } from "../../lib/turnStats";
+import { aggregateStats, mergeStats, type ServerStats, type TurnMetrics } from "../../lib/turnStats";
 import StepTimeline, { type MatchedSkill } from "../../components/console/StepTimeline";
 import StatsBar from "../../components/console/StatsBar";
 import ContextMeter from "../../components/console/ContextMeter";
@@ -36,6 +36,7 @@ import ApprovalCard from "../../components/console/ApprovalCard";
 import Composer, { approvalPayload, type ApprovalMode, type ComposerRef, type ComposerValue } from "../../components/console/Composer";
 import ArtifactRail, { type RailApproval, type RailTodo } from "../../components/console/ArtifactRail";
 import FollowUps from "../../components/console/FollowUps";
+import LiveDock from "../../components/console/LiveDock";
 import {
   CONSOLE_PRESETS_CHANGED,
   consolePresets,
@@ -102,6 +103,9 @@ type Turn = {
   approvals?: { req: IvyeaPermissionRequest; decision?: string }[];
   elapsedMs?: number;
   running?: boolean;
+  /** 这一轮是从存档里恢复出来的，不是这次页面跑的 —— 它身上没有计时/用量，
+   *  统计条据此避免把它算两遍（落盘那份已经把它算进去了）。 */
+  restored?: boolean;
   failed?: boolean;
   /**
    * 模型思考流的最近一段（agent ≥ v1.10.3 且本轮要了 stream_reasoning）。
@@ -162,6 +166,9 @@ function ConsoleInner() {
   // 本会话的上下文占用。agent 每轮发两次（开跑前 + 收尾），老 agent 一次都不发 ——
   // 那就整块不显示，绝不自己编一个百分比。
   const [ctxUsage, setCtxUsage] = useState<IvyeaContextUsage | null>(null);
+  /** 这条会话此前累计的账（服务端落盘）。切会话必须跟着换，新建必须清空 ——
+   *  留着上一条的数是最糟的一种错：它看起来有效，其实说的是别人。 */
+  const [serverStats, setServerStats] = useState<ServerStats | null>(null);
   const [todos, setTodos] = useState<RailTodo[]>([]);
   const [railApprovals, setRailApprovals] = useState<RailApproval[]>([]);
   // 本会话 Agent 改过的文件。同一路径被改多次时**保留每一次** —— 折叠成一条会让
@@ -188,8 +195,26 @@ function ConsoleInner() {
   const started = turns.length > 0;
   // 底部统计条的数。执行中每 250ms 会随 elapsedMs 重算一次 —— 只是遍历轮次求和，
   // 比一次 markdown 重解析便宜好几个数量级。
-  const sessionStats = useMemo(
-    () => aggregateStats(turns.filter((t) => t.role === "assistant")),
+  /**
+   * 统计条的数 = **服务端落盘的整会话累计** + **本次页面自己跑的那些轮**。
+   *
+   * 两边不能重叠：恢复出来的轮次身上没有计时/用量（那些数只在当时那个浏览器里
+   * 存在过），把它们混进本地聚合只会让轮数和步数翻倍。所以本地只聚合 live 的轮，
+   * 已落盘的那些由 serverStats 代表。老 agent 没有 stats 时行为与改动前一致。
+   */
+  const sessionStats = useMemo(() => {
+    // 这条会话有没有落盘的累计账？**这次改动之前存下的会话一条都没有**，老 agent
+    // 也不回报。那时候必须退回改动前的算法（把恢复出来的轮也算上），否则打开一条
+    // 旧会话，统计条会从"几轮几步"直接变成空白 —— 为了新增一项而弄丢已有的那项，
+    // 是这次改动最容易犯的错。
+    const hasServer = !!serverStats && (serverStats.turns || 0) > 0;
+    const live = aggregateStats(
+      turns.filter((t) => t.role === "assistant" && (!hasServer || !t.restored)));
+    return hasServer ? mergeStats(serverStats, live) : live;
+  }, [turns, serverStats]);
+  /** 正在跑的那一轮 —— 状态坞的数据源。流式期间它永远是最后一条。 */
+  const liveTurn = useMemo(
+    () => [...turns].reverse().find((t) => t.role === "assistant" && t.running),
     [turns],
   );
 
@@ -341,6 +366,7 @@ function ConsoleInner() {
     setFollowUps([]);
     setUsage(null);
     setCtxUsage(null);
+    setServerStats(null);
     setBusy(false);
     setEarlier({ hasMore: false, from: 0, loading: false });
     setComposer((c) => ({ ...c, text: "" }));
@@ -382,14 +408,17 @@ function ConsoleInner() {
     // 看起来有效，其实说的是刚才那条会话 —— 用户不会怀疑一个显示着数字的控件。
     setCtxUsage(null);
     setUsage(null);
+    setServerStats(null);
     ivyeaChatSession(urlSession)
       .then((d) => {
         if (!alive) return;
         // 消息 + 落盘的执行步骤重新缝成轮次（缝合靠 call_id，见 lib/sessionRestore）。
         const page = restoreSession(d?.session);
-        setTurns(page.turns.map((t) => ({ ...t, id: uid() })));
+        setTurns(page.turns.map((t) => ({ ...t, id: uid(), restored: true })));
         setEarlier({ hasMore: page.hasMore, from: page.from, loading: false });
         setSessionId(urlSession);
+        // 这条会话此前累计的用时/用量。老 agent 不回报 → null → 统计条只显示几轮几步。
+        setServerStats(page.stats || null);
         // 历史会话的上下文占用由详情接口带回来（老 agent 没有这个字段 → 保持不显示）。
         setCtxUsage((d?.session?.context as IvyeaContextUsage | undefined) || null);
         if (d?.session?.usage) setUsage(d.session.usage);
@@ -435,7 +464,7 @@ function ConsoleInner() {
     try {
       const d = await ivyeaChatSession(sessionId, { before: earlier.from });
       const page = restoreSession(d?.session);
-      setTurns((prev) => [...page.turns.map((t) => ({ ...t, id: uid() })), ...prev]);
+      setTurns((prev) => [...page.turns.map((t) => ({ ...t, id: uid(), restored: true })), ...prev]);
       setEarlier({ hasMore: page.hasMore, from: page.from, loading: false });
       requestAnimationFrame(() => {
         const node = bodyRef.current;
@@ -745,6 +774,12 @@ function ConsoleInner() {
           onStep: (ev) => {
             patchTurn(aiId, (t) => ({ steps: mergeStep(t.steps || [], stepFromEvent(ev)) }));
           },
+          // 计划**当场**落地：原来只在 onFinal 收一次，于是"接下来要干什么"要等这一轮
+          // 跑完才看得到 —— 而那正是最不需要它的时刻。（老 agent 不发这条事件，
+          // 那就还是只有收尾那一份，界面上不显示下一步，不编。）
+          onTodos: (d) => {
+            if (Array.isArray(d?.todos)) setTodos(d.todos as RailTodo[]);
+          },
           onPermission: (req) => {
             patchTurn(aiId, (t) => ({ approvals: [...(t.approvals || []), { req }] }));
           },
@@ -864,6 +899,9 @@ function ConsoleInner() {
     } finally {
       finishFlush();
       window.clearInterval(tick);
+      // 这一轮完了通知左栏再取一次：预览、时间要更新，而标题是服务端跑完这一轮才
+      // 由模型起的（SessionRail 收到这条会延后再补取一次，正好接住它）。
+      if (liveSid) notifyConsoleSessionsChanged(liveSid);
       patchTurn(aiId, (t) => ({
         running: false,
         elapsedMs: Date.now() - startedAt,
@@ -983,7 +1021,7 @@ function ConsoleInner() {
           <div className="cc-hero">
             <div className="cc-hero-brand">
               <img src="/ivyea-logo.png" alt="Ivyea" className="cc-hero-logo" />
-              <h1 className="cc-hero-title">今天要做点什么？</h1>
+              <h1 className="cc-hero-title">意念所至，行动随行</h1>
             </div>
             <div className="cc-hero-composer">{composerNode(false)}</div>
             {scenes.length > 0 && (
@@ -1073,6 +1111,16 @@ function ConsoleInner() {
               )}
             </div>
             <div className="cc-dock">
+              {/* 跑起来之后，"现在在干什么 / 接下来干什么"钉在输入框上方，不随对话滚走。
+                  长任务里对话区早就滚出去几屏了，把状态留在那上面等于没有状态。 */}
+              <LiveDock
+                running={busy}
+                steps={liveTurn?.steps || []}
+                reasoning={liveTurn?.reasoning || ""}
+                elapsedMs={liveTurn?.elapsedMs}
+                todos={todos}
+                onStop={stop}
+              />
               {composerNode(true)}
               {/* 进度条和统计条同一行：它们回答的是同一类问题（这轮花了多少），
                   分两行钉在输入框底下会把对话区又压掉一截。DockMeta 保证这一行

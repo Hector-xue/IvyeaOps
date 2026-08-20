@@ -61,7 +61,7 @@ export default function Composer({
   onImagesChange,
   modelLabel,
   onModelClick,
-  placeholder = "描述任务、粘贴材料，或说说你想让 Ivyea 先看什么…",
+  placeholder = "告诉 Ivyea 你想做什么，剩下的交给我……",
   autoFocus,
   compact,
   attaching,
@@ -286,9 +286,22 @@ export default function Composer({
     }
   };
 
+  /**
+   * 「+」按钮选中的文件。**图片和文档走的是两条完全不同的路**：
+   *   · 图片 → 和粘贴/拖拽同一条视觉链路（读成 data URI 进本轮消息，模型真的看得见）
+   *   · 其余 → 知识库（落盘 + 索引，之后可以问它的内容）
+   *
+   * 此前这里不分流，一律塞知识库，于是"传张截图问这是什么"变成了：模型只拿到一个
+   * 文件名，然后拿着这个名字在磁盘上翻半天、翻不到，最后老实说"我看不见这张图"
+   * （真实会话 20260818-175009 就这么烧掉了 34 步）。选图和粘贴图是同一个意图，
+   * 不该因为走了哪个入口而拿到两种结果。
+   */
   const pickFile = (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f && onAttach) onAttach(f);
+    const files = Array.from(e.target.files || []);
+    const pics = files.filter((f) => f.type.startsWith("image/"));
+    const docs = files.filter((f) => !f.type.startsWith("image/"));
+    if (pics.length) addImageFiles(pics);
+    if (onAttach) for (const f of docs) onAttach(f);
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -378,13 +391,13 @@ export default function Composer({
           <button
             type="button"
             className="cc-chip cc-chip-icon"
-            title="添加文件到知识库，然后就能直接问它的内容"
+            title="选图片就直接给我看（和粘贴一样），选文档就加进知识库，之后可以问它的内容"
             onClick={() => fileRef.current?.click()}
             disabled={!onAttach || attaching}
           >
             {attaching ? <span className="spin" /> : <Icon name="attach" size={15} />}
           </button>
-          <input ref={fileRef} type="file" style={{ display: "none" }} onChange={pickFile} />
+          <input ref={fileRef} type="file" multiple style={{ display: "none" }} onChange={pickFile} />
 
           <SheetSelect
             className="cc-chip xsel-compact"

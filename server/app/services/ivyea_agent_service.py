@@ -684,6 +684,23 @@ def chat_permission(payload: dict[str, Any]) -> dict[str, Any]:
     return request_json("POST", "/v1/chat/permission", payload, timeout=20.0)
 
 
+def pending_permissions() -> list[str] | None:
+    """agent 此刻**真的还卡在等人点**的审批 id（agent ≥ v1.16.1）。
+
+    用来给「待审批」页对账：我们自己那张表是流水账，只有决策/超时帧回到 ops 才销账，
+    所以页面关掉、断网、agent 重启之后，早就作废的那一步会永远挂在待审批里。
+
+    拿不到就返回 None（老 agent 没这个端点、或者 agent 没起）—— 调用方据此退回按
+    时间兜底，绝不能把"问不到"当成"一条都不在等"，那会把真正等着的审批一把清掉。
+    """
+    try:
+        data = request_json("GET", "/v1/chat/permissions/pending", timeout=5.0)
+    except (IvyeaAgentUnavailable, IvyeaAgentNotFound, IvyeaAgentError):
+        return None            # 问不到 ≠ 没有
+    rows = data.get("pending")
+    return [str(x) for x in rows] if isinstance(rows, list) else None
+
+
 def skills() -> dict[str, Any]:
     """agent 侧技能库（内置 skills_builtin + ~/.ivyea/skills）。
 

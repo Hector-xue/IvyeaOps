@@ -504,6 +504,12 @@ export async function ivyeaAgentChatStream(
      */
     onContext?: (data: IvyeaContextUsage) => void;
     /**
+     * Agent 自己排的计划变了（agent ≥ v1.16.1，每次 todo_write 落地后播一份）。
+     * 老 agent 不发这条 —— 计划只能等 final 那一份，界面上"接下来要干什么"
+     * 在这一轮跑完前就是空的，而不是编一条出来。
+     */
+    onTodos?: (data: { todos?: any[] }) => void;
+    /**
      * 模型的思考流（agent ≥ v1.10.3，且 payload 里带 stream_reasoning）。
      * 只有会思考的模型（deepseek-reasoner / claude / codex / gemini）才有；
      * 主脑不吐思考时这条永远不来，活动行退回显示工具步骤。
@@ -557,6 +563,8 @@ export async function ivyeaAgentChatStream(
       handlers.onReasoning?.(typeof data === "string" ? { text: data } : data || {});
     }
     else if (event === "context") handlers.onContext?.(data);
+    // todos 同样要显式分流：落进 onEvent 会被当成老 agent 的自由文本叙述。
+    else if (event === "todos") handlers.onTodos?.(typeof data === "string" ? {} : data || {});
     else if (event === "step") handlers.onStep?.(data);
     else if (event === "skill_match") handlers.onSkillMatch?.(data);
     else if (event === "file_change") handlers.onFileChange?.(data);

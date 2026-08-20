@@ -14,6 +14,7 @@
 import type { IvyeaChatSessionDetail, IvyeaStepEvent } from "../api/ivyeaAgent";
 import { stripInjected } from "./stripInjected";
 import { mergeStep, stepFromEvent, type ConsoleStep } from "./stepLabels";
+import type { ServerStats } from "./turnStats";
 
 export type RestoredTurn = {
   role: "user" | "assistant";
@@ -29,6 +30,12 @@ export type RestoredSession = {
   /** 本页最早的轮号 —— 取更早一页时当游标传回去。 */
   from: number;
   total: number;
+  /**
+   * 服务端落盘的整会话累计账（agent ≥ v1.16.1）。恢复出来的轮次身上没有计时/用量
+   * ——那些数只在跑的那一刻的浏览器里存在过——所以统计条改从这里取。
+   * 老 agent 不回报时是 undefined：统计条退回只显示"几轮几步"，不编。
+   */
+  stats?: ServerStats;
 };
 
 export function restoreSession(detail: IvyeaChatSessionDetail | null | undefined): RestoredSession {
@@ -95,11 +102,13 @@ export function restoreSession(detail: IvyeaChatSessionDetail | null | undefined
   }
 
   const t = detail?.turns;
+  const stats = (detail as any)?.stats;
   return {
     turns,
     hasMore: !!t?.has_more,
     from: t?.from ?? 0,
     total: t?.total ?? 0,
+    stats: stats && typeof stats === "object" ? (stats as ServerStats) : undefined,
   };
 }
 
