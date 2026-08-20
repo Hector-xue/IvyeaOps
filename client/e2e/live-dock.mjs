@@ -83,7 +83,35 @@ async function run() {
     assert.equal(await evaluate(send, `!!document.querySelector(".ld")`), false,
                  "人在底部时叙述就在眼前，状态坞不该再重复一遍");
 
-    // ── 2. 核心：翻上去看历史，状态坞顶上来接着说 ──────────────────────────
+    // ── 2. **流式过程中，已经排好的行一个像素都不许动** ────────────────────
+    // 用户投诉的"文字上下不停跳动"就是这个。截图看不出来 —— 必须连续采样同一个
+    // DOM 节点的坐标（按文本认行会把"两行之间的距离"误报成位移，第一版就栽在这）。
+    await evaluate(send, `(() => {
+      window.__jid = 0;
+      window.__pos = new Map();
+      window.__moved = 0;
+      window.__sample = () => {
+        // 量的是**在内容里的位置**，不是视口坐标：跟随底部时容器自己会滚，
+        // 视口坐标跟着变是正常的（dsh 也一样）。要钉的是"已经排好的行有没有
+        // 在文档流里被推动" —— 那才是用户看到的抖。
+        const inner = document.querySelector(".cc-thread-inner");
+        const base = inner ? inner.getBoundingClientRect().top : 0;
+        document.querySelectorAll(".af-line, .cc-bubble").forEach((el) => {
+          if (!el.dataset.jid) el.dataset.jid = "n" + (++window.__jid);
+          const y = Math.round(el.getBoundingClientRect().top - base);
+          const was = window.__pos.get(el.dataset.jid);
+          if (was === undefined) window.__pos.set(el.dataset.jid, y);
+          else window.__moved = Math.max(window.__moved, Math.abs(y - was));
+        });
+      };
+      window.__timer = setInterval(window.__sample, 120);
+      return true;
+    })()`);
+    await delay(6000);          // 让思考和工具在这段时间里不停往下长
+    const moved = await evaluate(send, `(() => { clearInterval(window.__timer); return window.__moved; })()`);
+    assert.ok(moved <= 1, `流式过程中已排好的行不许移动，实测最大位移 ${moved}px`);
+
+    // ── 3. 翻上去看历史，状态坞顶上来接着说 ────────────────────────────────
     const scrolled = await evaluate(send, `(() => {
       const body = document.querySelector(".cc-thread");   // 对话区自己的滚动容器
       if (!body) return { ok: false, why: "找不到 .cc-thread" };
@@ -107,13 +135,13 @@ async function run() {
     assert.equal(await text(send, ".ld-next-text"), "拉搜索词报表，找浪费最集中的词根");
     assert.equal(await text(send, ".ld-count"), "0/3", "计划完成度");
 
-    // ── 3. 计划推进时，"接下来"跟着换 ───────────────────────────────────
+    // ── 4. 计划推进时，"接下来"跟着换 ───────────────────────────────────
     await waitFor(send, `(document.querySelector(".ld-count")?.textContent || "") === "1/3"`,
                   "计划完成一条", 30_000);
     assert.equal(await text(send, ".ld-next-text"), "给出否词与竞价的具体动作",
                  "第二条开跑后，下一步要指向第三条");
 
-    // ── 4. 展开看完整计划 ───────────────────────────────────────────────
+    // ── 5. 展开看完整计划 ───────────────────────────────────────────────
     await click(send, ".ld-main");
     await waitFor(send, `document.querySelectorAll(".ld-plan li").length === 3`,
                   "展开后是三条计划", 10_000);
@@ -122,7 +150,7 @@ async function run() {
     assert.equal(await evaluate(send,
       `document.querySelectorAll(".ld-plan .ld-t-doing").length`), 1, "进行中一条");
 
-    // ── 5. 跑完就收掉（回到底部也一样不该有）──────────────────────────────
+    // ── 6. 跑完就收掉（回到底部也一样不该有）──────────────────────────────
     await waitFor(send, `document.body.innerText.includes("其中 28% 来自单次点击成本上升")`,
                   "整轮跑完", 40_000);
     await waitFor(send, `!document.querySelector(".ld")`, "跑完状态坞收掉", 10_000);

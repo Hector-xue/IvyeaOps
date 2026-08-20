@@ -126,7 +126,14 @@ type Turn = {
 };
 
 /** 思考流只保留尾部这么多字符 —— 活动行只显示最后一句，多存无用。 */
-const REASONING_TAIL = 400;
+/**
+ * 还没成段的那一段思考，**只留开头**这么多字。
+ *
+ * 原来留的是尾部（滑动窗口）。那一行因此永远在变：字一多，开头就开始往前漂，
+ * 整行文字不停左移 —— 上下不跳了，一行之内照样在抖。留开头则前缀恒定，
+ * 后面的字进省略号，视觉上是静止的。
+ */
+const REASONING_HEAD = 400;
 /** 一轮里最多留多少段思考。再多界面上也翻不完，而 state 每次 patch 都要拷一遍。 */
 const THOUGHTS_MAX = 60;
 
@@ -711,11 +718,10 @@ function ConsoleInner() {
       // 思考流走同一帧：它比正文更碎（模型逐字想），一条一次 setState 会把
       // 活动行刷成每秒几十次重绘。只留尾部，活动行只看最后一句。
       if (think) {
-        // reasoning 现在装的是**还没成段的那一段**：它边想边显示，想完（去调工具了）
-        // 就被 flushThought 收成一段落进 thoughts。留尾部上限是因为一段想太长时
-        // 界面上也只读得完最后那几行，而每次 patch 都要拷一遍整串。
+        // reasoning 装的是**还没成段的那一段**：边想边显示，想完（去调工具了）就被
+        // flushThought 收成一段落进 thoughts。只留开头，理由见 REASONING_HEAD。
         patchTurn(aiId, (t) => ({
-          reasoning: ((t.reasoning || "") + think).slice(-REASONING_TAIL),
+          reasoning: ((t.reasoning || "") + think).slice(0, REASONING_HEAD),
         }));
       }
     };

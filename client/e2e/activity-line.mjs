@@ -1,16 +1,15 @@
 /**
- * 「执行叙述铺开，但铺不爆页面」的浏览器 E2E。
+ * 「一件事一行、行高恒定、可整体折叠」的浏览器 E2E。
  *
- * 这条用例的历史值得写下来，因为它拦的是**同一个错的两个方向**：
- *   · 最早：一轮里每一步都铺开渲染 —— 192 步能把整页糊满，把回答挤出屏幕。
- *   · 上一版矫枉过正：整轮压成**一行**，只显示最后半句话 —— 用户盯着屏幕，
- *     既不知道刚才那 15 步干了什么，也不知道接下来要干什么（真实投诉）。
- * 现在的解法是**聚合**：连续的常规工具折成一行并按类型计数，写操作/子 agent/
- * MCP/计划这些"各自是一件事"的步骤才单独成行。所以 192 步 → 一行，而一段思考、
- * 一次写文件都看得见。
+ * 这条用例记着这块界面**三次**改错的方向，每一条断言都对应其中一次：
+ *   1. 每步都铺成卡片 → 192 步糊满整页，把回答挤出屏幕。
+ *   2. 矫枉过正压成一行，只显示最后半句 → 用户不知道刚才干了什么、接下来干什么。
+ *   3. 改成会换行的段落 → 思考是流式的，每来几个字就多一行，整屏文字上下跳
+ *      （用户原话："文字上下不停跳动"），而且折叠开关做成 9px 小箭头，没人认得出。
+ * 现在的形态对标 DeepSeek Harness：**一件事一行、单行截断、行高恒定**，外加一个
+ * 常驻的、带文字的折叠开关。
  *
- * 三件事只有真实浏览器排完版才证得了：铺出来占几行、展开后不许把页面撑爆、
- * 折叠开关看得见点得着。
+ * 行高恒定是这块界面唯一的硬约束 —— 只有真实浏览器排完版才量得到。
  *
  * 跑的是 src/components/console/ActivityFeed.tsx + src/styles/workbench.css 的真实代码。
  *
@@ -67,6 +66,9 @@ function App() {
   }]);
   window.__think = () => setThoughts((prev) => [...prev,
     { seq: STEP_COUNT, text: "查完了，接下来把结论写进文件。" }]);
+  // 一段很长的思考：会换行的实现在这里会变成三四行，把底下所有内容顶下去。
+  window.__longthink = () => setThoughts((prev) => [...prev, { seq: STEP_COUNT,
+    text: "这一段特别长，长到足以在任何正常宽度下换行好几次".repeat(8) }]);
   window.__finish = () => { setRunning(false); setSteps((prev) => prev.map((s) => ({ ...s, status: "ok" }))); };
 
   return (
@@ -128,46 +130,60 @@ async function run() {
     await send("Page.navigate", { url: "file://" + path.join(work, "index.html") });
     await waitFor(send, `!!document.querySelector(".af")`, "执行叙述", 20_000);
 
-    // ── 1. 192 步只折成**一行**，而且那一行说得出都干了什么 ────────────────
-    assert.equal(await visibleCount(send, ".af-group"), 1, "连续的常规工具要折成一行");
-    const summary = await textOf(send, ".af-group-text");
-    for (const need of ["跑了", "读了", "搜索"]) {
-      assert.ok(summary.includes(need), `摘要要按类型说清楚：${JSON.stringify(summary)}`);
-    }
-    assert.ok(/48/.test(summary), `192 步按四类平分，每类 48：${JSON.stringify(summary)}`);
-
-    // 整条叙述在没展开时必须很矮 —— 它是一条叙述，不是一面芯片墙
-    const feed = await rectOf(send, ".af");
-    assert.ok(feed.h < 220, `没展开时不该超过 220px，实际 ${feed.h}px`);
-
-    // ── 2. 思考是人话，独立成行 ─────────────────────────────────────────
-    assert.equal(await visibleCount(send, ".af-think"), 1);
-    assert.ok((await textOf(send, ".af-think p")).includes("先把现状查清楚"));
-
-    // ── 3. 写文件不许被折进计数里 —— 它是独立的一件事 ─────────────────────
-    await evaluate(send, `window.__think(), window.__write(), true`);
-    await delay(150);
-    assert.equal(await visibleCount(send, ".af-single"), 1, "写操作单独成行");
-    assert.ok((await textOf(send, ".af-single")).includes("IvyGrow.tsx"), "写了哪个文件要看得见");
-    assert.equal(await visibleCount(send, ".af-think"), 2, "第二段思考跟着出现");
-
-    // ── 4. 展开那一批：能看，但不许把页面撑爆 ────────────────────────────
-    await click(send, ".af-group-head");
-    await waitFor(send, `document.querySelectorAll(".af-row").length > 100`, "展开", 10_000);
-    const body = await rectOf(send, ".af-group-body");
-    assert.ok(body.h <= 800 * 0.4 + 2, `展开的日志自己滚，最多 40vh，实际 ${body.h}px`);
-    const scrollable = await evaluate(send, `(() => {
-      const el = document.querySelector(".af-group-body");
-      return el.scrollHeight - el.clientHeight;
+    // ── 1. 一件事一行，而且**每一行等高** ─────────────────────────────────
+    const lines = await evaluate(send, `(() => {
+      const rows = [...document.querySelectorAll(".af-line")];
+      const hs = rows.map((el) => Math.round(el.getBoundingClientRect().height));
+      return { n: rows.length, heights: [...new Set(hs)] };
     })()`);
-    assert.ok(scrollable > 100, "展开后是一块可翻的日志，不是把页面顶长");
+    // 默认只铺最新的 120 行，更早的折进一个按钮里 —— 几百行时用户看的永远是最新那批。
+    assert.equal(lines.n, 120, "默认铺最新 120 行");
+    assert.deepEqual(lines.heights, [22],
+                     `每一行都必须是同一个高度，实际 ${JSON.stringify(lines.heights)}`);
+    assert.ok((await textOf(send, ".af-more")).includes("更早"), "更早的过程要有一条路回去");
+    await click(send, ".af-more");
+    await delay(200);
+    assert.equal(await visibleCount(send, ".af-line"), STEP_COUNT + 1,
+                 "点开之后 192 步 + 1 段思考 = 193 行，一件事一行");
 
-    // ── 5. 跑完之后：不再有转的图标，收尾行消失 ──────────────────────────
-    await click(send, ".af-group-head");          // 收起
+    // ── 2. 一行绝不换行：内容再长也是省略号，不是第二行 ─────────────────────
+    await evaluate(send, `window.__longthink(), true`);
+    await delay(150);
+    const tall = await evaluate(send, `(() => {
+      const rows = [...document.querySelectorAll(".af-line")];
+      return rows.filter((el) => el.getBoundingClientRect().height > 23).length;
+    })()`);
+    assert.equal(tall, 0, "一段很长的思考也只能占一行 —— 换行就是上下跳动的来源");
+
+    // ── 3. 思考是人话，独立成行 ─────────────────────────────────────────
+    assert.ok((await textOf(send, ".af-think")).includes("先把现状查清楚"));
+
+    // ── 4. 写文件看得见文件名 ───────────────────────────────────────────
+    await evaluate(send, `window.__write(), true`);
+    await delay(150);
+    const feedText = await textOf(send, ".af-body");
+    assert.ok(feedText.includes("IvyGrow.tsx"), "写了哪个文件要看得见");
+
+    // ── 5. 折叠开关：看得见、点得着、说人话 ──────────────────────────────
+    const head = await rectOf(send, ".af-head");
+    assert.ok(head.h >= 20, `折叠开关要有正常的可点高度，实际 ${head.h}px`);
+    assert.ok((await textOf(send, ".af-head-toggle")).includes("收起"), "开关上要写着字");
+    assert.ok((await textOf(send, ".af-head-meta")).includes("步"), "收起前就该看得到几步");
+    await click(send, ".af-head");
+    await delay(200);
+    assert.equal(await visibleCount(send, ".af-line"), 0, "收起后一行都不剩");
+    const collapsed = await rectOf(send, ".af");
+    assert.ok(collapsed.h <= 30, `收起后整块只剩一行，实际 ${collapsed.h}px`);
+    assert.ok((await textOf(send, ".af-head-toggle")).includes("展开"), "收起后开关要改口");
+    await click(send, ".af-head");
+    await delay(200);
+    assert.ok(await visibleCount(send, ".af-line") > 100, "再点一下全都回来");
+
+    // ── 6. 跑完之后不许还有东西在转 ──────────────────────────────────────
     await evaluate(send, `window.__finish(), true`);
     await delay(200);
-    assert.equal(await visibleCount(send, ".af-foot"), 0, "跑完就不该再有『第几步·用时』那行");
-    assert.equal(await visibleCount(send, ".af-spin"), 0, "跑完了不许还有图标在转");
+    assert.equal(await visibleCount(send, ".af-run"), 0, "跑完了不许还有状态点在呼吸");
+    assert.equal(await visibleCount(send, ".ivy-grow"), 0, "跑完了常春藤要收掉");
 
     assert.deepEqual(errors, [], "页面不能抛异常");
     process.stdout.write("activity feed browser E2E passed\n");

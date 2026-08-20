@@ -3138,9 +3138,11 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
    scrollTop，和 useStickToBottom 的判断打架（用户明明停在上面，位置却在动）。 */
 .cc-thread{flex:1;min-height:0;overflow-y:auto;overflow-anchor:none;padding:16px 18px 8px;
   display:flex;flex-direction:column;gap:14px}
-/* 内容不满一屏时贴底：正在跑的叙述长在最下面，紧挨着输入框；空白留在上面。
-   内容超过一屏时 margin-top:auto 自动失效，照常从上往下滚。 */
-.cc-thread-inner{margin-top:auto;display:flex;flex-direction:column;gap:14px}
+/* 内容从上往下正常排。
+   **别再改成贴底（margin-top:auto）**：跑起来之后内容是从下面长出来的，贴底会让
+   已经排好的每一行随着新内容一起往上移 —— 屏幕上所有字每一帧都在跳。对话区宁可
+   上面空一块，也不能动已经排好的字。 */
+.cc-thread-inner{display:flex;flex-direction:column;gap:14px}
 .cc-tobottom{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);
   display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:999px;
   border:1px solid var(--b);background:var(--bg1);color:var(--t2);cursor:pointer;
@@ -3196,6 +3198,68 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
   /* 窄屏先舍弃"接下来"和步数，保住"在干什么"和停止键。 */
   .ld-next,.ld-tail span:not(.ld-caret):not(.ld-count){display:none}
 }
+.cc-user{display:flex;justify-content:flex-end}
+.cc-bubble{max-width:min(78%,640px);padding:8px 12px;border-radius:10px 10px 2px 10px;
+  background:color-mix(in srgb,var(--acc) 12%,var(--bg2));border:1px solid var(--b);
+  color:var(--t);font-size:var(--fs-12);line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.cc-ai{display:flex;flex-direction:column;gap:8px;max-width:min(92%,860px)}
+
+/* ── 执行叙述（components/console/ActivityFeed.tsx）───────────────────────
+   一件事一行、单行截断、行高恒定（对标 DeepSeek Harness）。行高恒定不是排版偏好：
+   思考是流式的，会换行的段落每来几个字就把下面所有内容顶一次，整屏文字都在跳。 */
+.af{display:flex;flex-direction:column;margin:2px 0 2px}
+
+/* 折叠开关：常驻一行，带图标带文字带"收起/展开"。 */
+/* 高度写死。里面那株常春藤是个 SVG，挂载/卸载时会把这一行撑高一两像素 ——
+   而它是整条叙述的第一行，撑高一次，底下每一行跟着挪一次（实测 4px）。 */
+.af-head{display:flex;align-items:center;gap:7px;width:100%;height:26px;padding:0 6px;
+  border:none;border-radius:var(--r);background:transparent;cursor:pointer;text-align:left;
+  overflow:hidden;white-space:nowrap;
+  font-family:var(--font);font-size:var(--fs-10);color:var(--t3)}
+.af-head:hover{background:var(--bg2);color:var(--t2)}
+.af-head-ivy{display:inline-flex;align-items:center;justify-content:center;
+  flex-shrink:0;width:1.2em;height:1.2em;line-height:0;color:var(--ivy)}
+.af-head-dot{font-style:normal}
+.af-head-label{color:var(--t2)}
+.af-head-meta{color:var(--t3)}
+.af-head-toggle{margin-left:auto;color:var(--t3);opacity:.9}
+
+.af-body{display:flex;flex-direction:column;padding-left:4px;
+  border-left:1px solid var(--b);margin-left:10px}
+.af-more{align-self:flex-start;margin:2px 0 2px 6px;padding:1px 8px;border-radius:999px;
+  border:1px dashed var(--b2);background:transparent;color:var(--t3);cursor:pointer;
+  font-family:var(--font);font-size:var(--fs-95)}
+.af-more:hover{color:var(--t2);border-color:var(--t3)}
+
+.af-item{display:flex;flex-direction:column}
+/* 一行：恒定高度、绝不换行。**任何改动都不许让它变成多行** —— 见文件头。 */
+.af-line{display:flex;align-items:center;gap:6px;width:100%;height:22px;padding:0 6px;
+  border:none;background:transparent;cursor:pointer;text-align:left;overflow:hidden;
+  white-space:nowrap;font-family:var(--font);font-size:var(--fs-10);color:var(--t3);
+  border-radius:var(--r)}
+button.af-line:hover{background:var(--bg2)}
+.af-icon{flex-shrink:0;width:1em;text-align:center;font-style:normal}
+.af-icon-live{display:inline-flex;align-items:center;justify-content:center;
+  height:1.2em;line-height:0;color:var(--ivy)}
+.af-kind{flex-shrink:0;color:var(--t2)}
+.af-sep{flex-shrink:0;opacity:.5}
+/* 摘要是唯一可以被挤掉的部分 —— 类型名和状态永远留着。 */
+.af-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.af-ms{flex-shrink:0;margin-left:auto;padding-left:8px;opacity:.75}
+.af-badge{flex-shrink:0;padding:0 5px;border-radius:3px;border:1px solid var(--amber);
+  color:var(--amber);font-size:var(--fs-85)}
+.af-think .af-icon{color:var(--t3)}
+.af-live .af-kind,.af-live .af-text{color:var(--t2)}
+.af-args{margin:0 0 3px 26px;padding:6px 8px;max-height:220px;overflow:auto;
+  border:1px solid var(--b);border-radius:var(--r);background:var(--bg2);
+  color:var(--t3);font-size:var(--fs-95);white-space:pre-wrap;word-break:break-all}
+.af-mark{flex-shrink:0;width:9px;text-align:center;font-size:var(--fs-9)}
+.af-ok{color:var(--acc)}
+.af-err{color:var(--red)}
+.af-blocked{color:var(--amber)}
+.af-run{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ivy);
+  animation:cs-breathe 1.4s var(--ease) infinite}
+
 .cc-user{display:flex;justify-content:flex-end}
 .cc-bubble{max-width:min(78%,640px);padding:8px 12px;border-radius:10px 10px 2px 10px;
   background:color-mix(in srgb,var(--acc) 12%,var(--bg2));border:1px solid var(--b);
