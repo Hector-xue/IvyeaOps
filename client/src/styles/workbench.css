@@ -3809,9 +3809,21 @@ button.af-line:hover{background:var(--bg2)}
 .sb-ws-add{margin-left:auto;background:transparent;border:none;color:var(--t3);cursor:pointer;
   font-size:var(--fs-13);line-height:1;padding:0 2px;font-family:var(--font)}
 .sb-ws-add:hover{color:var(--acc)}
-.sb-ws-input{width:calc(100% - 24px);margin:2px 12px 4px;padding:3px 6px;border:1px solid var(--b2);
-  border-radius:var(--r);background:var(--bg2);color:var(--t);font-family:var(--font);font-size:var(--fs-11);
+/* 内边距是按**字号刻度重排之后**的尺寸给的。--fs-11 从 11px 调成了阅读尺度
+   （见文件头 ① 的刻度表），padding 却一直停在 3px/6px 的老值 —— 结果 14.5px 的字
+   塞进 29px 高的框里顶满上下边框，看着像"字太大"，其实是盒子没跟着长。
+   左右缩进跟导航项对齐（margin 8px + padding 9px + 1px 边框 = 文字落在 18px，
+   和 .ni 的 8+10 一致）；早先的 12px 让它成了侧栏里唯一一个边沿对不齐的东西。 */
+.sb-ws-input{width:calc(100% - 16px);margin:2px 8px 4px;padding:6px 9px;border:1px solid var(--b2);
+  border-radius:var(--r);background:var(--bg2);color:var(--t);font-family:var(--font);font-size:var(--fs-105);
   outline:none}
+.sb-ws-input::placeholder{color:var(--t3)}
+/* 字号再退一档，**只发给用阅读刻度的三套皮肤**。
+   阅读刻度把 --fs-10 / --fs-105 / --fs-11 压成了同一个值（见文件头 ① 的刻度表），
+   于是这个过滤框的字和它要过滤的会话标题一模一样大，"工作区 / 过滤框 / 列表"
+   三级全在同一个视觉重量上抢。紧凑刻度那 16 套不发 —— 那儿 --fs-9 只有 9px，
+   一个要打字的输入框缩到 9px 是拿一个毛病换另一个。 */
+html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-ws-input{font-size:var(--fs-9)}
 .sb-ws-input:focus{border-color:var(--acc);box-shadow:0 0 0 2px var(--ring)}
 .sb-ws-group{margin-bottom:2px}
 .sb-ws-title{display:flex;align-items:center;gap:5px;width:100%;padding:3px 12px;background:transparent;
@@ -3943,15 +3955,17 @@ button.af-line:hover{background:var(--bg2)}
 .sb-sess:hover .sb-sess-del{opacity:1}
 .sb-sess-del:hover{color:var(--red)}
 .sb-sess:hover .sb-sess-time{display:none}
-.sb-sess-search{margin:0 12px 6px;width:calc(100% - 24px)}
-.sb-sess-more{display:block;width:calc(100% - 24px);margin:4px 12px 8px;padding:4px 8px;
+.sb-sess-search{margin:0 8px 6px;width:calc(100% - 16px)}
+.sb-sess-more{display:block;width:calc(100% - 16px);margin:4px 8px 8px;padding:4px 8px;
   border:1px dashed var(--b);border-radius:var(--r);background:transparent;color:var(--t3);
   font-family:var(--font);font-size:var(--fs-10);cursor:pointer;
   transition:color var(--dur) var(--ease),border-color var(--dur) var(--ease)}
 .sb-sess-more:hover:not(:disabled){color:var(--t2);border-color:var(--b2)}
 .sb-sess-more:disabled{opacity:.5;cursor:default}
 /* 来源筛选：三个板块共用会话库之后，左栏要能只看某一类。 */
-.sb-src-filter{display:flex;gap:3px;padding:0 12px 6px;flex-wrap:wrap}
+/* 缩进跟着搜索框走 —— 工作区这一块的三个控件（搜索 / 来源筛选 / 加载更多）
+   要么都对齐导航项的 8px，要么都不对齐；只挪一个等于把不一致换个地方摆。 */
+.sb-src-filter{display:flex;gap:3px;padding:0 8px 6px;flex-wrap:wrap}
 .sb-src-chip{padding:1px 7px;border-radius:99px;border:1px solid var(--b);background:transparent;
   color:var(--t3);font-family:var(--font);font-size:var(--fs-95);line-height:1.6;cursor:pointer;
   transition:color var(--dur) var(--ease),border-color var(--dur) var(--ease),
