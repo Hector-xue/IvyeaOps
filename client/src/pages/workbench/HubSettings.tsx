@@ -551,7 +551,10 @@ function LLMModelBlock({
       />
 
       {provider && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10, alignItems: "end" }}>
+        /* 用 .hs-row2 而不是内联 grid：这一页别处的两列都靠它，而它带着
+           `@media(max-width:600px)` 收成单列的规则 —— 内联样式媒体查询管不着，
+           手机上就会挤成一个 70px 宽的模型名输入框。 */
+        <div className="hs-row2" style={{ marginTop: 10 }}>
           <Field label="模型名称" hint={info?.examples ? `可用：${info.examples}` : (info?.defaultModel ? `推荐：${info.defaultModel}` : undefined)}>
             {slot ? (
               <ModelNameInput

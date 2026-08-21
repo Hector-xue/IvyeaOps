@@ -4112,7 +4112,12 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 .app-dialog-nav-item.active{background:var(--bg3);color:var(--t);font-weight:600}
 .app-dialog-nav-empty{padding:8px 10px;font-size:var(--fs-10);color:var(--t3)}
 /* 右侧内容 */
-.app-dialog-main{flex:1 1 auto;display:flex;flex-direction:column;min-width:0}
+/* min-height:0 是必须的，不是保险起见。窄屏下 .app-dialog 会翻成 flex-direction:column
+   （见下面的 720px 断点），这一层就成了**纵向** flex 子项 —— 默认的 min-height:auto
+   让它拒绝收缩到内容以下，于是撑到整份设置页那么高（实测 6115px），里层那个
+   overflow-y:auto 的滚动区 clientHeight == scrollHeight，压根没有可滚的东西，
+   表现就是"手机上打开系统配置划不动"。桌面端是 row，高度由 stretch 决定，碰不到。 */
+.app-dialog-main{flex:1 1 auto;display:flex;flex-direction:column;min-width:0;min-height:0}
 .app-dialog-head{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:14px 20px 10px;
   border-bottom:1px solid var(--b)}
 .app-dialog-icon{font-size:var(--fs-14)}
