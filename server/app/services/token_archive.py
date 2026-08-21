@@ -13,12 +13,15 @@ repeatedly (or re-archiving a day) overwrites rather than double-counts.
 """
 from __future__ import annotations
 
+import logging
 import sqlite3
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
 
 from app.core.config import settings
+
+logger = logging.getLogger("ivyea.services.token_archive")
 
 _LOCAL_TZ = timezone(timedelta(hours=8))
 DB_PATH = Path(settings.data_dir / "token_archive.sqlite3")
@@ -93,7 +96,10 @@ def _migrate_synthetic_model(conn: sqlite3.Connection) -> None:
         conn.execute("DELETE FROM token_daily WHERE model = '<synthetic>'")
         conn.commit()
     except Exception:
-        pass
+        # 迁移失败不该拦住建表和后面的读写 —— 脏行只影响"模型分布"那一栏的归属，
+        # 而这个函数挂在每次 init_db 上。但**必须留下痕迹**：静默吞掉的话，表现是
+        # 「<synthetic> 一直在，重启也不消失」，而日志里一个字都没有。
+        logger.warning("合并历史 <synthetic> 行失败，本次跳过", exc_info=True)
 
 
 def archive_run(lookback_days: int = 7) -> Dict[str, Any]:
@@ -169,7 +175,9 @@ def load_records(since: float) -> List[Dict[str, Any]]:
     try:
         init_db()
     except Exception:
-        pass
+        # 建表/迁移失败也要能把已有归档读出来（下面自会因为文件不可读而报错），
+        # 但同样不能静默 —— 这是"数字对不上"这类问题的第一现场。
+        logger.warning("读取归档前的 init_db 失败，继续按现有表结构读", exc_info=True)
     since_day = datetime.fromtimestamp(since, tz=_LOCAL_TZ).strftime("%Y-%m-%d")
     out: List[Dict[str, Any]] = []
     conn = _connect()
