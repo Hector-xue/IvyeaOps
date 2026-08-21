@@ -47,6 +47,11 @@ def _collect(text: str, into: dict[str, dict[str, str]]) -> None:
       · `[data-theme=light]{...}`                 —— 旧 16 套，不带引号
       · `[data-theme="a"],\\n[data-theme="b"]{...}` —— 门道两套共用的接线块与别名块
     """
+    # **先剥注释。** 这个解析器是按花括号切块的，而 CSS 注释里完全可以出现
+    # 花括号（比如写一句 `#root{font-weight:…}` 当例子说明）—— 不剥的话那对
+    # 括号会被当成真的规则块，从它往后**所有**主题的变量归属全部错位，
+    # 表现是某套主题的 --acc 莫名其妙变成了另一套的值。踩过一次，见 git 历史。
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
     for m in re.finditer(r"([^{}]+)\{([^{}]*)\}", text, re.S):
         sel, body = m.group(1), m.group(2)
         decls = dict(re.findall(r"(--[\w-]+):\s*([^;]+);", body))
@@ -85,7 +90,11 @@ def _css_themes() -> dict[str, dict[str, str]]:
     # `css[:14000]`，而调色区当时已经涨到 12100 字符 —— 再加一套主题的接线块就
     # 会把它自己截在外面，报出来是"注册表里有而 CSS 没有 quiet-*"，看起来像
     # 谁写漏了一个变量块，实际是这条切片的锅。找不到横幅时才退回字节数兜底。
-    marker = "GLOBAL BASE"
+    # 切点用横幅那一整行，**不要只用 "GLOBAL BASE" 两个词** —— 谁在上面的
+    # 注释里提一句"全局基座那一节"并把这两个词写进去，index() 就会先命中那句
+    # 注释，把它后面的主题块（包括它自己所在的那一块）拦腰截断。表现是
+    # "某套主题的 --acc 变成了 :root 的默认值"，看着像 CSS 写错了。踩过一次。
+    marker = "GLOBAL BASE — painting"
     head = css[: css.index(marker)] if marker in css else css[:14000]
     _collect(head, raw)
 

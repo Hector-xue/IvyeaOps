@@ -334,3 +334,165 @@ html[data-theme="lucent-light"] .cc-hero {
   background-image:
     radial-gradient(52% 30% at 50% 55%, rgb(var(--lc-c-brand) / .06) 0%, transparent 100%);
 }
+
+
+/* ── ⑥ 排版：分量 ────────────────────────────────────────────────────────
+ *
+ * 上一版琉璃被评价为"和静谧没什么变化，就是颜色差一点点"——**是对的**。
+ * 因为形状层复用了静谧，而排版又照抄了静谧的刻度，那剩下的区别就只有色温了。
+ * 排版才是这套语汇最有辨识度的一半，这一段专门做它。
+ *
+ * 三条，全部反着静谧来：
+ *   1. **正文用墨色，不用次级色。** 大段正文挂在 --t2 上是"发灰"的直接来源：
+ *      次级色的用途是"这条信息次要"，不是"这是正文"。
+ *   2. **标题大、重、字距紧。** 静谧的 md-h1 是 17px/700，和正文只差两档；
+ *      这里的层级靠**尺寸跨度**拉开 —— 标题跳到 26/21/17，且字距收紧，
+ *      这是大号字才有的处理（小字收字距会糊）。
+ *   3. **正文默认 500 字重**（在接线块里给 --ui-weight），标题 700。
+ */
+
+/* 6.1 正文回墨色。点名的都是**成段落读**的地方，不是元信息。 */
+html[data-skin="lucent"] .cc-answer,
+html[data-skin="lucent"] .md-p,
+html[data-skin="lucent"] .md-li,
+html[data-skin="lucent"] .agent-msg.assistant,
+html[data-skin="lucent"] .tbl td,
+html[data-skin="lucent"] .confirm-msg {
+  color: var(--t) !important;
+}
+/* 段落再松一档。16px 的中文正文按 1.8 排，行距 28.8px —— 苹果的正文行距
+   在 1.45~1.6 之间，但那是拉丁字母；中文字面满、需要更多行距才不挤，
+   1.75 是并排比出来的落点。 */
+html[data-skin="lucent"] .cc-answer,
+html[data-skin="lucent"] .md-p { line-height: 1.75; }
+
+/* 6.2 大标题。**这是整套语汇里最有辨识度的一件事** ——
+   系统设置、邮件、备忘录的页面标题都是又大又重、字距收紧的一行，
+   下面直接是内容，中间不放分隔线。 */
+html[data-skin="lucent"] .hs-header-title,
+html[data-skin="lucent"] .md-h1,
+html[data-skin="lucent"] .ws-main-h1 {
+  font-size: 26px !important;
+  font-weight: 700 !important;
+  letter-spacing: -.022em !important;
+  line-height: 1.22 !important;
+  color: var(--t) !important;
+  border-bottom: none !important;
+  padding-bottom: 0 !important;
+  margin-bottom: 6px !important;
+}
+html[data-skin="lucent"] .hs-header-sub {
+  font-size: 15px !important;
+  color: var(--t2) !important;
+  line-height: 1.55;
+}
+html[data-skin="lucent"] .md-h2 {
+  font-size: 21px !important; font-weight: 700 !important;
+  letter-spacing: -.016em !important; color: var(--t) !important; margin-top: 26px !important;
+}
+html[data-skin="lucent"] .md-h3 {
+  font-size: 17px !important; font-weight: 600 !important;
+  letter-spacing: -.008em !important; color: var(--t) !important;
+}
+/* 首屏那句 slogan 是整个产品的门面，跟着大标题一起放大收紧。 */
+html[data-skin="lucent"] .cc-hero-title {
+  font-size: 38px !important;
+  font-weight: 700 !important;
+  letter-spacing: -.028em !important;
+}
+/* 卡片/分组的小标题：不靠字号，靠字重和墨色站住（尺寸留给大标题）。 */
+html[data-skin="lucent"] .hs-section-title,
+html[data-skin="lucent"] .m-title,
+html[data-skin="lucent"] .qs-title,
+html[data-skin="lucent"] .confirm-title {
+  font-weight: 600 !important;
+  letter-spacing: -.006em !important;
+  color: var(--t) !important;
+}
+
+/* 6.3 数字一律等宽对齐。这是个天天看 ACOS / CPC / 曝光量的工具，
+   数字不对齐时，一列数看起来是"抖"的。 */
+html[data-skin="lucent"] .tbl,
+html[data-skin="lucent"] .cc-stats,
+html[data-skin="lucent"] .md-td,
+html[data-skin="lucent"] .sb-sess-time,
+html[data-skin="lucent"] .cc-stat { font-variant-numeric: tabular-nums; }
+
+/* 6.4 全大写的小标签：加字距。全大写不加字距是排版上的硬伤 ——
+   大写字母之间本来就比小写紧，不撑开就成了一坨。 */
+html[data-skin="lucent"] .vs-kicker,
+html[data-skin="lucent"] .ws-tr-msg-role,
+html[data-skin="lucent"] .cmdk-row-kind,
+html[data-skin="lucent"] .ws-src-chip { letter-spacing: .07em !important; }
+
+
+/* ── ⑦ 侧栏：选中态是**染色**，不是灰底 ──────────────────────────────────
+ *
+ * 静谧的选中态是一块中性灰底（--bg3）。这在"这一项被选中了"和"鼠标正悬在
+ * 这一项上"之间几乎没有区别 —— 两者都是一块灰。
+ * 桌面系统的侧栏选中一律是**强调色**：染色的底 + 同色的字和图标。
+ * 一眼就能分清"选中"（有颜色）和"悬停"（只是浅一层灰）。
+ */
+html[data-skin="lucent"] .ni {
+  padding: 9px 12px;              /* 行更高一档，接近触控尺度 */
+  margin: 2px 8px;
+  border-radius: var(--r-sm) !important;
+  font-weight: 500;
+}
+html[data-skin="lucent"] .ni:hover:not(.active) { background: var(--bg2) !important; }
+html[data-skin="lucent"] .ni.active {
+  background: color-mix(in srgb, var(--acc) 13%, transparent) !important;
+  color: var(--acc-ink) !important;
+  font-weight: 600 !important;
+}
+/* 图标跟着一起染色 —— 只染文字不染图标，那一行会看起来是"半选中"。 */
+html[data-skin="lucent"] .ni.active svg,
+html[data-skin="lucent"] .ni.active .nb { color: var(--acc-ink) !important; }
+
+/* 侧栏分组标题（"工作区"那一行）：小、重、带字距、次级色 ——
+   这是"这一组叫什么"，不是内容。
+   **这一行没有自己的类名**，markup 是 `.sb-ws-head > span`（裸 span，见
+   components/console/SessionRail.tsx:231）。我先后写过 .sb-group-title /
+   .sb-sect-title / .sb-ws-title 三个名字，全是不存在的 —— CSS 里选择器写错
+   不报错，只是静默不生效，所以这类东西必须去 markup 里核实，不能凭印象。 */
+html[data-skin="lucent"] .sb-ws-head > span {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: .05em !important;
+  color: var(--t3) !important;
+  text-transform: none;
+}
+/* 会话行也放松一档，和导航项同一个节奏。 */
+html[data-skin="lucent"] .sb-sess { padding: 8px 10px; margin: 1px 8px; }
+
+
+/* ── ⑧ 分组列表：一张卡片里一行行，分隔线内缩 ────────────────────────────
+ *
+ * 这是设置类界面的招牌形态：**若干行装在一张圆角卡里，行与行之间是一条
+ * 从文字左沿开始的发丝线**（不是通到卡片边缘的整条线）。内缩这件事看着
+ * 是细节，但它正是"一组相关的行"和"几个独立的盒子"的区别。
+ *
+ * 只发给 .hs-section（设置页的分组）—— 它的结构本来就是"标题 + 若干行"。
+ */
+html[data-skin="lucent"] .hs-section {
+  border: none !important;
+  border-radius: var(--r-lg) !important;
+  overflow: hidden;
+}
+html[data-skin="lucent"] .hs-section-hd {
+  border-bottom: 1px solid var(--b) !important;
+  background: transparent !important;
+  padding: 16px 18px 14px;
+}
+/* 行内容的呼吸。静谧是 14/16，这里给到 16/18 —— 分组列表的留白本来就比
+   密集表格松，它的信息密度不靠挤。 */
+html[data-skin="lucent"] .hs-section-body,
+html[data-skin="lucent"] .hs-section > div:not(.hs-section-hd) { padding-left: 18px; padding-right: 18px; }
+
+
+/* ── ⑨ 内容区留白 ────────────────────────────────────────────────────────
+   静谧是 20/24。字号整体涨了一档之后，边距不跟着涨会显得字顶到边上。 */
+html[data-skin="lucent"] .content:not(.content-fullpage):not(:has(.terminal-workbench-page)) {
+  padding: 26px 30px;
+}
+html[data-skin="lucent"] .hs-page { max-width: 780px; gap: 20px; }
