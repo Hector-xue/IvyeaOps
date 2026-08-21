@@ -1,0 +1,548 @@
+/* 琉璃皮肤 —— 材质 / 高度 / 动效增量层
+ * ============================================================================
+ *
+ * **这个文件只写"静谧没有的那部分"。** 形状（软角、无框控件、留白分层、
+ * 阅读行宽、markdown 版式）全部复用 styles/quiet-skin.css —— 那份文件里的
+ * 每一条几乎都是踩出来的修正，复制一份等于把坑复制一份。
+ * 引入顺序：quiet-skin.css → lucent-skin.css（见 main.tsx）。两边选择器特异性
+ * 相同（都是 0,1,1），**这一层能覆盖静谧靠的就是顺序**，改引入顺序会静默失效。
+ *
+ * 分四段：① 半径刻度 ② 材质 ③ 高度 ④ 动效
+ *
+ * ── 一件必须先说清楚的事：材质不是到处都能用 ─────────────────────────────
+ * `backdrop-filter` 模糊的是**元素背后已经画好的东西**。而在这套布局里：
+ *
+ *     .app  ├─ .sb        侧栏 ┐
+ *           └─ .main      ├─ .topbar   顶栏 ├─ 全是 flex 流内元素，
+ *                         └─ .content  内容 ┘   彼此**不重叠**
+ *
+ * 流内元素背后只有 body 的纯色底。给它们加模糊，模糊的是一块纯色 —— 结果和
+ * 直接填一个不透明色一模一样，只是白白多出一个强制合成层。
+ * 所以这一层的材质**只发给真正浮在内容之上的面**：
+ *
+ *     ✓ 账户菜单 / 全部工具浮层 / 模态 / 确认框 / ⌘K / 快捷弹层 / toast
+ *     ✓ 移动端（≤900px）的侧栏 —— 它在那里是 position:absolute，真的盖在内容上
+ *     ✗ 桌面的侧栏 / 顶栏 / 输入底座 —— 它们在流内，没有可模糊的东西
+ *
+ * 桌面外壳改用厚度的另一半语言：材质色（比内容面冷一档的灰）+ 0.5px 高光边
+ * + 高度令牌。**不假装那里有玻璃。**
+ *
+ * ── 一件本可以做、但没做的事 ─────────────────────────────────────────────
+ * 让对话流从输入底座下面滚过去（ChatGPT 那样），是这个界面里材质最能发挥的
+ * 地方。没做的原因：`.cc-dock` 是流内的兄弟节点，要浮起来就得给 `.cc-thread`
+ * 补一个**等于底座实际高度**的 padding-bottom，而底座高度随输入框行数变。
+ * 写死一个值的后果是"正文被输入框挡住"—— 那是功能回归，不是审美问题。
+ * 要做得对需要 JS 量高度，属于另一件事。
+ * ============================================================================ */
+
+
+/* ── ① 半径刻度 ──────────────────────────────────────────────────────────
+ *
+ * 静谧是"全站一个 --r（14px）+ 几处点名加大"。琉璃改成**按尺寸分五档**：
+ * 小控件用大圆角会变成胶囊，大面用小圆角会显得硬。
+ * 嵌套时内半径 = 外半径 − 内边距，角才是同心的。
+ *
+ * 注意：`[data-theme=lucent-*]` 里那句 `--r:var(--r-md)` 特异性是 (0,1,0)，
+ * **压不过**共享形状层里的 `html:is([data-skin=…]){--r:14px}` (0,1,1)。
+ * 真正生效的是下面这一行。两处都留着是为了让主题块自己读起来是完整的。
+ */
+html[data-skin="lucent"] { --r: var(--r-md); }
+
+/* 大面：浮层、模态、抽屉 */
+html[data-skin="lucent"] .tv-panel,
+html[data-skin="lucent"] .modal-card,
+html[data-skin="lucent"] .confirm-card { border-radius: var(--r-lg) !important; }
+/* 输入器是整屏视觉重心，半径最大（会话态 22 / 首屏 26，后者见 ④） */
+html[data-skin="lucent"] .cc-composer { border-radius: var(--r-xl) !important; }
+/* 中面：菜单、气泡、卡片 */
+html[data-skin="lucent"] .sb-menu,
+html[data-skin="lucent"] .cmdk-modal,
+html[data-skin="lucent"] .qs-popover { border-radius: var(--r-md) !important; }
+html[data-skin="lucent"] .cc-bubble  { border-radius: var(--r-md) var(--r-md) var(--r-xs) var(--r-md) !important; }
+html[data-skin="lucent"] .card,
+html[data-skin="lucent"] .hs-section,
+html[data-skin="lucent"] .hs-agent-card,
+html[data-skin="lucent"] .cs-approval,
+html[data-skin="lucent"] .wb-toast    { border-radius: var(--r-md) !important; }
+/* 小控件：按钮、输入、列表项 */
+html[data-skin="lucent"] .tbtn,
+html[data-skin="lucent"] .cs-btn,
+html[data-skin="lucent"] .ni,
+html[data-skin="lucent"] .sb-menu-item,
+html[data-skin="lucent"] .sb-acct,
+html[data-skin="lucent"] .sb-sess,
+html[data-skin="lucent"] .cmdk-row,
+html[data-skin="lucent"] .tv-card,
+html[data-skin="lucent"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-skin="lucent"] select,
+html[data-skin="lucent"] textarea:not(.cc-input),
+html[data-skin="lucent"] .hs-input  { border-radius: var(--r-sm) !important; }
+/* 最小：芯片、标签、场景入口保持胶囊（形状即语义：它们是"一颗一颗"的） */
+html[data-skin="lucent"] .cc-chip,
+html[data-skin="lucent"] .cc-scene  { border-radius: 999px !important; }
+html[data-skin="lucent"] .tv-kbd    { border-radius: var(--r-xs) !important; }
+
+
+/* ── ② 材质 ──────────────────────────────────────────────────────────────
+ *
+ * 四档的配方和归属在 lucent-tokens.css。这里只做分发，**名单就是全部** ——
+ * 不写通配符，也不写 `[class*=panel]` 这种模糊匹配：材质加在滚动内容上会让
+ * 每一帧都强制整页合成（静谧当初把 19 处 backdrop-filter 全杀掉就是为这个）。
+ * 同屏最多三块玻璃：一块浮层 + 遮罩 + 可能的 toast。
+ *
+ * 每处都要写两遍前缀：Safari / 旧 Edge 只认 -webkit-backdrop-filter。
+ * 少写一行的表现是"在 Mac 上是玻璃、在别处是一块半透明色板"。
+ */
+
+/* 2.1 regular —— 菜单 / 浮层 / 模态 / ⌘K / 快捷弹层 */
+html[data-skin="lucent"] .sb-menu,
+html[data-skin="lucent"] .tv-panel,
+html[data-skin="lucent"] .modal-card,
+html[data-skin="lucent"] .confirm-card,
+html[data-skin="lucent"] .cmdk-modal,
+html[data-skin="lucent"] .qs-popover {
+  background: var(--lc-mat-regular) !important;
+  -webkit-backdrop-filter: var(--lc-blur-regular);
+  backdrop-filter: var(--lc-blur-regular);
+  border: none !important;
+  box-shadow: var(--e3), var(--lc-mat-edge) !important;
+}
+/* 模态是全屏级的打断，比浮层再高一档 */
+html[data-skin="lucent"] .modal-card,
+html[data-skin="lucent"] .confirm-card,
+html[data-skin="lucent"] .cmdk-modal {
+  box-shadow: var(--e4), var(--lc-mat-edge) !important;
+}
+
+/* 2.2 thin —— toast。短暂、小面积，透一点让它不像一块贴纸 */
+html[data-skin="lucent"] .wb-toast {
+  background: var(--lc-mat-thin) !important;
+  -webkit-backdrop-filter: var(--lc-blur-thin);
+  backdrop-filter: var(--lc-blur-thin);
+  border: none !important;
+  box-shadow: var(--e3), var(--lc-mat-edge) !important;
+}
+
+/* 2.3 thick —— 移动端侧栏。**只有在这里它才真的盖在内容上**（见顶部说明）。 */
+@media (max-width: 900px) {
+  html[data-skin="lucent"] .sb {
+    background: var(--lc-mat-thick) !important;
+    -webkit-backdrop-filter: var(--lc-blur-thick);
+    backdrop-filter: var(--lc-blur-thick);
+    box-shadow: var(--e4) !important;
+  }
+}
+
+/* 2.4 遮罩。原值是 rgba(0,0,0,.55)+blur(2~4px)：在浅色主题下那是一块纯黑幕布，
+   把整页压成夜里。玻璃语汇里遮罩应该是**把底下洗淡**，不是盖黑 —— 用页面底色
+   的半透明 + 更大的模糊，深色主题下它自然还是深的（--lc-c-canvas 本来就近黑）。 */
+html[data-skin="lucent"] .modal-bd,
+html[data-skin="lucent"] .confirm-bd,
+html[data-skin="lucent"] .cmdk-backdrop,
+html[data-skin="lucent"] .onb-backdrop,
+html[data-skin="lucent"] .mcp-backdrop {
+  background: rgb(var(--lc-c-canvas) / .62) !important;
+  -webkit-backdrop-filter: saturate(140%) blur(12px);
+  backdrop-filter: saturate(140%) blur(12px);
+}
+
+/* 2.5 桌面外壳：不假装有玻璃，改用色差 + 一条高光边。
+   侧栏与内容区的分界在静谧那里是"paper 微灰 vs canvas 纯白"，琉璃保留这一点，
+   只补一条 0.5px 的亮边 —— 光从左上来，侧栏的右沿是背光面，内容区的左沿被照亮。
+   这是"两块板子有厚度"最省的表达，比一条 1px 灰线诚实。
+
+   **必须裹在 min-width 里。** 不裹的话它和上面 2.3 那条移动端规则特异性相同、
+   位置更靠后，于是抽屉的 --e4 投影会被这条 inset 发丝线顶掉 —— 表现是移动端
+   侧栏浮在内容上却没有影子，看着像"贴在页面上"而不是"盖住页面"。
+   实测撞过一次（computed 读出来 box-shadow 是 inset 那条），不是假设。 */
+@media (min-width: 901px) {
+  html[data-skin="lucent"] .sb {
+    box-shadow: inset -.5px 0 0 0 rgb(var(--lc-c-ink) / .06) !important;
+  }
+  html[data-theme="lucent-dark"] .sb {
+    box-shadow: inset -.5px 0 0 0 rgb(255 255 255 / .05) !important;
+  }
+}
+
+
+/* ── ③ 高度 ──────────────────────────────────────────────────────────────
+ *
+ * 静谧的通则是"表面不浮起"（只有首屏输入器一个例外）。琉璃反过来：**层级由
+ * 高度表达**，所以卡片、面板、审批卡这些"一个个独立的东西"要从画布上抬起来。
+ *
+ * 抬得很轻 —— 一屏上同时有十几个盒子，每个都带一层显眼的影，那不是层次是脏。
+ * --e1 的两层加起来最大也就 6% 的黑，肉眼读到的是"边缘软了一圈"，不是"有影子"。
+ *
+ * ⚠️ 这里只接上**主要容器**。workbench.css 里还有 70 处硬编码 box-shadow
+ * 没换成 --e*，那是一次机械替换，属于另一个提交 —— 在那之前，这些老组件在
+ * 琉璃下仍然是它们自己的旧影子。这不是漏，是有意分开：混在一起改，出了问题
+ * 分不清是主题的锅还是替换的锅。
+ */
+html[data-skin="lucent"] .card,
+html[data-skin="lucent"] .agent-card,
+html[data-skin="lucent"] .skill-card,
+html[data-skin="lucent"] .hs-section,
+html[data-skin="lucent"] .hs-agent-card {
+  background: var(--bg1) !important;
+  box-shadow: var(--e1), var(--e-hl) !important;
+}
+/* hover 抬一档。位移只有 1px —— 卡片是"轻轻浮起"，不是"跳起来"。 */
+html[data-skin="lucent"] .card:hover,
+html[data-skin="lucent"] .agent-card:hover,
+html[data-skin="lucent"] .skill-card:hover,
+html[data-skin="lucent"] .hs-agent-card:hover {
+  box-shadow: var(--e2), var(--e-hl) !important;
+  transform: translateY(-1px);
+}
+/* 审批卡是"需要你处理"，静谧给它留了边框（白名单 4.3）。琉璃在保留边框的
+   同时再抬一档 —— 它必须是这一屏里最先被看到的东西。 */
+html[data-skin="lucent"] .cs-approval {
+  box-shadow: var(--e2), var(--e-hl) !important;
+}
+/* 输入器：整屏唯一"等你动手"的地方，会话态也给一层贴合影。 */
+html[data-skin="lucent"] .cc-composer {
+  box-shadow: var(--e1) !important;
+}
+html[data-skin="lucent"] .cc-composer:focus-within {
+  border-color: var(--acc) !important;
+  box-shadow: var(--e2), 0 0 0 3px rgb(var(--lc-c-brand) / .18) !important;
+}
+/* 首屏输入器再高一档（静谧那条是写死的 rgb(0 0 0/.06)，深色下几乎不可见）。 */
+html[data-skin="lucent"] .cc-hero-composer .cc-composer {
+  border-radius: 26px !important;
+  box-shadow: var(--e3) !important;
+}
+/* 首屏这只框**一进页面就是聚焦态**（自动 focus），所以它的聚焦表达必须比会话态
+   那只轻 —— 满饱和的绿边加一圈光晕摆在首屏正中，会盖过标题，整屏第一眼看到的
+   是一个"报警框"。静谧当初也是这么收的（边色混到 42%），这里同理。 */
+html[data-skin="lucent"] .cc-hero-composer .cc-composer:focus-within {
+  border-color: color-mix(in srgb, var(--acc) 45%, var(--b)) !important;
+  box-shadow: var(--e3), 0 0 0 4px rgb(var(--lc-c-brand) / .10) !important;
+}
+
+
+/* ── ④ 动效 ──────────────────────────────────────────────────────────────
+ *
+ * 三条：**按压有反馈**、**出现从 .96 起而不是从 0 起**、**焦点环只给键盘**。
+ * 时长跟位移距离走，不是所有动画都 200ms（见 lucent-tokens.css 的三档）。
+ */
+
+/* 4.1 控件过渡。只声明会变的属性 —— `transition: all` 会把 width/height 也
+   带进去，侧栏收合那 220ms 里每一帧都要重排。 */
+html[data-skin="lucent"] .tbtn,
+html[data-skin="lucent"] .cs-btn,
+html[data-skin="lucent"] .cc-chip,
+html[data-skin="lucent"] .cc-scene,
+html[data-skin="lucent"] .ni,
+html[data-skin="lucent"] .sb-menu-item,
+html[data-skin="lucent"] .cmdk-row,
+html[data-skin="lucent"] .card,
+html[data-skin="lucent"] .agent-card,
+html[data-skin="lucent"] .skill-card,
+html[data-skin="lucent"] .hs-agent-card {
+  transition: background var(--d-fast) var(--ease-out),
+              color var(--d-fast) var(--ease-out),
+              box-shadow var(--d-fast) var(--ease-out),
+              transform var(--d-fast) var(--ease-out);
+}
+
+/* 4.2 按压反馈。iOS 的按钮按下去是**整体缩一点**，不是变个色就完事 ——
+   这是"我按到了"最直接的确认，尤其在没有边框的控件上（否则按下去毫无反应）。
+   .97 是量出来的下限，再小就变成"弹一下"了。 */
+html[data-skin="lucent"] .tbtn:active,
+html[data-skin="lucent"] .cs-btn:active:not(:disabled),
+html[data-skin="lucent"] .cc-chip:active,
+html[data-skin="lucent"] .cc-scene:active,
+html[data-skin="lucent"] .sb-menu-item:active,
+html[data-skin="lucent"] .cmdk-row:active {
+  transform: scale(.97);
+}
+
+/* 4.3 焦点环。静谧用的是 2px outline；outline 是**矩形**的，在圆角控件上
+   会露出四个角。改成 box-shadow 环 —— 它跟着 border-radius 走。
+   保留静谧那条判断：由容器代为表达焦点的输入框不画环（否则输入框里凭空
+   多出一圈）。 */
+html[data-skin="lucent"] :focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgb(var(--lc-c-brand) / .34) !important;
+}
+html[data-skin="lucent"] .cc-input:focus-visible,
+html[data-skin="lucent"] .cc-input:focus,
+html[data-skin="lucent"] .tv-search:focus-visible,
+html[data-skin="lucent"] .tv-search:focus {
+  box-shadow: none !important;
+}
+/* 卡片和浮层自己有阴影，聚焦时环要**叠在**阴影上而不是把它顶掉。 */
+html[data-skin="lucent"] .card:focus-visible,
+html[data-skin="lucent"] .agent-card:focus-visible,
+html[data-skin="lucent"] .skill-card:focus-visible {
+  box-shadow: var(--e2), 0 0 0 3px rgb(var(--lc-c-brand) / .34) !important;
+}
+
+/* 4.4 出现。**从 scale(.96) 起，不从 0 起** —— 从 0 长出来的东西看着像被吹起来，
+   从 .96 起才像"它本来就在那儿，只是刚被看见"。位移永远伴随不透明度。 */
+@keyframes lc-pop {
+  from { opacity: 0; transform: scale(.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes lc-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+html[data-skin="lucent"] .sb-menu,
+html[data-skin="lucent"] .qs-popover,
+html[data-skin="lucent"] .modal-card,
+html[data-skin="lucent"] .confirm-card,
+html[data-skin="lucent"] .cmdk-modal {
+  animation: lc-pop var(--d-base) var(--ease-spring) both;
+}
+html[data-skin="lucent"] .wb-toast {
+  animation: lc-rise var(--d-base) var(--ease-out) both;
+}
+
+/* 4.5 可以关。**这不是可选项** —— 前庭功能障碍的人看到缩放和位移会不适。
+   只保留不透明度，动效的"信息"（有东西出现了）还在，"物理"没了。 */
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin="lucent"] * {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+  html[data-skin="lucent"] .tbtn:active,
+  html[data-skin="lucent"] .cs-btn:active:not(:disabled),
+  html[data-skin="lucent"] .cc-chip:active,
+  html[data-skin="lucent"] .cc-scene:active,
+  html[data-skin="lucent"] .sb-menu-item:active,
+  html[data-skin="lucent"] .cmdk-row:active,
+  html[data-skin="lucent"] .card:hover,
+  html[data-skin="lucent"] .agent-card:hover,
+  html[data-skin="lucent"] .skill-card:hover,
+  html[data-skin="lucent"] .hs-agent-card:hover { transform: none !important; }
+}
+
+
+/* ── ⑤ 深色补偿 ──────────────────────────────────────────────────────────
+   静谧那两条首屏光晕是按 `[data-theme=quiet-dark]` 写的，琉璃拿不到。
+   深色下"浮起来"靠的不是影（黑影投在近黑底上等于没有），是**更亮的一档面**
+   加一条顶部高光 —— --e-hl 已经在管高光，这里补首屏那团光晕。 */
+html[data-theme="lucent-dark"] .cc-hero {
+  background-image:
+    radial-gradient(46% 26% at 50% 55%, rgb(var(--lc-c-brand) / .10) 0%, transparent 100%),
+    radial-gradient(27% 16% at 50% 54%, rgb(var(--lc-c-brand) / .07) 0%, transparent 100%);
+}
+html[data-theme="lucent-light"] .cc-hero {
+  background-image:
+    radial-gradient(52% 30% at 50% 55%, rgb(var(--lc-c-brand) / .06) 0%, transparent 100%);
+}
+
+
+/* ── ⑥ 排版：分量 ────────────────────────────────────────────────────────
+ *
+ * 上一版琉璃被评价为"和静谧没什么变化，就是颜色差一点点"——**是对的**。
+ * 因为形状层复用了静谧，而排版又照抄了静谧的刻度，那剩下的区别就只有色温了。
+ * 排版才是这套语汇最有辨识度的一半，这一段专门做它。
+ *
+ * 三条，全部反着静谧来：
+ *   1. **正文用墨色，不用次级色。** 大段正文挂在 --t2 上是"发灰"的直接来源：
+ *      次级色的用途是"这条信息次要"，不是"这是正文"。
+ *   2. **标题大、重、字距紧。** 静谧的 md-h1 是 17px/700，和正文只差两档；
+ *      这里的层级靠**尺寸跨度**拉开 —— 标题跳到 26/21/17，且字距收紧，
+ *      这是大号字才有的处理（小字收字距会糊）。
+ *   3. **正文默认 500 字重**（在接线块里给 --ui-weight），标题 700。
+ */
+
+/* 6.1 正文回墨色。点名的都是**成段落读**的地方，不是元信息。 */
+html[data-skin="lucent"] .cc-answer,
+html[data-skin="lucent"] .md-p,
+html[data-skin="lucent"] .md-li,
+html[data-skin="lucent"] .agent-msg.assistant,
+html[data-skin="lucent"] .tbl td,
+html[data-skin="lucent"] .confirm-msg {
+  color: var(--t) !important;
+}
+/* 段落再松一档。16px 的中文正文按 1.8 排，行距 28.8px —— 苹果的正文行距
+   在 1.45~1.6 之间，但那是拉丁字母；中文字面满、需要更多行距才不挤，
+   1.75 是并排比出来的落点。 */
+html[data-skin="lucent"] .cc-answer,
+html[data-skin="lucent"] .md-p { line-height: 1.75; }
+
+/* 6.2 大标题。**这是整套语汇里最有辨识度的一件事** ——
+   系统设置、邮件、备忘录的页面标题都是又大又重、字距收紧的一行，
+   下面直接是内容，中间不放分隔线。 */
+/* **大字轻、小字重** —— 这是这套主题的排版规则，不是两次拍脑袋的结果。
+   同一个字重，字号越大看起来越重（笔画变粗是等比的，但眼睛感知的"黑度"
+   是按面积走的）。所以要让一屏上所有标题的**视觉重量**齐平，大字就得用
+   更轻的字重去补偿。落到档位上：
+     ≥21px 用 500（Windows 上 = Regular，靠尺寸站住）
+     <21px 用 600（Windows 上 = Bold，小字必须靠字重才分得出层级）
+   这条界线不能再往下挪：16px 的小标题掉到 Regular，就和 16px 的正文
+   完全一样了，在 Windows 上没有中间档可以退。 */
+html[data-skin="lucent"] .hs-header-title,
+html[data-skin="lucent"] .md-h1,
+html[data-skin="lucent"] .ws-main-h1 {
+  font-size: 26px !important;
+  font-weight: 500 !important;
+  letter-spacing: normal !important;   /* 同上：中文标题不收字距 */
+  line-height: 1.22 !important;
+  color: var(--t) !important;
+  border-bottom: none !important;
+  padding-bottom: 0 !important;
+  margin-bottom: 6px !important;
+}
+html[data-skin="lucent"] .hs-header-sub {
+  font-size: 15px !important;
+  color: var(--t2) !important;
+  line-height: 1.55;
+}
+html[data-skin="lucent"] .md-h2 {
+  font-size: 21px !important; font-weight: 500 !important;   /* 21px：踩在界线上，归大字 */
+  letter-spacing: normal !important; color: var(--t) !important; margin-top: 26px !important;
+}
+html[data-skin="lucent"] .md-h3 {
+  font-size: 17px !important; font-weight: 600 !important;
+  letter-spacing: normal !important; color: var(--t) !important;
+}
+/* 首屏那句 slogan 是整个产品的门面。
+   **中文标题不做负字距。** 负字距是拉丁文大标题的做法 —— 字母之间本来就有
+   空隙可以收；而汉字是满格方块，字面之间只剩很窄的侧边距，再收就成了互相挤，
+   配上粗体笔画会直接糊在一起。这里给一点**正**字距让它透气。
+   分量靠字号，不靠字重 + 挤压。 */
+html[data-skin="lucent"] .cc-hero-title {
+  font-size: 34px !important;
+  /* **500 不是"比 600 轻一点"，在 Windows 上是"跨过一整档"。**
+     微软雅黑只有 Light/Regular/Bold：600 向上取到 Bold(700)，500 向下取到
+     Regular(400)，中间没有档位。所以这行的实际效果分两种平台：
+       · Windows：Regular —— 明显清瘦，靠 34px 的字号和很深的墨色撑住分量
+       · macOS：苹方有 Medium(500)，就是真的 Medium
+     两边都成立，因为这句话的分量本来就该由字号承担，不由字重承担。 */
+  font-weight: 500 !important;
+  letter-spacing: .01em !important;
+}
+/* 卡片/分组的小标题：不靠字号，靠字重和墨色站住（尺寸留给大标题）。 */
+html[data-skin="lucent"] .hs-section-title,
+html[data-skin="lucent"] .m-title,
+html[data-skin="lucent"] .qs-title,
+html[data-skin="lucent"] .confirm-title {
+  font-weight: 600 !important;
+  letter-spacing: normal !important;
+  color: var(--t) !important;
+}
+
+/* 6.3 数字一律等宽对齐。这是个天天看 ACOS / CPC / 曝光量的工具，
+   数字不对齐时，一列数看起来是"抖"的。 */
+html[data-skin="lucent"] .tbl,
+html[data-skin="lucent"] .cc-stats,
+html[data-skin="lucent"] .md-td,
+html[data-skin="lucent"] .sb-sess-time,
+html[data-skin="lucent"] .cc-stat { font-variant-numeric: tabular-nums; }
+
+/* 6.4 全大写的小标签：加字距。全大写不加字距是排版上的硬伤 ——
+   大写字母之间本来就比小写紧，不撑开就成了一坨。 */
+html[data-skin="lucent"] .vs-kicker,
+html[data-skin="lucent"] .ws-tr-msg-role,
+html[data-skin="lucent"] .cmdk-row-kind,
+html[data-skin="lucent"] .ws-src-chip { letter-spacing: .07em !important; }
+
+
+/* ── ⑦ 侧栏：选中态是**染色**，不是灰底 ──────────────────────────────────
+ *
+ * 静谧的选中态是一块中性灰底（--bg3）。这在"这一项被选中了"和"鼠标正悬在
+ * 这一项上"之间几乎没有区别 —— 两者都是一块灰。
+ * 桌面系统的侧栏选中一律是**强调色**：染色的底 + 同色的字和图标。
+ * 一眼就能分清"选中"（有颜色）和"悬停"（只是浅一层灰）。
+ */
+html[data-skin="lucent"] .ni {
+  padding: 9px 12px;              /* 行更高一档，接近触控尺度 */
+  margin: 2px 8px;
+  border-radius: var(--r-sm) !important;
+  font-weight: 500;
+}
+html[data-skin="lucent"] .ni:hover:not(.active) { background: var(--bg2) !important; }
+html[data-skin="lucent"] .ni.active {
+  background: color-mix(in srgb, var(--acc) 13%, transparent) !important;
+  color: var(--acc-ink) !important;
+  font-weight: 600 !important;
+}
+/* 图标跟着一起染色 —— 只染文字不染图标，那一行会看起来是"半选中"。 */
+html[data-skin="lucent"] .ni.active svg,
+html[data-skin="lucent"] .ni.active .nb { color: var(--acc-ink) !important; }
+
+/* 侧栏分组标题（"工作区"那一行）：小、重、带字距、次级色 ——
+   这是"这一组叫什么"，不是内容。
+   **这一行没有自己的类名**，markup 是 `.sb-ws-head > span`（裸 span，见
+   components/console/SessionRail.tsx:231）。我先后写过 .sb-group-title /
+   .sb-sect-title / .sb-ws-title 三个名字，全是不存在的 —— CSS 里选择器写错
+   不报错，只是静默不生效，所以这类东西必须去 markup 里核实，不能凭印象。 */
+html[data-skin="lucent"] .sb-ws-head > span {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: .05em !important;
+  color: var(--t3) !important;
+  text-transform: none;
+}
+/* 会话行也放松一档，和导航项同一个节奏。 */
+html[data-skin="lucent"] .sb-sess { padding: 8px 10px; margin: 1px 8px; }
+
+
+/* ── ⑧ 分组列表：一张卡片里一行行，分隔线内缩 ────────────────────────────
+ *
+ * 这是设置类界面的招牌形态：**若干行装在一张圆角卡里，行与行之间是一条
+ * 从文字左沿开始的发丝线**（不是通到卡片边缘的整条线）。内缩这件事看着
+ * 是细节，但它正是"一组相关的行"和"几个独立的盒子"的区别。
+ *
+ * 只发给 .hs-section（设置页的分组）—— 它的结构本来就是"标题 + 若干行"。
+ */
+html[data-skin="lucent"] .hs-section {
+  border: none !important;
+  border-radius: var(--r-lg) !important;
+  overflow: hidden;
+}
+html[data-skin="lucent"] .hs-section-hd {
+  border-bottom: 1px solid var(--b) !important;
+  background: transparent !important;
+  padding: 16px 18px 14px;
+}
+/* 行内容的呼吸。静谧是 14/16，这里给到 16/18 —— 分组列表的留白本来就比
+   密集表格松，它的信息密度不靠挤。 */
+html[data-skin="lucent"] .hs-section-body,
+html[data-skin="lucent"] .hs-section > div:not(.hs-section-hd) { padding-left: 18px; padding-right: 18px; }
+
+
+/* ── ⑨ 内容区留白 ────────────────────────────────────────────────────────
+   静谧是 20/24。字号整体涨了一档之后，边距不跟着涨会显得字顶到边上。 */
+html[data-skin="lucent"] .content:not(.content-fullpage):not(:has(.terminal-workbench-page)) {
+  padding: 26px 30px;
+}
+html[data-skin="lucent"] .hs-page { max-width: 780px; gap: 20px; }
+
+
+/* ── ⑩ 侧栏导航项：和会话标题同一个墨色 ──────────────────────────────────
+ *
+ * 基线里 `.ni{color:var(--t2)}` —— 导航项是**次级灰**，而它下面的会话标题
+ * `.sb-sess-title` 是墨色 `--t`。同一条侧栏上下两段用了两个色阶，上半截
+ * 就是会显得"灰灰的"，这跟字重和字号都没关系。
+ *
+ * 为什么基线那样写说得通、这里又要改：那 16 套经典主题的导航项**不是**
+ * 一等信息（它们的重心在内容区），次级色是刻意的降噪。而琉璃的层级是靠
+ * 字重和留白拉开的，颜色这一维不参与"主次"——参与"主次"的是 500 和 600、
+ * 是染色的选中态。颜色只剩下"墨 / 次级 / 三级"三档语义，导航项属于第一档。
+ *
+ * 分组标题（"小工具" / "管理" / "工作区"）**保持比正文浅**：它们是"这一组
+ * 叫什么"，不是可点的东西。但也从 --t3 抬到 --t2 —— 三级色在这个尺寸
+ * （13.5px）下确实太淡了。
+ */
+/* `:not(.ni-action)` 是必须的：「新建任务」是 `.ni.ni-action`，靠
+   `.ni-action{color:var(--acc)}` 着绿色，而那条只有 (0,1,0) 的特异性 ——
+   不排除的话它会被这条 (0,2,1) 压成黑字，整条侧栏唯一的主动作就消失在
+   一列同色文字里了。（第一次写漏了，截图里当场看出来。） */
+html[data-skin="lucent"] .ni:not(.ni-action) { color: var(--t); }
+html[data-skin="lucent"] .ni:not(.ni-action) .ic { color: var(--t2); }   /* 图标比字轻一档，字才是主角 */
+html[data-skin="lucent"] .ni:hover:not(.active):not(.ni-action) .ic { color: var(--t); }
+html[data-skin="lucent"] .ni.active .ic { color: var(--acc-ink) !important; }
+/* 主动作用**能当文字读的那支绿**（--acc 在纯白上只有 3.3:1）。 */
+html[data-skin="lucent"] .ni-action,
+html[data-skin="lucent"] .ni-action .ic { color: var(--acc-ink); }
+
+html[data-skin="lucent"] .ns,
+html[data-skin="lucent"] .ni-group,
+html[data-skin="lucent"] .sb-tools-group { color: var(--t2) !important; }

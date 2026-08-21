@@ -36,8 +36,12 @@ export const ZOOM_OPTIONS: ZoomOption[] = [
 // （含安卓，不依赖特定字体）。
 export type WeightOption = { id: string; label: string; value: number };
 
+// value 400 = **跟随主题**，不写 inline 覆盖（和字体族的 "theme" 档同一个约定）。
+// 以前这一档是"写死 400"，于是主题**永远没法定义自己的默认字重** —— inline
+// 样式压过一切 CSS。琉璃的正文基准是 500（Medium），被那个 400 静默盖掉了，
+// 表现就是"换了主题字重和原来一模一样"。
 export const WEIGHT_OPTIONS: WeightOption[] = [
-  { id: "normal", label: "标准", value: 400 },
+  { id: "normal", label: "跟随主题（默认）", value: 400 },
   { id: "medium", label: "中等", value: 500 },
   { id: "bold", label: "加粗", value: 600 },
 ];
@@ -87,7 +91,10 @@ export function applyZoom(value: number, persist = true): void {
 /** 应用全局字重（治"太细"，见 workbench.css `#root{font-weight:var(--ui-weight)}`）。 */
 export function applyWeight(value: number, persist = true): void {
   const v = WEIGHT_OPTIONS.some((o) => o.value === value) ? value : 400;
-  document.documentElement.style.setProperty("--ui-weight", String(v));
+  // 400 = 跟随主题：**移除** inline 覆盖，让主题里的 --ui-weight 生效
+  // （其余 17 套主题没定义它，`var(--ui-weight,400)` 回落 400，观感零变化）。
+  if (v === 400) document.documentElement.style.removeProperty("--ui-weight");
+  else document.documentElement.style.setProperty("--ui-weight", String(v));
   if (persist) { try { localStorage.setItem(WEIGHT_KEY, String(v)); } catch { /* noop */ } }
   if (persist) emit();
 }

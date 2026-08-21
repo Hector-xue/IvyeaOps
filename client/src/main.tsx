@@ -10,11 +10,16 @@ import App from "./App";
 // 所以 mendao-tokens.css 里一律写成 `:root[data-theme=…]`(0,2,0) 提权，
 // 让它与引入顺序无关。这行注释是给下一个想调换顺序的人看的。
 import "./styles/mendao-tokens.css";
+import "./styles/lucent-tokens.css";
 import "./styles/workbench.css";
 // 形状层最后引入：它们靠 !important 压过一切，放最后只是让阅读顺序和生效顺序一致。
 // 两张皮肤各自绑死在自己的主题上（data-skin=flat / quiet），互不相干，谁先谁后无所谓。
 import "./styles/mendao-skin.css";
 import "./styles/quiet-skin.css";
+// 琉璃的增量层**必须排在 quiet-skin 之后**：两边选择器特异性完全相同
+// （都是 0,1,1），谁覆盖谁只由顺序决定。调换的后果不是报错，是琉璃的
+// 半径刻度、焦点环、卡片阴影全部静默失效，看起来"和静谧一模一样"。
+import "./styles/lucent-skin.css";
 import { applyAppearance } from "./lib/appearance";
 import { DEFAULT_THEME, THEME_KEY, applyThemeAttrs, isThemeId, migrateTheme } from "./lib/themes";
 
