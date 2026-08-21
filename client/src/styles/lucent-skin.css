@@ -496,3 +496,35 @@ html[data-skin="lucent"] .content:not(.content-fullpage):not(:has(.terminal-work
   padding: 26px 30px;
 }
 html[data-skin="lucent"] .hs-page { max-width: 780px; gap: 20px; }
+
+
+/* ── ⑩ 侧栏导航项：和会话标题同一个墨色 ──────────────────────────────────
+ *
+ * 基线里 `.ni{color:var(--t2)}` —— 导航项是**次级灰**，而它下面的会话标题
+ * `.sb-sess-title` 是墨色 `--t`。同一条侧栏上下两段用了两个色阶，上半截
+ * 就是会显得"灰灰的"，这跟字重和字号都没关系。
+ *
+ * 为什么基线那样写说得通、这里又要改：那 16 套经典主题的导航项**不是**
+ * 一等信息（它们的重心在内容区），次级色是刻意的降噪。而琉璃的层级是靠
+ * 字重和留白拉开的，颜色这一维不参与"主次"——参与"主次"的是 500 和 600、
+ * 是染色的选中态。颜色只剩下"墨 / 次级 / 三级"三档语义，导航项属于第一档。
+ *
+ * 分组标题（"小工具" / "管理" / "工作区"）**保持比正文浅**：它们是"这一组
+ * 叫什么"，不是可点的东西。但也从 --t3 抬到 --t2 —— 三级色在这个尺寸
+ * （13.5px）下确实太淡了。
+ */
+/* `:not(.ni-action)` 是必须的：「新建任务」是 `.ni.ni-action`，靠
+   `.ni-action{color:var(--acc)}` 着绿色，而那条只有 (0,1,0) 的特异性 ——
+   不排除的话它会被这条 (0,2,1) 压成黑字，整条侧栏唯一的主动作就消失在
+   一列同色文字里了。（第一次写漏了，截图里当场看出来。） */
+html[data-skin="lucent"] .ni:not(.ni-action) { color: var(--t); }
+html[data-skin="lucent"] .ni:not(.ni-action) .ic { color: var(--t2); }   /* 图标比字轻一档，字才是主角 */
+html[data-skin="lucent"] .ni:hover:not(.active):not(.ni-action) .ic { color: var(--t); }
+html[data-skin="lucent"] .ni.active .ic { color: var(--acc-ink) !important; }
+/* 主动作用**能当文字读的那支绿**（--acc 在纯白上只有 3.3:1）。 */
+html[data-skin="lucent"] .ni-action,
+html[data-skin="lucent"] .ni-action .ic { color: var(--acc-ink); }
+
+html[data-skin="lucent"] .ns,
+html[data-skin="lucent"] .ni-group,
+html[data-skin="lucent"] .sb-tools-group { color: var(--t2) !important; }
