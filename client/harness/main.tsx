@@ -20,9 +20,17 @@ if (location.pathname !== route) {
 }
 
 // 主题：绕开一次性迁移，直接钉死，方便逐套对比。
+// **?t=none —— 装成一台全新的浏览器**：主题和迁移版本号都不写，走 src/main 里
+// 「没存过就吃 DEFAULT_THEME」那条路。改默认主题时只有这样才验得到，钉死一个 id
+// 验的永远是"钉的那个"，不是默认值。
 const theme = q.get("t") || "quiet-light";
-localStorage.setItem("ivyea-ops.theme", theme);
-localStorage.setItem("ivyea-ops.theme.v", "3");
+if (theme === "none") {
+  localStorage.removeItem("ivyea-ops.theme");
+  localStorage.removeItem("ivyea-ops.theme.v");
+} else {
+  localStorage.setItem("ivyea-ops.theme", theme);
+  localStorage.setItem("ivyea-ops.theme.v", "3");
+}
 // 侧栏默认展开，否则截图里全是收起态；?sb=collapsed 用来验收起态
 // （收起态有自己一套 .sb.collapsed 规则，点一下按钮再截图只会拍到动画中间帧）。
 localStorage.setItem("ivyea-ops.sidebar.collapsed",
@@ -35,7 +43,7 @@ for (const p of ["/console", "/dashboard", "/market", "/tools", "/agents",
   localStorage.setItem("ivyea-tour:" + p, "1");
 }
 // 换主题提示条同理：一次性的，不该出现在每张截图里。
-localStorage.setItem("ivyea-ops.theme.v", "3");
+if (theme !== "none") localStorage.setItem("ivyea-ops.theme.v", "3");
 
 // ?open=tools —— 页面稳定后按一下 ⌘K 把「全部工具」浮层打开。
 // 不做这个就只能验首页，而上一轮改坏的搜索框恰恰在浮层里。
