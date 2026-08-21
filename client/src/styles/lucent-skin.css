@@ -369,11 +369,19 @@ html[data-skin="lucent"] .md-p { line-height: 1.75; }
 /* 6.2 大标题。**这是整套语汇里最有辨识度的一件事** ——
    系统设置、邮件、备忘录的页面标题都是又大又重、字距收紧的一行，
    下面直接是内容，中间不放分隔线。 */
+/* **大字轻、小字重** —— 这是这套主题的排版规则，不是两次拍脑袋的结果。
+   同一个字重，字号越大看起来越重（笔画变粗是等比的，但眼睛感知的"黑度"
+   是按面积走的）。所以要让一屏上所有标题的**视觉重量**齐平，大字就得用
+   更轻的字重去补偿。落到档位上：
+     ≥21px 用 500（Windows 上 = Regular，靠尺寸站住）
+     <21px 用 600（Windows 上 = Bold，小字必须靠字重才分得出层级）
+   这条界线不能再往下挪：16px 的小标题掉到 Regular，就和 16px 的正文
+   完全一样了，在 Windows 上没有中间档可以退。 */
 html[data-skin="lucent"] .hs-header-title,
 html[data-skin="lucent"] .md-h1,
 html[data-skin="lucent"] .ws-main-h1 {
   font-size: 26px !important;
-  font-weight: 600 !important;
+  font-weight: 500 !important;
   letter-spacing: normal !important;   /* 同上：中文标题不收字距 */
   line-height: 1.22 !important;
   color: var(--t) !important;
@@ -387,7 +395,7 @@ html[data-skin="lucent"] .hs-header-sub {
   line-height: 1.55;
 }
 html[data-skin="lucent"] .md-h2 {
-  font-size: 21px !important; font-weight: 600 !important;
+  font-size: 21px !important; font-weight: 500 !important;   /* 21px：踩在界线上，归大字 */
   letter-spacing: normal !important; color: var(--t) !important; margin-top: 26px !important;
 }
 html[data-skin="lucent"] .md-h3 {
