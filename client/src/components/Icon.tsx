@@ -6,6 +6,8 @@ import {
   Settings, Ship, Sparkles, Target, Terminal, TrendingDown, Type, Users,
   Timer, History, Flag, Search, X, Pin,
   ArrowUp, Cpu, Eye, Paperclip, Square, ShieldCheck, Zap,
+  Ban, Brain, Check, ChevronDown, ChevronUp, FilePen, GitBranch, Link2, Plug,
+  RefreshCw, Copy, Wrench,
   type LucideIcon,
 } from "lucide-react";
 
@@ -88,6 +90,39 @@ const ICONS: Record<string, LucideIcon> = {
   "mode-full": Zap,
   // ── 场景 ──
   "ad-waste": TrendingDown,
+  // ── 执行叙述（console/ActivityFeed）──
+  // 这一块原来整片都是**字符字形**（✓ ⊙ ✻ ☰ ▤ ⚑ ⑂ ⌁ ⌃），也就是本文件头
+  // 那三条毛病的重灾区：粗细跟着正文字体走、基线和中文标签差一两像素、
+  // Windows 的默认中文字体里 ⑂ ⌁ 干脆没有（用户截图里那个像 └ 的东西就是它）。
+  // 全部换成同一套 lucide，一行里的图标才会是**一列**而不是七种字体的拼盘。
+  "step-ok": Check,
+  "step-err": X,
+  "step-blocked": Ban,
+  "step-think": Sparkles,
+  "step-skill": Blocks,
+  "step-board": LayoutGrid,
+  "step-mcp": Plug,
+  "step-tool": Wrench,
+  "step-subagent": GitBranch,
+  "step-knowledge": BookOpen,
+  "step-plan": ListChecks,
+  "step-note": FileText,
+  // 常用工具单独给形状 —— 一屏几十行的时候，"这一步在联网还是在读文件"
+  // 靠形状扫一眼就知道，比读四个中文字快得多。
+  "tool-search": Globe,
+  "tool-fetch": Link2,
+  "tool-read": FileText,
+  "tool-write": FilePen,
+  "tool-shell": Terminal,
+  "tool-grep": Search,
+  "tool-files": FolderOpen,
+  "tool-memory": Brain,
+  "feed": Activity,
+  "chev-up": ChevronUp,
+  "chev-down": ChevronDown,
+  // ── 回答末尾的动作行 ──
+  copy: Copy,
+  regenerate: RefreshCw,
 };
 
 /** 认不出的名字用它。留空白比画错更难排查。 */

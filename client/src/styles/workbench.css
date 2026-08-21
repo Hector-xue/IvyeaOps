@@ -3300,7 +3300,30 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
   background-color var(--dur) var(--ease),transform var(--dur) var(--ease)}
 .cc-tobottom:hover{color:var(--t);border-color:color-mix(in srgb,var(--acc) 45%,var(--b));
   background:color-mix(in srgb,var(--acc) 8%,var(--bg1));transform:translateX(-50%) translateY(-1px)}
-.cc-dock{flex-shrink:0;padding:8px 18px 12px;border-top:1px solid var(--b);background:var(--bg)}
+/* 输入坞。
+   **不画顶边线**：输入框自己带了一层投影，浮在页面上（见 .cc-composer.compact）。
+   再加一条横贯全宽的硬线，就变成"把页面切成上下两半"，而参考的那两家
+   （ChatGPT / DeepSeek Harness）在这个位置都是**什么都没有** —— 靠留白和投影
+   分层。线和投影同时上，是两种分层语言打架。 */
+.cc-dock{flex-shrink:0;padding:10px 18px 12px;background:var(--bg)}
+
+/* ── 回答末尾的动作行（components/console/AnswerActions.tsx）──────────────
+   正文读完之后的落点：一段话结束了、可以复制、可以再跑一次。没有它，正文的最后
+   一行文字直接撞上输入框（用户点名的"衔接处"）。 */
+/* 第一颗按钮往左吃掉自己的内边距，让**图标的左边缘**落在正文块的左边缘上。
+   不吃的话它会比正文右移 8px（探针量的：正文 501、图标 511）—— 一排比正文缩进
+   一点点的按钮，看起来就是没对齐，而不是"故意缩进"。
+   对齐的是 .cc-answer 这个盒子的左边：经典主题下它是一张有边框的卡（内边距
+   13px），琉璃/静谧下内边距是 0，两种情况下"和卡的左边对齐"都成立。 */
+.cc-acts{display:flex;align-items:center;gap:2px;margin:-2px 0 0}
+.cc-act:first-child{margin-left:-8px}
+.cc-act{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border:none;
+  border-radius:8px;background:transparent;color:var(--t3);cursor:pointer;
+  font-family:var(--font);font-size:var(--fs-10);line-height:1;
+  transition:color var(--dur) var(--ease),background-color var(--dur) var(--ease)}
+.cc-act:hover{color:var(--t);background:var(--bg2)}
+.cc-act.done{color:var(--acc)}
+.cc-act svg{flex-shrink:0}
 /* ── 实时状态坞（components/console/LiveDock.tsx）─────────────────────────
    钉在输入框正上方，不随对话滚走。一行说完三件事：在干什么 / 接下来干什么 /
    进行到哪。展开是 Agent 自己排的计划。 */
@@ -3361,24 +3384,36 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 /* 折叠开关：常驻一行，带图标带文字带"收起/展开"。 */
 /* 高度写死。里面那株常春藤是个 SVG，挂载/卸载时会把这一行撑高一两像素 ——
    而它是整条叙述的第一行，撑高一次，底下每一行跟着挪一次（实测 4px）。 */
-.af-head{display:flex;align-items:center;gap:7px;width:100%;height:26px;padding:0 6px 0 0;
+/* 头部和下面每一行走**同一套列宽**：状态 14px / 图标 16px / 6px 间距。
+   头部没有状态，但那一格照样留着（`.af-head-gap` 是个空占位）—— 这样
+   「执行过程」和「联网搜索」落在同一条竖线上，藤叶和 ✓ 落在另一条。
+   上一版头部是 flex + 34px 图标格、body 另有 12px 缩进和一条 9px 处的竖线，
+   三个左边界互不相干：藤叶、竖线、✓ 三样各在各的位置，谁也不对着谁
+   （用户原话：感觉怪怪的，是不是没有对齐）。 */
+.af-head{display:flex;align-items:center;gap:6px;width:100%;height:26px;padding:0 6px 0 0;
   border:none;border-radius:var(--r);background:transparent;cursor:pointer;text-align:left;
   overflow:hidden;white-space:nowrap;
   font-family:var(--font);font-size:var(--fs-10);color:var(--t3)}
 .af-head:hover{background:var(--bg2);color:var(--t2)}
 .af-head-ivy{display:inline-flex;align-items:center;justify-content:center;
-  flex-shrink:0;width:34px;height:1.2em;line-height:0;color:var(--ivy)}
-.af-head-dot{font-style:normal}
+  flex-shrink:0;width:14px;height:1.2em;line-height:0;color:var(--ivy)}
+/* 藤叶按 em 定尺寸（1.15em ≈ 15px），会从 14px 的格子里溢出来一点点。
+   在这一格里收成 1em，它和下面那一列 ✓ 才是同一个视觉宽度。 */
+.af-head-ivy .ivy-grow{width:1em;height:1em}
+.af-head-gap{flex-shrink:0;width:16px}
 .af-head-label{color:var(--t2)}
 .af-head-meta{color:var(--t3)}
-.af-head-toggle{margin-left:auto;color:var(--t3);opacity:.9}
+.af-head-toggle{margin-left:auto;display:inline-flex;align-items:center;gap:3px;
+  color:var(--t3);opacity:.9}
 
-/* 左边那条竖线从**图标列的中间**穿下去，行内所有内容跟着同一条网格线走。
-   之前是 head 一个缩进、body 另一个缩进、状态点和图标各占一个不固定的宽度，
-   于是每行的文字起点都差几个像素 —— 用户的原话是"参差不齐"。 */
-.af-body{display:flex;flex-direction:column;padding-left:12px;margin-left:9px;
-  border-left:1px solid var(--b)}
-.af-more{align-self:flex-start;margin:2px 0 2px 6px;padding:1px 8px;border-radius:999px;
+/* body 不再缩进、也不再画竖线。
+   那条竖线是上一版用来"把这些行归成一组"的，但它落在 9px 处 —— 既不穿过藤叶
+   （在 17px），也不穿过 ✓（在 28px），于是它不是一条时间轴，只是一根杵在左边
+   的线（用户点名的"一根竖线"）。分组交给头部那一行去说，它已经写着"执行过程
+   6 步 · 13.5s"和一个收起开关了。 */
+.af-body{display:flex;flex-direction:column}
+.af-more{align-self:flex-start;display:inline-flex;align-items:center;gap:4px;
+  margin:2px 0 2px 6px;padding:2px 9px;border-radius:999px;
   border:1px dashed var(--b2);background:transparent;color:var(--t3);cursor:pointer;
   font-family:var(--font);font-size:var(--fs-95)}
 .af-more:hover{color:var(--t2);border-color:var(--t3)}
@@ -3388,7 +3423,7 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 /* 固定五列：状态 / 图标 / 类型 / 摘要 / 耗时。
    **用网格不用 flex**：思考行没有状态点，flex 下它后面的每一列都会整体左移一格，
    一屏看下来就是参差不齐（用户原话）。网格里空着的那一格照样占位，天然对齐。 */
-.af-line{display:grid;grid-template-columns:12px 16px 4.8em minmax(0,1fr) auto;
+.af-line{display:grid;grid-template-columns:14px 16px 4.8em minmax(0,1fr) auto;
   align-items:center;gap:6px;width:100%;height:22px;padding:0 6px 0 0;
   border:none;background:transparent;cursor:pointer;text-align:left;overflow:hidden;
   white-space:nowrap;font-family:var(--font);font-size:var(--fs-10);color:var(--t3);
@@ -3396,8 +3431,12 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 button.af-line:hover{background:var(--bg2)}
 /* 别再给它 line-height:0 —— 那会让这一格的高度塌成 0，字跑到行外面去、
    同一行里其他列跟着量歪（实测思考行的类型名被挤成 18px，"思考"被截成"思·"）。 */
+/* 里面装的已经是 SVG 不是字符，所以 line-height 要归 0（替换元素会被行盒
+   垫出基线空间，图标就比同一行的中文低一两像素）。这和下面那条"别给 .af-line
+   line-height:0"不冲突：塌掉的是这一格，不是整行。 */
 .af-icon{display:flex;align-items:center;justify-content:center;
-  text-align:center;font-style:normal;line-height:1}
+  text-align:center;font-style:normal;line-height:0;color:var(--t3)}
+.af-icon svg,.af-mark svg{display:block}
 
 /* 装 SVG 的那一格才需要 line-height:0（SVG 是替换元素，行盒会给它垫基线空间）。 */
 .af-icon-live{display:flex;align-items:center;justify-content:center;
@@ -3416,7 +3455,7 @@ button.af-line:hover{background:var(--bg2)}
   border:1px solid var(--b);border-radius:var(--r);background:var(--bg2);
   color:var(--t3);font-size:var(--fs-95);white-space:pre-wrap;word-break:break-all}
 .af-mark{display:flex;align-items:center;justify-content:center;
-  text-align:center;font-size:var(--fs-9)}
+  text-align:center;font-size:var(--fs-9);line-height:0}
 .af-ok{color:var(--acc)}
 .af-err{color:var(--red)}
 .af-blocked{color:var(--amber)}
@@ -3628,10 +3667,18 @@ button.af-line:hover{background:var(--bg2)}
   background:color-mix(in srgb,var(--acc) 6%,transparent);transform:translateY(-1px)}
 
 /* ── 输入器 ──────────────────────────────────────────────────────────────── */
-.cc-composer{border:1px solid var(--b2);border-radius:10px;background:var(--bg1);padding:9px 11px 7px;
+.cc-composer{border:1px solid var(--b);border-radius:16px;background:var(--bg1);padding:9px 11px 7px;
   box-shadow:var(--elev-1);transition:border-color var(--dur) var(--ease),box-shadow var(--dur) var(--ease)}
-.cc-composer:focus-within{border-color:var(--acc);box-shadow:0 0 0 2px var(--ring)}
-.cc-composer.compact{padding:7px 9px 5px;box-shadow:none}
+.cc-composer:focus-within{border-color:color-mix(in srgb,var(--acc) 55%,var(--b2));
+  box-shadow:0 0 0 3px var(--ring),0 6px 20px rgba(0,0,0,.07)}
+/* 会话态（贴在对话底下那一只）。
+   **它需要阴影，不是不需要**：上一版这里写的是 `box-shadow:none`，于是会话里
+   的输入框变成"一个灰框贴在灰底上"，和欢迎页那只圆润、带投影、有存在感的完全
+   两样（用户原话：在会话的时候输入框看着不好看）。ChatGPT / DeepSeek Harness 的
+   做法都是让输入框**浮在**页面上 —— 靠的就是一层很轻的投影 + 大圆角，而不是
+   加深边框。加深边框只会让它更像表单控件。 */
+.cc-composer.compact{padding:8px 10px 6px;
+  box-shadow:0 1px 2px rgba(0,0,0,.04),0 6px 18px rgba(0,0,0,.06)}
 .cc-input{width:100%;border:none;background:transparent;color:var(--t);font-family:var(--font);
   font-size:var(--fs-125);line-height:1.65;resize:none;outline:none;min-height:24px;max-height:200px;
   overflow-y:auto;display:block}
@@ -3681,8 +3728,7 @@ button.af-line:hover{background:var(--bg2)}
    一行里两种小字号只会显得是没对齐。 */
 .cc-chip-model{max-width:230px;color:var(--t3)}
 .cc-chip-model:hover{color:var(--t2)}
-/* 发送键：圆、实心、图标居中。禁用态不用 opacity 掏空（那会连图标一起变灰糊），
-   改成灰底 + 弱前景 —— 形状还在，只是"现在还不能点"。 */
+/* 发送键：圆、实心、图标居中。 */
 .cc-send{width:34px;height:34px;border-radius:50%;border:none;background:var(--acc);color:var(--on-acc);
   cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
   transition:background-color var(--dur) var(--ease),transform var(--dur) var(--ease),
@@ -3690,7 +3736,14 @@ button.af-line:hover{background:var(--bg2)}
 .cc-send:hover:not(:disabled){filter:brightness(1.06);transform:translateY(-1px);
   box-shadow:0 3px 10px color-mix(in srgb,var(--acc) 38%,transparent)}
 .cc-send:active:not(:disabled){transform:translateY(0)}
-.cc-send:disabled{background:var(--bg3);color:var(--t3);box-shadow:none;cursor:not-allowed}
+/* 禁用态**保留品牌色，只是调淡**。
+   上一版是纯灰底 + 灰前景：输入框空着的时候（也就是绝大多数时间）整只输入框里
+   一点颜色都没有，右下角那颗按钮读起来像坏了（用户原话：发送按钮缺少色彩）。
+   ChatGPT 和 DeepSeek Harness 在空输入时也都保留着那颗有颜色的圆 —— 它是这块
+   界面的落点。淡到 16% 底 + 55% 前景，既看得出是"同一颗按钮"，又明显不是可点态。
+   不用 opacity 掏空：那会把图标和底色一起糊掉，形状就没了。 */
+.cc-send:disabled{background:color-mix(in srgb,var(--acc) 16%,var(--bg2));
+  color:color-mix(in srgb,var(--acc) 72%,var(--t3));box-shadow:none;cursor:not-allowed}
 .cc-send.cc-stop{background:var(--red);color:var(--on-acc);box-shadow:none}
 
 /* ── 上下文进度条 ─────────────────────────────────────────────────────────

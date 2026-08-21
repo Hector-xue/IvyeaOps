@@ -36,6 +36,7 @@ import ApprovalCard from "../../components/console/ApprovalCard";
 import Composer, { approvalPayload, type ApprovalMode, type ComposerRef, type ComposerValue } from "../../components/console/Composer";
 import ArtifactRail, { type RailApproval, type RailTodo } from "../../components/console/ArtifactRail";
 import FollowUps from "../../components/console/FollowUps";
+import AnswerActions from "../../components/console/AnswerActions";
 import LiveDock from "../../components/console/LiveDock";
 import {
   CONSOLE_PRESETS_CHANGED,
@@ -1111,7 +1112,7 @@ function ConsoleInner() {
                     </button>
                   </div>
                 )}
-                {turns.map((t) =>
+                {turns.map((t, ti) =>
                   t.role === "user" ? (
                     <div className="cc-user" key={t.id} data-turn={t.id}>
                       <div className="cc-bubble">{t.text}</div>
@@ -1133,6 +1134,24 @@ function ConsoleInner() {
                         >
                           {t.failed ? t.text : <MarkdownReport text={t.text} />}
                         </div>
+                      )}
+                      {/*
+                        * 正文和输入框之间的收尾。跑的过程中不出现 —— 正在写的一段
+                        * 话底下挂一排"复制/重新生成"，等于请用户复制一份还没写完的
+                        * 东西。跑完了才给。
+                        */}
+                      {t.text && !t.running && !t.failed && (
+                        <AnswerActions
+                          text={t.text}
+                          onRegenerate={
+                            // 上一条用户提问就在它前面一格。恢复出来的半截会话可能
+                            // 没有（只存了回答），那就不给这个按钮，别放一个点了没
+                            // 反应的开关。
+                            turns[ti - 1]?.role === "user" && !busy
+                              ? () => void send(turns[ti - 1].text)
+                              : undefined
+                          }
+                        />
                       )}
                       {/*
                         * 这里原来还有一行「⟳ 正在处理 · 12.3s」。它和上面那条活动行
