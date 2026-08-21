@@ -755,11 +755,21 @@ def console_session_list(
     rows.sort(key=lambda r: r.get("updated") or 0, reverse=True)
     total = len(rows)
     page = rows[offset:offset + limit]
+    # 每个工作区的**真实**条数。左栏此前把"当前这页里属于它的条数"当成计数显示，
+    # 于是一个有 211 条会话的工作区在只加载了 60 条时显示成 60 —— 看着像会话丢了。
+    # 分页前的 rows 就是全量，这里顺手数一遍，不额外查库。
+    ws_counts: dict[str, int] = {}
+    for r in rows:
+        key = r.get("workspace") or console_sessions.DEFAULT_WORKSPACE
+        ws_counts[key] = ws_counts.get(key, 0) + 1
+    workspaces = console_sessions.list_workspaces(principal, is_admin)
+    for w in workspaces:
+        w["count"] = ws_counts.get(w["name"], 0)
     return {"ok": True, "sessions": page, "agent_available": agent_ok,
             "total": total, "offset": offset,
             # 让前端不必自己算 —— 算错了就是"加载更多"点了没反应
             "has_more": offset + len(page) < total,
-            "workspaces": console_sessions.list_workspaces(principal, is_admin)}
+            "workspaces": workspaces}
 
 
 @router.patch("/console/sessions/{session_id}")

@@ -22,6 +22,7 @@
  * 常驻的头部按钮。
  */
 import { useMemo, useState } from "react";
+import Icon from "../Icon";
 import IvyGrow from "./IvyGrow";
 import { formatMs, type ConsoleStep } from "../../lib/stepLabels";
 
@@ -70,10 +71,14 @@ function oneLine(text: string): string {
 
 function StatusMark({ status }: { status: ConsoleStep["status"] }) {
   if (status === "running") return <span className="af-mark af-run" aria-label="进行中" />;
-  if (status === "error") return <span className="af-mark af-err" aria-label="失败">✕</span>;
+  if (status === "error") {
+    return <span className="af-mark af-err" aria-label="失败"><Icon name="step-err" size={12} strokeWidth={2.6} /></span>;
+  }
   // 被护栏拦下是流程纠偏（"先列计划再动手"），不是出错，别用红叉吓人。
-  if (status === "blocked") return <span className="af-mark af-blocked" aria-label="已拦截">⊘</span>;
-  return <span className="af-mark af-ok" aria-label="完成">✓</span>;
+  if (status === "blocked") {
+    return <span className="af-mark af-blocked" aria-label="已拦截"><Icon name="step-blocked" size={12} strokeWidth={2.2} /></span>;
+  }
+  return <span className="af-mark af-ok" aria-label="完成"><Icon name="step-ok" size={13} strokeWidth={2.8} /></span>;
 }
 
 /** 一步 = 一行。有参数时点开在下面摊一块原始参数。 */
@@ -87,7 +92,7 @@ function StepLine({ step }: { step: ConsoleStep }) {
               title={step.detail ? `${step.title} · ${step.detail}` : step.title}
               onClick={() => hasArgs && setOpen((v) => !v)}>
         <StatusMark status={step.status} />
-        <i className="af-icon">{step.icon}</i>
+        <i className="af-icon"><Icon name={step.icon} size={14} /></i>
         <span className="af-kind">{step.title}</span>
         <span className="af-text">{step.detail ? `· ${oneLine(step.detail)}` : ""}</span>
         {step.destructive && <span className="af-badge">写操作</span>}
@@ -129,7 +134,13 @@ export default function ActivityFeed({
       {/* 折叠开关。常驻、带文字、点得着 —— 上一版是行尾一个 9px 的箭头，没人认得出。 */}
       <button type="button" className="af-head" onClick={() => setCollapsed((v) => !v)}
               aria-expanded={!collapsed}>
-        <span className="af-head-ivy">{running ? <IvyGrow /> : <i className="af-head-dot">⌁</i>}</span>
+        <span className="af-head-ivy">
+          {running ? <IvyGrow /> : <Icon name="feed" size={13} strokeWidth={2} />}
+        </span>
+        {/* 空占位格。头部只有"图标 + 标题"两样东西，而下面每一行是"状态 + 图标 + 类型"
+            三样 —— 不补这一格，「执行过程」就落在「联网搜索」左边一整格的位置上，
+            整块从上到下没有一条对齐的竖线（用户原话：感觉怪怪的、没有对齐）。 */}
+        <span className="af-head-gap" aria-hidden />
         <span className="af-head-label">执行过程</span>
         <span className="af-head-meta">
           {/* 用 filter 拼，别用固定的分隔符：0 步的时候原来会拼出孤零零一个
@@ -137,14 +148,17 @@ export default function ActivityFeed({
           {[realSteps > 0 ? `${realSteps} 步` : (running ? "正在准备" : ""),
             elapsedMs !== undefined ? formatMs(elapsedMs) : ""].filter(Boolean).join(" · ")}
         </span>
-        <span className="af-head-toggle">{collapsed ? "展开 ⌄" : "收起 ⌃"}</span>
+        <span className="af-head-toggle">
+          {collapsed ? "展开" : "收起"}
+          <Icon name={collapsed ? "chev-down" : "chev-up"} size={13} />
+        </span>
       </button>
 
       {!collapsed && (
         <div className="af-body">
           {hidden > 0 && (
             <button type="button" className="af-more" onClick={() => setShowAll(true)}>
-              ↑ 展开更早的 {hidden} 行
+              <Icon name="chev-up" size={12} /> 展开更早的 {hidden} 行
             </button>
           )}
           {shown.map((item) => {
@@ -152,8 +166,8 @@ export default function ActivityFeed({
               return (
                 <div className="af-item" key={item.key}>
                   <div className="af-line af-think" title={item.text}>
-                    <span className="af-mark">{"\u00a0"}</span>
-                    <i className="af-icon">✻</i>
+                    <span className="af-mark" />
+                    <i className="af-icon"><Icon name="step-think" size={14} /></i>
                     <span className="af-kind">思考</span>
                     <span className="af-text">· {oneLine(item.text)}</span>
                   </div>
@@ -164,8 +178,8 @@ export default function ActivityFeed({
               return (
                 <div className="af-item" key={item.key}>
                   <div className="af-line af-think">
-                    <span className="af-mark">{"\u00a0"}</span>
-                    <i className="af-icon">✦</i>
+                    <span className="af-mark" />
+                    <i className="af-icon"><Icon name="step-skill" size={14} /></i>
                     <span className="af-kind">技能</span>
                     <span className="af-text">· {item.skills.map((s) => s.title).join("、")}</span>
                   </div>
@@ -178,7 +192,7 @@ export default function ActivityFeed({
           {live && (
             <div className="af-item" key="live">
               <div className="af-line af-think af-live">
-                <span className="af-mark">{"\u00a0"}</span>
+                <span className="af-mark" />
                 <i className="af-icon af-icon-live"><IvyGrow /></i>
                 <span className="af-kind">思考</span>
                 <span className="af-text">· {live}</span>

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import mimetypes
 import os
 import time
 from contextlib import asynccontextmanager
@@ -644,6 +645,14 @@ app.include_router(help_router.router, prefix="/api", tags=["help"])
 #   everything else     -> index.html (SPA fallback for React Router)
 _CLIENT_DIST = settings.root_dir / "client" / "dist"
 
+# `.woff2` is missing from the stdlib mimetypes table on some distros (this
+# server included), so FileResponse guessed `text/plain` for the self-hosted
+# fonts. Browsers still load a font with the wrong MIME, but any proxy or
+# security header that keys off content-type would be looking at a lie —
+# register it once here instead of hard-coding a media_type at each call site.
+mimetypes.add_type("font/woff2", ".woff2")
+mimetypes.add_type("font/woff", ".woff")
+
 
 if _CLIENT_DIST.exists():
     _ASSETS = _CLIENT_DIST / "assets"
@@ -666,6 +675,13 @@ if _CLIENT_DIST.exists():
         # fall back to index.html so React Router handles the URL.
         candidate = _CLIENT_DIST / full_path
         if candidate.is_file():
+            # Fonts are big (the bundled CJK face is 2MB) and their filenames
+            # carry the version, so they can be cached hard. Everything else in
+            # dist root keeps the default (ETag/Last-Modified revalidation).
+            if full_path.startswith("fonts/"):
+                return FileResponse(candidate, headers={
+                    "Cache-Control": "public, max-age=31536000, immutable",
+                })
             return FileResponse(candidate)
         index = _CLIENT_DIST / "index.html"
         if not index.is_file():

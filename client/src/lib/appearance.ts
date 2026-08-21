@@ -10,12 +10,27 @@
 export type FontOption = { id: string; label: string; stack: string };
 
 // stack 为空 = 不覆盖（跟随主题）。每个栈都含中英文回退，兼顾清晰度。
+//
+// ── 拉丁字形单列一支 ────────────────────────────────────────────────────
+// 中文 UI 里其实有一大半字符是拉丁的：数字、ASIN、SKU、型号、百分比、模型名。
+// 而中文字体自带的拉丁字形（尤其微软雅黑的）是配角，字距和字重都不讲究。
+// 所以下面的栈一律写成「拉丁字体 + 中文字体」两段：浏览器按**逐字**回退，
+// 拉丁走前面那支、汉字走后面那支，两边各用各的强项。
+// "Inter Web" / "Noto Sans SC Web" 是自带字库（见 workbench.css 顶部的
+// @font-face），选中才下载；带 Web 后缀是为了不顶掉用户本机的同名字体。
 export const FONT_OPTIONS: FontOption[] = [
   { id: "theme", label: "跟随主题（默认）", stack: "" },
+  // 推荐档：拉丁用 Inter（自带），汉字用系统里最好的那支（苹方 / 雅黑）。
+  // 只多下 48KB，是"性价比最高的那一档"。
+  { id: "inter", label: "Inter + 系统中文 · 推荐", stack: '"Inter Web","PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif' },
+  // 全自带档：汉字也不看用户机器脸色，2MB，观感最统一（Mac / Windows / 安卓一致）。
+  { id: "noto", label: "思源黑体 · 内置字库", stack: '"Inter Web","Noto Sans SC Web","PingFang SC","Microsoft YaHei",sans-serif' },
   { id: "system", label: "系统默认 · 清晰", stack: 'system-ui,-apple-system,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif' },
-  { id: "yahei", label: "微软雅黑", stack: '"Microsoft YaHei","PingFang SC",system-ui,-apple-system,sans-serif' },
-  { id: "pingfang", label: "苹方 PingFang", stack: '"PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif' },
-  { id: "source", label: "思源黑体", stack: '"Source Han Sans SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif' },
+  { id: "yahei", label: "微软雅黑", stack: '"Segoe UI","Microsoft YaHei","PingFang SC",system-ui,-apple-system,sans-serif' },
+  { id: "pingfang", label: "苹方 PingFang", stack: '-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif' },
+  // 老 id 保留（换掉会让已经选过它的人被重置回默认），但栈换成自带字库 ——
+  // 原来那一档只写了 local 名字，**原装 Windows 上一个都装不到**，选了等于没选。
+  { id: "source", label: "思源黑体（同上，兼容旧选项）", stack: '"Inter Web","Noto Sans SC Web","Source Han Sans SC","Microsoft YaHei",sans-serif' },
   // 衬线/等宽在手机（安卓/iOS）上也有系统字体，能看出明显区别；黑体类在安卓只有一种系统字，
   // 各选项看起来一样。手机上想直观改变观感，选「衬线体」或「等宽」。
   { id: "serif", label: "衬线体（宋体）", stack: '"Songti SC","SimSun","Noto Serif CJK SC",Georgia,"Times New Roman",serif' },

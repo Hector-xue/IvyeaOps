@@ -13,12 +13,15 @@ repeatedly (or re-archiving a day) overwrites rather than double-counts.
 """
 from __future__ import annotations
 
+import logging
 import sqlite3
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
 
 from app.core.config import settings
+
+logger = logging.getLogger("ivyea.services.token_archive")
 
 _LOCAL_TZ = timezone(timedelta(hours=8))
 DB_PATH = Path(settings.data_dir / "token_archive.sqlite3")
@@ -52,8 +55,51 @@ def init_db() -> None:
             """
         )
         conn.commit()
+        _migrate_synthetic_model(conn)
     finally:
         conn.close()
+
+
+def _migrate_synthetic_model(conn: sqlite3.Connection) -> None:
+    """把历史行里的假模型名 `<synthetic>` 并进 `claude-code`。
+
+    旧的 Claude 扫描器取会话文件里**第一个** message.model，会取到 Claude Code 为配额
+    提示/报错本地构造的 `<synthetic>`，于是整个会话被记到一个不存在的模型名下。扫描器
+    已修，但已经落库的归档行改不回真实型号（归档只留天粒度，对不回原文件），所以退一步
+    并到 `claude-code` —— 至少是个真实存在的归属，且和未知模型同一价档。
+
+    合并而不是改名：主键是 (day, source, agent, model)，同一天可能已有 claude-code 行，
+    直接 UPDATE 会撞主键，UPDATE OR REPLACE 则会把另一行悄悄吃掉。
+    """
+    try:
+        rows = conn.execute(
+            """SELECT day, source, agent, sessions, input_tokens, output_tokens,
+                      cache_read, cache_write, credits, updated_at
+               FROM token_daily WHERE model = '<synthetic>'""").fetchall()
+        if not rows:
+            return
+        for r in rows:
+            conn.execute(
+                """INSERT INTO token_daily
+                   (day, source, agent, model, sessions, input_tokens, output_tokens,
+                    cache_read, cache_write, credits, updated_at)
+                   VALUES (?,?,?,'claude-code',?,?,?,?,?,?,?)
+                   ON CONFLICT(day, source, agent, model) DO UPDATE SET
+                     sessions=token_daily.sessions+excluded.sessions,
+                     input_tokens=token_daily.input_tokens+excluded.input_tokens,
+                     output_tokens=token_daily.output_tokens+excluded.output_tokens,
+                     cache_read=token_daily.cache_read+excluded.cache_read,
+                     cache_write=token_daily.cache_write+excluded.cache_write,
+                     credits=token_daily.credits+excluded.credits,
+                     updated_at=excluded.updated_at""",
+                (r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9]))
+        conn.execute("DELETE FROM token_daily WHERE model = '<synthetic>'")
+        conn.commit()
+    except Exception:
+        # 迁移失败不该拦住建表和后面的读写 —— 脏行只影响"模型分布"那一栏的归属，
+        # 而这个函数挂在每次 init_db 上。但**必须留下痕迹**：静默吞掉的话，表现是
+        # 「<synthetic> 一直在，重启也不消失」，而日志里一个字都没有。
+        logger.warning("合并历史 <synthetic> 行失败，本次跳过", exc_info=True)
 
 
 def archive_run(lookback_days: int = 7) -> Dict[str, Any]:
@@ -124,6 +170,14 @@ def load_records(since: float) -> List[Dict[str, Any]]:
     """
     if not DB_PATH.exists():
         return []
+    # 读之前也过一遍 init_db：建表是 IF NOT EXISTS，但历史数据迁移挂在这儿，
+    # 只靠归档任务触发的话，没跑过归档的部署会一直读到旧的脏行。
+    try:
+        init_db()
+    except Exception:
+        # 建表/迁移失败也要能把已有归档读出来（下面自会因为文件不可读而报错），
+        # 但同样不能静默 —— 这是"数字对不上"这类问题的第一现场。
+        logger.warning("读取归档前的 init_db 失败，继续按现有表结构读", exc_info=True)
     since_day = datetime.fromtimestamp(since, tz=_LOCAL_TZ).strftime("%Y-%m-%d")
     out: List[Dict[str, Any]] = []
     conn = _connect()

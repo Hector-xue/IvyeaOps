@@ -108,8 +108,11 @@ html:is([data-skin="quiet"],[data-skin="lucent"]) .sb nav div[style*="background
    去掉 .cc-dock 那条 border-top 之后，正文会**直接被输入框切断**，看着像盖住了
    而不是滚下去了。参考图里 ChatGPT 用的也是渐隐而不是线 —— 这正是"用留白代替
    线条"该有的收尾，不补的话去掉的那条线就成了纯损失。
-   .cc-thread-wrap 本来就是 position:relative（给「回到底部」当定位参照）。 */
-html:is([data-skin="quiet"],[data-skin="lucent"]) .cc-thread-wrap::after {
+   .cc-thread-wrap 本来就是 position:relative（给「回到底部」当定位参照）。
+   **只在 .scrolled（没滚到底）时出现。** 无条件挂着的话，滚到底之后它照样罩在
+   最后 44px 上，把回答的末行和「复制/重新生成」那一行蒙成灰的 —— 用户看到的是
+   "复制按钮有点模糊"，而那不是渲染问题，是这层渐隐盖上去的。 */
+html:is([data-skin="quiet"],[data-skin="lucent"]) .cc-thread-wrap.scrolled::after {
   content: '';
   position: absolute;
   left: 0; right: 0; bottom: 0;
@@ -298,12 +301,14 @@ html:is([data-skin="quiet"],[data-skin="lucent"]) .cc-answer-error {
 
 /* 6.2 阅读行宽。一行 100+ 字的中文读起来极累，眼睛回扫会丢行。
        ~720px 在 15~16px 字号下约合 45 个汉字，是长文的舒适区。 */
-html:is([data-skin="quiet"],[data-skin="lucent"]) .cc-thread { padding: 22px 24px 10px; align-items: center; }
-/* 一条规则管住**所有**直接子项（提问 / 回答 / 跟进 / "更早"分隔），而不是逐个
-   点名 —— 漏掉一个，那一项就会在居中列里缩成内容宽度，看着像排版塌了。
-   width:100% 是必须的：align-items:center 会让 flex 子项退回内容宽度。 */
-html:is([data-skin="quiet"],[data-skin="lucent"]) .cc-thread > * { width: 100%; max-width: 720px; }
-html:is([data-skin="quiet"],[data-skin="lucent"]) .cc-dock > * { max-width: 720px; margin-left: auto; margin-right: auto; }
+/* 居中列本身已经提到基础层（workbench.css 里的 --cc-col，以及给 .cc-thread 和
+   .cc-dock 的直接子项加的宽度上限），因为"正文和输入框不对称"是**所有主题**共同的
+   毛病，不是这套皮肤的偏好。这里只把列宽收窄到这套皮肤想要的 720px —— 长文阅读
+   舒适区，一行约 45 个汉字。
+   （注意别在注释里写 .cc-dock 的子选择器：那串字符里的星号加斜杠会把注释就地
+   截断，后面整段都变成无效 CSS —— 刚踩过，表现是这条变量规则压根没生效。） */
+html:is([data-skin="quiet"],[data-skin="lucent"]) .cc-page { --cc-col: 720px; }
+html:is([data-skin="quiet"],[data-skin="lucent"]) .cc-thread { padding: 22px 24px 10px; }
 
 /* 6.3 提问气泡：保留气泡形（参考图里 ChatGPT 也保留），但去掉描边，
        只留一层极淡的强调色底。 */

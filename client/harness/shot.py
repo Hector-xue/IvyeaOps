@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """验证台截图/取值工具（CDP 设备模拟版）—— 只给本地验证用，不参与产品构建。
 
-    python3 harness/shot.py <url> <宽> <高> <out.png|-> ["JS 表达式"]
+    python3 harness/shot.py <url> <宽> <高> <out.png|-> ["JS 表达式"] [表达式后再等几秒] ["等待后再跑的 JS"]
 
     python3 harness/shot.py "http://127.0.0.1:5199/?t=quiet-light&r=/console" 390 844 mob.png \
         "JSON.stringify({w:document.documentElement.clientWidth, sw:document.documentElement.scrollWidth})"
@@ -14,7 +14,7 @@ Emulation.setDeviceMetricsOverride，宽度是真的。
 """
 import json, tempfile, subprocess, sys, time, urllib.request, websocket, base64, os, signal
 
-def main(url, w, h, out, expr=None, mobile=True, wait=3.5):
+def main(url, w, h, out, expr=None, mobile=True, wait=3.5, after=1.0, late=None):
     port = 9333
     prof = os.path.join(tempfile.gettempdir(), "ivyea-harness-cdp-profile")
     p = subprocess.Popen(["google-chrome","--headless","--disable-gpu","--no-sandbox",
@@ -45,7 +45,19 @@ def main(url, w, h, out, expr=None, mobile=True, wait=3.5):
         if expr:
             r = send("Runtime.evaluate", expression=expr, returnByValue=True)
             print(json.dumps(r.get("result", {}).get("value"), ensure_ascii=False, indent=1))
+        # 第二个表达式：在 after 这段等待**之后**、截图之前跑。
+        # 用来量"表达式把页面驱动起来之后"的东西 —— 比如发一条消息、等流跑完，
+        # 再读活动行的 getBoundingClientRect。第一个表达式跑的时候那些元素还不存在。
+        if late:
+            time.sleep(after)
+            r = send("Runtime.evaluate", expression=late, returnByValue=True)
+            print(json.dumps(r.get("result", {}).get("value"), ensure_ascii=False, indent=1))
         if out:
+            # 表达式里常有 click()（开抽屉 / 展开分组）：React 重渲染 + CSS 过渡
+            # 都要时间，紧接着截图只会拍到动画中间帧（抽屉滑到一半、按钮还没变形）。
+            # 只有跑过表达式才等这一下，纯截图不受影响。
+            if expr and not late:
+                time.sleep(after)
             r = send("Page.captureScreenshot", format="png", captureBeyondViewport=False)
             open(out, "wb").write(base64.b64decode(r["data"]))
             print("saved", out, w, "x", h)
@@ -55,4 +67,6 @@ def main(url, w, h, out, expr=None, mobile=True, wait=3.5):
 if __name__ == "__main__":
     a = sys.argv[1:]
     main(a[0], int(a[1]), int(a[2]), a[3] if len(a) > 3 and a[3] != "-" else None,
-         expr=a[4] if len(a) > 4 else None)
+         expr=a[4] if len(a) > 4 else None,
+         after=float(a[5]) if len(a) > 5 else 1.0,
+         late=a[6] if len(a) > 6 else None)

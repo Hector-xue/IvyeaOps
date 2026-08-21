@@ -481,7 +481,12 @@ html[data-skin="lucent"] .sb-ws-head > span {
   text-transform: none;
 }
 /* 会话行也放松一档，和导航项同一个节奏。 */
-html[data-skin="lucent"] .sb-sess { padding: 8px 10px; margin: 1px 8px; }
+/* 左内边距减掉 margin，让文字最终落点和其它皮肤一致（见 workbench.css 的
+   --sess-indent：那是唯一的缩进开关，这里只是把 margin 的 8px 找回来）。 */
+html[data-skin="lucent"] .sb-sess {
+  padding: 8px 10px 8px calc(var(--sess-indent) - 8px);
+  margin: 1px 8px;
+}
 
 
 /* ── ⑧ 分组列表：一张卡片里一行行，分隔线内缩 ────────────────────────────
@@ -539,9 +544,13 @@ html[data-skin="lucent"] .ni:not(.ni-action) { color: var(--t); }
 html[data-skin="lucent"] .ni:not(.ni-action) .ic { color: var(--t2); }   /* 图标比字轻一档，字才是主角 */
 html[data-skin="lucent"] .ni:hover:not(.active):not(.ni-action) .ic { color: var(--t); }
 html[data-skin="lucent"] .ni.active .ic { color: var(--acc-ink) !important; }
-/* 主动作用**能当文字读的那支绿**（--acc 在纯白上只有 3.3:1）。 */
-html[data-skin="lucent"] .ni-action,
-html[data-skin="lucent"] .ni-action .ic { color: var(--acc-ink); }
+/* 「新建任务」现在是一块带边框的卡片按钮（见 workbench.css 的 .ni.ni-action）：
+   形状已经把它和导航项分开了，颜色就不用再扛这个活 —— 字回到墨色（要读的按钮
+   文字，--acc 在纯白上只有 3.3:1），只有图标留那支**能当文字读的绿**。
+   这条选择器是 (0,2,1)，压得住 workbench.css 里的 .ni.ni-action (0,2,0)，
+   所以两处必须同时改，只改一处会出现"琉璃下整块还是绿的"。 */
+html[data-skin="lucent"] .ni-action { color: var(--t); }
+html[data-skin="lucent"] .sb-nav-top .ni.ni-action .ic { color: var(--acc-ink); }
 
 html[data-skin="lucent"] .ns,
 html[data-skin="lucent"] .ni-group,

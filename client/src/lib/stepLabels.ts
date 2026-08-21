@@ -73,15 +73,40 @@ const TOOL_VERBS: Record<string, string> = {
   task_read: "读取任务", task_step: "推进任务", task_log: "记录任务", task_resume: "恢复任务",
 };
 
+/**
+ * 每一步画什么图标。
+ *
+ * **值是 components/Icon 的登记名，不是字符**。以前这里存的是 ✦ ◧ ⚑ ⊙ ⑂ ▤ ☰ ·，
+ * 直接塞进 JSX 当文字渲染 —— 粗细跟着正文字体走、基线和中文标签差一两像素，
+ * 而 ⑂ ⌁ 这几个在 Windows 的默认中文字体里根本没有（用户截图里那个像 └ 的
+ * 东西就是缺字回退出来的）。换成 lucide 之后一整列图标才是同一套笔画。
+ */
 const PHASE_ICONS: Record<StepPhase, string> = {
-  skill: "✦",
-  board: "◧",
-  mcp: "⚑",
-  tool: "⊙",
-  subagent: "⑂",
-  knowledge: "▤",
-  plan: "☰",
-  note: "·",
+  skill: "step-skill",
+  board: "step-board",
+  mcp: "step-mcp",
+  tool: "step-tool",
+  subagent: "step-subagent",
+  knowledge: "step-knowledge",
+  plan: "step-plan",
+  note: "step-note",
+};
+
+/**
+ * 常用自带工具的专属形状。一屏几十行的时候，"这一步在联网还是在读文件"靠形状
+ * 扫一眼就知道 —— 全用同一个扳手图标等于没有图标。没登记的照旧回落到 phase 图标。
+ */
+const TOOL_ICONS: Record<string, string> = {
+  web_search: "tool-search", web_fetch: "tool-fetch",
+  read_file: "tool-read", view_file: "tool-read",
+  write_file: "tool-write", edit_file: "tool-write", code_apply_patch: "tool-write",
+  run_command: "tool-shell", run_python: "tool-shell", run_tests: "tool-shell",
+  bash_output: "tool-shell", kill_bash: "tool-shell",
+  grep: "tool-grep", search_code: "tool-grep", code_search: "tool-grep",
+  glob: "tool-files", list_dir: "tool-files",
+  knowledge_search: "step-knowledge", skill_search: "step-skill",
+  recall: "tool-memory", remember: "tool-memory",
+  todo_write: "step-plan", progress_update: "step-plan", self_critique: "step-plan",
 };
 
 // ── 板块能力目录（运行时注入）─────────────────────────────────────────────────
@@ -194,7 +219,7 @@ export function stepFromEvent(ev: IvyeaStepEvent): ConsoleStep {
   return {
     ...base,
     phase,
-    icon: PHASE_ICONS[phase],
+    icon: TOOL_ICONS[ev.name] || PHASE_ICONS[phase],
     title: TOOL_VERBS[ev.name] || ev.name || "执行步骤",
     detail: summarizeArgs(args),
   };

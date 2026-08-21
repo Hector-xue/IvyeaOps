@@ -36,6 +36,7 @@ import ApprovalCard from "../../components/console/ApprovalCard";
 import Composer, { approvalPayload, type ApprovalMode, type ComposerRef, type ComposerValue } from "../../components/console/Composer";
 import ArtifactRail, { type RailApproval, type RailTodo } from "../../components/console/ArtifactRail";
 import FollowUps from "../../components/console/FollowUps";
+import AnswerActions from "../../components/console/AnswerActions";
 import LiveDock from "../../components/console/LiveDock";
 import {
   CONSOLE_PRESETS_CHANGED,
@@ -1094,7 +1095,14 @@ function ConsoleInner() {
         ) : (
           /* ── 会话态 ────────────────────────────────────────────────── */
           <>
-            <div className="cc-thread-wrap">
+            {/*
+              * `scrolled` = 还没滚到底。底部那层渐隐（静谧/琉璃皮肤的
+              * .cc-thread-wrap::after）只在这时候才该出现 —— 它的意思是"下面还有，
+              * 正滚过去"。已经到底了还罩着，就变成把**最后那点内容**（回答的末行、
+              * 「复制/重新生成」那一行）蒙上一层灰，看起来像渲染糊了。
+              * 用户原话：复制按钮好像有点模糊。
+              */}
+            <div className={"cc-thread-wrap" + (atBottom ? "" : " scrolled")}>
               <div className="cc-thread scroll-thin" ref={bodyRef}>
                 {/*
                   * 内层这一圈是为了**把内容顶到底部**（margin-top:auto）。
@@ -1111,7 +1119,7 @@ function ConsoleInner() {
                     </button>
                   </div>
                 )}
-                {turns.map((t) =>
+                {turns.map((t, ti) =>
                   t.role === "user" ? (
                     <div className="cc-user" key={t.id} data-turn={t.id}>
                       <div className="cc-bubble">{t.text}</div>
@@ -1133,6 +1141,35 @@ function ConsoleInner() {
                         >
                           {t.failed ? t.text : <MarkdownReport text={t.text} />}
                         </div>
+                      )}
+                      {/*
+                        * 正文和输入框之间的收尾。跑的过程中不出现 —— 正在写的一段
+                        * 话底下挂一排"复制/重新生成"，等于请用户复制一份还没写完的
+                        * 东西。跑完了才给。
+                        */}
+                      {t.text && !t.running && !t.failed && (
+                        <AnswerActions
+                          text={t.text}
+                          onRegenerate={
+                            // 往回找**最近的**那条提问，不能只看前面一格：一次提问
+                            // 常常对应好几个 assistant 轮次（agent 边做边说，中间
+                            // 插着执行过程），那时候前一格是 assistant，按"前一格"
+                            // 判断的话最后一轮就没有这个按钮了 —— 用户截图里只剩
+                            // 一个"复制"就是这么来的。
+                            // 一条都找不到（恢复出来的半截会话只存了回答）就不给这
+                            // 个按钮，别放一个点了没反应的开关。
+                            (() => {
+                              if (busy) return undefined;
+                              for (let i = ti - 1; i >= 0; i--) {
+                                if (turns[i].role === "user") {
+                                  const q = turns[i].text;
+                                  return () => void send(q);
+                                }
+                              }
+                              return undefined;
+                            })()
+                          }
+                        />
                       )}
                       {/*
                         * 这里原来还有一行「⟳ 正在处理 · 12.3s」。它和上面那条活动行

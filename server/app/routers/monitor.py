@@ -592,23 +592,41 @@ def _kiro_cli_sessions() -> _Path | None:
 def _claude_projects() -> _Path | None:
     from app.core import integrations
     return integrations.claude_projects_dir()
+
+def _ivyea_sessions_dir() -> _Path | None:
+    from app.core import integrations
+    return integrations.ivyea_sessions_dir()
+
+def _dsh_sessions_dir() -> _Path | None:
+    from app.core import integrations
+    return integrations.dsh_sessions_dir()
 _LOCAL_TZ = _timezone(_timedelta(hours=8))
 _KIRO_DEFAULT_CONTEXT_TOKENS = 200_000
 
 # Pricing per 1M tokens (input, output) in USD. Keys are lowercase.
+# Anthropic 一档按官方价目表（2026-06 口径）：Fable 5 是 10/50，Opus 家族 5/25，
+# Sonnet 3/15，Haiku 1/5。**别照搬旧记忆里的 15/75** —— 那是早已作废的 Opus 3 价，
+# 会把 opus 成本整体高估 3 倍。
 _PRICING = {
     # Anthropic Claude
-    "claude-opus-4-8": (15, 75), "claude-opus-4-7": (15, 75), "claude-opus-4-6": (15, 75),
-    "claude-opus-4.5": (15, 75), "claude-opus-4": (15, 75),
+    "claude-fable-5": (10, 50), "claude-mythos-5": (10, 50),
+    "claude-opus-5": (5, 25),
+    "claude-opus-4-8": (5, 25), "claude-opus-4-7": (5, 25), "claude-opus-4-6": (5, 25),
+    "claude-opus-4.5": (5, 25), "claude-opus-4": (5, 25),
+    "claude-sonnet-5": (3, 15),
     "claude-sonnet-4-6": (3, 15), "claude-sonnet-4-5": (3, 15), "claude-sonnet-4": (3, 15),
     "claude-sonnet-4.5": (3, 15), "claude-3.7-sonnet": (3, 15), "claude-3-5-sonnet": (3, 15),
-    "claude-haiku-4-5": (0.8, 4), "claude-haiku-4.5": (0.8, 4), "claude-3-5-haiku": (0.8, 4),
+    "claude-haiku-4-5": (1, 5), "claude-haiku-4.5": (1, 5), "claude-3-5-haiku": (1, 5),
     # OpenAI
     "gpt-5.5": (2, 10), "gpt-5.4": (2, 10), "gpt-5": (2, 10),
+    "gpt-5-codex": (2, 10), "gpt-5.3-codex": (2, 10),
     "gpt-4o": (2.5, 10), "gpt-4o-mini": (0.15, 0.6), "o3": (2, 8), "o4-mini": (1.1, 4.4),
     "gpt-image-2": (0, 0),  # per-image pricing, not token-based
     # DeepSeek
     "deepseek-chat": (0.27, 1.1), "deepseek-reasoner": (0.55, 2.19), "deepseek-3.2": (0.27, 1.1),
+    "deepseek-v4-pro": (0.55, 2.19), "deepseek-v4-flash": (0.27, 1.1),
+    # xAI
+    "grok-4.5": (3, 15), "grok-4": (3, 15),
     # MiniMax
     "minimax-m2.7": (0.5, 2), "minimax/minimax-m2.7": (0.5, 2), "minimax-m2": (0.5, 2),
     # Kimi / Moonshot
@@ -662,7 +680,11 @@ def _scan_claude_sessions(since: float) -> list:
         if jsonl.stat().st_mtime < since:
             continue
         session_input = session_output = session_cache_read = session_cache_write = 0
-        model = None
+        # 按"哪个模型烧掉的 token 最多"定这个会话的归属，而不是取文件里第一个 model。
+        # 取第一个会踩到 `<synthetic>` —— Claude Code 把配额提示/报错这类本地构造的
+        # 消息也写成 message.model，它排在真实回合前面，于是整个会话被记到一个不存在
+        # 的"模型"名下（改之前有 55 亿 token 挂在 `<synthetic>` 上）。
+        model_tokens: dict = {}
         ts = jsonl.stat().st_mtime
         with open(jsonl, encoding="utf-8") as fh:
             for line in fh:
@@ -672,14 +694,20 @@ def _scan_claude_sessions(since: float) -> list:
                     if isinstance(msg, dict):
                         usage = msg.get("usage", {})
                         if usage:
-                            session_input += usage.get("input_tokens", 0)
-                            session_cache_read += usage.get("cache_read_input_tokens", 0)
-                            session_cache_write += usage.get("cache_creation_input_tokens", 0)
-                            session_output += usage.get("output_tokens", 0)
-                        if not model and msg.get("model"):
-                            model = msg["model"]
+                            inp = usage.get("input_tokens", 0)
+                            c_read = usage.get("cache_read_input_tokens", 0)
+                            c_write = usage.get("cache_creation_input_tokens", 0)
+                            out = usage.get("output_tokens", 0)
+                            session_input += inp
+                            session_cache_read += c_read
+                            session_cache_write += c_write
+                            session_output += out
+                            m = msg.get("model")
+                            if m and not str(m).startswith("<"):
+                                model_tokens[m] = model_tokens.get(m, 0) + inp + out + c_read + c_write
                 except Exception:
                     logger.debug("_json.loads 失败（旁路，已忽略）", exc_info=True)
+        model = max(model_tokens, key=model_tokens.get) if model_tokens else None
         if session_input > 0 or session_output > 0 or session_cache_read > 0 or session_cache_write > 0:
             results.append({
                 "ts": ts,
@@ -858,7 +886,7 @@ def _scan_hermes(since: float):
             out = (row[3] or 0) + (row[6] or 0)
             recs.append(_rec(row[0], row[1] or "hermes", inp, out, "Hermes",
                              f"Hermes/{row[7] or 'hermes'}", cache_read=row[4] or 0, cache_write=row[5] or 0))
-            total += inp + out
+            total += inp + out + (row[4] or 0) + (row[5] or 0)
         conn.close()
         return recs, {"source": "Hermes", "path": p, "status": "included", "sessions": len(recs), "total": total}
     except Exception as e:
@@ -936,10 +964,123 @@ def _scan_claude(since: float):
         for s in _scan_claude_sessions(since):
             recs.append(_rec(s["ts"], s["model"], s["input"], s["output"], "Claude Code", "Claude Code",
                              cache_read=s.get("cache_read", 0), cache_write=s.get("cache_write", 0)))
-            total += s["input"] + s["output"]
+            total += s["input"] + s["output"] + s.get("cache_read", 0) + s.get("cache_write", 0)
         return recs, {"source": "Claude Code", "path": p, "status": "included", "sessions": len(recs), "total": total}
     except Exception:
         return recs, {"source": "Claude Code", "path": p, "status": "error"}
+
+
+def _scan_ivyea_agent(since: float):
+    """Scan ivyea-agent 的会话账本 ~/.ivyea/sessions/<id>.json。
+
+    每个会话存 {id, created, updated, model, messages, usage}，usage 是
+    ivyea_agent.sessions._merge_stats 累出来的 {prompt, completion, cost, turns}。
+    ``prompt`` 走的是 OpenAI 兼容语义 —— **已经含缓存命中的那部分**，所以整体计入
+    input（和 Codex 口径一致），这里没有可单独拆出的 cache 列。
+
+    这个目录里还混着 MCP 的结果转储（{doc,data} 那种），靠"有没有 usage"筛掉。
+    """
+    import json as _json
+    p = _ivyea_sessions_dir()
+    if not (p and p.exists()):
+        return [], {"source": "Ivyea Agent", "path": p, "status": "missing"}
+    recs, total = [], 0
+    try:
+        for f in p.glob("*.json"):
+            try:
+                if f.stat().st_mtime < since:
+                    continue
+                d = _json.loads(f.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if not isinstance(d, dict):
+                continue
+            usage = d.get("usage")
+            if not isinstance(usage, dict) or not usage:
+                continue
+            inp = int(usage.get("prompt") or usage.get("prompt_tokens") or 0)
+            out = int(usage.get("completion") or usage.get("completion_tokens") or 0)
+            if inp <= 0 and out <= 0:
+                continue
+            ts = d.get("updated") or d.get("created") or f.stat().st_mtime
+            try:
+                ts = float(ts)
+            except Exception:
+                ts = f.stat().st_mtime
+            recs.append(_rec(ts, d.get("model") or "ivyea-agent", inp, out,
+                             "Ivyea Agent", "Ivyea Agent"))
+            total += inp + out
+        return recs, {"source": "Ivyea Agent", "path": p, "status": "included",
+                      "sessions": len(recs), "total": total}
+    except Exception as e:
+        return recs, {"source": "Ivyea Agent", "path": p, "status": f"error: {e}"}
+
+
+def _scan_dsh(since: float):
+    """Scan DeepSeek Harness 会话 ~/.dsh/sessions/<proj>/<session>/session.jsonl.zstd。
+
+    每个 ``assistant/message`` 事件带
+    ``usage: {inputTokens, outputTokens, reasoningTokens, cacheReadTokens}``。
+    reasoning 归到 output（和 Hermes 一样：思考 token 是按输出价计的）。
+
+    这些文件是 zstd 压的，而 IvyeaOps 跑在系统 python 上、没有 zstandard 包 ——
+    所以走 `zstd -dc` 子进程。没这个二进制就整源跳过并在覆盖表里说明，绝不静默归零。
+    事件自带毫秒时间戳，按事件时间分桶，比按文件 mtime 准。
+    """
+    import json as _json
+    import shutil as _shutil
+    import subprocess as _subprocess
+    p = _dsh_sessions_dir()
+    if not (p and p.exists()):
+        return [], {"source": "DeepSeek Harness", "path": p, "status": "missing"}
+    zstd = _shutil.which("zstd")
+    if not zstd:
+        return [], {"source": "DeepSeek Harness", "path": p, "status": "error: 缺少 zstd 命令，无法解压会话"}
+    recs, total = [], 0
+    try:
+        for f in p.rglob("session.jsonl.zstd"):
+            if f.stat().st_mtime < since:
+                continue
+            try:
+                raw = _subprocess.run([zstd, "-dc", str(f)], capture_output=True,
+                                      timeout=60).stdout.decode("utf-8", "ignore")
+            except Exception:
+                continue
+            # 一个会话可能横跨多天，按天聚合而不是整包记在最后一次修改时间上。
+            per_day: dict = {}
+            model = None
+            for line in raw.splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    d = _json.loads(line)
+                except Exception:
+                    continue
+                data = d.get("data") or {}
+                if not model and isinstance(data, dict) and data.get("model"):
+                    model = data["model"]
+                if d.get("type") != "assistant/message":
+                    continue
+                u = (data or {}).get("usage") or {}
+                if not u:
+                    continue
+                ms = d.get("time")
+                ts = (ms / 1000.0) if isinstance(ms, (int, float)) and ms > 1e11 else f.stat().st_mtime
+                day = _datetime.fromtimestamp(ts, tz=_LOCAL_TZ).strftime("%Y-%m-%d")
+                b = per_day.setdefault(day, {"ts": ts, "input": 0, "output": 0, "cache_read": 0})
+                b["input"] += int(u.get("inputTokens") or 0)
+                b["output"] += int(u.get("outputTokens") or 0) + int(u.get("reasoningTokens") or 0)
+                b["cache_read"] += int(u.get("cacheReadTokens") or 0)
+            for b in per_day.values():
+                if b["input"] <= 0 and b["output"] <= 0 and b["cache_read"] <= 0:
+                    continue
+                recs.append(_rec(b["ts"], model or "deepseek-harness", b["input"], b["output"],
+                                 "DeepSeek Harness", "DeepSeek Harness", cache_read=b["cache_read"]))
+                total += b["input"] + b["output"] + b["cache_read"]
+        return recs, {"source": "DeepSeek Harness", "path": p, "status": "included",
+                      "sessions": len(recs), "total": total}
+    except Exception as e:
+        return recs, {"source": "DeepSeek Harness", "path": p, "status": f"error: {e}"}
 
 
 # Registry of all token sources. Append a (name, scanner) here to add a tool.
@@ -950,6 +1091,8 @@ _TOKEN_SOURCES = [
     ("Codex", lambda since: _scan_codex_source(since, _codex_db, "Codex", "Codex")),
     ("Feishu Codex", lambda since: _scan_codex_source(since, _feishu_codex_db, "Hermes", "Hermes/Feishu Codex Relay")),
     ("Claude Code", _scan_claude),
+    ("Ivyea Agent", _scan_ivyea_agent),
+    ("DeepSeek Harness", _scan_dsh),
 ]
 
 
@@ -989,12 +1132,15 @@ def token_usage(_user: str = Depends(require_user)) -> dict:
               "cache_read_tokens": 0, "cache_write_tokens": 0,
               "total_tokens": 0, "cost_usd": 0.0}
 
-    def _bump(m: dict, key: str, inp: int, out: int, cost: float, source: str | None = None, credits: float = 0.0):
+    def _bump(m: dict, key: str, inp: int, out: int, cost: float, source: str | None = None,
+              credits: float = 0.0, cache_read: int = 0, cache_write: int = 0):
         if key not in m:
             m[key] = {
                 "sessions": 0,
                 "input_tokens": 0,
                 "output_tokens": 0,
+                "cache_read_tokens": 0,
+                "cache_write_tokens": 0,
                 "total_tokens": 0,
                 "cost_usd": 0.0,
                 "credits": 0.0,
@@ -1003,7 +1149,9 @@ def token_usage(_user: str = Depends(require_user)) -> dict:
         m[key]["sessions"] += 1
         m[key]["input_tokens"] += inp
         m[key]["output_tokens"] += out
-        m[key]["total_tokens"] += inp + out
+        m[key]["cache_read_tokens"] += cache_read
+        m[key]["cache_write_tokens"] += cache_write
+        m[key]["total_tokens"] += inp + out + cache_read + cache_write
         m[key]["cost_usd"] = round(m[key]["cost_usd"] + cost, 4)
         m[key]["credits"] = round(m[key]["credits"] + credits, 6)
         if source:
@@ -1014,19 +1162,27 @@ def token_usage(_user: str = Depends(require_user)) -> dict:
         day = dt.strftime("%Y-%m-%d")
         week = dt.strftime("%Y-W%W")
         month = dt.strftime("%Y-%m")
-        total = inp + out
+        # **缓存也是 token。** 少算它就没法跨工具比：Claude Code 每次请求的裸
+        # input_tokens 只有几个 token，整段上下文都记在 cache_read 里；而 Codex 上报的
+        # input_tokens 本身就含 cached_input_tokens（实测 96.5% 是缓存）。只算 in+out
+        # 等于把 Claude 的量抹成 0、把 Codex 的照单全收 —— 排行榜会整个反过来。
+        total = inp + out + cache_read + cache_write
         cost = _estimate_cost(model, inp, out, cache_read, cache_write)
         for key, m in [(day, daily_map), (week, weekly_map), (month, monthly_map)]:
             if key not in m:
-                m[key] = {"sessions": 0, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost_usd": 0.0}
+                m[key] = {"sessions": 0, "input_tokens": 0, "output_tokens": 0,
+                          "cache_read_tokens": 0, "cache_write_tokens": 0,
+                          "total_tokens": 0, "cost_usd": 0.0}
             m[key]["sessions"] += 1
             m[key]["input_tokens"] += inp
             m[key]["output_tokens"] += out
+            m[key]["cache_read_tokens"] += cache_read
+            m[key]["cache_write_tokens"] += cache_write
             m[key]["total_tokens"] += total
             m[key]["cost_usd"] = round(m[key]["cost_usd"] + cost, 4)
-        _bump(agent_map, agent, inp, out, cost, source, credits)
+        _bump(agent_map, agent, inp, out, cost, source, credits, cache_read, cache_write)
         if day == today_key:
-            _bump(today_agent_map, agent, inp, out, cost, source, credits)
+            _bump(today_agent_map, agent, inp, out, cost, source, credits, cache_read, cache_write)
         # Model breakdown — same full window as agents (口径统一).
         if model:
             if model not in model_map:
@@ -1066,7 +1222,8 @@ def token_usage(_user: str = Depends(require_user)) -> dict:
             _add(ar["ts"], ar["model"], ar["input"], ar["output"], ar["agent"],
                  ar["source"], ar.get("credits", 0.0), ar.get("cache_read", 0), ar.get("cache_write", 0))
             agg = backfill_sources.setdefault(ar["source"], 0)
-            backfill_sources[ar["source"]] = agg + ar["input"] + ar["output"]
+            backfill_sources[ar["source"]] = (agg + ar["input"] + ar["output"]
+                                              + ar.get("cache_read", 0) + ar.get("cache_write", 0))
         for src, tok in sorted(backfill_sources.items()):
             coverage.append({"source": f"{src} (归档)", "path": "token_archive.sqlite3",
                              "status": "from-archive", "sessions": 0,

@@ -1,5 +1,44 @@
 /* IvyeaOps workbench theme — dark terminal style. Ported from the design mock. */
 
+/* ── 自带字库（public/fonts/，不走 npm 也不走 CDN）─────────────────────────
+ *
+ * 为什么要自带：字体族选择器里原来那几档全是"猜用户机器上装了什么"。
+ * 「思源黑体」这一档在**原装 Windows 上根本不存在** —— 选了它，栈会一路回落到
+ * 微软雅黑，用户看到的是"选了没反应"。自带字库才是"选了就一定是它"。
+ *
+ * 为什么不从 fonts.googleapis.com 拉：用户和服务器都在国内，那个域名不通，
+ * 结果就是白等 30 秒再回落。自带的文件跟着 dist 一起发，离线也在。
+ *
+ * 为什么不用 npm 装 @fontsource：本机 ~/.npmrc 指着腾讯云内网镜像，任何一次
+ * install 都会把 package-lock 的 resolved 写死成外网访问不到的地址（踩过，CI 崩）。
+ * 直接放 woff2 文件，lockfile 一个字都不用动。
+ *
+ * **@font-face 是惰性的**：声明在这儿不等于会下载 —— 只有当页面上真的有字要用
+ * 这个族时浏览器才去取。所以这两条对"跟随主题"的默认用户是零成本，
+ * 只有在外观设置里主动选了它的人才会付那 2MB。
+ */
+/* Inter：只含 latin，48KB。中文 UI 里的数字/ASIN/型号/百分比全是拉丁字形，
+   换掉它们的收益比换汉字大得多，代价却只有 48KB。可变字重，一个文件顶九档。 */
+/* unicode-range 卡在 Latin-1 是**必须的**，不是优化：Inter 的 latin 子集里也有
+   U+2026（…）、U+2014（—）这些通用标点，而它们在拉丁字体里是"三个小圆点贴基线"。
+   中文的省略号写作「……」，用拉丁那支就变成了 "......"，一眼就是错的排版
+   （对比截图里当场看出来的）。卡住范围后，标点仍旧由后面的中文字体出。 */
+@font-face{
+  font-family:"Inter Web";
+  src:url("/fonts/inter-latin-var.woff2") format("woff2-variations");
+  font-weight:100 900;font-style:normal;font-display:swap;
+  unicode-range:U+0020-007E,U+00A0-00FF;
+}
+/* 思源黑体（Noto Sans SC）可变版，**裁到 GB2312 的 6763 字**：全字库 17MB，
+   裁完 2.0MB。GB2312 覆盖现代中文约 99.7%，落在外面的生僻字（人名用字之类）
+   按 CSS 的逐字回退规则由系统中文字体接手，不会变豆腐块。
+   族名带 " Web" 后缀：不叫 "Noto Sans SC"，就不会把用户本机装的同名字体顶掉。 */
+@font-face{
+  font-family:"Noto Sans SC Web";
+  src:url("/fonts/noto-sans-sc-gb2312-var.woff2") format("woff2-variations");
+  font-weight:100 900;font-style:normal;font-display:swap;
+}
+
 *{margin:0;padding:0;box-sizing:border-box}
 /* Slim scrollbars on desktop (mouse) — the native (~15px) bar is too chunky for
    this theme. Scoped to fine-pointer/hover devices ONLY: on touch screens this
@@ -3147,8 +3186,41 @@ body::after{
    用 auto + stretch：由 flex/block 布局去算，永远等于"容器减掉外边距"。 */
 button.ni{width:auto;align-self:stretch;background:transparent;border:none;border-left:2px solid transparent;
   font-family:var(--font);font-size:var(--fs-11);text-align:left;line-height:inherit}
-.ni-action{color:var(--acc)}
-.ni-action:hover{background:color-mix(in srgb,var(--acc) 8%,transparent)}
+/* ── 「新建任务」：抬成一块独立的卡片按钮（对标 DeepSeek Harness 的「新会话」）──
+ * 改造前它和下面的一级导航项共用 .ni 的全部样式，只靠"字是绿的"区分 —— 混在
+ * 一列同样式的行里，看不出"这是这条侧栏唯一的主动作"。参考图的做法是把它做成
+ * **带边框的白底圆角块 + 内容居中**：形状先于颜色，一眼就和导航项分开了。
+ *
+ * 选择器为什么这么长（`.sb-nav-top .ni.ni-action` = 0,3,0）：这块要压过三层
+ * 已有规则 —— `button.ni`(0,1,1) 的 `border:none`、`html[data-skin="lucent"] .ni`
+ * (0,2,1) 的 margin/padding、`html:is([quiet],[lucent]) .ni`(0,2,1) 的
+ * `padding-left:10px`。而两个皮肤文件在 main.tsx 里**排在 workbench.css 之后**，
+ * 同分就是它们赢。第一版写成 `.ni.ni-action`(0,2,0)，harness 探针读回来的是
+ * `margin:1px 8px; padding:9px 12px 9px 10px` —— 左右差 2px，卡片是歪的。
+ * 皮肤里的 `border-left-color:transparent !important`（为了灭掉 2px 选中色条）
+ * 只能同样用 `!important` 顶回来，否则这张卡片的左边框是透明的、只画了三条边。
+ * 颜色分工：**字用墨色、图标用强调色**。整块染绿在浅色主题下对比度只有 3.3:1，
+ * 而这是要读的按钮文字，不是装饰。 */
+.sb-nav-top .ni.ni-action{
+  justify-content:center;gap:8px;
+  margin:2px 8px 6px;padding:9px 12px;
+  border:1px solid var(--b) !important;border-radius:10px;
+  background:var(--bg1);color:var(--t);font-weight:600;text-align:center;
+  box-shadow:0 1px 2px rgba(0,0,0,.05);
+  transition:background .12s,border-color .12s,box-shadow .12s,transform .12s;
+}
+.sb-nav-top .ni.ni-action .ic{color:var(--acc)}
+/* .ni-label 基线是 flex:1（导航项要让计数/箭头靠右）。在这里必须收回来：
+   撑满整行的话文字盒占掉全部剩余宽度，justify-content:center 就无事可做，
+   图标+文字会贴着左边，只有"整块居中"的假象。 */
+.sb-nav-top .ni.ni-action .ni-label{flex:0 1 auto;text-align:center}
+.sb-nav-top .ni.ni-action:hover{background:var(--bg2);border-color:var(--b2) !important;
+  box-shadow:0 2px 8px rgba(0,0,0,.07);transform:translateY(-1px)}
+.sb-nav-top .ni.ni-action:active{transform:translateY(0);box-shadow:0 1px 2px rgba(0,0,0,.05)}
+/* 收起态：不补这条的话 52px 宽的收起栏里会塞进 8px 外边距 + 12px 内边距，
+   图标被挤出边界。收起时它退化成一个方形的图标按钮，边框保留。
+   要压过 `html:is([quiet],[lucent]) .sb.collapsed .ni`(0,3,1)，所以这条是 (0,4,0)。 */
+.sb.collapsed .sb-nav-top .ni.ni-action{margin:2px 6px 6px;padding:8px 0;gap:0}
 .ni-group{color:var(--t3)}
 .sb.collapsed .ns{display:none}
 .sb-workspace{padding-bottom:4px}
@@ -3213,8 +3285,19 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .cc-thread-wrap{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
 /* overflow-anchor:none —— 浏览器自己的滚动锚定会在流式追加内容时替我们改
    scrollTop，和 useStickToBottom 的判断打架（用户明明停在上面，位置却在动）。 */
+/* 阅读列。**正文和输入框必须是同一条居中的列** —— 这是这块界面最容易被忽略、
+   一眼又最容易看出来的对齐问题：以前 .cc-thread 和 .cc-dock 各自铺满整个宽度，
+   而回答被 `.cc-ai{max-width:min(92%,860px)}` 从**左边**顶着截短，于是正文左边缘
+   和输入框齐平、右边缘却短一截。用户原话："我的正文比输入框要靠左一些，gpt 的是
+   两端均匀多出一些，deepseek 是两端均匀短出一些，只有我的是不对称的。"
+   放在基础层而不是某套皮肤里：不对称是所有主题共同的毛病。静谧/琉璃把这个变量
+   收到 720px（它们的长文阅读舒适区），其余主题用 880px。 */
+.cc-page{--cc-col:880px}
 .cc-thread{flex:1;min-height:0;overflow-y:auto;overflow-anchor:none;padding:16px 18px 8px;
-  display:flex;flex-direction:column;gap:14px}
+  display:flex;flex-direction:column;align-items:center;gap:14px}
+/* width:100% 是必须的：align-items:center 会让 flex 子项退回内容宽度。 */
+.cc-thread > *{width:100%;max-width:var(--cc-col)}
+.cc-dock > *{max-width:var(--cc-col);margin-left:auto;margin-right:auto}
 /* 内容从上往下正常排。
    **别再改成贴底（margin-top:auto）**：跑起来之后内容是从下面长出来的，贴底会让
    已经排好的每一行随着新内容一起往上移 —— 屏幕上所有字每一帧都在跳。对话区宁可
@@ -3228,7 +3311,35 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
   background-color var(--dur) var(--ease),transform var(--dur) var(--ease)}
 .cc-tobottom:hover{color:var(--t);border-color:color-mix(in srgb,var(--acc) 45%,var(--b));
   background:color-mix(in srgb,var(--acc) 8%,var(--bg1));transform:translateX(-50%) translateY(-1px)}
-.cc-dock{flex-shrink:0;padding:8px 18px 12px;border-top:1px solid var(--b);background:var(--bg)}
+/* 输入坞。
+   **不画顶边线**：输入框自己带了一层投影，浮在页面上（见 .cc-composer.compact）。
+   再加一条横贯全宽的硬线，就变成"把页面切成上下两半"，而参考的那两家
+   （ChatGPT / DeepSeek Harness）在这个位置都是**什么都没有** —— 靠留白和投影
+   分层。线和投影同时上，是两种分层语言打架。 */
+.cc-dock{flex-shrink:0;padding:18px 18px 12px;background:var(--bg)}
+
+/* ── 回答末尾的动作行（components/console/AnswerActions.tsx）──────────────
+   正文读完之后的落点：一段话结束了、可以复制、可以再跑一次。没有它，正文的最后
+   一行文字直接撞上输入框（用户点名的"衔接处"）。 */
+/* 第一颗按钮往左吃掉自己的内边距，让**图标的左边缘**落在正文块的左边缘上。
+   不吃的话它会比正文右移 8px（探针量的：正文 501、图标 511）—— 一排比正文缩进
+   一点点的按钮，看起来就是没对齐，而不是"故意缩进"。
+   对齐的是 .cc-answer 这个盒子的左边：经典主题下它是一张有边框的卡（内边距
+   13px），琉璃/静谧下内边距是 0，两种情况下"和卡的左边对齐"都成立。 */
+/* 上下都要留出距离。贴着正文就像正文的一部分，贴着输入框就像输入框的工具条 ——
+   参考的两家都是上面留一行的量、下面留得更多（用户原话：是不是离正文和输入框
+   太近了）。上面 4+8（.cc-ai 的 gap）＝12px，下面由 .cc-dock 的上内边距给到 28px。 */
+.cc-acts{display:flex;align-items:center;gap:2px;margin:4px 0 0}
+.cc-act:first-child{margin-left:-8px}
+/* 用次级色而不是三级色。三级色在 14px 的线性图标上会淡到看着像**没画清楚**，
+   而参考的两家在这一排上都是接近正文的深度。 */
+.cc-act{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border:none;
+  border-radius:8px;background:transparent;color:var(--t2);cursor:pointer;
+  font-family:var(--font);font-size:var(--fs-10);line-height:1;
+  transition:color var(--dur) var(--ease),background-color var(--dur) var(--ease)}
+.cc-act:hover{color:var(--t);background:var(--bg2)}
+.cc-act.done{color:var(--acc)}
+.cc-act svg{flex-shrink:0}
 /* ── 实时状态坞（components/console/LiveDock.tsx）─────────────────────────
    钉在输入框正上方，不随对话滚走。一行说完三件事：在干什么 / 接下来干什么 /
    进行到哪。展开是 Agent 自己排的计划。 */
@@ -3279,7 +3390,9 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .cc-bubble{max-width:min(78%,640px);padding:8px 12px;border-radius:10px 10px 2px 10px;
   background:color-mix(in srgb,var(--acc) 12%,var(--bg2));border:1px solid var(--b);
   color:var(--t);font-size:var(--fs-12);line-height:1.7;white-space:pre-wrap;word-break:break-word}
-.cc-ai{display:flex;flex-direction:column;gap:8px;max-width:min(92%,860px)}
+/* 回答铺满整条阅读列。行宽由 --cc-col 管，这里再套一层 92% 只会让右边缘比输入框
+   短一截 —— 而左边缘是齐的，于是整块看起来是歪的（见 .cc-thread 那段注释）。 */
+.cc-ai{display:flex;flex-direction:column;gap:8px;max-width:100%}
 
 /* ── 执行叙述（components/console/ActivityFeed.tsx）───────────────────────
    一件事一行、单行截断、行高恒定（对标 DeepSeek Harness）。行高恒定不是排版偏好：
@@ -3289,24 +3402,36 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 /* 折叠开关：常驻一行，带图标带文字带"收起/展开"。 */
 /* 高度写死。里面那株常春藤是个 SVG，挂载/卸载时会把这一行撑高一两像素 ——
    而它是整条叙述的第一行，撑高一次，底下每一行跟着挪一次（实测 4px）。 */
-.af-head{display:flex;align-items:center;gap:7px;width:100%;height:26px;padding:0 6px 0 0;
+/* 头部和下面每一行走**同一套列宽**：状态 14px / 图标 16px / 6px 间距。
+   头部没有状态，但那一格照样留着（`.af-head-gap` 是个空占位）—— 这样
+   「执行过程」和「联网搜索」落在同一条竖线上，藤叶和 ✓ 落在另一条。
+   上一版头部是 flex + 34px 图标格、body 另有 12px 缩进和一条 9px 处的竖线，
+   三个左边界互不相干：藤叶、竖线、✓ 三样各在各的位置，谁也不对着谁
+   （用户原话：感觉怪怪的，是不是没有对齐）。 */
+.af-head{display:flex;align-items:center;gap:6px;width:100%;height:26px;padding:0 6px 0 0;
   border:none;border-radius:var(--r);background:transparent;cursor:pointer;text-align:left;
   overflow:hidden;white-space:nowrap;
   font-family:var(--font);font-size:var(--fs-10);color:var(--t3)}
 .af-head:hover{background:var(--bg2);color:var(--t2)}
 .af-head-ivy{display:inline-flex;align-items:center;justify-content:center;
-  flex-shrink:0;width:34px;height:1.2em;line-height:0;color:var(--ivy)}
-.af-head-dot{font-style:normal}
+  flex-shrink:0;width:14px;height:1.2em;line-height:0;color:var(--ivy)}
+/* 藤叶按 em 定尺寸（1.15em ≈ 15px），会从 14px 的格子里溢出来一点点。
+   在这一格里收成 1em，它和下面那一列 ✓ 才是同一个视觉宽度。 */
+.af-head-ivy .ivy-grow{width:1em;height:1em}
+.af-head-gap{flex-shrink:0;width:16px}
 .af-head-label{color:var(--t2)}
 .af-head-meta{color:var(--t3)}
-.af-head-toggle{margin-left:auto;color:var(--t3);opacity:.9}
+.af-head-toggle{margin-left:auto;display:inline-flex;align-items:center;gap:3px;
+  color:var(--t3);opacity:.9}
 
-/* 左边那条竖线从**图标列的中间**穿下去，行内所有内容跟着同一条网格线走。
-   之前是 head 一个缩进、body 另一个缩进、状态点和图标各占一个不固定的宽度，
-   于是每行的文字起点都差几个像素 —— 用户的原话是"参差不齐"。 */
-.af-body{display:flex;flex-direction:column;padding-left:12px;margin-left:9px;
-  border-left:1px solid var(--b)}
-.af-more{align-self:flex-start;margin:2px 0 2px 6px;padding:1px 8px;border-radius:999px;
+/* body 不再缩进、也不再画竖线。
+   那条竖线是上一版用来"把这些行归成一组"的，但它落在 9px 处 —— 既不穿过藤叶
+   （在 17px），也不穿过 ✓（在 28px），于是它不是一条时间轴，只是一根杵在左边
+   的线（用户点名的"一根竖线"）。分组交给头部那一行去说，它已经写着"执行过程
+   6 步 · 13.5s"和一个收起开关了。 */
+.af-body{display:flex;flex-direction:column}
+.af-more{align-self:flex-start;display:inline-flex;align-items:center;gap:4px;
+  margin:2px 0 2px 6px;padding:2px 9px;border-radius:999px;
   border:1px dashed var(--b2);background:transparent;color:var(--t3);cursor:pointer;
   font-family:var(--font);font-size:var(--fs-95)}
 .af-more:hover{color:var(--t2);border-color:var(--t3)}
@@ -3316,7 +3441,7 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 /* 固定五列：状态 / 图标 / 类型 / 摘要 / 耗时。
    **用网格不用 flex**：思考行没有状态点，flex 下它后面的每一列都会整体左移一格，
    一屏看下来就是参差不齐（用户原话）。网格里空着的那一格照样占位，天然对齐。 */
-.af-line{display:grid;grid-template-columns:12px 16px 4.8em minmax(0,1fr) auto;
+.af-line{display:grid;grid-template-columns:14px 16px 4.8em minmax(0,1fr) auto;
   align-items:center;gap:6px;width:100%;height:22px;padding:0 6px 0 0;
   border:none;background:transparent;cursor:pointer;text-align:left;overflow:hidden;
   white-space:nowrap;font-family:var(--font);font-size:var(--fs-10);color:var(--t3);
@@ -3324,8 +3449,12 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 button.af-line:hover{background:var(--bg2)}
 /* 别再给它 line-height:0 —— 那会让这一格的高度塌成 0，字跑到行外面去、
    同一行里其他列跟着量歪（实测思考行的类型名被挤成 18px，"思考"被截成"思·"）。 */
+/* 里面装的已经是 SVG 不是字符，所以 line-height 要归 0（替换元素会被行盒
+   垫出基线空间，图标就比同一行的中文低一两像素）。这和下面那条"别给 .af-line
+   line-height:0"不冲突：塌掉的是这一格，不是整行。 */
 .af-icon{display:flex;align-items:center;justify-content:center;
-  text-align:center;font-style:normal;line-height:1}
+  text-align:center;font-style:normal;line-height:0;color:var(--t3)}
+.af-icon svg,.af-mark svg{display:block}
 
 /* 装 SVG 的那一格才需要 line-height:0（SVG 是替换元素，行盒会给它垫基线空间）。 */
 .af-icon-live{display:flex;align-items:center;justify-content:center;
@@ -3344,7 +3473,7 @@ button.af-line:hover{background:var(--bg2)}
   border:1px solid var(--b);border-radius:var(--r);background:var(--bg2);
   color:var(--t3);font-size:var(--fs-95);white-space:pre-wrap;word-break:break-all}
 .af-mark{display:flex;align-items:center;justify-content:center;
-  text-align:center;font-size:var(--fs-9)}
+  text-align:center;font-size:var(--fs-9);line-height:0}
 .af-ok{color:var(--acc)}
 .af-err{color:var(--red)}
 .af-blocked{color:var(--amber)}
@@ -3556,10 +3685,18 @@ button.af-line:hover{background:var(--bg2)}
   background:color-mix(in srgb,var(--acc) 6%,transparent);transform:translateY(-1px)}
 
 /* ── 输入器 ──────────────────────────────────────────────────────────────── */
-.cc-composer{border:1px solid var(--b2);border-radius:10px;background:var(--bg1);padding:9px 11px 7px;
+.cc-composer{border:1px solid var(--b);border-radius:16px;background:var(--bg1);padding:9px 11px 7px;
   box-shadow:var(--elev-1);transition:border-color var(--dur) var(--ease),box-shadow var(--dur) var(--ease)}
-.cc-composer:focus-within{border-color:var(--acc);box-shadow:0 0 0 2px var(--ring)}
-.cc-composer.compact{padding:7px 9px 5px;box-shadow:none}
+.cc-composer:focus-within{border-color:color-mix(in srgb,var(--acc) 55%,var(--b2));
+  box-shadow:0 0 0 3px var(--ring),0 6px 20px rgba(0,0,0,.07)}
+/* 会话态（贴在对话底下那一只）。
+   **它需要阴影，不是不需要**：上一版这里写的是 `box-shadow:none`，于是会话里
+   的输入框变成"一个灰框贴在灰底上"，和欢迎页那只圆润、带投影、有存在感的完全
+   两样（用户原话：在会话的时候输入框看着不好看）。ChatGPT / DeepSeek Harness 的
+   做法都是让输入框**浮在**页面上 —— 靠的就是一层很轻的投影 + 大圆角，而不是
+   加深边框。加深边框只会让它更像表单控件。 */
+.cc-composer.compact{padding:8px 10px 6px;
+  box-shadow:0 1px 2px rgba(0,0,0,.04),0 6px 18px rgba(0,0,0,.06)}
 .cc-input{width:100%;border:none;background:transparent;color:var(--t);font-family:var(--font);
   font-size:var(--fs-125);line-height:1.65;resize:none;outline:none;min-height:24px;max-height:200px;
   overflow-y:auto;display:block}
@@ -3609,8 +3746,7 @@ button.af-line:hover{background:var(--bg2)}
    一行里两种小字号只会显得是没对齐。 */
 .cc-chip-model{max-width:230px;color:var(--t3)}
 .cc-chip-model:hover{color:var(--t2)}
-/* 发送键：圆、实心、图标居中。禁用态不用 opacity 掏空（那会连图标一起变灰糊），
-   改成灰底 + 弱前景 —— 形状还在，只是"现在还不能点"。 */
+/* 发送键：圆、实心、图标居中。 */
 .cc-send{width:34px;height:34px;border-radius:50%;border:none;background:var(--acc);color:var(--on-acc);
   cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
   transition:background-color var(--dur) var(--ease),transform var(--dur) var(--ease),
@@ -3618,7 +3754,14 @@ button.af-line:hover{background:var(--bg2)}
 .cc-send:hover:not(:disabled){filter:brightness(1.06);transform:translateY(-1px);
   box-shadow:0 3px 10px color-mix(in srgb,var(--acc) 38%,transparent)}
 .cc-send:active:not(:disabled){transform:translateY(0)}
-.cc-send:disabled{background:var(--bg3);color:var(--t3);box-shadow:none;cursor:not-allowed}
+/* 禁用态**保留品牌色，只是调淡**。
+   上一版是纯灰底 + 灰前景：输入框空着的时候（也就是绝大多数时间）整只输入框里
+   一点颜色都没有，右下角那颗按钮读起来像坏了（用户原话：发送按钮缺少色彩）。
+   ChatGPT 和 DeepSeek Harness 在空输入时也都保留着那颗有颜色的圆 —— 它是这块
+   界面的落点。淡到 16% 底 + 55% 前景，既看得出是"同一颗按钮"，又明显不是可点态。
+   不用 opacity 掏空：那会把图标和底色一起糊掉，形状就没了。 */
+.cc-send:disabled{background:color-mix(in srgb,var(--acc) 16%,var(--bg2));
+  color:color-mix(in srgb,var(--acc) 72%,var(--t3));box-shadow:none;cursor:not-allowed}
 .cc-send.cc-stop{background:var(--red);color:var(--on-acc);box-shadow:none}
 
 /* ── 上下文进度条 ─────────────────────────────────────────────────────────
@@ -3728,7 +3871,7 @@ button.af-line:hover{background:var(--bg2)}
   .cc-chip-model{padding:5px 8px}
   .cc-rail{display:none}           /* 手机端不挤会话区 */
   .cc-thread{padding:12px 10px 6px}
-  .cc-dock{padding:6px 10px 10px}
+  .cc-dock{padding:14px 10px 10px}
   .cc-bubble{max-width:88%}
   .cc-ai,.cc-followups{max-width:100%}
   .cs-detail{max-width:130px}
@@ -3805,16 +3948,49 @@ button.af-line:hover{background:var(--bg2)}
 }
 
 /* ── 侧边栏：工作区 + 会话列表（components/console/SessionRail.tsx）──────── */
-.sb-ws-head{display:flex;align-items:center;gap:6px}
-.sb-ws-add{margin-left:auto;background:transparent;border:none;color:var(--t3);cursor:pointer;
-  font-size:var(--fs-13);line-height:1;padding:0 2px;font-family:var(--font)}
-.sb-ws-add:hover{color:var(--acc)}
-.sb-ws-input{width:calc(100% - 24px);margin:2px 12px 4px;padding:3px 6px;border:1px solid var(--b2);
-  border-radius:var(--r);background:var(--bg2);color:var(--t);font-family:var(--font);font-size:var(--fs-11);
-  outline:none}
+.sb-ws-head{display:flex;align-items:center;gap:2px}
+/* 头部动作图标（搜索 / 筛选 / 新建）。第一个吃掉 margin-left:auto 把整组顶到右边。
+   命中区做到 24×24 —— 图标本身只有 14px，光靠图标本体点是点不准的。 */
+.sb-ws-act{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;
+  background:transparent;border:none;border-radius:var(--r);color:var(--t3);cursor:pointer;padding:0;
+  transition:color var(--dur) var(--ease),background-color var(--dur) var(--ease)}
+.sb-ws-act:first-of-type{margin-left:auto}
+.sb-ws-act:hover{color:var(--t);background:color-mix(in srgb, var(--t) 7%, transparent)}
+/* 开着的时候要看得出来，否则用户不知道列表正被一个收起来的筛选器过滤着 —— 那正是
+   此前"我的对话丢了"那类错觉的来源。 */
+.sb-ws-act.on{color:var(--acc);background:color-mix(in srgb, var(--acc) 12%, transparent)}
+/* 内边距是按**字号刻度重排之后**的尺寸给的。--fs-11 从 11px 调成了阅读尺度
+   （见文件头 ① 的刻度表），padding 却一直停在 3px/6px 的老值 —— 结果 14.5px 的字
+   塞进 29px 高的框里顶满上下边框，看着像"字太大"，其实是盒子没跟着长。
+   左右缩进跟导航项对齐（margin 8px + padding 9px + 1px 边框 = 文字落在 18px，
+   和 .ni 的 8+10 一致）；早先的 12px 让它成了侧栏里唯一一个边沿对不齐的东西。 */
+/* 输入框字号**只在这里定义一次**，图标要按它算尺寸（1em）；分两处写死早晚调歪一边。
+   退一档只发给用阅读刻度的三套皮肤：阅读刻度把 --fs-10 / --fs-105 / --fs-11 压成了
+   同一个值（见文件头 ① 的刻度表），于是这个过滤框的字和它要过滤的会话标题一模一样大，
+   "工作区 / 过滤框 / 列表"三级全在同一个视觉重量上抢。紧凑刻度那 16 套不退 ——
+   那儿 --fs-9 只有 9px，一个要打字的输入框缩到 9px 是拿一个毛病换另一个。 */
+.sb-workspace{--sb-input-fs:var(--fs-105)}
+html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspace{--sb-input-fs:var(--fs-9)}
+.sb-ws-input{width:calc(100% - 16px);margin:2px 8px 4px;padding:6px 9px;border:1px solid var(--b2);
+  border-radius:var(--r);background:var(--bg2);color:var(--t);font-family:var(--font);
+  font-size:var(--sb-input-fs);outline:none}
+.sb-ws-input::placeholder{color:var(--t3)}
 .sb-ws-input:focus{border-color:var(--acc);box-shadow:0 0 0 2px var(--ring)}
-.sb-ws-group{margin-bottom:2px}
-.sb-ws-title{display:flex;align-items:center;gap:5px;width:100%;padding:3px 12px;background:transparent;
+/* 会话行的缩进只有这一个开关。
+   三级缩进照参考实现来：**分组标签 → 文件夹图标 → 会话标题**，一级比一级深。
+   此前是反的 —— 会话标题落在 18px，而它的父级「默认工作区」的文字在 42px，
+   子项比父项还靠左，看着就是一堆东西平铺着，没有从属关系。
+   .flat 是"只有默认工作区、分组标题根本没渲染"的情况：没有父级还缩这么深，
+   就是白白吃掉本来就不够用的标题宽度。
+   32px 是照参考实现的**比例**定的，不是照它的像素：那张参考图的侧栏 439px 宽、
+   会话缩进 45px（10.2%），这里侧栏 264px，比着像素抄会缩到 15%，白白多截断
+   一截标题。 */
+.sb-ws-group{margin-bottom:2px;--sess-indent:32px}
+.sb-ws-group.flat{--sess-indent:16px}
+/* 文件夹图标：和折叠箭头一起构成"这是一个组"的信号。用 --t3 而不是正文色，
+   它是标识不是内容。 */
+.sb-ws-ico{flex-shrink:0;color:var(--t3)}
+.sb-ws-title{display:flex;align-items:center;gap:5px;width:100%;padding:3px 8px;background:transparent;
   border:none;color:var(--t3);font-family:var(--font);font-size:var(--fs-105);cursor:pointer;text-align:left;
   transition:color var(--dur) var(--ease)}
 .sb-ws-title:hover{color:var(--t2)}
@@ -3827,7 +4003,7 @@ button.af-line:hover{background:var(--bg2)}
 /* 会话行。标题走**正文色**而不是次级色 —— 这是一列"要读的东西"，不是元信息；
    对比 ChatGPT 的会话列表，它的条目就是近黑。行高也松一档（4→6px）：一屏三十
    条挤在 29px 行距里，扫起来是一片糊。 */
-.sb-sess{display:flex;align-items:center;gap:6px;padding:6px 12px 6px 24px;cursor:pointer;
+.sb-sess{display:flex;align-items:center;gap:6px;padding:6px 12px 6px var(--sess-indent);cursor:pointer;
   color:var(--t);font-size:var(--fs-105);border-left:2px solid transparent;
   transition:color var(--dur) var(--ease),background-color var(--dur) var(--ease)}
 .sb-sess:hover{color:var(--t);background:var(--bg2)}
@@ -3943,15 +4119,75 @@ button.af-line:hover{background:var(--bg2)}
 .sb-sess:hover .sb-sess-del{opacity:1}
 .sb-sess-del:hover{color:var(--red)}
 .sb-sess:hover .sb-sess-time{display:none}
-.sb-sess-search{margin:0 12px 6px;width:calc(100% - 24px)}
-.sb-sess-more{display:block;width:calc(100% - 24px);margin:4px 12px 8px;padding:4px 8px;
+/* 外边距挪到外层：图标要相对整个框绝对定位，输入框自己带 margin 会让两者错位。 */
+.sb-sess-search-wrap{position:relative;margin:0 8px 6px;font-size:var(--sb-input-fs)}
+.sb-sess-search{margin:0;width:100%;padding-left:calc(1em + 18px)}
+.sb-sess-search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);
+  width:1em;height:1em;color:var(--t3);pointer-events:none}
+/* ── 「新建工作区」里的目录选择入口 ─────────────────────────────────────── */
+.sb-ws-pick{display:flex;align-items:center;gap:6px;width:calc(100% - 16px);margin:2px 8px 4px;
+  padding:6px 9px;border:1px dashed var(--b2);border-radius:var(--r);background:transparent;
+  color:var(--t3);font-family:var(--font);font-size:var(--sb-input-fs);cursor:pointer;text-align:left;
+  transition:color var(--dur) var(--ease),border-color var(--dur) var(--ease)}
+.sb-ws-pick:hover{color:var(--t2);border-color:var(--t3)}
+/* 选中目录后从虚线变实线：虚线是"这里还空着"的通用暗示，选完还留着会让人以为没生效。 */
+.sb-ws-pick.has{border-style:solid;color:var(--t)}
+.sb-ws-pick-t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-ws-pick-x{flex-shrink:0;color:var(--t3);padding:0 2px}
+.sb-ws-pick-x:hover{color:var(--red)}
+
+/* ── 目录选择器弹窗（components/console/FolderPicker.tsx）─────────────────── */
+.fp-card{width:min(620px,92vw);display:flex;flex-direction:column;max-height:80vh;overflow:hidden}
+.fp-path{display:flex;align-items:center;gap:6px;padding:8px 16px;border-bottom:1px solid var(--b);
+  font-size:var(--fs-10);color:var(--t3)}
+.fp-up,.fp-pencil{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+  flex-shrink:0;background:transparent;border:none;border-radius:var(--r);color:var(--t3);cursor:pointer;padding:0}
+.fp-up:hover,.fp-pencil:hover{color:var(--t);background:color-mix(in srgb, var(--t) 7%, transparent)}
+/* direction:rtl 让长路径从**尾部**开始显示 —— 省略号打在开头。路径的可辨识信息几乎
+   全在末尾几段，从头截断等于把有用的部分丢掉。 */
+.fp-path-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fp-path-input{flex:1;padding:4px 8px;border:1px solid var(--acc);border-radius:var(--r);
+  background:var(--bg2);color:var(--t);font-family:var(--font);font-size:var(--fs-10);outline:none}
+/* 列表自己滚，弹窗整体不滚 —— 整体滚会把底部的按钮排也滚走。 */
+.fp-list{flex:1;overflow-y:auto;padding:6px 8px;min-height:220px}
+.fp-row{display:flex;align-items:center;gap:9px;width:100%;padding:7px 8px;border:none;
+  border-radius:var(--r);background:transparent;color:var(--t);font-family:var(--font);
+  font-size:var(--fs-105);cursor:pointer;text-align:left;
+  transition:background-color var(--dur) var(--ease)}
+.fp-row:hover{background:color-mix(in srgb, var(--t) 6%, transparent)}
+.fp-ico{flex-shrink:0;color:var(--t3)}
+.fp-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fp-chev{flex-shrink:0;color:var(--t3);opacity:.5}
+.fp-state{display:flex;align-items:center;gap:8px;padding:24px 10px;color:var(--t3);
+  font-size:var(--fs-10);line-height:1.7}
+.fp-err{color:var(--red)}
+.fp-spin{animation:fp-rot 1s linear infinite}
+@keyframes fp-rot{to{transform:rotate(360deg)}}
+.fp-foot{align-items:center;gap:10px}
+.fp-newbtn{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border:1px solid var(--b);
+  border-radius:var(--r);background:transparent;color:var(--t3);font-family:var(--font);
+  font-size:var(--fs-10);cursor:pointer;white-space:nowrap}
+.fp-newbtn:hover{color:var(--t);border-color:var(--b2)}
+.fp-new-input{padding:4px 8px;border:1px solid var(--acc);border-radius:var(--r);background:var(--bg2);
+  color:var(--t);font-family:var(--font);font-size:var(--fs-10);outline:none;width:180px}
+.fp-hidden{display:inline-flex;align-items:center;gap:5px;color:var(--t3);font-size:var(--fs-10);
+  cursor:pointer;white-space:nowrap}
+.fp-spacer{flex:1}
+@media (max-width:680px){
+  .fp-foot{flex-wrap:wrap}
+  .fp-spacer{flex-basis:100%}
+}
+
+.sb-sess-more{display:block;width:calc(100% - 16px);margin:4px 8px 8px;padding:4px 8px;
   border:1px dashed var(--b);border-radius:var(--r);background:transparent;color:var(--t3);
   font-family:var(--font);font-size:var(--fs-10);cursor:pointer;
   transition:color var(--dur) var(--ease),border-color var(--dur) var(--ease)}
 .sb-sess-more:hover:not(:disabled){color:var(--t2);border-color:var(--b2)}
 .sb-sess-more:disabled{opacity:.5;cursor:default}
 /* 来源筛选：三个板块共用会话库之后，左栏要能只看某一类。 */
-.sb-src-filter{display:flex;gap:3px;padding:0 12px 6px;flex-wrap:wrap}
+/* 缩进跟着搜索框走 —— 工作区这一块的三个控件（搜索 / 来源筛选 / 加载更多）
+   要么都对齐导航项的 8px，要么都不对齐；只挪一个等于把不一致换个地方摆。 */
+.sb-src-filter{display:flex;gap:3px;padding:0 8px 6px;flex-wrap:wrap}
 .sb-src-chip{padding:1px 7px;border-radius:99px;border:1px solid var(--b);background:transparent;
   color:var(--t3);font-family:var(--font);font-size:var(--fs-95);line-height:1.6;cursor:pointer;
   transition:color var(--dur) var(--ease),border-color var(--dur) var(--ease),

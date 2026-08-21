@@ -6,6 +6,9 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Folder, FolderOpen, FolderPlus, Search, SlidersHorizontal } from "lucide-react";
+import { useAuth } from "../../App";
+import FolderPicker, { shortPath } from "./FolderPicker";
 import {
   CONSOLE_SESSIONS_CHANGED,
   consoleSessionDelete,
@@ -91,6 +94,14 @@ export default function SessionRail({
   const [newWsPath, setNewWsPath] = useState("");
   const [wsErr, setWsErr] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  // 搜索框和来源筛选默认收起，各由头部一个图标唤出。
+  // 它们常年摊在那儿时，「工作区」这一块从上到下是"标题 / 满宽输入框 / 一排 chip /
+  // 列表"四层，每层都在喊 —— 而九成时间用户只是想看一眼列表。
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
 
   // 「加载更多」是把 limit 调大重取整段，而不是把新一页拼到旧数组后面。
   // 拼接看着更省流量，但一旦有会话被改名/删除/被新一轮顶到前面，两段就会错位、
@@ -225,27 +236,70 @@ export default function SessionRail({
   const byWorkspace = (name: string) =>
     rows.filter((r) => (r.workspace || DEFAULT_WS) === name);
 
+  // 有没有哪个**展开的**工作区还没加载完 —— 只有这时候「加载更多」才会让画面变化。
+  // 用服务端给的真实条数比，而不是比全局 total：全局还有剩余，不等于剩余的那些
+  // 属于任何一个展开的组。
+  const canLoadMore = spaces.some((ws) => {
+    const expanded = onlyDefaultWorkspace ? true : open[ws.name] !== false;
+    if (!expanded) return false;
+    return byWorkspace(ws.name).length < (ws.count ?? Number.MAX_SAFE_INTEGER);
+  });
+
   return (
     <div className="sb-workspace">
       <div className="ns sb-ws-head">
         <span>工作区</span>
-        <button className="sb-ws-add" title="新建工作区" onClick={() => setAdding(true)}>+</button>
+        {/* 三个图标顶在标题右侧：搜索 / 来源筛选 / 新建工作区。
+            用图标而不是常驻控件，是为了让这一块只剩"标题 + 列表"两层。 */}
+        <button
+          className={"sb-ws-act" + (searchOpen || q ? " on" : "")}
+          title="搜索会话"
+          onClick={() => {
+            const next = !searchOpen;
+            setSearchOpen(next);
+            if (!next) setQ("");           // 收起就清掉，否则列表被一个看不见的词过滤着
+          }}
+        ><Search size={14} /></button>
+        {showSourceFilter && (
+          <button
+            className={"sb-ws-act" + (filterOpen || src ? " on" : "")}
+            title="按来源筛选"
+            onClick={() => setFilterOpen((v) => !v)}
+          ><SlidersHorizontal size={14} /></button>
+        )}
+        <button className="sb-ws-act" title="新建工作区" onClick={() => setAdding(true)}>
+          <FolderPlus size={14} />
+        </button>
       </div>
 
-      <input
-        className="sb-ws-input sb-sess-search"
-        placeholder="搜索会话…"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Escape") setQ(""); }}
-      />
+      {/* 放大镜不是装饰：这个框满宽、无内容时就是一块空板子，光靠占位文字
+          挂在左上角读不出"这是搜索"。图标钉在左侧把它锚住。
+          pointer-events:none —— 图标压在输入框上方，不挡点击。 */}
+      {searchOpen && (
+      <div className="sb-sess-search-wrap">
+        <Search className="sb-sess-search-icon" aria-hidden />
+        <input
+          className="sb-ws-input sb-sess-search"
+          autoFocus
+          placeholder="搜索会话…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          // 第一下 Esc 清词、第二下收起。直接收起会把用户刚敲的词一起吞掉，
+          // 而清空往往才是他想要的。
+          onKeyDown={(e) => {
+            if (e.key !== "Escape") return;
+            if (q) setQ(""); else setSearchOpen(false);
+          }}
+        />
+      </div>
+      )}
 
       {/*
         * 来源筛选只在**真的有一种以上来源**时出现。
         * 196px 宽塞不下 4 个 chip，实测换行成 2 行；而绝大多数人只用任务台，
         * 那两行就是纯占地方 —— 还把会话又往下推了一截。
         */}
-      {showSourceFilter && (
+      {showSourceFilter && (filterOpen || !!src) && (
       <div className="sb-src-filter">
         {SOURCE_FILTERS.map((f) => (
           <button
@@ -271,16 +325,28 @@ export default function SessionRail({
               if (e.key === "Escape") { setAdding(false); setNewWs(""); setNewWsPath(""); setWsErr(""); }
             }}
           />
-          <input
-            className="sb-ws-input"
-            placeholder="绑定目录（可选，仅管理员）"
-            value={newWsPath}
-            onChange={(e) => setNewWsPath(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void addWorkspace();
-              if (e.key === "Escape") { setAdding(false); setNewWs(""); setNewWsPath(""); setWsErr(""); }
-            }}
-          />
+          {/* 绑定目录：能选就别让人手打。路径打错不会当场报错，要等 Agent 真去读写
+              文件时才炸，那时候用户早忘了自己填过什么。浏览接口仅管理员可用
+              （后端 require_admin_actor），所以非管理员这里退回纯输入框。 */}
+          {isAdmin ? (
+            <button
+              className={"sb-ws-pick" + (newWsPath ? " has" : "")}
+              onClick={() => setPicking(true)}
+              title={newWsPath || "选一个目录绑给这个工作区"}
+            >
+              <Folder size={13} />
+              <span className="sb-ws-pick-t">{newWsPath ? shortPath(newWsPath, 26) : "选择绑定目录（可选）"}</span>
+              {newWsPath && (
+                <span
+                  className="sb-ws-pick-x"
+                  title="不绑目录"
+                  onClick={(e) => { e.stopPropagation(); setNewWsPath(""); }}
+                >✕</span>
+              )}
+            </button>
+          ) : (
+            <div className="sb-ws-hint">绑定目录仅管理员可设置。</div>
+          )}
           {wsErr && <div className="sb-ws-err">{wsErr}</div>}
           <div className="sb-ws-hint">回车创建 · Esc 取消。绑了目录，Agent 的文件操作就在那个目录里。</div>
         </>
@@ -290,14 +356,21 @@ export default function SessionRail({
         const items = byWorkspace(ws.name);
         const isOpen = onlyDefaultWorkspace ? true : open[ws.name] !== false;
         return (
-          <div key={ws.name} className="sb-ws-group">
+          <div key={ws.name} className={"sb-ws-group" + (onlyDefaultWorkspace ? " flat" : "")}>
             {/* 只有「默认工作区」一个分组时，这个标题+计数+折叠箭头是纯噪音：
                 没有别的组可切，折叠它也没有意义。 */}
             {!onlyDefaultWorkspace && (
             <button className="sb-ws-title" onClick={() => toggle(ws.name)}>
               <span className="sb-ws-caret">{isOpen ? "▾" : "▸"}</span>
+              {/* 展开态用打开的文件夹 —— 折叠箭头本身很小，图标跟着换态，
+                  扫一眼就知道哪个组是开的。 */}
+              {isOpen ? <FolderOpen className="sb-ws-ico" size={14} />
+                      : <Folder className="sb-ws-ico" size={14} />}
               <span className="sb-ws-name" title={ws.path || undefined}>{ws.name}</span>
-              <span className="sb-ws-count">{items.length}</span>
+              {/* 计数取服务端给的**真实**条数，不是当前页里的条数。
+                  拿 items.length 当计数时，一个有 211 条会话的工作区在只加载了
+                  60 条时显示成 60 —— 看着像会话丢了。 */}
+              <span className="sb-ws-count">{ws.count ?? items.length}</span>
               {!ws.builtin && (
                 <span
                   className="sb-ws-del"
@@ -374,7 +447,11 @@ export default function SessionRail({
         <div className="sb-ws-empty">没有匹配「{debouncedQ}」的会话。</div>
       )}
 
-      {hasMore && (
+      {/* **折叠了就别再问「加载更多」。** 它此前只看 hasMore，于是出现过这种画面：
+          唯一有会话的工作区是折叠的，旁边一个空工作区展开着写"暂无会话"，底下还挂着
+          「加载更多（已显示 60 / 211）」—— 点了什么都不会变，因为多出来的会话全落进
+          那个折叠的组里。判据改成"有没有哪个展开的组还没加载完"。 */}
+      {hasMore && canLoadMore && (
         <button
           className="sb-sess-more"
           disabled={loadingMore}
@@ -382,6 +459,10 @@ export default function SessionRail({
         >
           {loadingMore ? "载入中…" : `加载更多（已显示 ${rows.length} / ${total}）`}
         </button>
+      )}
+
+      {picking && (
+        <FolderPicker onClose={() => setPicking(false)} onPick={(p) => setNewWsPath(p)} />
       )}
     </div>
   );
