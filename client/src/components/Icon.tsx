@@ -1,9 +1,9 @@
 import {
-  Activity, ArrowUpCircle, BarChart3, Blocks, BookOpen, Bot, ClipboardCheck,
+  Activity, ArrowUpCircle, BarChart3, Blocks, BookOpen, Bot, CirclePlus, ClipboardCheck,
   Database, FileDiff, FileText, FolderOpen, Globe, HelpCircle, Home, Image as ImageIcon,
   Languages, LayoutGrid, LayoutPanelLeft, LayoutTemplate, ListChecks, LogOut,
   MessageCircleQuestion, Newspaper, Palette, PanelLeftClose, PanelLeftOpen, Plus,
-  Settings, Ship, Sparkles, SquarePen, Target, Terminal, TrendingDown, Type, Users,
+  Settings, Ship, Sparkles, Target, Terminal, TrendingDown, Type, Users,
   Timer, History, Flag, Search, X, Pin,
   ArrowUp, Cpu, Eye, Paperclip, Square, ShieldCheck, Zap,
   type LucideIcon,
@@ -28,7 +28,9 @@ import {
  */
 const ICONS: Record<string, LucideIcon> = {
   // ── 一级项 ──
-  "new-task": SquarePen,
+  // 「新建任务」是侧栏唯一的主动作，用⊕（"加一个新的"）比✎（"编辑"）更直白 ——
+  // 和参考实现（DeepSeek Harness 的「新会话」）一致。
+  "new-task": CirclePlus,
   console: MessageCircleQuestion,
   capability: Blocks,
   approval: ClipboardCheck,

@@ -23,8 +23,10 @@ if (location.pathname !== route) {
 const theme = q.get("t") || "quiet-light";
 localStorage.setItem("ivyea-ops.theme", theme);
 localStorage.setItem("ivyea-ops.theme.v", "3");
-// 侧栏保持展开，否则截图里全是收起态。
-localStorage.removeItem("ivyea-ops.sidebar.collapsed");
+// 侧栏默认展开，否则截图里全是收起态；?sb=collapsed 用来验收起态
+// （收起态有自己一套 .sb.collapsed 规则，点一下按钮再截图只会拍到动画中间帧）。
+localStorage.setItem("ivyea-ops.sidebar.collapsed",
+  q.get("sb") === "collapsed" ? "1" : "0");
 
 // 各板块的首次引导弹层会盖住半个屏幕 —— 它是要验的界面之外的东西，
 // 直接标记成"看过了"。（真实使用中它只出现一次，不是常态。）
@@ -102,6 +104,11 @@ if (q.get("overflow") === "1") {
     document.body.appendChild(pre);
   }, 2500);
 }
+
+// ?font=<FONT_OPTIONS 的 id> —— 验字体族那几档。必须**在 import 真实入口之前**
+// 写进 localStorage：applyAppearance() 是在 src/main 里同步跑的，晚一步就来不及。
+const font = q.get("font");
+if (font) localStorage.setItem("ivyea-ops.ui.font", font);
 
 // 真实入口。放在最后 import：它内部会立刻跑主题启动逻辑并 render。
 import("../src/main");

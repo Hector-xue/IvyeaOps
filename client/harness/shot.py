@@ -46,6 +46,11 @@ def main(url, w, h, out, expr=None, mobile=True, wait=3.5):
             r = send("Runtime.evaluate", expression=expr, returnByValue=True)
             print(json.dumps(r.get("result", {}).get("value"), ensure_ascii=False, indent=1))
         if out:
+            # 表达式里常有 click()（开抽屉 / 展开分组）：React 重渲染 + CSS 过渡
+            # 都要时间，紧接着截图只会拍到动画中间帧（抽屉滑到一半、按钮还没变形）。
+            # 只有跑过表达式才等这一下，纯截图不受影响。
+            if expr:
+                time.sleep(1.0)
             r = send("Page.captureScreenshot", format="png", captureBeyondViewport=False)
             open(out, "wb").write(base64.b64decode(r["data"]))
             print("saved", out, w, "x", h)

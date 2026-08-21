@@ -1198,7 +1198,9 @@ function AppearanceSection() {
           <div className="hs-agent-card">
             <div className="hs-agent-card-title">字体</div>
             <div className="hs-agent-card-desc">
-              默认「跟随主题」。觉得字太细/不清晰，换「系统默认 · 清晰」或「微软雅黑」通常最舒服。
+              默认「跟随主题」。想更好看就选「Inter + 系统中文 · 推荐」——
+              数字和英文换成 Inter，汉字仍用系统里最好的那支（苹方 / 雅黑），只多下 48KB。
+              想让每台机器长得一模一样，选「思源黑体 · 内置字库」（自带字库，首次约 2MB）。
             </div>
             <div style={{ marginTop: 8 }}>
               <SheetSelect className="hs-input" value={fontId} onChange={onFont} title="选择字体"

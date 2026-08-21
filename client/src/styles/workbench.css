@@ -1,5 +1,44 @@
 /* IvyeaOps workbench theme — dark terminal style. Ported from the design mock. */
 
+/* ── 自带字库（public/fonts/，不走 npm 也不走 CDN）─────────────────────────
+ *
+ * 为什么要自带：字体族选择器里原来那几档全是"猜用户机器上装了什么"。
+ * 「思源黑体」这一档在**原装 Windows 上根本不存在** —— 选了它，栈会一路回落到
+ * 微软雅黑，用户看到的是"选了没反应"。自带字库才是"选了就一定是它"。
+ *
+ * 为什么不从 fonts.googleapis.com 拉：用户和服务器都在国内，那个域名不通，
+ * 结果就是白等 30 秒再回落。自带的文件跟着 dist 一起发，离线也在。
+ *
+ * 为什么不用 npm 装 @fontsource：本机 ~/.npmrc 指着腾讯云内网镜像，任何一次
+ * install 都会把 package-lock 的 resolved 写死成外网访问不到的地址（踩过，CI 崩）。
+ * 直接放 woff2 文件，lockfile 一个字都不用动。
+ *
+ * **@font-face 是惰性的**：声明在这儿不等于会下载 —— 只有当页面上真的有字要用
+ * 这个族时浏览器才去取。所以这两条对"跟随主题"的默认用户是零成本，
+ * 只有在外观设置里主动选了它的人才会付那 2MB。
+ */
+/* Inter：只含 latin，48KB。中文 UI 里的数字/ASIN/型号/百分比全是拉丁字形，
+   换掉它们的收益比换汉字大得多，代价却只有 48KB。可变字重，一个文件顶九档。 */
+/* unicode-range 卡在 Latin-1 是**必须的**，不是优化：Inter 的 latin 子集里也有
+   U+2026（…）、U+2014（—）这些通用标点，而它们在拉丁字体里是"三个小圆点贴基线"。
+   中文的省略号写作「……」，用拉丁那支就变成了 "......"，一眼就是错的排版
+   （对比截图里当场看出来的）。卡住范围后，标点仍旧由后面的中文字体出。 */
+@font-face{
+  font-family:"Inter Web";
+  src:url("/fonts/inter-latin-var.woff2") format("woff2-variations");
+  font-weight:100 900;font-style:normal;font-display:swap;
+  unicode-range:U+0020-007E,U+00A0-00FF;
+}
+/* 思源黑体（Noto Sans SC）可变版，**裁到 GB2312 的 6763 字**：全字库 17MB，
+   裁完 2.0MB。GB2312 覆盖现代中文约 99.7%，落在外面的生僻字（人名用字之类）
+   按 CSS 的逐字回退规则由系统中文字体接手，不会变豆腐块。
+   族名带 " Web" 后缀：不叫 "Noto Sans SC"，就不会把用户本机装的同名字体顶掉。 */
+@font-face{
+  font-family:"Noto Sans SC Web";
+  src:url("/fonts/noto-sans-sc-gb2312-var.woff2") format("woff2-variations");
+  font-weight:100 900;font-style:normal;font-display:swap;
+}
+
 *{margin:0;padding:0;box-sizing:border-box}
 /* Slim scrollbars on desktop (mouse) — the native (~15px) bar is too chunky for
    this theme. Scoped to fine-pointer/hover devices ONLY: on touch screens this
@@ -3147,8 +3186,41 @@ body::after{
    用 auto + stretch：由 flex/block 布局去算，永远等于"容器减掉外边距"。 */
 button.ni{width:auto;align-self:stretch;background:transparent;border:none;border-left:2px solid transparent;
   font-family:var(--font);font-size:var(--fs-11);text-align:left;line-height:inherit}
-.ni-action{color:var(--acc)}
-.ni-action:hover{background:color-mix(in srgb,var(--acc) 8%,transparent)}
+/* ── 「新建任务」：抬成一块独立的卡片按钮（对标 DeepSeek Harness 的「新会话」）──
+ * 改造前它和下面的一级导航项共用 .ni 的全部样式，只靠"字是绿的"区分 —— 混在
+ * 一列同样式的行里，看不出"这是这条侧栏唯一的主动作"。参考图的做法是把它做成
+ * **带边框的白底圆角块 + 内容居中**：形状先于颜色，一眼就和导航项分开了。
+ *
+ * 选择器为什么这么长（`.sb-nav-top .ni.ni-action` = 0,3,0）：这块要压过三层
+ * 已有规则 —— `button.ni`(0,1,1) 的 `border:none`、`html[data-skin="lucent"] .ni`
+ * (0,2,1) 的 margin/padding、`html:is([quiet],[lucent]) .ni`(0,2,1) 的
+ * `padding-left:10px`。而两个皮肤文件在 main.tsx 里**排在 workbench.css 之后**，
+ * 同分就是它们赢。第一版写成 `.ni.ni-action`(0,2,0)，harness 探针读回来的是
+ * `margin:1px 8px; padding:9px 12px 9px 10px` —— 左右差 2px，卡片是歪的。
+ * 皮肤里的 `border-left-color:transparent !important`（为了灭掉 2px 选中色条）
+ * 只能同样用 `!important` 顶回来，否则这张卡片的左边框是透明的、只画了三条边。
+ * 颜色分工：**字用墨色、图标用强调色**。整块染绿在浅色主题下对比度只有 3.3:1，
+ * 而这是要读的按钮文字，不是装饰。 */
+.sb-nav-top .ni.ni-action{
+  justify-content:center;gap:8px;
+  margin:2px 8px 6px;padding:9px 12px;
+  border:1px solid var(--b) !important;border-radius:10px;
+  background:var(--bg1);color:var(--t);font-weight:600;text-align:center;
+  box-shadow:0 1px 2px rgba(0,0,0,.05);
+  transition:background .12s,border-color .12s,box-shadow .12s,transform .12s;
+}
+.sb-nav-top .ni.ni-action .ic{color:var(--acc)}
+/* .ni-label 基线是 flex:1（导航项要让计数/箭头靠右）。在这里必须收回来：
+   撑满整行的话文字盒占掉全部剩余宽度，justify-content:center 就无事可做，
+   图标+文字会贴着左边，只有"整块居中"的假象。 */
+.sb-nav-top .ni.ni-action .ni-label{flex:0 1 auto;text-align:center}
+.sb-nav-top .ni.ni-action:hover{background:var(--bg2);border-color:var(--b2) !important;
+  box-shadow:0 2px 8px rgba(0,0,0,.07);transform:translateY(-1px)}
+.sb-nav-top .ni.ni-action:active{transform:translateY(0);box-shadow:0 1px 2px rgba(0,0,0,.05)}
+/* 收起态：不补这条的话 52px 宽的收起栏里会塞进 8px 外边距 + 12px 内边距，
+   图标被挤出边界。收起时它退化成一个方形的图标按钮，边框保留。
+   要压过 `html:is([quiet],[lucent]) .sb.collapsed .ni`(0,3,1)，所以这条是 (0,4,0)。 */
+.sb.collapsed .sb-nav-top .ni.ni-action{margin:2px 6px 6px;padding:8px 0;gap:0}
 .ni-group{color:var(--t3)}
 .sb.collapsed .ns{display:none}
 .sb-workspace{padding-bottom:4px}
