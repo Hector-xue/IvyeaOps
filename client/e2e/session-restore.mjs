@@ -122,6 +122,41 @@ const detail = {
   assert.equal(out.turns[1].steps[0].status, "error", "失败状态照实显示，不粉饰成完成");
 }
 
+// ── 我发过的图要跟着历史回来 ──────────────────────────────────────────────
+//
+// 图从来不进模型，存档里留下的是 agent 注入的 `[用户附图 …]` 段落 + 每张图的
+// `ivyea-ref://` 句柄。不把它们捞出来，刷新之后"我发过一张图"在界面上就没了 ——
+// 用户原话："会话记录里面也没有展示我发送的图片"。
+{
+  const out = restoreSession({
+    messages: [{
+      role: "user",
+      content: "这张图里面是什么？\n\n[用户附图 —— 视觉模型代读的内容]\n本轮用户上传了 2 张图。"
+        + "\n第 1 张（原图句柄 ivyea-ref://aa11）：\n一只红熊猫"
+        + "\n第 2 张（原图句柄 ivyea-ref://bb22）：\n一台野外相机",
+    }],
+  });
+  assert.deepEqual(out.turns.map((t) => t.text), ["这张图里面是什么？"], "代读的文字不进气泡");
+  assert.deepEqual(out.turns[0].images,
+                   ["/api/assistant/image/ref/aa11", "/api/assistant/image/ref/bb22"],
+                   "两张图都要能取回原图");
+}
+
+// 只发图不打字也是一轮 —— 那一格不能整个消失
+{
+  const out = restoreSession({
+    messages: [{ role: "user", content: "\n\n[用户附图 —— 视觉模型代读的内容]\n第 1 张（原图句柄 ivyea-ref://cc33）：\n一张表" }],
+  });
+  assert.equal(out.turns.length, 1);
+  assert.deepEqual(out.turns[0].images, ["/api/assistant/image/ref/cc33"]);
+}
+
+// 没有附图的轮次不能凭空长出 images 字段
+{
+  const out = restoreSession({ messages: [{ role: "user", content: "普通一句话" }] });
+  assert.equal(out.turns[0].images, undefined);
+}
+
 // ── 空响应不炸 ────────────────────────────────────────────────────────────
 {
   assert.deepEqual(restoreSession(null).turns, []);

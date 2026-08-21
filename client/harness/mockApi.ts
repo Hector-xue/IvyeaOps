@@ -41,6 +41,12 @@ const SESSIONS = TITLES.map((title, i) => ({
 
 /** 一轮真实形态的问答：有执行过程、有 markdown 正文、有表格和代码块。 */
 const TURNS = [
+  // 带附图的一轮：存档里留下的是 agent 注入的 `[用户附图 …]` 段落 + 原图句柄。
+  // 气泡里要**只显示那句问话 + 缩略图**，代读的文字一个字都不该露出来。
+  { role: "user", content: "这张图里面是什么？\n\n[用户附图 —— 视觉模型代读的内容]\n"
+      + "本轮用户上传了 1 张图。图片本体不在你的上下文里，下面是视觉模型逐张读出的内容。\n"
+      + "第 1 张（代读模型 qwen-vl、原图句柄 ivyea-ref://0000000000000abcd）：\n一张露营椅的主图。" },
+  { role: "assistant", content: "是一张露营椅的主图（图由视觉模型代读成文字后交给我）。" },
   { role: "user", content: "帮我跑一下广告巡检" },
   {
     role: "assistant",
@@ -247,7 +253,13 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
     };
   }],
   ["/ivyea-agent/chat/sessions", { ok: true, sessions: [] }],
-  ["/ivyea-agent/status", { ok: true, model: "deepseek-v4-pro", ready: true }],
+  // health.version 决定附图走哪条路：≥ 1.15.3 的 agent 认识 attachments（附图的
+  // 文字版进 user 消息、跟着历史走），老的只能退回塞 system。?oldagent=1 验后者。
+  ["/ivyea-agent/status", () => ({
+    ok: true, available: true, model: "deepseek-v4-pro", ready: true,
+    health: { version: new URLSearchParams(location.search).get("oldagent") === "1" ? "1.15.1" : "1.15.3",
+              model: { model: "deepseek-v4-pro" } },
+  })],
   ["/ivyea-agent/skills", { ok: true, skills: [] }],
   ["/ivyea-agent/ops-tools", { ok: true, tools: [] }],
   ["/skill-tools/pinned", []],
@@ -892,6 +904,9 @@ export function installMockApi(): void {
       return Promise.resolve(sse(["兜底通道", "答的这一段。"]));
     }
     if (url.startsWith("/api/ivyea-agent/chat/stream")) {
+      // 发出去的 payload 留一份：附图这类字段"前端明明处理了、agent 却没收到"的
+      // 错法不会有任何报错，只能靠量最后一次请求体验到。
+      try { (window as any).__lastChatBody = JSON.parse(String(init?.body || "{}")); } catch { /* ignore */ }
       if (agentDown) return Promise.resolve(new Response("agent 未就绪", { status: 503 }));
       return Promise.resolve(agentStream());
     }

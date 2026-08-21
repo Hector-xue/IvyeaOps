@@ -13,6 +13,8 @@ const INJECTION_MARKERS = [
   "\n\n[Ivyea 内置亚马逊知识库",
   "\n\n[任务范围锁定",
   "\n\n[工程上下文]",
+  // 附图的文字版（视觉模型代读的内容）。气泡里给的是原图缩略图，不是这段文字。
+  "\n\n[用户附图",
 ];
 
 export function stripInjected(text: string): string {

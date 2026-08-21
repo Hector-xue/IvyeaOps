@@ -220,3 +220,20 @@ def test_paging_params_are_clamped_at_the_service_boundary():
     assert calls[1].endswith("?turns=1&before=0")
     # 转不成整数才回默认 —— 否则表现是"打开会话 500"（int(Query 对象) 抛 TypeError）
     assert calls[2].endswith("?turns=8")
+
+
+def test_attachments_reach_the_daemon_and_stay_out_of_a_plain_turn():
+    """附图的文字版必须真的传下去。
+
+    ChatBody 是白名单：漏掉这个字段的表现是"前端明明读出了图，模型却说没收到图"，
+    而且一句报错都没有。空列表则要消失 —— 不带图的一轮发给 daemon 的东西不能变。
+    """
+    assert "attachments" not in mod._chat_payload(mod.ChatBody(message="hi"))
+    payload = mod._chat_payload(mod.ChatBody(message="这张图里面是什么？", attachments=[
+        {"kind": "image", "ref": "ivyea-ref://abc123", "by": "siliconflow · Qwen3-VL",
+         "text": "一只红熊猫趴在树干上。"},
+    ]))
+    assert payload["attachments"] == [
+        {"kind": "image", "name": "", "ref": "ivyea-ref://abc123",
+         "by": "siliconflow · Qwen3-VL", "text": "一只红熊猫趴在树干上。"},
+    ]

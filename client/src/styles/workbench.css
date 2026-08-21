@@ -3387,6 +3387,12 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
   .ld-next,.ld-tail span:not(.ld-caret):not(.ld-count){display:none}
 }
 .cc-user{display:flex;justify-content:flex-end}
+/* 我发的图 + 我打的字是一列，整列靠右。图在上、字在下 —— 和输入框里的排布一致。 */
+.cc-user-col{display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:min(78%,640px)}
+.cc-user-col .cc-bubble{max-width:100%}
+.cc-user-imgs{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+.cc-user-imgs img{max-width:min(180px,42vw);max-height:180px;border-radius:10px;
+  border:1px solid var(--b);background:var(--bg2)}
 .cc-bubble{max-width:min(78%,640px);padding:8px 12px;border-radius:10px 10px 2px 10px;
   background:color-mix(in srgb,var(--acc) 12%,var(--bg2));border:1px solid var(--b);
   color:var(--t);font-size:var(--fs-12);line-height:1.7;white-space:pre-wrap;word-break:break-word}

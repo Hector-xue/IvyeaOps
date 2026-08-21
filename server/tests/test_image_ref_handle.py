@@ -125,3 +125,25 @@ def test_same_millisecond_handles_keep_their_order(monkeypatch):
     for stale in refs[:3]:
         with pytest.raises(ValueError, match="附图引用"):
             asyncio.run(assistant._source_to_bytes(stale))
+
+
+# ── 会话记录里的那张缩略图 ───────────────────────────────────────────────────
+#
+# 历史会话是从 agent 的存档里恢复的，存档里只有文字（图从来不进模型）。没有一个
+# 按句柄取原图的出口，刷新之后"我发过一张图"在界面上就彻底消失了 —— 用户原话：
+# "会话记录里面也没有展示我发送的图片"。
+
+def test_handle_can_be_fetched_back_as_a_file_for_the_transcript():
+    ref = assistant.image_ref(assistant.ImageRefReq(data_url=DATA_URL), _user="t")["ref"]
+    resp = assistant.image_ref_file(ref.removeprefix("ivyea-ref://"), _user="t")
+    assert resp.media_type == "image/png"
+    assert resp.path.read_bytes() == base64.b64decode(PNG)
+
+
+def test_expired_or_forged_handle_404s_instead_of_reading_a_random_file():
+    with pytest.raises(HTTPException) as exc:
+        assistant.image_ref_file("0" * 16, _user="t")
+    assert exc.value.status_code == 404
+    with pytest.raises(HTTPException) as exc:
+        assistant.image_ref_file("../../etc/passwd", _user="t")
+    assert exc.value.status_code == 404

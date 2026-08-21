@@ -59,3 +59,16 @@ export async function imageRef(dataUrl: string): Promise<{ ref: string; bytes: n
   }
   return r.json();
 }
+
+/**
+ * `ivyea-ref://<id>` → 能直接放进 `<img src>` 的地址。
+ *
+ * 历史会话是从 agent 的存档里恢复的，而存档里只有文字（图片从来不进模型），
+ * 用户发过的那张图只剩这串句柄 —— 会话记录里的缩略图靠它取回原图。
+ * 不是句柄（http 地址、data URL）就原样返回。
+ */
+export function imageRefUrl(ref: string): string {
+  const id = String(ref || "").trim();
+  if (!id.startsWith("ivyea-ref://")) return id;
+  return "/api/assistant/image/ref/" + encodeURIComponent(id.slice("ivyea-ref://".length));
+}

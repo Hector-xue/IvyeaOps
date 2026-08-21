@@ -1,4 +1,5 @@
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { stripInjected } from "../lib/stripInjected";
 import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import {
@@ -108,7 +109,11 @@ function isKnowledgeQuestion(text: string) {
 }
 
 function cleanSessionContent(role: string, content: string) {
-  if (role === "user") return content.split("\n\n[Ivyea 本地知识检索]")[0].trim();
+  // 用全站共用的那份剥离清单（lib/stripInjected）。这里原来自己写了半份，只认
+  // "[Ivyea 本地知识检索]" —— 技能说明书、任务范围锁定、附图的文字版都会原样摆
+  // 进用户那侧的气泡。各写一份必然漂，agent 侧 transcript.py 顶上那段注释说的
+  // 就是这件事。
+  if (role === "user") return stripInjected(content);
   return content.trim();
 }
 

@@ -367,6 +367,17 @@ export type IvyeaContextUsage = {
   model?: string;
 };
 
+/** 一张附图在这一轮里的样子：读出来的文字 + 原图句柄，图片本体留在 ops 服务器上。 */
+export type IvyeaChatAttachment = {
+  kind: "image";
+  /** ops 侧的 `ivyea-ref://` 原图句柄，也是会话记录里那张缩略图的来源。 */
+  ref?: string;
+  /** 代读这张图的视觉模型。 */
+  by?: string;
+  /** 视觉模型读出的正文。 */
+  text: string;
+};
+
 export type IvyeaChatPayload = {
   message: string;
   session_id?: string;
@@ -392,6 +403,14 @@ export type IvyeaChatPayload = {
   use_tools?: boolean;
   /** 追加到本轮系统提示的额外上下文（@ 引用的资料就走这里）。 */
   system?: string;
+  /**
+   * 本轮附图（agent ≥ v1.15.3）。图片本体不进模型：ops 先用视觉模型把图读成文字，
+   * 连同原图句柄一起走这个字段 —— agent 会把它并进**这一轮的 user 消息**，于是
+   * 它跟着历史和存档走。**别再塞回 system**：system 每轮重建、落盘时被本轮那份
+   * 覆盖，下一轮用户问"你刚才怎么看到那张图的"，模型手里一个字都没有，只能否认
+   * 自己看过图（真实投诉）。
+   */
+  attachments?: IvyeaChatAttachment[];
   /**
    * 要模型的思考流（agent ≥ v1.10.3）。默认不要 —— agent 侧同样默认关，
    * 因为老前端会把未知事件当自由文本渲染。老 agent 收到这个多余字段直接忽略。
