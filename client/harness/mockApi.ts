@@ -257,9 +257,65 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   // 文字版进 user 消息、跟着历史走），老的只能退回塞 system。?oldagent=1 验后者。
   ["/ivyea-agent/status", () => ({
     ok: true, available: true, model: "deepseek-v4-pro", ready: true,
-    health: { version: new URLSearchParams(location.search).get("oldagent") === "1" ? "1.15.1" : "1.15.3",
+    // ≥ 1.15.4 才认 payload.model —— 模型芯片能不能真的切就看它。
+    // ?oldagent=1 装成老 agent，验"退回只跳系统配置、不给假开关"那条路。
+    health: { version: new URLSearchParams(location.search).get("oldagent") === "1" ? "1.15.1" : "1.15.4",
               model: { model: "deepseek-v4-pro" } },
   })],
+  // 模型选择器的数据源。**必须有没配 key 的那几家**：面板把它们收进「未配置密钥」
+  // 分组，那一段的样式只在这种数据下才渲染得出来。
+  ["/ivyea-agent/model/providers", {
+    ok: true,
+    providers: [
+      { id: "deepseek", label: "DeepSeek", key_status: "configured", default_model: "deepseek-v4-flash",
+        models: ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-flash-vision-exp"], model_count: 3 },
+      { id: "openrouter", label: "OpenRouter", key_status: "configured", default_model: "x-ai/grok-4.6",
+        models: ["x-ai/grok-4.6", "anthropic/claude-sonnet-4-6", "google/gemini-3.7-flash",
+                 "deepseek/deepseek-v4-pro-0813", "qwen/qwen3.8-27b"], model_count: 5 },
+      { id: "ollama", label: "Ollama / Local OpenAI-compatible", key_status: "none",
+        models: ["qwen3:8b", "llama3.3:70b"], model_count: 2 },
+      { id: "anthropic", label: "Anthropic Claude API", key_status: "missing:ANTHROPIC_API_KEY",
+        models: ["claude-sonnet-4-6"], model_count: 1 },
+      { id: "openai", label: "OpenAI API", key_status: "missing:OPENAI_API_KEY",
+        models: ["gpt-5.6"], model_count: 1 },
+      { id: "gemini", label: "Google Gemini API", key_status: "missing:GEMINI_API_KEY",
+        models: ["gemini-3.7-flash"], model_count: 1 },
+    ],
+  }],
+  ["/ivyea-agent/model/providers/", (url: string) => {
+    const pid = (url.split("/ivyea-agent/model/providers/")[1] || "").split("/")[0];
+    return { ok: true, catalog: { ok: true, provider_id: pid, label: pid, source: "live",
+                                  models: ["刷新到的-模型-1", "刷新到的-模型-2"], default_model: "刷新到的-模型-1" } };
+  }],
+  // 系统配置：**必须给几个槽位填上 provider**，否则 LLMModelBlock 的模型名那一块
+  // 根本不渲染（它只在选了 provider 之后才出现）—— 模型下拉就永远验不到。
+  ["/settings", {
+    settings: {
+      ivyea_agent_url: "http://127.0.0.1:8765", ivyea_agent_auto_start: true,
+      ivyea_agent_provider: "deepseek", ivyea_agent_model: "deepseek-v4-flash",
+      ivyea_agent_api_key: "sk-demo-agent", ivyea_agent_base_url: "",
+      assistant_provider: "deepseek", assistant_model: "deepseek-v4-flash",
+      assistant_api_key: "sk-demo-assistant", assistant_base_url: "",
+      vision_provider: "siliconflow", vision_model: "Qwen/Qwen3-VL-30B-A3B-Instruct",
+      vision_api_key: "sk-demo-vision", vision_base_url: "https://api.siliconflow.cn/v1",
+      apimart_key: "sk-demo-apimart", apimart_base: "https://api.apimart.ai/v1",
+      image_model: "", image_api_key: "", image_base_url: "",
+      text_ai_providers: "ivyea-agent,deepseek,assistant",
+      vision_ai_providers: "apimart,openai,assistant",
+    },
+    secret_keys: ["apimart_key", "ivyea_agent_api_key", "vision_api_key"],
+  }],
+  // ?catalogfail=1 —— 装成中转商问不到清单（实测 Apimart 余额不足会返回 402）。
+  // 那条降级路径（"常见模型名"兜底 + 说清原因 + 仍可手输）只有这种数据下才渲染得出来。
+  ["/settings/model-catalog", () => (
+    new URLSearchParams(location.search).get("catalogfail") === "1"
+      ? { ok: false, error: "", catalog: { ok: false, source: "builtin", models: [],
+            error: 'HTTP 402: {"error":{"message":"insufficient balance"}}' } }
+      : { ok: true, catalog: { ok: true, source: "live", label: "硅基流动",
+            default_model: "Qwen/Qwen3-VL-30B-A3B-Instruct",
+            models: ["Qwen/Qwen3-VL-30B-A3B-Instruct", "deepseek-ai/DeepSeek-V4-Flash",
+                     "zai-org/GLM-5.2", "Tongyi-MAI/Z-Image-Turbo"] } }
+  )],
   ["/ivyea-agent/skills", { ok: true, skills: [] }],
   ["/ivyea-agent/ops-tools", { ok: true, tools: [] }],
   ["/skill-tools/pinned", []],

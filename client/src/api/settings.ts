@@ -148,6 +148,34 @@ export async function patchSettings(updates: Partial<HubSettings>): Promise<Sett
   return data;
 }
 
+/** 一个模型槽位能用哪些模型。slot: agent | assistant | vision | image。 */
+export type SlotCatalogResp = {
+  ok: boolean;
+  error?: string;
+  catalog: {
+    ok: boolean;
+    models: string[];
+    default_model?: string;
+    label?: string;
+    /** live / cache / builtin / none —— builtin 和 none 都意味着"只能手输"。 */
+    source?: string;
+    error?: string;
+  };
+};
+
+/**
+ * 列出某个槽位当前那套账号支持哪些模型。
+ *
+ * provider/base_url/api_key 可以现给：系统配置页在**保存之前**就要能看清单，
+ * 那时新填的 key 还没落库。都不给就用库里存的那份。
+ */
+export async function slotModelCatalog(body: {
+  slot: string; provider?: string; base_url?: string; api_key?: string; refresh?: boolean;
+}): Promise<SlotCatalogResp> {
+  const { data } = await api.post<SlotCatalogResp>("/settings/model-catalog", body, { timeout: 25000 });
+  return data;
+}
+
 export async function getHealth(): Promise<HealthResp> {
   const { data } = await api.get<HealthResp>("/settings/health", { timeout: 10000 });
   return data;

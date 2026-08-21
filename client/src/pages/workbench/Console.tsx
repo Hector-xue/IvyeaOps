@@ -66,6 +66,8 @@ import {
   type IvyeaPermissionRequest,
   type IvyeaSkillInfo,
 } from "../../api/ivyeaAgent";
+import { splitModelId } from "../../components/console/ModelPicker";
+import { getSettings, patchSettings } from "../../api/settings";
 import { errText } from "../../lib/errText";
 import { openSettings } from "../../components/SettingsDialog";
 
@@ -169,6 +171,8 @@ const THOUGHTS_MAX = 60;
 
 type Prefs = {
   workspace: string; approval: ApprovalMode; skill: string;
+  /** 本会话选中的主脑模型（`provider:model`）；"" = 跟随 agent 的全局主脑。 */
+  model: string;
   /** 跟进建议每轮额外跑一次模型调用，给个开关。默认开。 */
   followUps: boolean;
   /** 套用中的预设名与人设 —— 和工作区/档位一样，刷新后应该还在。 */
@@ -178,7 +182,7 @@ type Prefs = {
 
 function loadPrefs(): Prefs {
   const fallback: Prefs = {
-    workspace: "默认工作区", approval: "readonly", skill: "",
+    workspace: "默认工作区", approval: "readonly", skill: "", model: "",
     followUps: true, preset: "", system: "",
   };
   try {
@@ -208,6 +212,15 @@ function ConsoleInner() {
   const [busy, setBusy] = useState(false);
   const [sessionId, setSessionId] = useState("");
   const [model, setModel] = useState("");
+  /**
+   * 本会话选中的主脑（`provider:model`），逐轮下发。"" = 跟随 agent 的全局主脑。
+   *
+   * 刻意**不改全局**：agent 的模型是全局设置，真按全局切会把 ops 的其他用户和
+   * 正在跑的定时任务一起换掉。想改全局走模型面板里的「设为默认」。
+   */
+  const [modelPick, setModelPick] = useState(prefs.current.model || "");
+  /** agent 认不认 payload.model（≥ v1.15.4）。老版本会忽略它 —— 那就别给假开关。 */
+  const [modelSwitchable, setModelSwitchable] = useState(false);
   const [readOnly, setReadOnly] = useState(true);
   const [usage, setUsage] = useState<any>(null);
   // 本会话的上下文占用。agent 每轮发两次（开跑前 + 收尾），老 agent 一次都不发 ——
@@ -280,13 +293,15 @@ function ConsoleInner() {
       workspace: composer.workspace,
       approval: composer.approval,
       skill: composer.skill,
+      model: modelPick,
       followUps: followEnabled,
       preset: composer.preset || "",
       system: composer.system || "",
     };
     prefs.current = next;
     try { localStorage.setItem(PREFS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
-  }, [composer.workspace, composer.approval, composer.skill, composer.preset, composer.system, followEnabled]);
+  }, [composer.workspace, composer.approval, composer.skill, composer.preset, composer.system,
+      modelPick, followEnabled]);
 
   // ── 能力目录：板块工具的中文 title 是步骤芯片的文案来源 ────────────────────
   useEffect(() => {
@@ -300,14 +315,19 @@ function ConsoleInner() {
     consolePresets()
       .then((d) => { if (alive) setPresets(d); })
       .catch(() => void 0);   // 没有预设不影响开一轮
-    // 当前主脑模型：只用来显示。agent 的模型是全局配置，不支持按轮次覆盖，
-    // 所以 composer 上那枚 chip 是信息位 + 去系统配置的入口，不是选择器。
+    // 当前主脑模型 + agent 版本。agent ≥ v1.15.4 认 payload.model，所以那枚 chip
+    // 现在是**真的选择器**（逐轮下发，只影响这条会话）；更老的版本会忽略这个字段，
+    // 那时它退回信息位 + 去系统配置的入口。
     ivyeaAgentStatus()
       .then((d) => {
         if (!alive) return;
         const m = (d?.health as any)?.model || {};
         setModel(String(m.model || m.label || ""));
-        setAgentTakesAttachments(atLeast(String((d?.health as any)?.version || ""), "1.15.3"));
+        const ver = String((d?.health as any)?.version || "");
+        setAgentTakesAttachments(atLeast(ver, "1.15.3"));
+        // 老 agent 收到 model 字段会直接忽略：那时给下拉框就是个假开关（选了别的
+        // 模型、跑的还是老模型，还没有任何提示）。所以按版本决定给不给。
+        setModelSwitchable(atLeast(ver, "1.15.4"));
       })
       .catch(() => void 0);
     // @ 可引用的东西：知识卡 + 上传件。取不到就没有 @ 菜单，不影响别的。
@@ -813,6 +833,9 @@ function ConsoleInner() {
           workspace: composer.workspace && composer.workspace !== "默认工作区" ? composer.workspace : undefined,
           skill: composer.skill || undefined,
           auto_skill: !composer.skill,
+          // 本轮主脑。老 agent 不认识这个字段会直接忽略，且没选模型时 ops 后端
+          // 会整个剔除它 —— 两个方向都安全。
+          model: modelSwitchable && modelPick ? modelPick : undefined,
           plan_mode,
           approval,
           // 人设排最前：它定义"以什么身份、什么判断标准作答"，逻辑上先于本轮材料。
@@ -1076,6 +1099,34 @@ function ConsoleInner() {
     }
   }, [notify]);
 
+  /**
+   * 把选中的模型写成**全局默认**（写 ops 的系统配置，再由后端下推给 agent）。
+   *
+   * 换 provider 时必须把 ops 存的那把 key 一起清空 —— sync_model_settings 会把
+   * `ivyea_agent_api_key` 推成**新 provider** 对应的环境变量：拿 A 家的 key 覆盖
+   * B 家的，B 家原本配好的 key 就这么没了，而且毫无征兆。清空只是"不再下推"，
+   * agent 自己 .env 里各家已有的 key 一个都不动。
+   */
+  const setModelAsDefault = useCallback(async (id: string) => {
+    const { provider, model: picked } = splitModelId(id);
+    if (!provider || !picked) return;
+    try {
+      const cur = await getSettings();
+      const changingProvider = String(cur?.settings?.ivyea_agent_provider || "") !== provider;
+      await patchSettings({
+        ivyea_agent_provider: provider,
+        ivyea_agent_model: picked,
+        ...(changingProvider ? { ivyea_agent_api_key: "", ivyea_agent_base_url: "" } : {}),
+      });
+      // 已经是默认了，就不该再逐轮覆盖 —— 留着的话用户以后改了默认却不生效。
+      setModelPick("");
+      setModel(picked);
+      notify("success", `已把 ${picked} 设为默认主脑（对所有用户和定时任务生效）`);
+    } catch (e: any) {
+      notify("error", errText(e, "设为默认失败"));
+    }
+  }, [notify]);
+
   const patch = (p: Partial<ComposerValue>) => setComposer((c) => ({ ...c, ...p }));
 
   const composerNode = (compact: boolean) => (
@@ -1099,7 +1150,11 @@ function ConsoleInner() {
       images={images}
       onImagesChange={setImages}
       modelLabel={model}
-      onModelClick={() => openSettings()}
+      modelValue={modelPick}
+      onModelChange={setModelPick}
+      modelSwitchable={modelSwitchable}
+      onModelSettings={() => openSettings()}
+      onModelDefault={setModelAsDefault}
       autoFocus={!compact}
       compact={compact}
     />

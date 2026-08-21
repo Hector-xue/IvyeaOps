@@ -4,7 +4,7 @@ import SheetSelect from "../../components/SheetSelect";
 import {
   getSettings, patchSettings, getHealth, changePassword,
   testSetting, autodetectSettings, selfCheckSettings, getAgentVersion,
-  startAgentUpgrade, getAgentUpgradeProgress,
+  startAgentUpgrade, getAgentUpgradeProgress, slotModelCatalog,
   type HubSettings, type HealthResp, type TestResult, type SelfCheckResp,
 } from "../../api/settings";
 import { installAgentStreamUrl } from "../../api/setup";
@@ -219,6 +219,137 @@ function SecretInput({ value, onChange, placeholder }: { value: string; onChange
   );
 }
 
+// ── 模型名：从"背默写"变成"挑一个" ────────────────────────────────────────────
+//
+// 这四个槽位的模型名此前都是自由文本框：用户得自己记住
+// "Qwen/Qwen3-VL-30B-A3B-Instruct" 这种字符串，记错了还要等到真调用时才报错。
+// 现在按槽位去问那个端点支持哪些模型，挑一个就行。
+//
+// **手输必须留着**：中转商的 /models 会因为余额不足（实测 apimart 返回 402）、
+// 网络不通、或者压根没有这个接口而拉不到清单。那种时候下拉是空的，输入框是唯一出路。
+
+/** 视觉 / 生图模型的名字特征。用来把长清单收窄到"可能能用的那几个"。 */
+const MODEL_HINTS: Record<string, RegExp> = {
+  vision: /(vl|vision|visual|omni|gpt-4o|gpt-5|claude|gemini|glm-4v|qwen-vl|internvl|llava)/i,
+  image: /(image|img|flux|dall-?e|sd[-_.]?\d|stable-?diffusion|seedream|z-image|imagen|kolors|playground)/i,
+};
+
+function ModelNameInput({
+  slot, provider, baseUrl, apiKey, value, onChange, placeholder, hintKind, fallbackModels,
+}: {
+  /** 后端按它解析去问哪个端点：agent | assistant | vision | image。 */
+  slot: string;
+  provider: string; baseUrl: string; apiKey: string;
+  value: string; onChange: (v: string) => void;
+  placeholder?: string;
+  /** 给了就先按这类模型的名字特征过滤，可一键切回全部。 */
+  hintKind?: "vision" | "image";
+  /**
+   * 端点拉不到清单时的候选。生图这一档几乎必然走到这里 —— 实测 Apimart 的
+   * `/models` 在余额不足时返回 402，清单就是空的，而空下拉等于这个功能不存在。
+   * 只是**常见名字**，不保证对方平台支持，所以文案上要说清楚。
+   */
+  fallbackModels?: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [models, setModels] = useState<string[] | null>(null);
+  const [source, setSource] = useState("");
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [onlyHinted, setOnlyHinted] = useState(!!hintKind);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  const load = useCallback(async (refresh: boolean) => {
+    setLoading(true); setErr("");
+    try {
+      const d = await slotModelCatalog({ slot, provider, base_url: baseUrl, api_key: apiKey, refresh });
+      setModels(d?.catalog?.models || []);
+      setSource(String(d?.catalog?.source || ""));
+      setErr(String(d?.catalog?.error || ""));
+    } catch (e: any) {
+      setModels([]);
+      setErr(e?.response?.data?.detail || e?.message || "取模型清单失败");
+    } finally {
+      setLoading(false);
+    }
+  }, [slot, provider, baseUrl, apiKey]);
+
+  // 换了 provider / 地址 / 密钥，上一份清单就不作数了 —— 留着它会让人从 A 家的
+  // 清单里挑一个模型填进 B 家的槽位。
+  useEffect(() => { setModels(null); setOpen(false); }, [provider, baseUrl, apiKey]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && models === null && !loading) void load(false);
+  };
+
+  const usingFallback = !!(models && models.length === 0 && fallbackModels?.length);
+  const shown = (usingFallback ? fallbackModels! : (models || [])).filter((m) => {
+    if (!onlyHinted || !hintKind || usingFallback) return true;
+    return MODEL_HINTS[hintKind].test(m);
+  });
+
+  return (
+    <div className="hs-model-pick" ref={boxRef}>
+      <div className="hs-model-row">
+        <input className="hs-input" type="text" value={value} onChange={e => onChange(e.target.value)}
+          placeholder={placeholder} spellCheck={false} autoComplete="off" />
+        <button type="button" className="hs-model-btn" onClick={toggle}
+          title="列出这套账号支持的模型">{loading ? "…" : open ? "▴" : "▾"}</button>
+      </div>
+      {open && (
+        <div className="hs-model-dd">
+          <div className="hs-model-dd-hd">
+            <span>
+              {loading ? "正在取清单…"
+                : usingFallback ? "常见模型名（没能问到这个平台）"
+                : source === "live" ? "实时清单"
+                : source === "cache" ? "缓存清单"
+                : models?.length ? "内置清单" : "没取到清单"}
+            </span>
+            <span className="hs-model-dd-acts">
+              {hintKind && !usingFallback && (
+                <button type="button" onClick={() => setOnlyHinted(v => !v)}>
+                  {onlyHinted ? "显示全部" : (hintKind === "vision" ? "只看视觉" : "只看生图")}
+                </button>
+              )}
+              <button type="button" onClick={() => void load(true)} disabled={loading}>刷新</button>
+            </span>
+          </div>
+          {err && (
+            <div className="hs-model-dd-err">
+              {err}<br />
+              {usingFallback
+                ? "下面是常见的模型名，不保证你这个平台支持；也可以直接把模型名填进上面的输入框。"
+                : "拉不到清单不影响使用：直接把模型名填进上面的输入框即可。"}
+            </div>
+          )}
+          {!loading && shown.length === 0 && !err && (
+            <div className="hs-model-dd-err">没有可选项{onlyHinted ? "（试试「显示全部」）" : ""}。</div>
+          )}
+          <div className="hs-model-dd-list">
+            {shown.map(m => (
+              <button key={m} type="button"
+                className={"hs-model-opt" + (m === value ? " active" : "")}
+                onClick={() => { onChange(m); setOpen(false); }}>{m}</button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── LLM model block ───────────────────────────────────────────────────────────
 
 type ProviderDef = { id: string; label: string; defaultModel: string; envVar: string; hint?: string; examples?: string };
@@ -366,11 +497,17 @@ function ProviderPicker({
 function LLMModelBlock({
   title, hint,
   providerKey, modelKey, apiKeyKey, baseUrlKey,
+  slot, hintKind, inherit,
   vals, set,
 }: {
   title: string; hint?: string;
   providerKey: keyof HubSettings; modelKey: keyof HubSettings;
   apiKeyKey: keyof HubSettings; baseUrlKey: keyof HubSettings;
+  /** 给了就把模型名换成可选清单（后端按 slot 解析去问哪个端点）。 */
+  slot?: string;
+  hintKind?: "vision" | "image";
+  /** 「沿用某某账号」：一键把 provider + 地址 + 密钥抄过来，只剩挑一个模型。 */
+  inherit?: { label: string; title?: string; run: () => void }[];
   vals: HubSettings;
   set: <K extends keyof HubSettings>(k: K, v: HubSettings[K]) => void;
 }) {
@@ -387,6 +524,20 @@ function LLMModelBlock({
         {hint && <span style={{ fontWeight: 400, color: "var(--t3)", marginLeft: 8 }}>{hint}</span>}
       </div>
 
+      {inherit && inherit.length > 0 && (
+        /*
+         * 每个槽位都要填 provider + 模型 + key + 地址四样，是"配置复杂"的大头。
+         * 大多数人其实就是想用和主脑同一套账号 —— 那就给一键抄过来。
+         */
+        <div className="hs-inherit">
+          <span>快速配置：</span>
+          {inherit.map(it => (
+            <button key={it.label} type="button" className="hs-inherit-btn"
+              title={it.title} onClick={it.run}>{it.label}</button>
+          ))}
+        </div>
+      )}
+
       <div className="hs-label" style={{ marginBottom: 6 }}>选择 Provider</div>
       <ProviderPicker
         value={provider}
@@ -400,11 +551,22 @@ function LLMModelBlock({
       {provider && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10, alignItems: "end" }}>
           <Field label="模型名称" hint={info?.examples ? `可用：${info.examples}` : (info?.defaultModel ? `推荐：${info.defaultModel}` : undefined)}>
-            <TxtInput
-              value={model}
-              onChange={v => set(modelKey, v as HubSettings[typeof modelKey])}
-              placeholder={info?.defaultModel || "模型名称"}
-            />
+            {slot ? (
+              <ModelNameInput
+                slot={slot}
+                provider={provider} baseUrl={baseUrl} apiKey={apiKey}
+                value={model}
+                onChange={v => set(modelKey, v as HubSettings[typeof modelKey])}
+                placeholder={info?.defaultModel || "模型名称"}
+                hintKind={hintKind}
+              />
+            ) : (
+              <TxtInput
+                value={model}
+                onChange={v => set(modelKey, v as HubSettings[typeof modelKey])}
+                placeholder={info?.defaultModel || "模型名称"}
+              />
+            )}
           </Field>
           <Field label={info?.envVar || "API Key"}>
             <SecretInput
@@ -1377,6 +1539,7 @@ export default function HubSettings({ focusSection = "" }: { focusSection?: stri
             hint="可与全局兜底大模型不同。"
             providerKey="ivyea_agent_provider" modelKey="ivyea_agent_model"
             apiKeyKey="ivyea_agent_api_key" baseUrlKey="ivyea_agent_base_url"
+            slot="agent"
             vals={vals} set={set}
           />
         </div>
@@ -1428,6 +1591,16 @@ export default function HubSettings({ focusSection = "" }: { focusSection?: stri
           hint="市场调研、打法推荐、广告分析，以及 IvyeaAgent 不可用时的任务台对话会使用它。"
           providerKey="assistant_provider" modelKey="assistant_model"
           apiKeyKey="assistant_api_key" baseUrlKey="assistant_base_url"
+          slot="assistant"
+          inherit={[{
+            label: "沿用主脑账号",
+            title: "把 IvyeaAgent 主脑那套 Provider / 密钥 / 地址抄过来，只需再挑一个模型",
+            run: () => {
+              set("assistant_provider", vals.ivyea_agent_provider);
+              set("assistant_api_key", vals.ivyea_agent_api_key);
+              set("assistant_base_url", vals.ivyea_agent_base_url);
+            },
+          }]}
           vals={vals} set={set}
         />
       </Section>
@@ -1447,6 +1620,27 @@ export default function HubSettings({ focusSection = "" }: { focusSection?: stri
           hint="模型必须支持图片输入（多模态）。"
           providerKey="vision_provider" modelKey="vision_model"
           apiKeyKey="vision_api_key" baseUrlKey="vision_base_url"
+          slot="vision" hintKind="vision"
+          inherit={[
+            {
+              label: "沿用主脑账号",
+              title: "抄 IvyeaAgent 主脑那套账号。注意仍要挑一个**支持图片输入**的模型",
+              run: () => {
+                set("vision_provider", vals.ivyea_agent_provider);
+                set("vision_api_key", vals.ivyea_agent_api_key);
+                set("vision_base_url", vals.ivyea_agent_base_url);
+              },
+            },
+            {
+              label: "沿用兜底账号",
+              title: "抄上面「全局兜底大模型」那套账号",
+              run: () => {
+                set("vision_provider", vals.assistant_provider);
+                set("vision_api_key", vals.assistant_api_key);
+                set("vision_base_url", vals.assistant_base_url);
+              },
+            },
+          ]}
           vals={vals} set={set}
         />
       </Section>
@@ -1470,7 +1664,17 @@ export default function HubSettings({ focusSection = "" }: { focusSection?: stri
 
         <div className="hs-row2">
           <Field label="模型名称" hint="Apimart 用 gpt-image-2；自定义平台填它的模型名（如 dall-e-3）。">
-            <TxtInput value={vals.image_model} onChange={v => set("image_model", v)} placeholder="gpt-image-2" />
+            {/* 清单按**生效的那套账号**取：填了自定义地址就问自定义那家，没填就问
+                Apimart —— 和真生成时走的端点完全同一套优先级（见后端 _SLOT_KEYS）。
+                取不到（Apimart 余额不足时会返回 402）就还是手输，不挡人。 */}
+            <ModelNameInput
+              slot="image"
+              provider="" baseUrl={vals.image_base_url} apiKey={vals.image_api_key}
+              value={vals.image_model} onChange={v => set("image_model", v)}
+              placeholder="gpt-image-2" hintKind="image"
+              fallbackModels={["gpt-image-2", "gpt-image-1", "dall-e-3", "flux-1.1-pro",
+                               "flux-kontext-pro", "seedream-4.0", "Tongyi-MAI/Z-Image-Turbo"]}
+            />
           </Field>
           <Field label="Apimart 地址" hint="非官方网关才需改，否则保持默认。">
             <TxtInput value={vals.apimart_base} onChange={v => set("apimart_base", v)} placeholder="https://api.apimart.ai/v1" />

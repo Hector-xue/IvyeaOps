@@ -297,6 +297,33 @@ export type KnowledgeEvidencePayload = {
   rebuild?: boolean;
 };
 
+export type AgentModelCatalog = {
+  ok: boolean;
+  provider_id?: string;
+  label?: string;
+  models: string[];
+  default_model?: string;
+  /** live = 刚从端点拉的；cache = 24h 内的缓存；builtin = 内置兜底清单。 */
+  source?: string;
+  error?: string;
+};
+
+/** 这家 provider 的密钥配好了吗。oauth 那几档的字符串形态不止一种，统一在这里判。 */
+export function providerKeyReady(keyStatus: string): boolean {
+  const s = String(keyStatus || "");
+  if (!s || s.startsWith("missing:")) return false;
+  return s === "configured" || s.startsWith("configured:")
+    || s === "none" || s === "aws_sdk" || s === "valid" || s === "expired+refresh";
+}
+
+/** 内置 provider 的实时模型清单（agent 侧带 24h 缓存）。 */
+export async function ivyeaProviderModels(providerId: string, refresh = false) {
+  const { data } = await api.get<{ ok: boolean; catalog: AgentModelCatalog }>(
+    `/ivyea-agent/model/providers/${encodeURIComponent(providerId)}/models`,
+    { params: refresh ? { refresh: 1 } : undefined, timeout: 20000 });
+  return data;
+}
+
 export async function ivyeaAgentStatus() {
   const { data } = await api.get<IvyeaAgentStatus>("/ivyea-agent/status");
   return data;
@@ -388,6 +415,11 @@ export type IvyeaChatPayload = {
   inject_retrieval?: boolean;
   /** 显式指定本轮必须遵循的 skill id。 */
   skill?: string;
+  /**
+   * 本轮用哪个主脑模型（agent ≥ v1.15.4），形如 `openrouter:x-ai/grok-4.6`。
+   * 留空 = agent 的全局主脑。老 agent 会忽略它。
+   */
+  model?: string;
   /** 让 serve 按用户问题自动匹配 skill 并回发 skill_match 事件。 */
   auto_skill?: boolean;
   /**

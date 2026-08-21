@@ -727,6 +727,16 @@ def provider_models(provider_id: str, refresh: bool = False) -> dict[str, Any]:
     return request_json("GET", f"/v1/model/providers/{safe_id}/models{suffix}")
 
 
+def model_catalog(payload: dict[str, Any]) -> dict[str, Any]:
+    """任意 OpenAI 兼容端点的模型清单（agent ≥ v1.15.4）。
+
+    provider_models() 只认 agent 内置 provider 表里那几家、密钥也只从 agent 自己的
+    .env 取；ops 的视觉槽/生图槽常指向内置表里没有的中转商，密钥又存在 ops 这边。
+    """
+    # 取清单要真发一次外网请求，默认 8 秒常常不够（中转商动辄 3~5 秒）。
+    return request_json("POST", "/v1/model/catalog", payload, timeout=max(_timeout(), 20.0))
+
+
 def provider_probe(provider_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     safe_id = urllib.parse.quote(provider_id.strip(), safe="")
     return request_json("POST", f"/v1/model/providers/{safe_id}/probe", payload)
