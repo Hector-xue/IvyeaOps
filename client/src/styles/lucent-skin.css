@@ -401,7 +401,13 @@ html[data-skin="lucent"] .md-h3 {
    分量靠字号，不靠字重 + 挤压。 */
 html[data-skin="lucent"] .cc-hero-title {
   font-size: 34px !important;
-  font-weight: 600 !important;
+  /* **500 不是"比 600 轻一点"，在 Windows 上是"跨过一整档"。**
+     微软雅黑只有 Light/Regular/Bold：600 向上取到 Bold(700)，500 向下取到
+     Regular(400)，中间没有档位。所以这行的实际效果分两种平台：
+       · Windows：Regular —— 明显清瘦，靠 34px 的字号和很深的墨色撑住分量
+       · macOS：苹方有 Medium(500)，就是真的 Medium
+     两边都成立，因为这句话的分量本来就该由字号承担，不由字重承担。 */
+  font-weight: 500 !important;
   letter-spacing: .01em !important;
 }
 /* 卡片/分组的小标题：不靠字号，靠字重和墨色站住（尺寸留给大标题）。 */
