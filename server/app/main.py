@@ -645,11 +645,23 @@ app.include_router(help_router.router, prefix="/api", tags=["help"])
 #   everything else     -> index.html (SPA fallback for React Router)
 _CLIENT_DIST = settings.root_dir / "client" / "dist"
 
-# `.woff2` is missing from the stdlib mimetypes table on some distros (this
-# server included), so FileResponse guessed `text/plain` for the self-hosted
-# fonts. Browsers still load a font with the wrong MIME, but any proxy or
-# security header that keys off content-type would be looking at a lie —
-# register it once here instead of hard-coding a media_type at each call site.
+# Pin the content types we serve instead of trusting whatever the host's
+# mimetypes table happens to say. Two real failures, both platform-specific:
+#
+#   - `.js` / `.mjs` on **Windows**: mimetypes seeds itself from the registry,
+#     where `HKCR\.js` is frequently `text/plain` (plenty of installers write
+#     it). StaticFiles serves /assets/*.js straight from guess_type, and a
+#     browser doing strict MIME checking refuses a module served as text/plain
+#     — the whole app is a blank page. Reported and diagnosed by @jacks10086
+#     in PR #64; this is that fix, folded in here so both cases live together.
+#   - `.woff2` on some Linux distros (this server included): guessed
+#     `text/plain`. Browsers load the font anyway, but any proxy or security
+#     header keying off content-type is looking at a lie.
+#
+# Registering once here beats hard-coding a media_type at each call site —
+# StaticFiles has no call site to hard-code.
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("application/javascript", ".mjs")
 mimetypes.add_type("font/woff2", ".woff2")
 mimetypes.add_type("font/woff", ".woff")
 

@@ -6,6 +6,19 @@
 
 ---
 
+## [Unreleased]
+
+### 修复
+
+- **Windows 上前端可能整页空白**：`.js` 的 Content-Type 被答成 `text/plain`，
+  而浏览器对 ES module 做严格 MIME 检查，收到 text/plain 直接拒绝执行 ——
+  控制台只有一句 MIME 报错，看着完全不像服务端问题。根因是 Python 的
+  `mimetypes` 表在 Windows 上是读注册表的，而 `HKCR\.js` 常被各种安装包写成
+  `text/plain`。现在几个关键类型一律在启动时钉死，不再听宿主机的。
+  由 [@jacks10086](https://github.com/jacks10086) 报告并定位（#64）。
+
+---
+
 ## [v1.12.5] - 2026-08-21
 
 ### 修复
