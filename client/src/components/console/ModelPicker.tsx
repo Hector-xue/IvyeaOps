@@ -21,6 +21,7 @@ import {
   ivyeaModelProviders, ivyeaProviderModels, providerKeyReady,
   type IvyeaProvider,
 } from "../../api/ivyeaAgent";
+import { errText } from "../../lib/errText";
 
 /** `provider:model`。agent 的 models.by_id 认这个形态。 */
 export function modelId(provider: string, model: string): string {
@@ -190,9 +191,7 @@ export default function ModelPicker({
     } catch (e: any) {
       // 已经有一份（哪怕过期）就别把错误摆出来：列表照常能用，
       // 弹一句"取模型清单失败"只会让人以为面板坏了。
-      if (!providerCache?.length) {
-        setLoadErr(e?.response?.data?.detail || e?.message || "取模型清单失败");
-      }
+      if (!providerCache?.length) setLoadErr(errText(e, "取模型清单失败"));
     } finally {
       fetchingRef.current = false;
       setLoading(false);

@@ -270,7 +270,7 @@ function ModelNameInput({
       setErr(String(d?.catalog?.error || ""));
     } catch (e: any) {
       setModels([]);
-      setErr(e?.response?.data?.detail || e?.message || "取模型清单失败");
+      setErr(errText(e, "取模型清单失败"));
     } finally {
       setLoading(false);
     }
