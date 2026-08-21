@@ -235,6 +235,8 @@ _DEFAULTS: Dict[str, Any] = {
     "kiro_cli_db": "",           # /root/.local/share/kiro-cli/data.sqlite3
     "kiro_cli_sessions_dir": "", # /root/.kiro/sessions/cli
     "claude_projects_dir": "",   # /root/.claude/projects (jsonl token logs)
+    "ivyea_sessions_dir": "",    # /root/.ivyea/sessions (ivyea-agent 会话账本)
+    "dsh_sessions_dir": "",      # /root/.dsh/sessions (DeepSeek Harness 会话)
     "hermes_node_bin": "",       # /root/.hermes/node/bin (PATH augment for spawns)
     "bun_bin": "",               # /root/.bun/bin (bun-based CLIs)
     # ASIN/广告审计的默认执行智能体（选择器里 "auto" 解析到它）。默认 hermes——它是
@@ -275,6 +277,8 @@ _ENV_MAP: Dict[str, str] = {
     "kiro_cli_db": "IVYEA_OPS_KIRO_CLI_DB",
     "kiro_cli_sessions_dir": "IVYEA_OPS_KIRO_CLI_SESSIONS_DIR",
     "claude_projects_dir": "IVYEA_OPS_CLAUDE_PROJECTS_DIR",
+    "ivyea_sessions_dir": "IVYEA_OPS_IVYEA_SESSIONS_DIR",
+    "dsh_sessions_dir": "IVYEA_OPS_DSH_SESSIONS_DIR",
     "hermes_node_bin": "IVYEA_OPS_HERMES_NODE_BIN",
     "bun_bin": "IVYEA_OPS_BUN_BIN",
 }

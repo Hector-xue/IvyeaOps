@@ -603,7 +603,7 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
           <div className="met">
             <div className="ml">累计总 Token</div>
             <div className="mv" style={{ color: "var(--acc)" }}>{fmtTokens(totals.total_tokens)}</div>
-            <div className="ms neu">{totals.sessions} 次会话（全部历史）</div>
+            <div className="ms neu">{totals.sessions} 次会话 · 含缓存读写</div>
           </div>
           <div className="met">
             <div className="ml">累计参考金额</div>
@@ -689,6 +689,7 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
                 <th>{tab === "daily" ? "日期" : tab === "weekly" ? "周" : "月份"}</th>
                 <th>输入</th>
                 <th>输出</th>
+                <th>缓存</th>
                 <th>总计</th>
                 <th>费用</th>
                 <th>会话</th>
@@ -700,6 +701,9 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
                   <td>{row[labelKey]}</td>
                   <td>{fmtTokens(row.input_tokens)}</td>
                   <td>{fmtTokens(row.output_tokens)}</td>
+                  <td className="neu">
+                    {fmtTokens((row.cache_read_tokens || 0) + (row.cache_write_tokens || 0))}
+                  </td>
                   <td style={{ color: "var(--acc)", fontWeight: 500 }}>{fmtTokens(row.total_tokens)}</td>
                   <td style={{ color: "var(--amber)" }}>${(row.cost_usd || 0).toFixed(2)}</td>
                   <td>{row.sessions}</td>

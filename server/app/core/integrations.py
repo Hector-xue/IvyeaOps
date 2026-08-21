@@ -86,6 +86,14 @@ def claude_projects_dir() -> Optional[Path]:
     return _path_or_none(_hs.get("claude_projects_dir", ""))
 
 
+def ivyea_sessions_dir() -> Optional[Path]:
+    return _path_or_none(_hs.get("ivyea_sessions_dir", ""))
+
+
+def dsh_sessions_dir() -> Optional[Path]:
+    return _path_or_none(_hs.get("dsh_sessions_dir", ""))
+
+
 # --- PATH augmentations ----------------------------------------------------
 
 def extra_path_dirs() -> list[str]:

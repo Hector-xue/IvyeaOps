@@ -985,24 +985,26 @@ export async function brainChatDeleteMessage(messageId: string) {
 
 // --- Token Usage ---
 
+/** total_tokens = 输入 + 输出 + 缓存读 + 缓存写。缓存也是 token，不计就没法跨工具比。 */
 export type TokenDayStat = {
   day: string; sessions: number; input_tokens: number; output_tokens: number;
-  total_tokens: number; cache_read_tokens: number; cost_usd: number;
+  total_tokens: number; cache_read_tokens: number; cache_write_tokens: number; cost_usd: number;
 };
 export type TokenWeekStat = {
   week: string; sessions: number; input_tokens: number; output_tokens: number;
-  total_tokens: number; cost_usd: number;
+  total_tokens: number; cache_read_tokens: number; cache_write_tokens: number; cost_usd: number;
 };
 export type TokenMonthStat = {
   month: string; sessions: number; input_tokens: number; output_tokens: number;
-  total_tokens: number; cost_usd: number;
+  total_tokens: number; cache_read_tokens: number; cache_write_tokens: number; cost_usd: number;
 };
 export type TokenModelStat = {
   model: string; sessions: number; total_tokens: number; cost_usd: number;
 };
 export type TokenAgentStat = {
   agent: string; sessions: number; input_tokens: number; output_tokens: number;
-  total_tokens: number; cost_usd: number; credits: number; sources: string[];
+  total_tokens: number; cache_read_tokens: number; cache_write_tokens: number;
+  cost_usd: number; credits: number; sources: string[];
 };
 export type TokenCoverageStat = {
   source: string; path: string; status: string; sessions: number; total_tokens: number; credits: number;

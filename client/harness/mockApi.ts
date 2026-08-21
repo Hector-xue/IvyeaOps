@@ -299,6 +299,392 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   ["/monitor/services", []],
   ["/monitor/processes", []],
   ["/monitor/logs", { lines: [] }],
+  // Token 统计面板。**数据是真机 /api/monitor/token-usage 的真实快照**，不是编的：
+  // 这一屏要验的恰恰是量级关系（缓存占了 99%，总计必然远大于输入+输出），
+  // 随手编一组"好看"的数只会把口径 bug 验没了。
+  ["/monitor/token-usage", {
+    "totals": {
+      "sessions": 2036,
+      "input_tokens": 2415083805,
+      "output_tokens": 126179342,
+      "cache_read_tokens": 35334591515,
+      "cache_write_tokens": 635824502,
+      "total_tokens": 38511679164,
+      "cost_usd": 27240.7241
+    },
+    "daily": [
+      {
+        "day": "2026-08-21",
+        "sessions": 3,
+        "input_tokens": 1582,
+        "output_tokens": 789975,
+        "cache_read_tokens": 139934767,
+        "cache_write_tokens": 2563077,
+        "total_tokens": 143289401,
+        "cost_usd": 105.7439
+      },
+      {
+        "day": "2026-08-20",
+        "sessions": 3,
+        "input_tokens": 12226,
+        "output_tokens": 884789,
+        "cache_read_tokens": 327820579,
+        "cache_write_tokens": 1697365,
+        "total_tokens": 330414959,
+        "cost_usd": 196.629
+      },
+      {
+        "day": "2026-08-19",
+        "sessions": 1,
+        "input_tokens": 1016,
+        "output_tokens": 306921,
+        "cache_read_tokens": 127520185,
+        "cache_write_tokens": 729204,
+        "total_tokens": 128557326,
+        "cost_usd": 75.9957
+      },
+      {
+        "day": "2026-08-18",
+        "sessions": 6,
+        "input_tokens": 106483,
+        "output_tokens": 1678110,
+        "cache_read_tokens": 1024843147,
+        "cache_write_tokens": 5791556,
+        "total_tokens": 1032419296,
+        "cost_usd": 586.545
+      },
+      {
+        "day": "2026-08-17",
+        "sessions": 1,
+        "input_tokens": 670,
+        "output_tokens": 377509,
+        "cache_read_tokens": 41812978,
+        "cache_write_tokens": 1261216,
+        "total_tokens": 43452373,
+        "cost_usd": 38.2302
+      },
+      {
+        "day": "2026-08-16",
+        "sessions": 6,
+        "input_tokens": 73525,
+        "output_tokens": 1949377,
+        "cache_read_tokens": 981840601,
+        "cache_write_tokens": 4567539,
+        "total_tokens": 988431042,
+        "cost_usd": 568.1969
+      }
+    ],
+    "weekly": [
+      {
+        "week": "2026-W33",
+        "sessions": 14,
+        "input_tokens": 121977,
+        "output_tokens": 4037304,
+        "cache_read_tokens": 1661931656,
+        "cache_write_tokens": 12042418,
+        "total_tokens": 1678133355,
+        "cost_usd": 1003.1438
+      },
+      {
+        "week": "2026-W32",
+        "sessions": 19,
+        "input_tokens": 330249,
+        "output_tokens": 8157921,
+        "cache_read_tokens": 3635834593,
+        "cache_write_tokens": 27544531,
+        "total_tokens": 3671867294,
+        "cost_usd": 2195.2972
+      },
+      {
+        "week": "2026-W31",
+        "sessions": 62,
+        "input_tokens": 1035853,
+        "output_tokens": 5048994,
+        "cache_read_tokens": 2183986936,
+        "cache_write_tokens": 28001637,
+        "total_tokens": 2218073420,
+        "cost_usd": 1349.014
+      },
+      {
+        "week": "2026-W30",
+        "sessions": 110,
+        "input_tokens": 2587335,
+        "output_tokens": 6937470,
+        "cache_read_tokens": 2326010445,
+        "cache_write_tokens": 26009907,
+        "total_tokens": 2361545157,
+        "cost_usd": 1470.8641
+      }
+    ],
+    "monthly": [
+      {
+        "month": "2026-08",
+        "sessions": 124,
+        "input_tokens": 2001314,
+        "output_tokens": 18901910,
+        "cache_read_tokens": 8056500927,
+        "cache_write_tokens": 71819785,
+        "total_tokens": 8149223936,
+        "cost_usd": 4897.7832
+      },
+      {
+        "month": "2026-07",
+        "sessions": 477,
+        "input_tokens": 262579055,
+        "output_tokens": 30695423,
+        "cache_read_tokens": 7941615051,
+        "cache_write_tokens": 143180609,
+        "total_tokens": 8378070138,
+        "cost_usd": 7504.5993
+      },
+      {
+        "month": "2026-06",
+        "sessions": 519,
+        "input_tokens": 1806827837,
+        "output_tokens": 55126096,
+        "cache_read_tokens": 16602722047,
+        "cache_write_tokens": 356361272,
+        "total_tokens": 18821037252,
+        "cost_usd": 12272.4768
+      },
+      {
+        "month": "2026-05",
+        "sessions": 739,
+        "input_tokens": 275558827,
+        "output_tokens": 20200009,
+        "cache_read_tokens": 2458477544,
+        "cache_write_tokens": 64462836,
+        "total_tokens": 2818699216,
+        "cost_usd": 2391.3362
+      }
+    ],
+    "models": [
+      {
+        "model": "claude-opus-4-8",
+        "sessions": 49,
+        "total_tokens": 15350110742,
+        "cost_usd": 10998.7078
+      },
+      {
+        "model": "claude-opus-5",
+        "sessions": 57,
+        "total_tokens": 9766636384,
+        "cost_usd": 5978.7952
+      },
+      {
+        "model": "claude-code",
+        "sessions": 7,
+        "total_tokens": 5511397017,
+        "cost_usd": 735.4627
+      },
+      {
+        "model": "gpt-5.5",
+        "sessions": 282,
+        "total_tokens": 2578600314,
+        "cost_usd": 4525.4664
+      },
+      {
+        "model": "claude-fable-5",
+        "sessions": 13,
+        "total_tokens": 2186249495,
+        "cost_usd": 3116.5281
+      },
+      {
+        "model": "claude-opus-4-7",
+        "sessions": 87,
+        "total_tokens": 1024330898,
+        "cost_usd": 1234.1318
+      }
+    ],
+    "agents": [
+      {
+        "sessions": 140,
+        "input_tokens": 4668048,
+        "output_tokens": 109288627,
+        "cache_read_tokens": 33943066040,
+        "cache_write_tokens": 631912029,
+        "total_tokens": 34688934744,
+        "cost_usd": 21921.9762,
+        "credits": 0.0,
+        "agent": "Claude Code",
+        "sources": [
+          "Claude Code"
+        ]
+      },
+      {
+        "sessions": 59,
+        "input_tokens": 2117096535,
+        "output_tokens": 5872918,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 2122969453,
+        "cost_usd": 4292.9225,
+        "credits": 0.0,
+        "agent": "Codex",
+        "sources": [
+          "Codex"
+        ]
+      },
+      {
+        "sessions": 1805,
+        "input_tokens": 290156787,
+        "output_tokens": 10888150,
+        "cache_read_tokens": 1387072739,
+        "cache_write_tokens": 3912473,
+        "total_tokens": 1692030149,
+        "cost_usd": 1023.1785,
+        "credits": 0.0,
+        "agent": "Hermes",
+        "sources": [
+          "Hermes/Feishu Codex Relay",
+          "Hermes/cli",
+          "Hermes/cron",
+          "Hermes/feishu"
+        ]
+      },
+      {
+        "sessions": 4,
+        "input_tokens": 94005,
+        "output_tokens": 83416,
+        "cache_read_tokens": 4452736,
+        "cache_write_tokens": 0,
+        "total_tokens": 4630157,
+        "cost_usd": 0.2374,
+        "credits": 0.0,
+        "agent": "DeepSeek Harness",
+        "sources": [
+          "DeepSeek Harness"
+        ]
+      },
+      {
+        "sessions": 26,
+        "input_tokens": 3056966,
+        "output_tokens": 46231,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 3103197,
+        "cost_usd": 2.3978,
+        "credits": 0.0,
+        "agent": "Ivyea Agent",
+        "sources": [
+          "Ivyea Agent"
+        ]
+      },
+      {
+        "sessions": 2,
+        "input_tokens": 11464,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 11464,
+        "cost_usd": 0.0115,
+        "credits": 0.128151,
+        "agent": "Kiro",
+        "sources": [
+          "Kiro CLI estimate"
+        ]
+      }
+    ],
+    "today_agents": [
+      {
+        "sessions": 3,
+        "input_tokens": 1582,
+        "output_tokens": 789975,
+        "cache_read_tokens": 139934767,
+        "cache_write_tokens": 2563077,
+        "total_tokens": 143289401,
+        "cost_usd": 105.7439,
+        "credits": 0.0,
+        "agent": "Claude Code",
+        "sources": [
+          "Claude Code"
+        ]
+      }
+    ],
+    "coverage": [
+      {
+        "source": "Hermes",
+        "path": "/root/.hermes/state.db",
+        "status": "included",
+        "sessions": 1783,
+        "total_tokens": 1681975008,
+        "credits": 0.0
+      },
+      {
+        "source": "Kiro Gateway",
+        "path": "(unconfigured)",
+        "status": "missing",
+        "sessions": 0,
+        "total_tokens": 0,
+        "credits": 0.0
+      },
+      {
+        "source": "Kiro CLI sessions",
+        "path": "/root/.kiro/sessions/cli",
+        "status": "estimated-from-context-usage",
+        "sessions": 2,
+        "total_tokens": 11464,
+        "credits": 0.128151
+      },
+      {
+        "source": "Codex",
+        "path": "/root/.codex/state_5.sqlite",
+        "status": "included",
+        "sessions": 51,
+        "total_tokens": 1092573972,
+        "credits": 0.0
+      },
+      {
+        "source": "Hermes/Feishu Codex Relay",
+        "path": "/root/feishu-codex-relay/.codex-home/state_5.sqlite",
+        "status": "included",
+        "sessions": 22,
+        "total_tokens": 10055141,
+        "credits": 0.0
+      },
+      {
+        "source": "Claude Code",
+        "path": "/root/.claude/projects",
+        "status": "included",
+        "sessions": 76,
+        "total_tokens": 10644841336,
+        "credits": 0.0
+      },
+      {
+        "source": "Ivyea Agent",
+        "path": "/root/.ivyea/sessions",
+        "status": "included",
+        "sessions": 26,
+        "total_tokens": 3103197,
+        "credits": 0.0
+      },
+      {
+        "source": "DeepSeek Harness",
+        "path": "/root/.dsh/sessions",
+        "status": "included",
+        "sessions": 4,
+        "total_tokens": 4630157,
+        "credits": 0.0
+      },
+      {
+        "source": "Claude Code (归档)",
+        "path": "token_archive.sqlite3",
+        "status": "from-archive",
+        "sessions": 0,
+        "total_tokens": 24044093408,
+        "credits": 0
+      },
+      {
+        "source": "Codex (归档)",
+        "path": "token_archive.sqlite3",
+        "status": "from-archive",
+        "sessions": 0,
+        "total_tokens": 1030395481,
+        "credits": 0
+      }
+    ],
+    "timezone": "Asia/Shanghai"
+  }],
   ["/news/dates", { dates: ["2026-08-17"], latest: "2026-08-17" }],
   ["/news/day", { date: "2026-08-17", items: [], generated_at: "", summary: "" }],
   ["/deep-analysis/history", { items: [] }],

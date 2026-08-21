@@ -35,6 +35,7 @@ git log 记得住「改了什么」，记不住「为什么不选另一条路」
 | [0015](./0015-fold-assistant-and-imagegen-into-console.md) | AI 问答与 AI 生图并入任务台 | 2026-08-17 |
 | [0016](./0016-sync-hub-skills-into-agent.md) | Skill 中心的 amazon 技能注册进 IvyeaAgent 技能库 | 2026-08-17 |
 | [0017](./0017-lucent-theme-shares-quiet-shape-layer.md) | 琉璃主题复用静谧的形状层，只加材质/高度/动效/排版 | 2026-08-21 |
+| [0018](./0018-token-stats-count-cache-tokens.md) | Token 统计把缓存计入总量，并接入 IvyeaAgent / DeepSeek Harness | 2026-08-21 |
 
 ## 模板
 
