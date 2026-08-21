@@ -71,7 +71,13 @@ export const THEMES: readonly ThemeDef[] = [
   { id: "bordeaux",      name: "波尔红", icon: "⊗",  accent: "#b03280", mode: "dark"  },
 ];
 
-export const DEFAULT_THEME = "quiet-light";
+/**
+ * 新用户（这台浏览器没存过主题）看到的第一套皮肤。
+ *
+ * **只影响没存过主题的浏览器。** 已经存过的人不受影响 —— 换默认值不会去改
+ * 别人已经选好的东西，那是下面 migrateTheme 的职责，而这次没有推迁移版本号。
+ */
+export const DEFAULT_THEME = "lucent-light";
 
 /** localStorage 键。写在这里，免得四个启动路径各拼一遍字符串。 */
 export const THEME_KEY = "ivyea-ops.theme";
@@ -83,8 +89,13 @@ const MIGRATION_KEY = "ivyea-ops.theme.v";
 const MIGRATION = "3";
 
 /**
- * 把默认主题换成静谧，同时不粗暴对待存量用户。
- * （v2 那一轮换的是门道，同一套机制，只是把版本号推到 3。）
+ * 历次换默认主题时，不粗暴对待存量用户。
+ * （v2 换成门道，v3 换成静谧，同一套机制，只是把版本号往上推。）
+ *
+ * **v4 没有做。** 后来默认值改成了琉璃·浅，但只改 DEFAULT_THEME、没推版本号 ——
+ * 也就是只有新用户吃到，已经在用的人手上是什么还是什么。这是刻意的：静谧和琉璃
+ * 形状层本来就是同一套（见 ADR-0017），把人从静谧硬换到琉璃换不来多少东西，
+ * 却要动他已经习惯的界面。
  *
  * 直接改 DEFAULT_THEME 是不够的：老用户的 localStorage 里已经存着 `dark`，
  * 他们永远不会知道有新主题。而无条件改写又太横 —— 那等于把手动选过主题的人

@@ -167,10 +167,17 @@ export const BOARDS: BoardEntry[] = [
     to: "/users", icon: "users", label: "用户管理", group: "admin", legacySection: "管理",
     pathLabel: "~/用户管理", admin: true, ready: true,
   },
-  {
-    to: "/hub-settings", icon: "settings", label: "系统配置", group: "admin", legacySection: "管理",
-    pathLabel: "~/系统配置", admin: true, ready: true,
-  },
+  /*
+   * 「系统配置」曾经在这里，**已撤掉**。
+   *
+   * 左下角账户菜单里本来就有一个入口，而且那个入口开的是对话框 ——
+   * SettingsDialog 懒加载的就是 pages/workbench/HubSettings 本身，同一个组件、
+   * 同一套内容，改个配置不必把人从当前工作里赶出去。侧栏再放一个，就是同一件事
+   * 两个入口，而两个入口迟早各自演化。
+   *
+   * 路由 /hub-settings 保留着（深链、引导、别处的「前往系统配置」都还指着它），
+   * 只是不再出现在导航里。
+   */
   {
     to: "/news", icon: "news", label: "资讯", group: "admin", legacySection: "管理",
     pathLabel: "~/资讯", admin: true, key: "news", ready: true,
