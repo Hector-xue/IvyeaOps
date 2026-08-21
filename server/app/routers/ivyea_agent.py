@@ -1108,6 +1108,55 @@ def provider_models(provider_id: str, refresh: bool = False) -> dict[str, Any]:
     return _call(svc.provider_models, provider_id, refresh)
 
 
+# ── 订阅登录（Claude / Codex / Gemini / Qwen / Copilot）─────────────────────
+#
+# **一律 require_admin。** 这些凭据存在服务器上、由 agent 全局共用：谁登录，这台
+# agent 上所有用户的对话和所有定时任务都在烧谁的订阅额度。这不是普通用户该按的开关。
+
+_AUTH_PROVIDERS = {"qwen-oauth", "openai-codex", "anthropic-oauth", "google-gemini-cli", "copilot"}
+
+
+class AuthActionBody(BaseModel):
+    session: str = Field(default="", max_length=120)
+    # 粘回来的东西：Claude 的 `code#state`、Gemini 的整条回调 URL、Copilot 的 token。
+    value: str = Field(default="", max_length=8000)
+
+
+def _checked_auth_provider(provider_id: str) -> str:
+    """provider id 会被拼进转发给 agent 的路径，只放行清单里那五个。"""
+    pid = (provider_id or "").strip()
+    if pid not in _AUTH_PROVIDERS:
+        raise HTTPException(status_code=404, detail=f"这个 provider 不走登录流程：{provider_id}")
+    return pid
+
+
+@router.get("/auth")
+def auth_status(_admin: str = Depends(require_admin)) -> dict[str, Any]:
+    return _call(svc.auth_status)
+
+
+@router.post("/auth/{provider_id}/start")
+def auth_start(provider_id: str, _admin: str = Depends(require_admin)) -> dict[str, Any]:
+    return _call(svc.auth_start, _checked_auth_provider(provider_id))
+
+
+@router.post("/auth/{provider_id}/poll")
+def auth_poll(provider_id: str, body: AuthActionBody,
+              _admin: str = Depends(require_admin)) -> dict[str, Any]:
+    return _call(svc.auth_poll, _checked_auth_provider(provider_id), body.session)
+
+
+@router.post("/auth/{provider_id}/complete")
+def auth_complete(provider_id: str, body: AuthActionBody,
+                  _admin: str = Depends(require_admin)) -> dict[str, Any]:
+    return _call(svc.auth_complete, _checked_auth_provider(provider_id), body.session, body.value)
+
+
+@router.post("/auth/{provider_id}/logout")
+def auth_logout(provider_id: str, _admin: str = Depends(require_admin)) -> dict[str, Any]:
+    return _call(svc.auth_logout, _checked_auth_provider(provider_id))
+
+
 @router.post("/model/catalog")
 def model_catalog(body: ModelCatalogBody) -> dict[str, Any]:
     return _call(svc.model_catalog, _payload(body))

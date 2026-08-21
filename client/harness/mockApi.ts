@@ -264,6 +264,49 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   })],
   // 模型选择器的数据源。**必须有没配 key 的那几家**：面板把它们收进「未配置密钥」
   // 分组，那一段的样式只在这种数据下才渲染得出来。
+  // 订阅登录：**三种流程各留一个**（device / paste / token），还要留"已登录"和
+  // "未登录"两种状态 —— 面板的按钮、徽标、流程面板都只在特定状态下才渲染得出来。
+  ["/ivyea-agent/auth", {
+    ok: true,
+    providers: [
+      { id: "anthropic-oauth", label: "Claude 订阅 OAuth", kind: "paste",
+        status: "not-authenticated", ready: false,
+        hint: "授权后页面会显示一段 `code#state`，整段复制粘回来。" },
+      { id: "openai-codex", label: "OpenAI Codex OAuth", kind: "device",
+        status: "authenticated+refresh", ready: true, source: "device-code",
+        hint: "打开页面后输入下面的代码并确认授权，这里会自动完成。" },
+      { id: "google-gemini-cli", label: "Gemini Code Assist OAuth", kind: "paste",
+        status: "expired", ready: false,
+        hint: "授权后浏览器会跳到一个打不开的 127.0.0.1 地址（正常现象）—— 把地址栏里那条完整 URL 复制粘回来。" },
+      { id: "qwen-oauth", label: "Qwen OAuth / Portal", kind: "device",
+        status: "not-authenticated", ready: false,
+        hint: "在打开的页面上确认授权即可，这里会自动完成。" },
+      { id: "copilot", label: "GitHub Copilot / GitHub Models", kind: "token",
+        status: "configured:COPILOT_GITHUB_TOKEN", ready: true,
+        hint: "填一个有 Copilot 权限的 GitHub Token。" },
+    ],
+  }],
+  ["/ivyea-agent/auth/", (url: string) => {
+    const parts = (url.split("/ivyea-agent/auth/")[1] || "").split("/");
+    const pid = parts[0] || "";
+    const action = (parts[1] || "").split("?")[0];
+    if (action === "start") {
+      if (pid === "qwen-oauth" || pid === "openai-codex") {
+        return { ok: true, provider: pid, kind: "device", session: "sess-1",
+                 user_code: "PR7X-NERO", verification_uri: "https://example.invalid/activate",
+                 interval: 2, expires_in: 900, hint: "在打开的页面上确认授权即可。" };
+      }
+      if (pid === "copilot") {
+        return { ok: true, provider: pid, kind: "token", session: "sess-1",
+                 hint: "填一个有 Copilot 权限的 GitHub Token。" };
+      }
+      return { ok: true, provider: pid, kind: "paste", session: "sess-1",
+               url: "https://example.invalid/oauth/authorize?code=true",
+               expires_in: 900, hint: "授权后把回调内容整段粘回来。" };
+    }
+    if (action === "poll") return { ok: true, status: "pending", interval: 2, note: "" };
+    return { ok: true };
+  }],
   ["/ivyea-agent/model/providers", {
     ok: true,
     providers: [

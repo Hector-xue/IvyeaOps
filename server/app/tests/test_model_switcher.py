@@ -174,3 +174,49 @@ def test_no_secret_is_echoed_back(hub, monkeypatch):
     _stub_agent(monkeypatch, sink)
     out = _run(hub.model_catalog(hub.ModelCatalogBody(slot="vision")))
     assert "sk-vision" not in repr(out)
+
+
+# ── 订阅登录代理 ────────────────────────────────────────────────────────────
+
+def test_auth_routes_are_admin_only(ctx):
+    """凭据存在服务器上、由 agent 全局共用：谁登录，全站所有对话和定时任务都在烧
+    谁的订阅额度。这不是普通用户该按的开关。"""
+    import inspect
+
+    from app.core.security import require_admin
+    _svc, router = ctx
+    for fn in (router.auth_status, router.auth_start, router.auth_poll,
+               router.auth_complete, router.auth_logout):
+        deps = [p.default for p in inspect.signature(fn).parameters.values()
+                if hasattr(p.default, "dependency")]
+        assert any(d.dependency is require_admin for d in deps), f"{fn.__name__} 少了 require_admin"
+
+
+def test_auth_provider_id_is_whitelisted(ctx):
+    """provider id 会被拼进转发给 agent 的路径，不能什么都放行。"""
+    from fastapi import HTTPException
+    _svc, router = ctx
+    assert router._checked_auth_provider("qwen-oauth") == "qwen-oauth"
+    for bad in ("deepseek", "../../health", ""):
+        with pytest.raises(HTTPException):
+            router._checked_auth_provider(bad)
+
+
+def test_auth_calls_forward_session_and_value(ctx, monkeypatch):
+    svc, router = ctx
+    seen: dict = {}
+
+    def _poll(pid, session):
+        seen["poll"] = (pid, session)
+        return {"ok": True, "status": "pending"}
+
+    def _complete(pid, session, value):
+        seen["complete"] = (pid, session, value)
+        return {"ok": True}
+
+    monkeypatch.setattr(svc, "auth_poll", _poll)
+    monkeypatch.setattr(svc, "auth_complete", _complete)
+    router.auth_poll("qwen-oauth", router.AuthActionBody(session="s1"))
+    router.auth_complete("anthropic-oauth", router.AuthActionBody(session="s2", value="code#state"))
+    assert seen["poll"] == ("qwen-oauth", "s1")
+    assert seen["complete"] == ("anthropic-oauth", "s2", "code#state")

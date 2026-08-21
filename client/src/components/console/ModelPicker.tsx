@@ -42,6 +42,11 @@ type Row = {
   keyEnv: string;
 };
 
+/** 走订阅登录（而不是填 API key）的那几家。 */
+const OAUTH_PROVIDERS = new Set([
+  "qwen-oauth", "openai-codex", "anthropic-oauth", "google-gemini-cli", "copilot",
+]);
+
 /**
  * provider 清单每次开面板都拉一遍太浪费（23 家 + 能力矩阵），进程内存一份。
  *
@@ -367,18 +372,24 @@ export default function ModelPicker({
             {groups.notReady.length > 0 && (
               <div className="mp-group mp-group-off">
                 <div className="mp-group-hd"><span>未配置密钥</span></div>
-                {groups.notReady.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className="mp-row mp-row-off"
-                    onClick={onOpenSettings}
-                    title={`去系统配置填 ${keyEnvOf(p) || "密钥"}`}
-                  >
-                    <span className="mp-row-name">{p.label || p.id}</span>
-                    <span className="mp-row-sub">{keyEnvOf(p) || "需登录授权"}</span>
-                  </button>
-                ))}
+                {groups.notReady.map((p) => {
+                  // 订阅制那几家不是"填密钥"而是"去登录"。写成填密钥会让人一直在
+                  // 找一个根本不存在的输入框。
+                  const oauth = OAUTH_PROVIDERS.has(p.id);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className="mp-row mp-row-off"
+                      onClick={onOpenSettings}
+                      title={oauth ? "去「系统配置 → 订阅登录」登录这个账号"
+                                   : `去系统配置填 ${keyEnvOf(p) || "密钥"}`}
+                    >
+                      <span className="mp-row-name">{p.label || p.id}</span>
+                      <span className="mp-row-sub">{oauth ? "去登录" : (keyEnvOf(p) || "需授权")}</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

@@ -21,6 +21,8 @@ import {
   FONT_OPTIONS, ZOOM_OPTIONS, WEIGHT_OPTIONS,
   getFontId, getZoom, getWeight, applyFont, applyZoom, applyWeight,
 } from "../../lib/appearance";
+import { useAuth } from "../../App";
+import SubscriptionLogin from "../../components/settings/SubscriptionLogin";
 import { errText } from "../../lib/errText";
 
 type SaveStatus = "idle" | "saving" | "ok" | "error";
@@ -1425,6 +1427,11 @@ function AppearanceSection() {
 const COLLAPSED_SECTIONS = new Set(["appearance"]);
 
 export default function HubSettings({ focusSection = "" }: { focusSection?: string } = {}) {
+  // 订阅登录那一段只给管理员看：凭据存在服务器上、由 agent 全局共用，
+  // 谁登录全站就烧谁的额度。后端那几个端点也是 require_admin，这里只是别把
+  // 一个按下去必然 403 的按钮摆在普通用户面前。
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
   const [vals, setVals] = useState<HubSettings>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState("");
@@ -1544,6 +1551,25 @@ export default function HubSettings({ focusSection = "" }: { focusSection?: stri
           />
         </div>
       </Section>
+
+      {/* -- 核心 1.5: 订阅制模型登录（仅管理员）-- */}
+      {isAdmin && (
+        <div className="hs-section">
+          <div className="hs-section-hd">
+            <div>
+              <div className="hs-section-title">订阅登录</div>
+              <div className="hs-section-desc">
+                Claude 订阅、OpenAI Codex、Gemini Code Assist、Qwen、GitHub Copilot 这几家不是填 API Key，
+                而是要走一次授权登录。以前只能去 IvyeaAgent 的命令行做，现在在这里点几下就行。
+                登录完成后，它们会出现在任务台模型选择器的「已配置」分组里。
+              </div>
+            </div>
+          </div>
+          <div className="hs-fields">
+            <SubscriptionLogin />
+          </div>
+        </div>
+      )}
 
       {/* -- 核心 2: 数据源 -- */}
       <Section

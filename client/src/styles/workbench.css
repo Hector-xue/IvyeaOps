@@ -4838,3 +4838,48 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
   font-size:var(--fs-10);font-family:var(--font);padding:3px 9px;border-radius:999px;
   transition:border-color .12s,color .12s}
 .hs-inherit-btn:hover{border-color:var(--acc);color:var(--acc)}
+
+/* ── 订阅登录面板（系统配置 · 仅管理员）──────────────────────────────────── */
+.sl-wrap{display:flex;flex-direction:column;gap:8px}
+/* 这条提醒不能做成灰色小字：它说的是"你这一下会让全站都用你的额度"。 */
+.sl-warn{padding:9px 11px;border-radius:8px;font-size:var(--fs-10);line-height:1.6;
+  color:var(--t2);background:color-mix(in srgb,var(--amber) 9%,transparent);
+  border:1px solid color-mix(in srgb,var(--amber) 32%,transparent)}
+.sl-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:9px 11px;border:1px solid var(--b);border-radius:8px;background:var(--bg2)}
+.sl-row-main{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
+.sl-name{font-size:var(--fs-115);font-weight:600;color:var(--t)}
+.sl-pill{font-size:var(--fs-10);padding:2px 8px;border-radius:999px;white-space:nowrap;
+  border:1px solid var(--b);color:var(--t3)}
+.sl-pill.tone-ok{color:var(--acc);border-color:color-mix(in srgb,var(--acc) 40%,transparent);
+  background:color-mix(in srgb,var(--acc) 9%,transparent)}
+.sl-pill.tone-warn{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 40%,transparent);
+  background:color-mix(in srgb,var(--amber) 9%,transparent)}
+.sl-row-acts{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.sl-btn{border:1px solid var(--b);background:transparent;color:var(--t2);cursor:pointer;
+  font-size:var(--fs-10);font-family:var(--font);padding:5px 12px;border-radius:999px;
+  transition:border-color .12s,color .12s}
+.sl-btn:hover:not(:disabled){border-color:var(--acc);color:var(--acc)}
+.sl-btn:disabled{opacity:.45;cursor:default}
+.sl-btn-quiet{color:var(--t3)}
+
+.sl-flow{display:flex;flex-direction:column;gap:8px;padding:11px;border-radius:10px;
+  border:1px solid color-mix(in srgb,var(--acc) 35%,transparent);
+  background:color-mix(in srgb,var(--acc) 5%,transparent)}
+.sl-flow-hd{display:flex;align-items:center;justify-content:space-between;
+  font-size:var(--fs-115);font-weight:600;color:var(--t)}
+.sl-x{border:none;background:transparent;color:var(--t3);cursor:pointer;
+  font-size:var(--fs-10);font-family:var(--font)}
+.sl-x:hover{color:var(--t)}
+/* 设备码要**大**：用户拿着手机在另一台设备上照着输，小字号就是在刁难人。 */
+.sl-code-row{display:flex;align-items:center;gap:10px}
+.sl-code{font-family:var(--mono,ui-monospace,monospace);font-size:22px;letter-spacing:.14em;
+  font-weight:700;color:var(--t);background:var(--bg1);border:1px solid var(--b);
+  padding:6px 14px;border-radius:8px;user-select:all}
+.sl-link{font-size:var(--fs-11);color:var(--acc);text-decoration:none;width:fit-content}
+.sl-link:hover{text-decoration:underline}
+.sl-input{width:100%;background:var(--bg1);border:1px solid var(--b);color:var(--t);
+  font-family:var(--font);font-size:var(--fs-12);padding:7px 10px;border-radius:6px;
+  outline:none;resize:vertical}
+.sl-note{font-size:var(--fs-10);color:var(--t3);line-height:1.6}
+.sl-err{color:var(--red)}
