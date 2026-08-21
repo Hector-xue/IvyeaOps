@@ -42,8 +42,16 @@ type Row = {
   keyEnv: string;
 };
 
-/** provider 清单每次开面板都拉一遍太浪费（23 家 + 能力矩阵），进程内存一份。 */
+/**
+ * provider 清单每次开面板都拉一遍太浪费（23 家 + 能力矩阵），进程内存一份。
+ *
+ * 但**不能一直用**：用户在这个面板里看到"未配置密钥"，点过去填好 key 再回来，
+ * 缓存还说没配 —— 那是个死胡同。所以带一分钟保质期，过期就在后台重取（列表照旧
+ * 先用旧的渲染，不闪一下空白）。
+ */
 let providerCache: IvyeaProvider[] | null = null;
+let providerCacheAt = 0;
+const PROVIDER_TTL_MS = 60_000;
 
 function keyEnvOf(row: IvyeaProvider): string {
   const s = String(row.key_status || "");
@@ -152,7 +160,9 @@ export default function ModelPicker({
 
   // ── provider 清单 ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!open || providers.length || loading) return;
+    if (!open || loading) return;
+    const fresh = providers.length > 0 && Date.now() - providerCacheAt < PROVIDER_TTL_MS;
+    if (fresh) return;
     let alive = true;
     setLoading(true);
     setLoadErr("");
@@ -161,10 +171,15 @@ export default function ModelPicker({
         if (!alive) return;
         const rows = d?.providers || [];
         providerCache = rows;
+        providerCacheAt = Date.now();
         setProviders(rows);
       })
       .catch((e: any) => {
-        if (alive) setLoadErr(e?.response?.data?.detail || e?.message || "取模型清单失败");
+        // 已经有一份（哪怕过期）就别把错误摆出来：列表照常能用，
+        // 弹一句"取模型清单失败"只会让人以为面板坏了。
+        if (alive && !providers.length) {
+          setLoadErr(e?.response?.data?.detail || e?.message || "取模型清单失败");
+        }
       })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
@@ -293,7 +308,7 @@ export default function ModelPicker({
               {!value && <span className="mp-check" aria-hidden>✓</span>}
             </button>
 
-            {loading && <div className="mp-note">正在取模型清单…</div>}
+            {loading && providers.length === 0 && <div className="mp-note">正在取模型清单…</div>}
             {!loading && loadErr && (
               <div className="mp-note mp-note-err">
                 {loadErr}
