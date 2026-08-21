@@ -3285,8 +3285,19 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .cc-thread-wrap{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
 /* overflow-anchor:none —— 浏览器自己的滚动锚定会在流式追加内容时替我们改
    scrollTop，和 useStickToBottom 的判断打架（用户明明停在上面，位置却在动）。 */
+/* 阅读列。**正文和输入框必须是同一条居中的列** —— 这是这块界面最容易被忽略、
+   一眼又最容易看出来的对齐问题：以前 .cc-thread 和 .cc-dock 各自铺满整个宽度，
+   而回答被 `.cc-ai{max-width:min(92%,860px)}` 从**左边**顶着截短，于是正文左边缘
+   和输入框齐平、右边缘却短一截。用户原话："我的正文比输入框要靠左一些，gpt 的是
+   两端均匀多出一些，deepseek 是两端均匀短出一些，只有我的是不对称的。"
+   放在基础层而不是某套皮肤里：不对称是所有主题共同的毛病。静谧/琉璃把这个变量
+   收到 720px（它们的长文阅读舒适区），其余主题用 880px。 */
+.cc-page{--cc-col:880px}
 .cc-thread{flex:1;min-height:0;overflow-y:auto;overflow-anchor:none;padding:16px 18px 8px;
-  display:flex;flex-direction:column;gap:14px}
+  display:flex;flex-direction:column;align-items:center;gap:14px}
+/* width:100% 是必须的：align-items:center 会让 flex 子项退回内容宽度。 */
+.cc-thread > *{width:100%;max-width:var(--cc-col)}
+.cc-dock > *{max-width:var(--cc-col);margin-left:auto;margin-right:auto}
 /* 内容从上往下正常排。
    **别再改成贴底（margin-top:auto）**：跑起来之后内容是从下面长出来的，贴底会让
    已经排好的每一行随着新内容一起往上移 —— 屏幕上所有字每一帧都在跳。对话区宁可
@@ -3305,7 +3316,7 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
    再加一条横贯全宽的硬线，就变成"把页面切成上下两半"，而参考的那两家
    （ChatGPT / DeepSeek Harness）在这个位置都是**什么都没有** —— 靠留白和投影
    分层。线和投影同时上，是两种分层语言打架。 */
-.cc-dock{flex-shrink:0;padding:10px 18px 12px;background:var(--bg)}
+.cc-dock{flex-shrink:0;padding:18px 18px 12px;background:var(--bg)}
 
 /* ── 回答末尾的动作行（components/console/AnswerActions.tsx）──────────────
    正文读完之后的落点：一段话结束了、可以复制、可以再跑一次。没有它，正文的最后
@@ -3315,10 +3326,15 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
    一点点的按钮，看起来就是没对齐，而不是"故意缩进"。
    对齐的是 .cc-answer 这个盒子的左边：经典主题下它是一张有边框的卡（内边距
    13px），琉璃/静谧下内边距是 0，两种情况下"和卡的左边对齐"都成立。 */
-.cc-acts{display:flex;align-items:center;gap:2px;margin:-2px 0 0}
+/* 上下都要留出距离。贴着正文就像正文的一部分，贴着输入框就像输入框的工具条 ——
+   参考的两家都是上面留一行的量、下面留得更多（用户原话：是不是离正文和输入框
+   太近了）。上面 4+8（.cc-ai 的 gap）＝12px，下面由 .cc-dock 的上内边距给到 28px。 */
+.cc-acts{display:flex;align-items:center;gap:2px;margin:4px 0 0}
 .cc-act:first-child{margin-left:-8px}
+/* 用次级色而不是三级色。三级色在 14px 的线性图标上会淡到看着像**没画清楚**，
+   而参考的两家在这一排上都是接近正文的深度。 */
 .cc-act{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border:none;
-  border-radius:8px;background:transparent;color:var(--t3);cursor:pointer;
+  border-radius:8px;background:transparent;color:var(--t2);cursor:pointer;
   font-family:var(--font);font-size:var(--fs-10);line-height:1;
   transition:color var(--dur) var(--ease),background-color var(--dur) var(--ease)}
 .cc-act:hover{color:var(--t);background:var(--bg2)}
@@ -3374,7 +3390,9 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .cc-bubble{max-width:min(78%,640px);padding:8px 12px;border-radius:10px 10px 2px 10px;
   background:color-mix(in srgb,var(--acc) 12%,var(--bg2));border:1px solid var(--b);
   color:var(--t);font-size:var(--fs-12);line-height:1.7;white-space:pre-wrap;word-break:break-word}
-.cc-ai{display:flex;flex-direction:column;gap:8px;max-width:min(92%,860px)}
+/* 回答铺满整条阅读列。行宽由 --cc-col 管，这里再套一层 92% 只会让右边缘比输入框
+   短一截 —— 而左边缘是齐的，于是整块看起来是歪的（见 .cc-thread 那段注释）。 */
+.cc-ai{display:flex;flex-direction:column;gap:8px;max-width:100%}
 
 /* ── 执行叙述（components/console/ActivityFeed.tsx）───────────────────────
    一件事一行、单行截断、行高恒定（对标 DeepSeek Harness）。行高恒定不是排版偏好：
@@ -3853,7 +3871,7 @@ button.af-line:hover{background:var(--bg2)}
   .cc-chip-model{padding:5px 8px}
   .cc-rail{display:none}           /* 手机端不挤会话区 */
   .cc-thread{padding:12px 10px 6px}
-  .cc-dock{padding:6px 10px 10px}
+  .cc-dock{padding:14px 10px 10px}
   .cc-bubble{max-width:88%}
   .cc-ai,.cc-followups{max-width:100%}
   .cs-detail{max-width:130px}
