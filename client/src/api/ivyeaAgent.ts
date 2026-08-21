@@ -730,7 +730,29 @@ export const SOURCE_PATH: Record<ConsoleSource, string> = {
   brain: "/brain",
 };
 
-export type ConsoleWorkspace = { name: string; path: string; builtin: boolean };
+export type ConsoleWorkspace = {
+  name: string; path: string; builtin: boolean;
+  /** 该工作区的**真实**会话数（服务端在分页前数的）。别拿当前页里的条数当计数 ——
+   *  只加载了 60 条时，一个有 211 条的工作区会显示成 60，看着像会话丢了。 */
+  count?: number;
+};
+
+/** 目录浏览（给「新建工作区」选绑定目录用）。走 agents 那套 /browse-filesystem，
+ *  **仅管理员**可用（后端 require_admin_actor），非管理员会 403 —— 调用方要退回手填。 */
+export type FolderEntry = { path: string; name: string; type: "directory" };
+
+export async function browseFolders(path?: string) {
+  const { data } = await api.get<{
+    path: string; parent: string; suggestions: FolderEntry[]; isDrives?: boolean;
+  }>("/agents/browse-filesystem", { params: path ? { path } : {} });
+  return data;
+}
+
+export async function createFolder(path: string) {
+  const { data } = await api.post<{ success: boolean; path: string }>(
+    "/agents/create-folder", { path });
+  return data;
+}
 
 export async function consoleSessions(
   workspace = "", limit = 60, source = "", q = "", offset = 0,

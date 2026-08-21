@@ -481,7 +481,12 @@ html[data-skin="lucent"] .sb-ws-head > span {
   text-transform: none;
 }
 /* 会话行也放松一档，和导航项同一个节奏。 */
-html[data-skin="lucent"] .sb-sess { padding: 8px 10px; margin: 1px 8px; }
+/* 左内边距减掉 margin，让文字最终落点和其它皮肤一致（见 workbench.css 的
+   --sess-indent：那是唯一的缩进开关，这里只是把 margin 的 8px 找回来）。 */
+html[data-skin="lucent"] .sb-sess {
+  padding: 8px 10px 8px calc(var(--sess-indent) - 8px);
+  margin: 1px 8px;
+}
 
 
 /* ── ⑧ 分组列表：一张卡片里一行行，分隔线内缩 ────────────────────────────

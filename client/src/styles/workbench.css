@@ -3805,10 +3805,17 @@ button.af-line:hover{background:var(--bg2)}
 }
 
 /* ── 侧边栏：工作区 + 会话列表（components/console/SessionRail.tsx）──────── */
-.sb-ws-head{display:flex;align-items:center;gap:6px}
-.sb-ws-add{margin-left:auto;background:transparent;border:none;color:var(--t3);cursor:pointer;
-  font-size:var(--fs-13);line-height:1;padding:0 2px;font-family:var(--font)}
-.sb-ws-add:hover{color:var(--acc)}
+.sb-ws-head{display:flex;align-items:center;gap:2px}
+/* 头部动作图标（搜索 / 筛选 / 新建）。第一个吃掉 margin-left:auto 把整组顶到右边。
+   命中区做到 24×24 —— 图标本身只有 14px，光靠图标本体点是点不准的。 */
+.sb-ws-act{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;
+  background:transparent;border:none;border-radius:var(--r);color:var(--t3);cursor:pointer;padding:0;
+  transition:color var(--dur) var(--ease),background-color var(--dur) var(--ease)}
+.sb-ws-act:first-of-type{margin-left:auto}
+.sb-ws-act:hover{color:var(--t);background:color-mix(in srgb, var(--t) 7%, transparent)}
+/* 开着的时候要看得出来，否则用户不知道列表正被一个收起来的筛选器过滤着 —— 那正是
+   此前"我的对话丢了"那类错觉的来源。 */
+.sb-ws-act.on{color:var(--acc);background:color-mix(in srgb, var(--acc) 12%, transparent)}
 /* 内边距是按**字号刻度重排之后**的尺寸给的。--fs-11 从 11px 调成了阅读尺度
    （见文件头 ① 的刻度表），padding 却一直停在 3px/6px 的老值 —— 结果 14.5px 的字
    塞进 29px 高的框里顶满上下边框，看着像"字太大"，其实是盒子没跟着长。
@@ -3826,8 +3833,21 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
   font-size:var(--sb-input-fs);outline:none}
 .sb-ws-input::placeholder{color:var(--t3)}
 .sb-ws-input:focus{border-color:var(--acc);box-shadow:0 0 0 2px var(--ring)}
-.sb-ws-group{margin-bottom:2px}
-.sb-ws-title{display:flex;align-items:center;gap:5px;width:100%;padding:3px 12px;background:transparent;
+/* 会话行的缩进只有这一个开关。
+   三级缩进照参考实现来：**分组标签 → 文件夹图标 → 会话标题**，一级比一级深。
+   此前是反的 —— 会话标题落在 18px，而它的父级「默认工作区」的文字在 42px，
+   子项比父项还靠左，看着就是一堆东西平铺着，没有从属关系。
+   .flat 是"只有默认工作区、分组标题根本没渲染"的情况：没有父级还缩这么深，
+   就是白白吃掉本来就不够用的标题宽度。
+   32px 是照参考实现的**比例**定的，不是照它的像素：那张参考图的侧栏 439px 宽、
+   会话缩进 45px（10.2%），这里侧栏 264px，比着像素抄会缩到 15%，白白多截断
+   一截标题。 */
+.sb-ws-group{margin-bottom:2px;--sess-indent:32px}
+.sb-ws-group.flat{--sess-indent:16px}
+/* 文件夹图标：和折叠箭头一起构成"这是一个组"的信号。用 --t3 而不是正文色，
+   它是标识不是内容。 */
+.sb-ws-ico{flex-shrink:0;color:var(--t3)}
+.sb-ws-title{display:flex;align-items:center;gap:5px;width:100%;padding:3px 8px;background:transparent;
   border:none;color:var(--t3);font-family:var(--font);font-size:var(--fs-105);cursor:pointer;text-align:left;
   transition:color var(--dur) var(--ease)}
 .sb-ws-title:hover{color:var(--t2)}
@@ -3840,7 +3860,7 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 /* 会话行。标题走**正文色**而不是次级色 —— 这是一列"要读的东西"，不是元信息；
    对比 ChatGPT 的会话列表，它的条目就是近黑。行高也松一档（4→6px）：一屏三十
    条挤在 29px 行距里，扫起来是一片糊。 */
-.sb-sess{display:flex;align-items:center;gap:6px;padding:6px 12px 6px 24px;cursor:pointer;
+.sb-sess{display:flex;align-items:center;gap:6px;padding:6px 12px 6px var(--sess-indent);cursor:pointer;
   color:var(--t);font-size:var(--fs-105);border-left:2px solid transparent;
   transition:color var(--dur) var(--ease),background-color var(--dur) var(--ease)}
 .sb-sess:hover{color:var(--t);background:var(--bg2)}
@@ -3961,6 +3981,60 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 .sb-sess-search{margin:0;width:100%;padding-left:calc(1em + 18px)}
 .sb-sess-search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);
   width:1em;height:1em;color:var(--t3);pointer-events:none}
+/* ── 「新建工作区」里的目录选择入口 ─────────────────────────────────────── */
+.sb-ws-pick{display:flex;align-items:center;gap:6px;width:calc(100% - 16px);margin:2px 8px 4px;
+  padding:6px 9px;border:1px dashed var(--b2);border-radius:var(--r);background:transparent;
+  color:var(--t3);font-family:var(--font);font-size:var(--sb-input-fs);cursor:pointer;text-align:left;
+  transition:color var(--dur) var(--ease),border-color var(--dur) var(--ease)}
+.sb-ws-pick:hover{color:var(--t2);border-color:var(--t3)}
+/* 选中目录后从虚线变实线：虚线是"这里还空着"的通用暗示，选完还留着会让人以为没生效。 */
+.sb-ws-pick.has{border-style:solid;color:var(--t)}
+.sb-ws-pick-t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-ws-pick-x{flex-shrink:0;color:var(--t3);padding:0 2px}
+.sb-ws-pick-x:hover{color:var(--red)}
+
+/* ── 目录选择器弹窗（components/console/FolderPicker.tsx）─────────────────── */
+.fp-card{width:min(620px,92vw);display:flex;flex-direction:column;max-height:80vh;overflow:hidden}
+.fp-path{display:flex;align-items:center;gap:6px;padding:8px 16px;border-bottom:1px solid var(--b);
+  font-size:var(--fs-10);color:var(--t3)}
+.fp-up,.fp-pencil{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+  flex-shrink:0;background:transparent;border:none;border-radius:var(--r);color:var(--t3);cursor:pointer;padding:0}
+.fp-up:hover,.fp-pencil:hover{color:var(--t);background:color-mix(in srgb, var(--t) 7%, transparent)}
+/* direction:rtl 让长路径从**尾部**开始显示 —— 省略号打在开头。路径的可辨识信息几乎
+   全在末尾几段，从头截断等于把有用的部分丢掉。 */
+.fp-path-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fp-path-input{flex:1;padding:4px 8px;border:1px solid var(--acc);border-radius:var(--r);
+  background:var(--bg2);color:var(--t);font-family:var(--font);font-size:var(--fs-10);outline:none}
+/* 列表自己滚，弹窗整体不滚 —— 整体滚会把底部的按钮排也滚走。 */
+.fp-list{flex:1;overflow-y:auto;padding:6px 8px;min-height:220px}
+.fp-row{display:flex;align-items:center;gap:9px;width:100%;padding:7px 8px;border:none;
+  border-radius:var(--r);background:transparent;color:var(--t);font-family:var(--font);
+  font-size:var(--fs-105);cursor:pointer;text-align:left;
+  transition:background-color var(--dur) var(--ease)}
+.fp-row:hover{background:color-mix(in srgb, var(--t) 6%, transparent)}
+.fp-ico{flex-shrink:0;color:var(--t3)}
+.fp-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fp-chev{flex-shrink:0;color:var(--t3);opacity:.5}
+.fp-state{display:flex;align-items:center;gap:8px;padding:24px 10px;color:var(--t3);
+  font-size:var(--fs-10);line-height:1.7}
+.fp-err{color:var(--red)}
+.fp-spin{animation:fp-rot 1s linear infinite}
+@keyframes fp-rot{to{transform:rotate(360deg)}}
+.fp-foot{align-items:center;gap:10px}
+.fp-newbtn{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border:1px solid var(--b);
+  border-radius:var(--r);background:transparent;color:var(--t3);font-family:var(--font);
+  font-size:var(--fs-10);cursor:pointer;white-space:nowrap}
+.fp-newbtn:hover{color:var(--t);border-color:var(--b2)}
+.fp-new-input{padding:4px 8px;border:1px solid var(--acc);border-radius:var(--r);background:var(--bg2);
+  color:var(--t);font-family:var(--font);font-size:var(--fs-10);outline:none;width:180px}
+.fp-hidden{display:inline-flex;align-items:center;gap:5px;color:var(--t3);font-size:var(--fs-10);
+  cursor:pointer;white-space:nowrap}
+.fp-spacer{flex:1}
+@media (max-width:680px){
+  .fp-foot{flex-wrap:wrap}
+  .fp-spacer{flex-basis:100%}
+}
+
 .sb-sess-more{display:block;width:calc(100% - 16px);margin:4px 8px 8px;padding:4px 8px;
   border:1px dashed var(--b);border-radius:var(--r);background:transparent;color:var(--t3);
   font-family:var(--font);font-size:var(--fs-10);cursor:pointer;

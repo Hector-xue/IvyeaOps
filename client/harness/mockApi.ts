@@ -142,10 +142,32 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
     known: true, total_tokens: 13_900_000, spend_usd: 42.7, enabled: false,
     limit_usd: 0, ratio: 0, level: "ok", age_seconds: 30,
   }],
+  // 两个工作区 + count，才验得到"折叠了不该冒加载更多"和"计数不是本页条数"这两条。
+  // count 是**真实**条数（服务端分页前数的），故意和 SESSIONS 的长度不一致。
   ["/ivyea-agent/console/sessions", {
     ok: true, sessions: SESSIONS, agent_available: true,
-    workspaces: [{ name: "默认工作区", path: "/root", builtin: true }],
+    workspaces: [
+      { name: "默认工作区", path: "/root", builtin: true, count: 189 },
+      { name: "Amazon", path: "/root/amazon-image-workflow", builtin: false, count: 0 },
+    ],
     total: 189, offset: 0, has_more: true,
+  }],
+  // 目录选择器。字段名照抄 server/app/agents/routers/files.py 的 browse_filesystem。
+  ["/agents/browse-filesystem", {
+    path: "/root", parent: "/",
+    suggestions: [
+      { path: "/root/amazon-image-workflow", name: "amazon-image-workflow", type: "directory" },
+      { path: "/root/backups", name: "backups", type: "directory" },
+      { path: "/root/brain", name: "brain", type: "directory" },
+      { path: "/root/claudecodeui", name: "claudecodeui", type: "directory" },
+      { path: "/root/dev-history", name: "dev-history", type: "directory" },
+      { path: "/root/dsh-workspace", name: "dsh-workspace", type: "directory" },
+      { path: "/root/feishu-claude-relay", name: "feishu-claude-relay", type: "directory" },
+      { path: "/root/harness", name: "harness", type: "directory" },
+      { path: "/root/ivyea-agent", name: "ivyea-agent", type: "directory" },
+      { path: "/root/ivyea-ops", name: "ivyea-ops", type: "directory" },
+      { path: "/root/.cache", name: ".cache", type: "directory" },
+    ],
   }],
   ["/ivyea-agent/console/presets", { ok: true, presets: [] }],
   // 能力市场的三个数据源。真实部署里 /skill/* 和 /skill-market/* 都挂在
