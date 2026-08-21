@@ -829,6 +829,25 @@ function match(url: string): Canned {
   return typeof hit[1] === "function" ? hit[1](url) : hit[1];
 }
 
+/**
+ * **这几个接口的假响应必须慢一点。**
+ *
+ * 假后端默认在一个微任务里就 resolve —— 比 React 的重渲染还早。于是"响应回来时
+ * 组件已经重渲染过一轮"这个真实网络下的常态，在验证台里永远复现不出来。
+ * 实测漏掉过一个死锁：effect 里 setLoading(true) 让依赖变化，React 先跑 cleanup 把
+ * 回调作废，请求回来时状态一个都没落地，面板永远停在"正在取模型清单…"，而验证台
+ * 一路绿灯。给这类"开面板才去取"的接口加几百毫秒，那个顺序才验得到。
+ */
+const SLOW_PATHS: [string, number][] = [
+  ["/ivyea-agent/model/providers", 320],
+  ["/settings/model-catalog", 320],
+];
+
+const delayFor = (url: string): number => {
+  for (const [prefix, ms] of SLOW_PATHS) if (url.includes(prefix)) return ms;
+  return 0;
+};
+
 /** 装上假适配器。必须在 render 之前调用。 */
 export function installMockApi(): void {
   const reply = (config: { url?: string; baseURL?: string }) => {
@@ -846,11 +865,17 @@ export function installMockApi(): void {
     } as never;
   };
 
-  api.defaults.adapter = async (config) => reply(config);
+  const slowReply = async (config: { url?: string; baseURL?: string }) => {
+    const ms = delayFor((config.baseURL || "") + (config.url || ""));
+    if (ms) await new Promise((r) => setTimeout(r, ms));
+    return reply(config);
+  };
+
+  api.defaults.adapter = async (config) => slowReply(config);
   // 各板块自建的 axios 实例（listing/api.ts 就是一个）不共享上面那个 adapter，
   // 但会在发请求时回落到全局默认值——不设这个，整个 Listing 板块在验证台里
   // 是打不开的。
-  axios.defaults.adapter = async (config) => reply(config);
+  axios.defaults.adapter = async (config) => slowReply(config);
 
   // ?agentdown=1 —— 装成 IvyeaAgent 没起来，用来验任务台的兜底通道。
   // AI 问答那一页并进任务台后，"agent 掉线还能纯聊"这条退路就只剩这一个入口了，

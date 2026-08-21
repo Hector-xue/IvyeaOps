@@ -159,31 +159,44 @@ export default function ModelPicker({
   }, [openSignal]);
 
   // ── provider 清单 ────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!open || loading) return;
-    const fresh = providers.length > 0 && Date.now() - providerCacheAt < PROVIDER_TTL_MS;
-    if (fresh) return;
-    let alive = true;
+  /*
+   * **别把 loading 放进 effect 的依赖里，也别用 alive 标志守回调。**
+   * 曾经这么写过，结果是面板永远停在"正在取模型清单…"：
+   *   effect 里 setLoading(true) → 依赖变了 → React 先跑 cleanup（alive=false）
+   *   → 请求回来时 setProviders / setLoading(false) 全被那个标志挡掉。
+   * 假后端在微任务里就 resolve，抢在重渲染前面，所以验证台一路绿灯；真实网络
+   * 有几十毫秒延迟，顺序反过来就死锁。取数据放事件驱动的函数里，用 ref 防重入。
+   */
+  const fetchingRef = useRef(false);
+
+  const loadProviders = useCallback(async (force: boolean) => {
+    if (fetchingRef.current) return;
+    const fresh = !!providerCache && Date.now() - providerCacheAt < PROVIDER_TTL_MS;
+    if (!force && fresh) return;
+    fetchingRef.current = true;
     setLoading(true);
     setLoadErr("");
-    ivyeaModelProviders()
-      .then((d) => {
-        if (!alive) return;
-        const rows = d?.providers || [];
-        providerCache = rows;
-        providerCacheAt = Date.now();
-        setProviders(rows);
-      })
-      .catch((e: any) => {
-        // 已经有一份（哪怕过期）就别把错误摆出来：列表照常能用，
-        // 弹一句"取模型清单失败"只会让人以为面板坏了。
-        if (alive && !providers.length) {
-          setLoadErr(e?.response?.data?.detail || e?.message || "取模型清单失败");
-        }
-      })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, [open, providers.length, loading]);
+    try {
+      const d = await ivyeaModelProviders();
+      const rows = d?.providers || [];
+      providerCache = rows;
+      providerCacheAt = Date.now();
+      setProviders(rows);
+    } catch (e: any) {
+      // 已经有一份（哪怕过期）就别把错误摆出来：列表照常能用，
+      // 弹一句"取模型清单失败"只会让人以为面板坏了。
+      if (!providerCache?.length) {
+        setLoadErr(e?.response?.data?.detail || e?.message || "取模型清单失败");
+      }
+    } finally {
+      fetchingRef.current = false;
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open) void loadProviders(false);
+  }, [open, loadProviders]);
 
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 30);
