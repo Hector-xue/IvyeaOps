@@ -3752,6 +3752,9 @@ button.af-line:hover{background:var(--bg2)}
    一行里两种小字号只会显得是没对齐。 */
 .cc-chip-model{max-width:230px;color:var(--t3)}
 .cc-chip-model:hover{color:var(--t2)}
+/* 模型名长短差得远（"deepseek-v4-flash" 到 "bytedance-seed/seed-2-1-turbo"）。
+   芯片有 max-width，标签不给省略号的话长名字会直接顶出芯片、压到发送键上。 */
+.cc-chip-model .cc-chip-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 发送键：圆、实心、图标居中。 */
 .cc-send{width:34px;height:34px;border-radius:50%;border:none;background:var(--acc);color:var(--on-acc);
   cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
@@ -3870,12 +3873,14 @@ button.af-line:hover{background:var(--bg2)}
   .cc-hero-title{font-size:24px;line-height:1.35}
   /* 底栏在 390px 宽下装不下"附件+工作区+档位+模型+发送"：桌面靠左组 overflow
      隐藏来保一行，手机上那会**把审批档位裁掉**——恰恰是最不能看不见的那一个。
-     所以手机上允许折行，并把模型名收成一个图标 + 一个下拉箭头（箭头留着：它现在
-     是真开关了，只剩一个图标会让人以为点不了）。 */
+     所以窄屏允许折行。
+     **模型名不藏**：这枚芯片以前只是个跳转入口，收成一个图标无所谓；现在它是
+     "你正在跟哪个模型说话"的唯一显示位，也是切换入口 —— 藏掉名字，用户就只能
+     点开面板才知道自己在用哪个模型。底栏这一档本来就能折行，给它留个位置、
+     超长省略即可（900px 并不只是手机：半屏窗口、小笔记本都会落到这一档）。 */
   .cc-bar{flex-wrap:wrap;row-gap:6px}
   .cc-bar-left{overflow:visible;flex-wrap:wrap}
-  .cc-chip-model .cc-chip-label{display:none}
-  .cc-chip-model{padding:5px 8px}
+  .cc-chip-model{padding:5px 8px;max-width:160px}
   .cc-rail{display:none}           /* 手机端不挤会话区 */
   .cc-thread{padding:12px 10px 6px}
   .cc-dock{padding:14px 10px 10px}
