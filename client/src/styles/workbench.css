@@ -3881,6 +3881,23 @@ button.af-line:hover{background:var(--bg2)}
   .cc-bar{flex-wrap:wrap;row-gap:6px}
   .cc-bar-left{overflow:visible;flex-wrap:wrap}
   .cc-chip-model{padding:5px 8px;max-width:160px}
+}
+
+/* 手机上底栏必然折行：附件 + 工作区 + 审批 + 模型 + 发送，五样排不进一行。
+   **折了就要看起来是有意折的。** 右组默认 margin-left:auto 贴右，掉到第二行之后
+   整组还贴着右边，左侧空出一大片（实测 390px 下空 110px），两行各走各的 ——
+   那正是"乱"的来源。
+   改成右组独占一整行、两端对齐：模型芯片贴左（和上一行的附件按钮同一条左边线），
+   发送键贴右，中间那段空白从"缺口"变成"栏位"。模型名也因此拿到整行的宽度，
+   不必再截成 deepseek-v…（上一行截断、这一行整片空白，是最说不通的一种排版）。
+
+   断点取 640 而不是"真正折行的那一档"：折不折行取决于工作区名、审批档位、模型名
+   有多长（实测 601~640 之间，短标签能排一行、"审批放行"就排不下），CSS 判断不了。
+   取 640 的代价是短标签 + 601~640px 这一小段会多占一行 —— 但两行仍是对齐的，
+   而赌低了就会重新出现"右组孤零零贴右、左边空一片"的那个乱象。 */
+@media (max-width:640px){
+  .cc-bar-right{width:100%;margin-left:0;justify-content:space-between}
+  .cc-chip-model{max-width:none;min-width:0;flex:0 1 auto}
   .cc-rail{display:none}           /* 手机端不挤会话区 */
   .cc-thread{padding:12px 10px 6px}
   .cc-dock{padding:14px 10px 10px}
