@@ -59,6 +59,7 @@ import {
   ivyeaOpsTools,
   ivyeaSkills,
   visionDescribe,
+  type IvyeaChatAttachment,
   type ConsolePreset,
   type IvyeaContextUsage,
   type IvyeaFileChange,
@@ -86,6 +87,20 @@ const PREFS_KEY = "ivyea-ops.console.prefs";
 /** 兜底通道（agent 掉线时）的人设。agent 在时人设由 serve 那边给。 */
 const FALLBACK_SYSTEM =
   "你是亚马逊运营助手，用中文清晰作答；需要时用 Markdown（表格/列表/标题）写出可直接复制的文档。";
+
+/**
+ * `have >= want` 吗（纯数字点分版本）。取不到版本一律当成"老的"，宁可走兼容分支。
+ */
+function atLeast(have: string, want: string): boolean {
+  const a = have.replace(/^v/, "").split(".").map((x) => parseInt(x, 10));
+  if (!a.length || Number.isNaN(a[0])) return false;
+  const b = want.split(".").map(Number);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const p = a[i] || 0, q = b[i] || 0;
+    if (p !== q) return p > q;
+  }
+  return true;
+}
 
 /** 兜底那条注记的序号 —— 只要在同一轮里唯一即可，跟正常轮次的 noteSeq 互不相干。 */
 let noteSeqFallback = 0;
@@ -132,6 +147,12 @@ type Turn = {
   thoughts?: Thought[];
   /** 这一轮的计时与用量，喂给底部统计条。 */
   metrics?: TurnMetrics;
+  /**
+   * 这一轮用户发出去的图（本次页面里是 data URL，从存档恢复时是 `ivyea-ref://`
+   * 换来的地址）。**必须在气泡里显示**：图不进模型，会话记录此前完全看不出用户
+   * 发过图 —— 用户原话："会话记录里面也没有展示我发送的图片"。
+   */
+  images?: string[];
 };
 
 /** 思考流只保留尾部这么多字符 —— 活动行只显示最后一句，多存无用。 */
@@ -214,6 +235,13 @@ function ConsoleInner() {
   const [references, setReferences] = useState<ComposerRef[]>([]);
   const [picked, setPicked] = useState<ComposerRef[]>([]);
   const [images, setImages] = useState<string[]>([]);
+  /**
+   * 这台机器上的 agent 认不认识 `attachments`（≥ v1.15.3）。
+   *
+   * 认识：附图的文字版进 user 消息，跟着历史走；不认识（或问不到版本）：退回老路子
+   * 塞 system —— 那样只有贴图那一轮有效，但总好过整段丢掉。
+   */
+  const [agentTakesAttachments, setAgentTakesAttachments] = useState(false);
   const [loadingSession, setLoadingSession] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
@@ -279,6 +307,7 @@ function ConsoleInner() {
         if (!alive) return;
         const m = (d?.health as any)?.model || {};
         setModel(String(m.model || m.label || ""));
+        setAgentTakesAttachments(atLeast(String((d?.health as any)?.version || ""), "1.15.3"));
       })
       .catch(() => void 0);
     // @ 可引用的东西：知识卡 + 上传件。取不到就没有 @ 菜单，不影响别的。
@@ -611,7 +640,16 @@ function ConsoleInner() {
 
     setFollowUps([]);
     setComposer((c) => ({ ...c, text: "" }));
-    const userTurn: Turn = { id: uid(), role: "user", text };
+    // 图和 @ 引用都是**这一轮**的东西，和文字一起清空。
+    // 原来清在这个函数的末尾，于是：一轮动辄几分钟，这几分钟里图还挂在输入框上
+    // （用户原话："文字出去了，但是图还显示在输入框里面"）；而中止/断链那两个
+    // 分支中途 return，压根走不到那行清理，图就一直粘在下一轮上。
+    // 后面用的是这两个局部快照，清 state 不影响这一轮要发的内容。
+    const sentImages = images;
+    const sentPicked = picked;
+    setImages([]);
+    setPicked([]);
+    const userTurn: Turn = { id: uid(), role: "user", text, images: sentImages };
     const aiId = uid();
     const aiTurn: Turn = {
       id: aiId, role: "assistant", text: "", steps: [], skills: [], approvals: [], running: true,
@@ -630,10 +668,10 @@ function ConsoleInner() {
     // @ 引用：把选中条目的正文取出来随本轮带下去。取不到的跳过并说明，
     // 不要让用户以为引用了、实际什么都没带。
     let refSystem = "";
-    if (picked.length) {
+    if (sentPicked.length) {
       const parts: string[] = [];
       const failed: string[] = [];
-      for (const r of picked) {
+      for (const r of sentPicked) {
         try {
           const d = await ivyeaKnowledgeFile(r.path);
           const body = String(d?.content || "").slice(0, 12000);
@@ -660,31 +698,38 @@ function ConsoleInner() {
     //           远程地址（比如上一轮出的图）本来就能直接当原图，原样带过去。
     let visionSystem = "";
     let imageRefSystem = "";
-    if (images.length) {
-      const local = images.filter((u) => u.startsWith("data:"));
-      const remote = images.filter((u) => !u.startsWith("data:"));
-      if (local.length) {
-        try {
-          const d = await visionDescribe(local);
-          if (d?.text?.trim()) {
-            visionSystem = `[用户附图 —— 由视觉模型（${d.provider || "vision"}）读出的内容]\n${d.text.trim()}`;
-          }
-        } catch (e: any) {
-          notify("error", errText(e, "图片没能读出来，这一轮按纯文字继续。可在「系统配置 → AI 服务」配一个视觉模型。"));
-        }
-      }
-      const handles: string[] = [];
-      for (const u of local) {
-        try {
-          const { ref } = await imageRef(u);
+    const attachments: IvyeaChatAttachment[] = [];
+    if (sentImages.length) {
+      const local = sentImages.filter((u) => u.startsWith("data:"));
+      const remote = sentImages.filter((u) => !u.startsWith("data:"));
+      // **一张一张读**，不是一次把几张图丢过去拿回一整段文字：那样句柄和描述对不上
+      // 号，模型下一轮说"第 2 张里的表格"就会张冠李戴。
+      const failed: any[] = [];
+      const read = await Promise.all(local.map(async (u) => {
+        const [desc, handle] = await Promise.all([
+          visionDescribe([u])
+            .then((d) => ({ text: String(d?.text || "").trim(), by: String(d?.provider || "") }))
+            .catch((e: any) => { failed.push(e); return { text: "", by: "" }; }),
           // 拿不到句柄就当没有 —— 把 undefined 拼进提示词，模型会拿着
           // "第 1 张：undefined" 去调作图，然后报一个谁也看不懂的错。
-          if (typeof ref === "string" && ref.trim()) handles.push(ref.trim());
-        } catch {
-          // 换不到句柄只影响"拿这张图去改图"，看图那条路已经走完了，不打断这一轮。
-        }
+          imageRef(u).then(({ ref }) => (typeof ref === "string" ? ref.trim() : "")).catch(() => ""),
+        ]);
+        return { ...desc, ref: handle };
+      }));
+      if (failed.length) {
+        const why = errText(failed[0], "图片没能读出来，这一轮按纯文字继续。可在「系统配置 → AI 服务」配一个视觉模型。");
+        notify("error", failed.length > 1 ? `${failed.length} 张图没读出来：${why}` : why);
       }
-      handles.push(...remote);
+      for (const r of read) {
+        if (r.text) attachments.push({ kind: "image", ref: r.ref, by: r.by, text: r.text });
+      }
+      // 老 agent（< v1.15.3）不认识 attachments —— 那就还按老路子把这段文字塞进
+      // system。**新 agent 上不要重复塞**：同一段描述在一轮里出现两遍纯属浪费上下文。
+      if (!agentTakesAttachments && attachments.length) {
+        visionSystem = "[用户附图 —— 由视觉模型读出的内容]\n" +
+          attachments.map((a, i) => `第 ${i + 1} 张${a.by ? `（${a.by}）` : ""}：\n${a.text}`).join("\n\n");
+      }
+      const handles = [...read.map((r) => r.ref).filter(Boolean), ...remote];
       if (handles.length) {
         imageRefSystem =
           "[用户附图的原图句柄]\n" +
@@ -777,6 +822,10 @@ function ConsoleInner() {
             imageRefSystem,
             refSystem,
           ].filter(Boolean).join("\n\n") || undefined,
+          // 附图走 attachments，agent 会把它并进**这一轮的 user 消息**（跟着历史和
+          // 存档走）；塞在 system 里的话，system 每轮重建、落盘时被本轮那份覆盖，
+          // 下一轮模型手里一个字都没有，只能否认自己看过图。
+          attachments: attachments.length ? attachments : undefined,
           persist: true,
           inject_retrieval: true,
           // 要模型的思考流：活动行上"它在想什么"比"它在调哪个工具"更贴近现在发生了什么。
@@ -970,13 +1019,12 @@ function ConsoleInner() {
       abortRef.current = null;
     }
 
-    setPicked([]);                      // 引用是"本轮"的，发完就清
-    setImages([]);
     notifyConsoleSessionsChanged();     // 新会话进左栏 / 已有会话更新时间
     if (finalText.trim()) void loadFollowUps(text, finalText);
     // images / picked 必须在依赖里：send 里读了它们。漏掉的话这个回调会闭包住
     // 旧值 —— 贴完图不打字直接发，图就丢了（之前靠"总会先打字"侥幸没暴露）。
-  }, [composer, busy, sessionId, images, picked, patchTurn, notify, loadFollowUps]);
+  }, [composer, busy, sessionId, images, picked, agentTakesAttachments,
+      patchTurn, notify, loadFollowUps]);
 
   /**
    * 点正文里的图 → 收进输入框，作为下一轮的原图。
@@ -1122,7 +1170,20 @@ function ConsoleInner() {
                 {turns.map((t, ti) =>
                   t.role === "user" ? (
                     <div className="cc-user" key={t.id} data-turn={t.id}>
-                      <div className="cc-bubble">{t.text}</div>
+                      <div className="cc-user-col">
+                        {/* 我发的图。它在气泡**上面**：先看到发了什么图，再看到问了什么，
+                            和输入框里的排布一致。历史会话里取的是原图句柄，图被清理掉
+                            （只留最近 200 张）时不留一块碎图，直接把这一格摘掉。 */}
+                        {!!t.images?.length && (
+                          <div className="cc-user-imgs">
+                            {t.images.map((src, i) => (
+                              <img key={i} src={src} alt="附图" loading="lazy"
+                                   onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                            ))}
+                          </div>
+                        )}
+                        {!!t.text && <div className="cc-bubble">{t.text}</div>}
+                      </div>
                     </div>
                   ) : (
                     <div className="cc-ai wb-enter" key={t.id}>

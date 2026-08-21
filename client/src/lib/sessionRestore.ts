@@ -12,6 +12,7 @@
  * 代码），所以刷新前后看到的执行过程是同一个东西，而不是另画一版。
  */
 import type { IvyeaChatSessionDetail, IvyeaStepEvent } from "../api/ivyeaAgent";
+import { imageRefUrl } from "../api/assistant";
 import { stripInjected } from "./stripInjected";
 import { mergeStep, stepFromEvent, type ConsoleStep } from "./stepLabels";
 import type { ServerStats } from "./turnStats";
@@ -21,7 +22,23 @@ export type RestoredTurn = {
   text: string;
   steps?: ConsoleStep[];
   skills?: { id: string; title: string; domain?: string; score?: number }[];
+  /** 这一轮用户发的图（能直接放进 `<img src>` 的地址）。 */
+  images?: string[];
 };
+
+/**
+ * 把存档里那条 user 消息里的附图句柄取出来。
+ *
+ * 图片本体从来不进模型，存档里留下的是 agent 注入的 `[用户附图 …]` 段落 + 每张图
+ * 的 `ivyea-ref://` 句柄。没有这一步，刷新之后"我发过一张图"这件事在界面上就彻底
+ * 消失了 —— 用户原话："会话记录里面也没有展示我发送的图片"。
+ */
+function attachedImages(content: string): string[] {
+  const at = content.indexOf("\n\n[用户附图");
+  if (at < 0) return [];
+  const refs = content.slice(at).match(/ivyea-ref:\/\/[0-9a-f]+/g) || [];
+  return [...new Set(refs)].map(imageRefUrl).slice(0, 4);
+}
 
 export type RestoredSession = {
   turns: RestoredTurn[];
@@ -65,14 +82,17 @@ export function restoreSession(detail: IvyeaChatSessionDetail | null | undefined
     const role = row?.role;
     if (role === "user") {
       // 注入给模型的技能/知识块和用户真正打的字存在同一条消息里，气泡里只留后者。
-      const text = stripInjected(String(row.content || ""));
+      const raw = String(row.content || "");
+      const text = stripInjected(raw);
+      const images = attachedImages(raw);
       // 上一轮没来得及归位的步骤（比如最后一步之后模型没再说话）挂到上一个 assistant 上
       if (pending.length) {
         const last = [...turns].reverse().find((t) => t.role === "assistant");
         if (last) flushInto(last);
         else { pending = []; pendingSkills = undefined; }
       }
-      if (text) turns.push({ role: "user", text });
+      // 只发图不打字也是一轮 —— 有图就得留下这一格，否则那一轮整个消失。
+      if (text || images.length) turns.push({ role: "user", text, ...(images.length ? { images } : {}) });
       continue;
     }
     if (role !== "assistant") continue;      // tool 行只用来对齐，不进气泡

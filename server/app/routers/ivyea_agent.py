@@ -75,6 +75,22 @@ class ProviderProbeBody(BaseModel):
 _SESSION_ID = r"^(?:|[A-Za-z0-9_-]{1,120})$"
 
 
+class ChatAttachment(BaseModel):
+    """本轮附图在 payload 里的样子：视觉模型读出的文字 + 原图句柄，图片本体不下发。
+
+    为什么要有它：这段文字原先塞在 `system` 里，而 agent 的 system 每轮重建、落盘
+    时还被本轮那份覆盖 —— 用户贴图问完一轮，下一轮再问"你刚才怎么看到那张图的"，
+    模型手里一个字都没有，只能否认自己看过图。走 attachments 的话 agent 会把它并进
+    **user 消息**，跟着历史和存档一起走（agent ≥ v1.15.3）。
+    """
+    kind: str = Field(default="image", max_length=20)
+    name: str = Field(default="", max_length=200)
+    ref: str = Field(default="", max_length=200)
+    # 代读这张图的视觉模型。用户问"你是怎么看到图的"时，模型得答得出具体是谁读的。
+    by: str = Field(default="", max_length=120)
+    text: str = Field(default="", max_length=8000)
+
+
 class ChatBody(BaseModel):
     message: str = Field(..., min_length=1, max_length=20000)
     session_id: str = Field(default="", max_length=120, pattern=_SESSION_ID)
@@ -96,6 +112,8 @@ class ChatBody(BaseModel):
     turn_id: str = Field(default="", max_length=120)
     task_id: str = Field(default="", max_length=120)
     system: str = Field(default="", max_length=20000)
+    # 本轮附图（视觉模型代读出来的文字 + 原图句柄）。空列表时由 _chat_payload 剔除。
+    attachments: list[ChatAttachment] = Field(default_factory=list, max_length=4)
     defer_citation_text: bool = False
     # 要模型的思考流（agent ≥ v1.10.3）。默认关，且为 False 时从下发 payload 里剔除 ——
     # 老 daemon 看到的 payload 与改动前逐字一致。
@@ -343,6 +361,7 @@ _CHAT_OPTIONAL_DEFAULTS: dict[str, Any] = {
     "turn_id": "",
     "task_id": "",
     "system": "",
+    "attachments": [],
     "defer_citation_text": False,
     "stream_reasoning": False,
     "approval": "none",
@@ -971,13 +990,14 @@ async def vision_describe(body: VisionDescribeBody,
                           _user: str = Depends(require_user)) -> dict[str, Any]:
     """把图片读成文字 —— 任务台的"贴图"靠它。
 
-    为什么在 ops 这边读而不是把图直接丢给 agent：agent serve 在主脑不支持视觉时
-    **直接抛错**（`main_brain_no_vision`），而本机主脑 deepseek 恰好没有视觉、
-    agent 自己的 `pick_vision_model()` 也返回 None —— 图片发过去必然失败。
-    ops 这边反倒有配好的视觉链（系统配置里的 vision_* ，listing 和技能商店一直在用），
-    所以在这里把图读成文字再作为文本带进那一轮。
+    为什么在 ops 这边读而不是把图直接丢给 agent：ops 这边的视觉链（系统配置里的
+    vision_*）是 Listing、技能商店一直在用的那条，配没配、好不好使有据可依；
+    agent 侧另有一条自己的三档降级链（主脑直读 / 视觉旁路 / 本地 CV 度量），
+    两条链的配置互相独立，用户机器上很可能只配了一边。合并成一条是另一个决定，
+    见 ADR-0020，别顺手在这里改。
 
     代价要说清楚：Agent 拿到的是**图片的描述**而不是图片本身，精细看图会有损耗。
+    读出来的文字走 chat 的 `attachments` 字段（不是 `system`）—— 理由同见 ADR-0020。
     """
     from app.services import ai_synthesis_service
 

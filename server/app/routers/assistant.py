@@ -17,7 +17,7 @@ from typing import AsyncGenerator, List
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.core import hub_settings as _hs
@@ -569,6 +569,25 @@ def image_ref(req: ImageRefReq, _user: str = Depends(require_user)) -> dict:
         raise HTTPException(500, f"附图落盘失败：{e}")
     _prune_refs()
     return {"ref": f"{_REF_SCHEME}{ref_id}", "bytes": len(raw)}
+
+
+@router.get("/image/ref/{ref_id}")
+def image_ref_file(ref_id: str, _user: str = Depends(require_user)) -> FileResponse:
+    """按句柄取回原图 —— 会话记录里那张缩略图就是从这里来的。
+
+    历史会话是从 agent 的存档里恢复的，而存档里只有文字（图片本体从来不进模型）。
+    没有这个出口的话，刷新之后"我发过一张图"这件事在界面上就彻底消失了 —— 用户的
+    原话是"会话记录里面也没有展示我发送的图片"。
+
+    句柄只认自己发的 uuid-hex（`_ref_file` 里堵的路径穿越），落盘的图只保留最近
+    _KEEP_REFS 张，过期的返回 404，由前端显示成"附图已过期"。
+    """
+    path = _ref_file(ref_id)
+    if path is None or not path.exists():
+        raise HTTPException(404, "附图引用已过期或不存在")
+    ext = path.suffix.lstrip(".").lower()
+    mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext or 'png'}"
+    return FileResponse(path, media_type=mime)
 
 
 @router.get("/image/status")

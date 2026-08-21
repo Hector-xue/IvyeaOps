@@ -210,6 +210,13 @@ def test_preview_strips_injected_context():
     assert cs.clean_preview("") == ""
 
 
+def test_preview_drops_the_attached_image_readout():
+    """附图的文字版（视觉模型代读的内容）同样是注给模型的，别摆进左栏标题。"""
+    raw = ("这张图里面是什么？\n\n[用户附图 —— 视觉模型代读的内容]\n"
+           "本轮用户上传了 1 张图。\n第 1 张：\n一只红熊猫趴在树干上")
+    assert cs.clean_preview(raw) == "这张图里面是什么？"
+
+
 def test_list_uses_cleaned_preview(monkeypatch):
     cs.register_session("s1", "alice@x.com")
     monkeypatch.setattr(mod, "_call", lambda fn, *a, **k: {"sessions": [

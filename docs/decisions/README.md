@@ -37,6 +37,7 @@ git log 记得住「改了什么」，记不住「为什么不选另一条路」
 | [0017](./0017-lucent-theme-shares-quiet-shape-layer.md) | 琉璃主题复用静谧的形状层，只加材质/高度/动效/排版 | 2026-08-21 |
 | [0018](./0018-token-stats-count-cache-tokens.md) | Token 统计把缓存计入总量，并接入 IvyeaAgent / DeepSeek Harness | 2026-08-21 |
 | [0019](./0019-bundle-webfonts.md) | 界面字体自带字库，直接放 public/fonts | 2026-08-21 |
+| [0020](./0020-attached-image-readout-belongs-to-the-user-message.md) | 附图的文字版归属于 user 消息，不再塞进 system | 2026-08-21 |
 
 ## 模板
 
