@@ -3881,6 +3881,12 @@ button.af-line:hover{background:var(--bg2)}
   .cc-bar{flex-wrap:wrap;row-gap:6px}
   .cc-bar-left{overflow:visible;flex-wrap:wrap}
   .cc-chip-model{padding:5px 8px;max-width:160px}
+  .cc-rail{display:none}           /* 手机端不挤会话区 */
+  .cc-thread{padding:12px 10px 6px}
+  .cc-dock{padding:14px 10px 10px}
+  .cc-bubble{max-width:88%}
+  .cc-ai,.cc-followups{max-width:100%}
+  .cs-detail{max-width:130px}
 }
 
 /* 手机上底栏必然折行：附件 + 工作区 + 审批 + 模型 + 发送，五样排不进一行。
@@ -3898,12 +3904,6 @@ button.af-line:hover{background:var(--bg2)}
 @media (max-width:640px){
   .cc-bar-right{width:100%;margin-left:0;justify-content:space-between}
   .cc-chip-model{max-width:none;min-width:0;flex:0 1 auto}
-  .cc-rail{display:none}           /* 手机端不挤会话区 */
-  .cc-thread{padding:12px 10px 6px}
-  .cc-dock{padding:14px 10px 10px}
-  .cc-bubble{max-width:88%}
-  .cc-ai,.cc-followups{max-width:100%}
-  .cs-detail{max-width:130px}
 }
 
 /* ── 任务台步骤流补充：拦截态 + 规划步折叠（P1 结构化事件）───────────────── */
