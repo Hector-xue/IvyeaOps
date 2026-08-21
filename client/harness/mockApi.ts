@@ -1005,6 +1005,23 @@ export function installMockApi(): void {
           { content: "拉搜索词报表，找浪费最集中的词根", status: "in_progress" },
           { content: "给出否词与竞价的具体动作", status: "pending" },
         ] });
+        // ── 写操作审批卡 ──────────────────────────────────────────────
+        // ?approval=1 时插一张确认卡。**它此前在验证台里根本渲染不出来** ——
+        // 假流从不发 permission_request，于是"审批档位选了放行、卡片长什么样、
+        // 点了确认之后流怎么继续"这一整条最要紧的链路，一次都没被验过。
+        if (new URLSearchParams(location.search).get("approval") === "1") {
+          await beat(500);
+          send("permission_request", {
+            request_id: "req-demo-1", session_id: "s-live", op_type: "lingxing_write",
+            title: "把 3 个搜索词加为否定关键词", destructive: true,
+            preview: "广告活动：Trail Camera - Auto\n否词：cheap camera / free camera / camera app",
+            options: [{ key: "approve", label: "批准这一次" },
+                      { key: "session", label: "本会话都允许" },
+                      { key: "deny", label: "拒绝" }],
+            expires_at: Math.floor(Date.now() / 1000) + 600,
+          });
+          await beat(2500);
+        }
         await beat(600);
         for (const t of ["先说结论：", "这一周花费涨了 34%，", "其中 28% 来自单次点击成本上升。"]) {
           await beat(500); send("token", { text: t });

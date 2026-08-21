@@ -983,6 +983,12 @@ ASSISTANT_PROVIDER_BASE = {
     "siliconflow": "https://api.siliconflow.cn/v1",
     "dashscope":  "https://dashscope.aliyuncs.com/compatible-mode/v1",
     "zhipu":      "https://open.bigmodel.cn/api/paas/v4",
+    # GLM Coding Plan（订阅）走的是**另一个地址**：官方明确要求 coding 专用端点
+    # /api/coding/paas/v4，填成上面那个通用端点不通，而报错完全指不到"地址错了"上。
+    "zai-coding":  "https://api.z.ai/api/coding/paas/v4",
+    "glm-coding":  "https://open.bigmodel.cn/api/coding/paas/v4",
+    # Kimi Code 订阅（授权登录后用）。
+    "kimi-code":   "https://api.kimi.com/coding/v1",
     "groq":       "https://api.groq.com/openai/v1",
     "together":   "https://api.together.xyz/v1",
     "xiaomi":     "https://token-plan-sgp.xiaomimimo.com/v1",

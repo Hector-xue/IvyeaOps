@@ -197,6 +197,7 @@ def test_auth_provider_id_is_whitelisted(ctx):
     from fastapi import HTTPException
     _svc, router = ctx
     assert router._checked_auth_provider("qwen-oauth") == "qwen-oauth"
+    assert router._checked_auth_provider("kimi-code") == "kimi-code"
     for bad in ("deepseek", "../../health", ""):
         with pytest.raises(HTTPException):
             router._checked_auth_provider(bad)

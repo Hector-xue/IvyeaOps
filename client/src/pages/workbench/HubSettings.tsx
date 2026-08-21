@@ -369,6 +369,11 @@ const PROVIDERS: ProviderDef[] = [
   { id: "siliconflow", label: "硅基流动",  defaultModel: "deepseek-ai/DeepSeek-V3.2",          envVar: "SILICONFLOW_API_KEY",         hint: "国内直连，有免费档，含 Qwen-VL 视觉", examples: "deepseek-ai/DeepSeek-V3.2 / Qwen/Qwen3-VL-30B-A3B-Instruct" },
   { id: "dashscope",  label: "阿里云百炼", defaultModel: "qwen-plus",                          envVar: "DASHSCOPE_API_KEY",           hint: "国内直连，qwen-vl 系列可做视觉" },
   { id: "zhipu",      label: "智谱",       defaultModel: "glm-4-plus",                         envVar: "ZHIPUAI_API_KEY",             hint: "GLM-4V-Flash 视觉免费" },
+  // GLM Coding Plan（订阅）单列两条：它的地址和普通 API **不是一个** ——
+  // 官方要求 coding 专用端点 /api/coding/paas/v4，填成通用端点不通，而报错完全
+  // 指不到"地址错了"上。把它做成可选项，用户就不必自己去翻文档拼地址。
+  { id: "zai-coding", label: "GLM Coding Plan · Z.AI", defaultModel: "glm-5.3",                envVar: "ZAI_API_KEY",                 hint: "订阅制套餐（海外站），走 coding 专用地址", examples: "glm-5.3 / glm-5.2 / glm-4.7" },
+  { id: "glm-coding", label: "GLM Coding Plan · 智谱", defaultModel: "glm-5.3",                envVar: "ZHIPUAI_API_KEY",             hint: "订阅制套餐（国内站），走 coding 专用地址", examples: "glm-5.3 / glm-5.2 / glm-4.7" },
   { id: "custom",     label: "自定义",     defaultModel: "",                                   envVar: "",                            hint: "OpenAI 兼容接口" },
 ];
 

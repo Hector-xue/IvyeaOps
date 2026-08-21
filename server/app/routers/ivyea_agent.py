@@ -1113,7 +1113,8 @@ def provider_models(provider_id: str, refresh: bool = False) -> dict[str, Any]:
 # **一律 require_admin。** 这些凭据存在服务器上、由 agent 全局共用：谁登录，这台
 # agent 上所有用户的对话和所有定时任务都在烧谁的订阅额度。这不是普通用户该按的开关。
 
-_AUTH_PROVIDERS = {"qwen-oauth", "openai-codex", "anthropic-oauth", "google-gemini-cli", "copilot"}
+_AUTH_PROVIDERS = {"qwen-oauth", "openai-codex", "kimi-code",
+                   "anthropic-oauth", "google-gemini-cli", "copilot"}
 
 
 class AuthActionBody(BaseModel):

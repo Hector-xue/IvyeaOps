@@ -764,3 +764,37 @@ a.ivyea-agent-mini-btn {
     gap: 0;
   }
 }
+
+/* ── 悬浮球里嵌的是任务台本体 ─────────────────────────────────────────────
+   面板从"自己画一套对话"改成渲染 <Console embedded />（见 IvyeaAgentDock.tsx
+   顶部的说明）。这里只负责给它一个能滚的盒子，以及把历史列表浮在它上面 ——
+   用条件渲染切换历史会把正在跑的那一轮卸载掉。 */
+.ivyea-agent-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* 任务台默认是整页布局（cc-page 撑满视口）。嵌进来之后要改成"填满这个盒子"。 */
+.ivyea-agent-body .cc-page,
+.ivyea-agent-body .cc-main {
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+/* 面板窄，左右留白按面板给，不按整页给。 */
+.ivyea-agent-body .cc-thread { padding: 12px 12px 4px; }
+.ivyea-agent-body .cc-dock { padding: 10px 12px 12px; }
+.ivyea-agent-body .cc-hero { padding: 18px 12px; }
+.ivyea-agent-body .cc-hero-title { font-size: var(--fs-14); }
+.ivyea-agent-body .cc-bubble { max-width: 94%; }
+
+/* 历史列表：浮层，盖住对话但不卸载它 */
+.ivyea-agent-body .ivyea-agent-history-view {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+.ivyea-agent-icon-btn.active { color: var(--acc); }

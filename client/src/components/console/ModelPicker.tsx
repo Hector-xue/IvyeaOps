@@ -44,7 +44,7 @@ type Row = {
 
 /** 走订阅登录（而不是填 API key）的那几家。 */
 const OAUTH_PROVIDERS = new Set([
-  "qwen-oauth", "openai-codex", "anthropic-oauth", "google-gemini-cli", "copilot",
+  "qwen-oauth", "openai-codex", "kimi-code", "anthropic-oauth", "google-gemini-cli", "copilot",
 ]);
 
 /**
