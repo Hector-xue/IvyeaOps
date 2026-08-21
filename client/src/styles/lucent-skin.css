@@ -373,8 +373,8 @@ html[data-skin="lucent"] .hs-header-title,
 html[data-skin="lucent"] .md-h1,
 html[data-skin="lucent"] .ws-main-h1 {
   font-size: 26px !important;
-  font-weight: 700 !important;
-  letter-spacing: -.022em !important;
+  font-weight: 600 !important;
+  letter-spacing: normal !important;   /* 同上：中文标题不收字距 */
   line-height: 1.22 !important;
   color: var(--t) !important;
   border-bottom: none !important;
@@ -387,18 +387,22 @@ html[data-skin="lucent"] .hs-header-sub {
   line-height: 1.55;
 }
 html[data-skin="lucent"] .md-h2 {
-  font-size: 21px !important; font-weight: 700 !important;
-  letter-spacing: -.016em !important; color: var(--t) !important; margin-top: 26px !important;
+  font-size: 21px !important; font-weight: 600 !important;
+  letter-spacing: normal !important; color: var(--t) !important; margin-top: 26px !important;
 }
 html[data-skin="lucent"] .md-h3 {
   font-size: 17px !important; font-weight: 600 !important;
-  letter-spacing: -.008em !important; color: var(--t) !important;
+  letter-spacing: normal !important; color: var(--t) !important;
 }
-/* 首屏那句 slogan 是整个产品的门面，跟着大标题一起放大收紧。 */
+/* 首屏那句 slogan 是整个产品的门面。
+   **中文标题不做负字距。** 负字距是拉丁文大标题的做法 —— 字母之间本来就有
+   空隙可以收；而汉字是满格方块，字面之间只剩很窄的侧边距，再收就成了互相挤，
+   配上粗体笔画会直接糊在一起。这里给一点**正**字距让它透气。
+   分量靠字号，不靠字重 + 挤压。 */
 html[data-skin="lucent"] .cc-hero-title {
-  font-size: 38px !important;
-  font-weight: 700 !important;
-  letter-spacing: -.028em !important;
+  font-size: 34px !important;
+  font-weight: 600 !important;
+  letter-spacing: .01em !important;
 }
 /* 卡片/分组的小标题：不靠字号，靠字重和墨色站住（尺寸留给大标题）。 */
 html[data-skin="lucent"] .hs-section-title,
@@ -406,7 +410,7 @@ html[data-skin="lucent"] .m-title,
 html[data-skin="lucent"] .qs-title,
 html[data-skin="lucent"] .confirm-title {
   font-weight: 600 !important;
-  letter-spacing: -.006em !important;
+  letter-spacing: normal !important;
   color: var(--t) !important;
 }
 
