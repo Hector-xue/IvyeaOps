@@ -6,6 +6,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Search } from "lucide-react";
 import {
   CONSOLE_SESSIONS_CHANGED,
   consoleSessionDelete,
@@ -232,13 +233,19 @@ export default function SessionRail({
         <button className="sb-ws-add" title="新建工作区" onClick={() => setAdding(true)}>+</button>
       </div>
 
-      <input
-        className="sb-ws-input sb-sess-search"
-        placeholder="搜索会话…"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Escape") setQ(""); }}
-      />
+      {/* 放大镜不是装饰：这个框满宽、无内容时就是一块空板子，光靠占位文字
+          挂在左上角读不出"这是搜索"。图标钉在左侧把它锚住。
+          pointer-events:none —— 图标压在输入框上方，不挡点击。 */}
+      <div className="sb-sess-search-wrap">
+        <Search className="sb-sess-search-icon" aria-hidden />
+        <input
+          className="sb-ws-input sb-sess-search"
+          placeholder="搜索会话…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Escape") setQ(""); }}
+        />
+      </div>
 
       {/*
         * 来源筛选只在**真的有一种以上来源**时出现。

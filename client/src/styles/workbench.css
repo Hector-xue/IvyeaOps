@@ -3814,16 +3814,17 @@ button.af-line:hover{background:var(--bg2)}
    塞进 29px 高的框里顶满上下边框，看着像"字太大"，其实是盒子没跟着长。
    左右缩进跟导航项对齐（margin 8px + padding 9px + 1px 边框 = 文字落在 18px，
    和 .ni 的 8+10 一致）；早先的 12px 让它成了侧栏里唯一一个边沿对不齐的东西。 */
+/* 输入框字号**只在这里定义一次**，图标要按它算尺寸（1em）；分两处写死早晚调歪一边。
+   退一档只发给用阅读刻度的三套皮肤：阅读刻度把 --fs-10 / --fs-105 / --fs-11 压成了
+   同一个值（见文件头 ① 的刻度表），于是这个过滤框的字和它要过滤的会话标题一模一样大，
+   "工作区 / 过滤框 / 列表"三级全在同一个视觉重量上抢。紧凑刻度那 16 套不退 ——
+   那儿 --fs-9 只有 9px，一个要打字的输入框缩到 9px 是拿一个毛病换另一个。 */
+.sb-workspace{--sb-input-fs:var(--fs-105)}
+html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspace{--sb-input-fs:var(--fs-9)}
 .sb-ws-input{width:calc(100% - 16px);margin:2px 8px 4px;padding:6px 9px;border:1px solid var(--b2);
-  border-radius:var(--r);background:var(--bg2);color:var(--t);font-family:var(--font);font-size:var(--fs-105);
-  outline:none}
+  border-radius:var(--r);background:var(--bg2);color:var(--t);font-family:var(--font);
+  font-size:var(--sb-input-fs);outline:none}
 .sb-ws-input::placeholder{color:var(--t3)}
-/* 字号再退一档，**只发给用阅读刻度的三套皮肤**。
-   阅读刻度把 --fs-10 / --fs-105 / --fs-11 压成了同一个值（见文件头 ① 的刻度表），
-   于是这个过滤框的字和它要过滤的会话标题一模一样大，"工作区 / 过滤框 / 列表"
-   三级全在同一个视觉重量上抢。紧凑刻度那 16 套不发 —— 那儿 --fs-9 只有 9px，
-   一个要打字的输入框缩到 9px 是拿一个毛病换另一个。 */
-html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-ws-input{font-size:var(--fs-9)}
 .sb-ws-input:focus{border-color:var(--acc);box-shadow:0 0 0 2px var(--ring)}
 .sb-ws-group{margin-bottom:2px}
 .sb-ws-title{display:flex;align-items:center;gap:5px;width:100%;padding:3px 12px;background:transparent;
@@ -3955,7 +3956,11 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-ws-inpu
 .sb-sess:hover .sb-sess-del{opacity:1}
 .sb-sess-del:hover{color:var(--red)}
 .sb-sess:hover .sb-sess-time{display:none}
-.sb-sess-search{margin:0 8px 6px;width:calc(100% - 16px)}
+/* 外边距挪到外层：图标要相对整个框绝对定位，输入框自己带 margin 会让两者错位。 */
+.sb-sess-search-wrap{position:relative;margin:0 8px 6px;font-size:var(--sb-input-fs)}
+.sb-sess-search{margin:0;width:100%;padding-left:calc(1em + 18px)}
+.sb-sess-search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);
+  width:1em;height:1em;color:var(--t3);pointer-events:none}
 .sb-sess-more{display:block;width:calc(100% - 16px);margin:4px 8px 8px;padding:4px 8px;
   border:1px dashed var(--b);border-radius:var(--r);background:transparent;color:var(--t3);
   font-family:var(--font);font-size:var(--fs-10);cursor:pointer;
