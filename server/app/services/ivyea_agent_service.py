@@ -727,6 +727,47 @@ def provider_models(provider_id: str, refresh: bool = False) -> dict[str, Any]:
     return request_json("GET", f"/v1/model/providers/{safe_id}/models{suffix}")
 
 
+# ── 订阅制 provider 的登录（agent ≥ v1.15.5）────────────────────────────────
+# Claude 订阅 / Codex / Gemini / Qwen / Copilot 不是填 key 而是走 OAuth，此前只有
+# agent 的 CLI 能做。这里只做透传：凭据全程留在 agent 那边，ops 不落盘、不回显。
+
+def auth_status() -> dict[str, Any]:
+    return request_json("GET", "/v1/auth")
+
+
+def auth_start(provider_id: str) -> dict[str, Any]:
+    safe = urllib.parse.quote(provider_id.strip(), safe="")
+    # 要真发一次外网请求去要设备码/授权链接，默认 8 秒常常不够。
+    return request_json("POST", f"/v1/auth/{safe}/start", {}, timeout=max(_timeout(), 40.0))
+
+
+def auth_poll(provider_id: str, session: str) -> dict[str, Any]:
+    safe = urllib.parse.quote(provider_id.strip(), safe="")
+    return request_json("POST", f"/v1/auth/{safe}/poll", {"session": session},
+                        timeout=max(_timeout(), 40.0))
+
+
+def auth_complete(provider_id: str, session: str, value: str) -> dict[str, Any]:
+    safe = urllib.parse.quote(provider_id.strip(), safe="")
+    return request_json("POST", f"/v1/auth/{safe}/complete",
+                        {"session": session, "value": value}, timeout=max(_timeout(), 60.0))
+
+
+def auth_logout(provider_id: str) -> dict[str, Any]:
+    safe = urllib.parse.quote(provider_id.strip(), safe="")
+    return request_json("POST", f"/v1/auth/{safe}/logout", {}, timeout=max(_timeout(), 30.0))
+
+
+def model_catalog(payload: dict[str, Any]) -> dict[str, Any]:
+    """任意 OpenAI 兼容端点的模型清单（agent ≥ v1.15.4）。
+
+    provider_models() 只认 agent 内置 provider 表里那几家、密钥也只从 agent 自己的
+    .env 取；ops 的视觉槽/生图槽常指向内置表里没有的中转商，密钥又存在 ops 这边。
+    """
+    # 取清单要真发一次外网请求，默认 8 秒常常不够（中转商动辄 3~5 秒）。
+    return request_json("POST", "/v1/model/catalog", payload, timeout=max(_timeout(), 20.0))
+
+
 def provider_probe(provider_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     safe_id = urllib.parse.quote(provider_id.strip(), safe="")
     return request_json("POST", f"/v1/model/providers/{safe_id}/probe", payload)

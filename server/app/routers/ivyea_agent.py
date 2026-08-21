@@ -67,6 +67,19 @@ class ProviderProbeBody(BaseModel):
     timeout: float = Field(default=30.0, ge=1.0, le=120.0)
 
 
+class ModelCatalogBody(BaseModel):
+    """列一个端点支持哪些模型。
+
+    api_key 允许调用方现给：系统配置页在**保存之前**就要能看清单，而那时新填的
+    key 还没落库。留空则由 agent 去它自己的 .env 里找。密钥不落 ops 的盘、不回显。
+    """
+
+    provider: str = Field(default="", max_length=80)
+    base_url: str = Field(default="", max_length=500)
+    api_key: str = Field(default="", max_length=500)
+    refresh: bool = False
+
+
 # 会话 id 会在 agent 那边直接拼成文件名。agent 侧已经在 sessions.path_for 堵了，
 # 这里再收一道：越界的 id 根本不该出 ops 的门。
 #
@@ -107,6 +120,11 @@ class ChatBody(BaseModel):
     #    或跑一轮纯文本都做不到。留空/False 时由 _chat_payload 剔除，
     #    daemon 看到的 payload 与改动前逐字一致 —— 老调用方零影响。
     skill: str = Field(default="", max_length=200)
+    # 本轮用哪个主脑模型（agent ≥ v1.15.4），形如 "openrouter:x-ai/grok-4.6"。
+    # 留空 = 用 agent 的全局主脑，且由 _chat_payload 整个剔除 —— 老 daemon 收到的
+    # payload 与改动前逐字一致。任务台的模型选择器就是逐轮下发它：agent 的模型本来
+    # 是全局的，真按全局切会把 ops 的其他用户和定时任务一起换掉。
+    model: str = Field(default="", max_length=200)
     auto_skill: bool = False
     use_tools: bool = True
     turn_id: str = Field(default="", max_length=120)
@@ -357,6 +375,7 @@ def manifest() -> dict[str, Any]:
 # 塞了几个 ""/False 改变 serve 的行为。
 _CHAT_OPTIONAL_DEFAULTS: dict[str, Any] = {
     "skill": "",
+    "model": "",
     "auto_skill": False,
     "turn_id": "",
     "task_id": "",
@@ -1087,6 +1106,61 @@ def model_providers() -> dict[str, Any]:
 @router.get("/model/providers/{provider_id}/models")
 def provider_models(provider_id: str, refresh: bool = False) -> dict[str, Any]:
     return _call(svc.provider_models, provider_id, refresh)
+
+
+# ── 订阅登录（Claude / Codex / Gemini / Qwen / Copilot）─────────────────────
+#
+# **一律 require_admin。** 这些凭据存在服务器上、由 agent 全局共用：谁登录，这台
+# agent 上所有用户的对话和所有定时任务都在烧谁的订阅额度。这不是普通用户该按的开关。
+
+_AUTH_PROVIDERS = {"qwen-oauth", "openai-codex", "kimi-code",
+                   "anthropic-oauth", "google-gemini-cli", "copilot"}
+
+
+class AuthActionBody(BaseModel):
+    session: str = Field(default="", max_length=120)
+    # 粘回来的东西：Claude 的 `code#state`、Gemini 的整条回调 URL、Copilot 的 token。
+    value: str = Field(default="", max_length=8000)
+
+
+def _checked_auth_provider(provider_id: str) -> str:
+    """provider id 会被拼进转发给 agent 的路径，只放行清单里那五个。"""
+    pid = (provider_id or "").strip()
+    if pid not in _AUTH_PROVIDERS:
+        raise HTTPException(status_code=404, detail=f"这个 provider 不走登录流程：{provider_id}")
+    return pid
+
+
+@router.get("/auth")
+def auth_status(_admin: str = Depends(require_admin)) -> dict[str, Any]:
+    return _call(svc.auth_status)
+
+
+@router.post("/auth/{provider_id}/start")
+def auth_start(provider_id: str, _admin: str = Depends(require_admin)) -> dict[str, Any]:
+    return _call(svc.auth_start, _checked_auth_provider(provider_id))
+
+
+@router.post("/auth/{provider_id}/poll")
+def auth_poll(provider_id: str, body: AuthActionBody,
+              _admin: str = Depends(require_admin)) -> dict[str, Any]:
+    return _call(svc.auth_poll, _checked_auth_provider(provider_id), body.session)
+
+
+@router.post("/auth/{provider_id}/complete")
+def auth_complete(provider_id: str, body: AuthActionBody,
+                  _admin: str = Depends(require_admin)) -> dict[str, Any]:
+    return _call(svc.auth_complete, _checked_auth_provider(provider_id), body.session, body.value)
+
+
+@router.post("/auth/{provider_id}/logout")
+def auth_logout(provider_id: str, _admin: str = Depends(require_admin)) -> dict[str, Any]:
+    return _call(svc.auth_logout, _checked_auth_provider(provider_id))
+
+
+@router.post("/model/catalog")
+def model_catalog(body: ModelCatalogBody) -> dict[str, Any]:
+    return _call(svc.model_catalog, _payload(body))
 
 
 @router.post("/model/providers/{provider_id}/probe")

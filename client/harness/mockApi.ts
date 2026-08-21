@@ -257,9 +257,108 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   // 文字版进 user 消息、跟着历史走），老的只能退回塞 system。?oldagent=1 验后者。
   ["/ivyea-agent/status", () => ({
     ok: true, available: true, model: "deepseek-v4-pro", ready: true,
-    health: { version: new URLSearchParams(location.search).get("oldagent") === "1" ? "1.15.1" : "1.15.3",
+    // ≥ 1.15.4 才认 payload.model —— 模型芯片能不能真的切就看它。
+    // ?oldagent=1 装成老 agent，验"退回只跳系统配置、不给假开关"那条路。
+    health: { version: new URLSearchParams(location.search).get("oldagent") === "1" ? "1.15.1" : "1.15.4",
               model: { model: "deepseek-v4-pro" } },
   })],
+  // 模型选择器的数据源。**必须有没配 key 的那几家**：面板把它们收进「未配置密钥」
+  // 分组，那一段的样式只在这种数据下才渲染得出来。
+  // 订阅登录：**三种流程各留一个**（device / paste / token），还要留"已登录"和
+  // "未登录"两种状态 —— 面板的按钮、徽标、流程面板都只在特定状态下才渲染得出来。
+  ["/ivyea-agent/auth", {
+    ok: true,
+    providers: [
+      { id: "anthropic-oauth", label: "Claude 订阅 OAuth", kind: "paste",
+        status: "not-authenticated", ready: false,
+        hint: "授权后页面会显示一段 `code#state`，整段复制粘回来。" },
+      { id: "openai-codex", label: "OpenAI Codex OAuth", kind: "device",
+        status: "authenticated+refresh", ready: true, source: "device-code",
+        hint: "打开页面后输入下面的代码并确认授权，这里会自动完成。" },
+      { id: "google-gemini-cli", label: "Gemini Code Assist OAuth", kind: "paste",
+        status: "expired", ready: false,
+        hint: "授权后浏览器会跳到一个打不开的 127.0.0.1 地址（正常现象）—— 把地址栏里那条完整 URL 复制粘回来。" },
+      { id: "qwen-oauth", label: "Qwen OAuth / Portal", kind: "device",
+        status: "not-authenticated", ready: false,
+        hint: "在打开的页面上确认授权即可，这里会自动完成。" },
+      { id: "copilot", label: "GitHub Copilot / GitHub Models", kind: "token",
+        status: "configured:COPILOT_GITHUB_TOKEN", ready: true,
+        hint: "填一个有 Copilot 权限的 GitHub Token。" },
+    ],
+  }],
+  ["/ivyea-agent/auth/", (url: string) => {
+    const parts = (url.split("/ivyea-agent/auth/")[1] || "").split("/");
+    const pid = parts[0] || "";
+    const action = (parts[1] || "").split("?")[0];
+    if (action === "start") {
+      if (pid === "qwen-oauth" || pid === "openai-codex") {
+        return { ok: true, provider: pid, kind: "device", session: "sess-1",
+                 user_code: "PR7X-NERO", verification_uri: "https://example.invalid/activate",
+                 interval: 2, expires_in: 900, hint: "在打开的页面上确认授权即可。" };
+      }
+      if (pid === "copilot") {
+        return { ok: true, provider: pid, kind: "token", session: "sess-1",
+                 hint: "填一个有 Copilot 权限的 GitHub Token。" };
+      }
+      return { ok: true, provider: pid, kind: "paste", session: "sess-1",
+               url: "https://example.invalid/oauth/authorize?code=true",
+               expires_in: 900, hint: "授权后把回调内容整段粘回来。" };
+    }
+    if (action === "poll") return { ok: true, status: "pending", interval: 2, note: "" };
+    return { ok: true };
+  }],
+  ["/ivyea-agent/model/providers", {
+    ok: true,
+    providers: [
+      { id: "deepseek", label: "DeepSeek", key_status: "configured", default_model: "deepseek-v4-flash",
+        models: ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-flash-vision-exp"], model_count: 3 },
+      { id: "openrouter", label: "OpenRouter", key_status: "configured", default_model: "x-ai/grok-4.6",
+        models: ["x-ai/grok-4.6", "anthropic/claude-sonnet-4-6", "google/gemini-3.7-flash",
+                 "deepseek/deepseek-v4-pro-0813", "qwen/qwen3.8-27b"], model_count: 5 },
+      { id: "ollama", label: "Ollama / Local OpenAI-compatible", key_status: "none",
+        models: ["qwen3:8b", "llama3.3:70b"], model_count: 2 },
+      { id: "anthropic", label: "Anthropic Claude API", key_status: "missing:ANTHROPIC_API_KEY",
+        models: ["claude-sonnet-4-6"], model_count: 1 },
+      { id: "openai", label: "OpenAI API", key_status: "missing:OPENAI_API_KEY",
+        models: ["gpt-5.6"], model_count: 1 },
+      { id: "gemini", label: "Google Gemini API", key_status: "missing:GEMINI_API_KEY",
+        models: ["gemini-3.7-flash"], model_count: 1 },
+    ],
+  }],
+  ["/ivyea-agent/model/providers/", (url: string) => {
+    const pid = (url.split("/ivyea-agent/model/providers/")[1] || "").split("/")[0];
+    return { ok: true, catalog: { ok: true, provider_id: pid, label: pid, source: "live",
+                                  models: ["刷新到的-模型-1", "刷新到的-模型-2"], default_model: "刷新到的-模型-1" } };
+  }],
+  // 系统配置：**必须给几个槽位填上 provider**，否则 LLMModelBlock 的模型名那一块
+  // 根本不渲染（它只在选了 provider 之后才出现）—— 模型下拉就永远验不到。
+  ["/settings", {
+    settings: {
+      ivyea_agent_url: "http://127.0.0.1:8765", ivyea_agent_auto_start: true,
+      ivyea_agent_provider: "deepseek", ivyea_agent_model: "deepseek-v4-flash",
+      ivyea_agent_api_key: "sk-demo-agent", ivyea_agent_base_url: "",
+      assistant_provider: "deepseek", assistant_model: "deepseek-v4-flash",
+      assistant_api_key: "sk-demo-assistant", assistant_base_url: "",
+      vision_provider: "siliconflow", vision_model: "Qwen/Qwen3-VL-30B-A3B-Instruct",
+      vision_api_key: "sk-demo-vision", vision_base_url: "https://api.siliconflow.cn/v1",
+      apimart_key: "sk-demo-apimart", apimart_base: "https://api.apimart.ai/v1",
+      image_model: "", image_api_key: "", image_base_url: "",
+      text_ai_providers: "ivyea-agent,deepseek,assistant",
+      vision_ai_providers: "apimart,openai,assistant",
+    },
+    secret_keys: ["apimart_key", "ivyea_agent_api_key", "vision_api_key"],
+  }],
+  // ?catalogfail=1 —— 装成中转商问不到清单（实测 Apimart 余额不足会返回 402）。
+  // 那条降级路径（"常见模型名"兜底 + 说清原因 + 仍可手输）只有这种数据下才渲染得出来。
+  ["/settings/model-catalog", () => (
+    new URLSearchParams(location.search).get("catalogfail") === "1"
+      ? { ok: false, error: "", catalog: { ok: false, source: "builtin", models: [],
+            error: 'HTTP 402: {"error":{"message":"insufficient balance"}}' } }
+      : { ok: true, catalog: { ok: true, source: "live", label: "硅基流动",
+            default_model: "Qwen/Qwen3-VL-30B-A3B-Instruct",
+            models: ["Qwen/Qwen3-VL-30B-A3B-Instruct", "deepseek-ai/DeepSeek-V4-Flash",
+                     "zai-org/GLM-5.2", "Tongyi-MAI/Z-Image-Turbo"] } }
+  )],
   ["/ivyea-agent/skills", { ok: true, skills: [] }],
   ["/ivyea-agent/ops-tools", { ok: true, tools: [] }],
   ["/skill-tools/pinned", []],
@@ -773,6 +872,25 @@ function match(url: string): Canned {
   return typeof hit[1] === "function" ? hit[1](url) : hit[1];
 }
 
+/**
+ * **这几个接口的假响应必须慢一点。**
+ *
+ * 假后端默认在一个微任务里就 resolve —— 比 React 的重渲染还早。于是"响应回来时
+ * 组件已经重渲染过一轮"这个真实网络下的常态，在验证台里永远复现不出来。
+ * 实测漏掉过一个死锁：effect 里 setLoading(true) 让依赖变化，React 先跑 cleanup 把
+ * 回调作废，请求回来时状态一个都没落地，面板永远停在"正在取模型清单…"，而验证台
+ * 一路绿灯。给这类"开面板才去取"的接口加几百毫秒，那个顺序才验得到。
+ */
+const SLOW_PATHS: [string, number][] = [
+  ["/ivyea-agent/model/providers", 320],
+  ["/settings/model-catalog", 320],
+];
+
+const delayFor = (url: string): number => {
+  for (const [prefix, ms] of SLOW_PATHS) if (url.includes(prefix)) return ms;
+  return 0;
+};
+
 /** 装上假适配器。必须在 render 之前调用。 */
 export function installMockApi(): void {
   const reply = (config: { url?: string; baseURL?: string }) => {
@@ -790,11 +908,17 @@ export function installMockApi(): void {
     } as never;
   };
 
-  api.defaults.adapter = async (config) => reply(config);
+  const slowReply = async (config: { url?: string; baseURL?: string }) => {
+    const ms = delayFor((config.baseURL || "") + (config.url || ""));
+    if (ms) await new Promise((r) => setTimeout(r, ms));
+    return reply(config);
+  };
+
+  api.defaults.adapter = async (config) => slowReply(config);
   // 各板块自建的 axios 实例（listing/api.ts 就是一个）不共享上面那个 adapter，
   // 但会在发请求时回落到全局默认值——不设这个，整个 Listing 板块在验证台里
   // 是打不开的。
-  axios.defaults.adapter = async (config) => reply(config);
+  axios.defaults.adapter = async (config) => slowReply(config);
 
   // ?agentdown=1 —— 装成 IvyeaAgent 没起来，用来验任务台的兜底通道。
   // AI 问答那一页并进任务台后，"agent 掉线还能纯聊"这条退路就只剩这一个入口了，
@@ -881,6 +1005,23 @@ export function installMockApi(): void {
           { content: "拉搜索词报表，找浪费最集中的词根", status: "in_progress" },
           { content: "给出否词与竞价的具体动作", status: "pending" },
         ] });
+        // ── 写操作审批卡 ──────────────────────────────────────────────
+        // ?approval=1 时插一张确认卡。**它此前在验证台里根本渲染不出来** ——
+        // 假流从不发 permission_request，于是"审批档位选了放行、卡片长什么样、
+        // 点了确认之后流怎么继续"这一整条最要紧的链路，一次都没被验过。
+        if (new URLSearchParams(location.search).get("approval") === "1") {
+          await beat(500);
+          send("permission_request", {
+            request_id: "req-demo-1", session_id: "s-live", op_type: "lingxing_write",
+            title: "把 3 个搜索词加为否定关键词", destructive: true,
+            preview: "广告活动：Trail Camera - Auto\n否词：cheap camera / free camera / camera app",
+            options: [{ key: "approve", label: "批准这一次" },
+                      { key: "session", label: "本会话都允许" },
+                      { key: "deny", label: "拒绝" }],
+            expires_at: Math.floor(Date.now() / 1000) + 600,
+          });
+          await beat(2500);
+        }
         await beat(600);
         for (const t of ["先说结论：", "这一周花费涨了 34%，", "其中 28% 来自单次点击成本上升。"]) {
           await beat(500); send("token", { text: t });

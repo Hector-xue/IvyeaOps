@@ -66,6 +66,8 @@ import {
   type IvyeaPermissionRequest,
   type IvyeaSkillInfo,
 } from "../../api/ivyeaAgent";
+import { splitModelId } from "../../components/console/ModelPicker";
+import { getSettings, patchSettings } from "../../api/settings";
 import { errText } from "../../lib/errText";
 import { openSettings } from "../../components/SettingsDialog";
 
@@ -169,6 +171,8 @@ const THOUGHTS_MAX = 60;
 
 type Prefs = {
   workspace: string; approval: ApprovalMode; skill: string;
+  /** 本会话选中的主脑模型（`provider:model`）；"" = 跟随 agent 的全局主脑。 */
+  model: string;
   /** 跟进建议每轮额外跑一次模型调用，给个开关。默认开。 */
   followUps: boolean;
   /** 套用中的预设名与人设 —— 和工作区/档位一样，刷新后应该还在。 */
@@ -178,7 +182,7 @@ type Prefs = {
 
 function loadPrefs(): Prefs {
   const fallback: Prefs = {
-    workspace: "默认工作区", approval: "readonly", skill: "",
+    workspace: "默认工作区", approval: "readonly", skill: "", model: "",
     followUps: true, preset: "", system: "",
   };
   try {
@@ -194,7 +198,29 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-function ConsoleInner() {
+/**
+ * 嵌入模式（右下角悬浮球用）。
+ *
+ * 悬浮球以前是**另一份**简化实现：只有流式正文和一行工具叙述，没有审批档位、
+ * 没有确认卡、没有步骤流、没有模型切换……而任务台这边一直在长。两份各自演化的
+ * 结果就是"同一个 Agent，在两个入口下能力差一大截"。
+ *
+ * 所以不再补功能，而是**让悬浮球直接渲染这一份**。embedded 只关掉三件与"页面"
+ * 绑定的事：读写地址栏、右侧产物栏、大 Hero。其余全部照旧 —— 以后任务台加什么，
+ * 悬浮球自动就有。
+ */
+export type ConsoleEmbedProps = {
+  embedded?: boolean;
+  /** 嵌入模式下要打开的历史会话（外壳的历史列表选中的那条）。 */
+  sessionId?: string;
+  /** 会话 id 变化时回传给外壳（它要拿来高亮历史列表）。 */
+  onSessionChange?: (id: string) => void;
+  /** 数字一变就开新会话。嵌入模式专用 —— 见下面为什么不走全局事件。 */
+  resetSignal?: number;
+};
+
+function ConsoleInner({ embedded = false, sessionId: embedSession = "",
+                        onSessionChange, resetSignal = 0 }: ConsoleEmbedProps = {}) {
   const notify = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -208,6 +234,15 @@ function ConsoleInner() {
   const [busy, setBusy] = useState(false);
   const [sessionId, setSessionId] = useState("");
   const [model, setModel] = useState("");
+  /**
+   * 本会话选中的主脑（`provider:model`），逐轮下发。"" = 跟随 agent 的全局主脑。
+   *
+   * 刻意**不改全局**：agent 的模型是全局设置，真按全局切会把 ops 的其他用户和
+   * 正在跑的定时任务一起换掉。想改全局走模型面板里的「设为默认」。
+   */
+  const [modelPick, setModelPick] = useState(prefs.current.model || "");
+  /** agent 认不认 payload.model（≥ v1.15.4）。老版本会忽略它 —— 那就别给假开关。 */
+  const [modelSwitchable, setModelSwitchable] = useState(false);
   const [readOnly, setReadOnly] = useState(true);
   const [usage, setUsage] = useState<any>(null);
   // 本会话的上下文占用。agent 每轮发两次（开跑前 + 收尾），老 agent 一次都不发 ——
@@ -280,13 +315,15 @@ function ConsoleInner() {
       workspace: composer.workspace,
       approval: composer.approval,
       skill: composer.skill,
+      model: modelPick,
       followUps: followEnabled,
       preset: composer.preset || "",
       system: composer.system || "",
     };
     prefs.current = next;
     try { localStorage.setItem(PREFS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
-  }, [composer.workspace, composer.approval, composer.skill, composer.preset, composer.system, followEnabled]);
+  }, [composer.workspace, composer.approval, composer.skill, composer.preset, composer.system,
+      modelPick, followEnabled]);
 
   // ── 能力目录：板块工具的中文 title 是步骤芯片的文案来源 ────────────────────
   useEffect(() => {
@@ -300,14 +337,19 @@ function ConsoleInner() {
     consolePresets()
       .then((d) => { if (alive) setPresets(d); })
       .catch(() => void 0);   // 没有预设不影响开一轮
-    // 当前主脑模型：只用来显示。agent 的模型是全局配置，不支持按轮次覆盖，
-    // 所以 composer 上那枚 chip 是信息位 + 去系统配置的入口，不是选择器。
+    // 当前主脑模型 + agent 版本。agent ≥ v1.15.4 认 payload.model，所以那枚 chip
+    // 现在是**真的选择器**（逐轮下发，只影响这条会话）；更老的版本会忽略这个字段，
+    // 那时它退回信息位 + 去系统配置的入口。
     ivyeaAgentStatus()
       .then((d) => {
         if (!alive) return;
         const m = (d?.health as any)?.model || {};
         setModel(String(m.model || m.label || ""));
-        setAgentTakesAttachments(atLeast(String((d?.health as any)?.version || ""), "1.15.3"));
+        const ver = String((d?.health as any)?.version || "");
+        setAgentTakesAttachments(atLeast(ver, "1.15.3"));
+        // 老 agent 收到 model 字段会直接忽略：那时给下拉框就是个假开关（选了别的
+        // 模型、跑的还是老模型，还没有任何提示）。所以按版本决定给不给。
+        setModelSwitchable(atLeast(ver, "1.15.4"));
       })
       .catch(() => void 0);
     // @ 可引用的东西：知识卡 + 上传件。取不到就没有 @ 菜单，不影响别的。
@@ -431,15 +473,27 @@ function ConsoleInner() {
     const handler = () => {
       resetSession();
       // 地址栏还留着 ?session= 的话，下面那个 effect 会立刻把旧会话又拉回来。
-      if (window.location.search) navigate("/console", { replace: true });
+      // 嵌入模式下这一份没有自己的地址栏（外壳可能停在任意板块），一律不碰。
+      if (!embedded && window.location.search) navigate("/console", { replace: true });
     };
-    window.addEventListener(CONSOLE_NEW_EVENT, handler);
+    // 嵌入模式**不听这个全局事件**：它是侧边栏「新建任务」按下时广播的，说的是
+    // "页面那一份开一轮新的"。两份都听，就会出现"在悬浮球里点新会话，页面上正跑着
+    // 的那轮也被清掉"这种互相干扰。嵌入模式改用 resetSignal（点对点）。
+    if (!embedded) window.addEventListener(CONSOLE_NEW_EVENT, handler);
     return () => window.removeEventListener(CONSOLE_NEW_EVENT, handler);
-  }, [resetSession, navigate]);
+  }, [resetSession, navigate, embedded]);
+
+  const resetSeenRef = useRef(resetSignal);
+  useEffect(() => {
+    if (!embedded || resetSignal === resetSeenRef.current) return;
+    resetSeenRef.current = resetSignal;
+    resetSession();
+  }, [embedded, resetSignal, resetSession]);
 
   // 从别的板块带过来的预填：?q= 提示词、?skill= 预选技能（能力市场「用这个技能」
   // 走的就是它）。用完即从地址栏抹掉，免得刷新时又套一遍。
   useEffect(() => {
+    if (embedded) return;      // 地址栏是页面那一份的，嵌入模式不掺和
     const sp = new URLSearchParams(location.search);
     const q = sp.get("q");
     const skill = sp.get("skill");
@@ -452,7 +506,11 @@ function ConsoleInner() {
 
   // ?session= 打开左栏点选的历史会话。**不同于 ?q/?skill，它留在地址栏里** ——
   // 左栏靠它高亮当前会话，刷新/分享链接也要能回到同一条。
-  const urlSession = new URLSearchParams(location.search).get("session") || "";
+  // 打开哪条历史会话：页面模式看地址栏（左栏高亮、刷新、分享链接都靠它），
+  // 嵌入模式听外壳传进来的 prop（悬浮球有自己的历史列表）。
+  const urlSession = embedded
+    ? embedSession
+    : (new URLSearchParams(location.search).get("session") || "");
   useEffect(() => {
     if (!urlSession) return;
     if (urlSession === sessionId) return;      // 已经是当前会话，别重复拉
@@ -499,7 +557,8 @@ function ConsoleInner() {
         notify("error", e?.response?.status === 403
           ? "这条会话不属于你"
           : (errText(e, "打开会话失败")));
-        navigate("/console", { replace: true });
+        if (embedded) onSessionChange?.("");
+        else navigate("/console", { replace: true });
       })
       .finally(() => { if (alive) setLoadingSession(false); });
     return () => { alive = false; };
@@ -813,6 +872,9 @@ function ConsoleInner() {
           workspace: composer.workspace && composer.workspace !== "默认工作区" ? composer.workspace : undefined,
           skill: composer.skill || undefined,
           auto_skill: !composer.skill,
+          // 本轮主脑。老 agent 不认识这个字段会直接忽略，且没选模型时 ops 后端
+          // 会整个剔除它 —— 两个方向都安全。
+          model: modelSwitchable && modelPick ? modelPick : undefined,
           plan_mode,
           approval,
           // 人设排最前：它定义"以什么身份、什么判断标准作答"，逻辑上先于本轮材料。
@@ -853,7 +915,9 @@ function ConsoleInner() {
               // 指向这条会话时（在历史会话里继续问）就不写，省掉每轮一次白折腾。
               // 恢复 effect 那边 urlSession===sessionId 会直接 return，不会重复拉取、
               // 也不会 abort 掉正在跑的这一轮（e2e/session-url.mjs 钉住了这一条）。
-              if (new URLSearchParams(window.location.search).get("session") !== d.session_id) {
+              if (embedded) {
+                onSessionChange?.(d.session_id);
+              } else if (new URLSearchParams(window.location.search).get("session") !== d.session_id) {
                 navigate(`/console?session=${encodeURIComponent(d.session_id)}`, { replace: true });
               }
             }
@@ -1076,6 +1140,34 @@ function ConsoleInner() {
     }
   }, [notify]);
 
+  /**
+   * 把选中的模型写成**全局默认**（写 ops 的系统配置，再由后端下推给 agent）。
+   *
+   * 换 provider 时必须把 ops 存的那把 key 一起清空 —— sync_model_settings 会把
+   * `ivyea_agent_api_key` 推成**新 provider** 对应的环境变量：拿 A 家的 key 覆盖
+   * B 家的，B 家原本配好的 key 就这么没了，而且毫无征兆。清空只是"不再下推"，
+   * agent 自己 .env 里各家已有的 key 一个都不动。
+   */
+  const setModelAsDefault = useCallback(async (id: string) => {
+    const { provider, model: picked } = splitModelId(id);
+    if (!provider || !picked) return;
+    try {
+      const cur = await getSettings();
+      const changingProvider = String(cur?.settings?.ivyea_agent_provider || "") !== provider;
+      await patchSettings({
+        ivyea_agent_provider: provider,
+        ivyea_agent_model: picked,
+        ...(changingProvider ? { ivyea_agent_api_key: "", ivyea_agent_base_url: "" } : {}),
+      });
+      // 已经是默认了，就不该再逐轮覆盖 —— 留着的话用户以后改了默认却不生效。
+      setModelPick("");
+      setModel(picked);
+      notify("success", `已把 ${picked} 设为默认主脑（对所有用户和定时任务生效）`);
+    } catch (e: any) {
+      notify("error", errText(e, "设为默认失败"));
+    }
+  }, [notify]);
+
   const patch = (p: Partial<ComposerValue>) => setComposer((c) => ({ ...c, ...p }));
 
   const composerNode = (compact: boolean) => (
@@ -1099,14 +1191,18 @@ function ConsoleInner() {
       images={images}
       onImagesChange={setImages}
       modelLabel={model}
-      onModelClick={() => openSettings()}
+      modelValue={modelPick}
+      onModelChange={setModelPick}
+      modelSwitchable={modelSwitchable}
+      onModelSettings={() => openSettings()}
+      onModelDefault={setModelAsDefault}
       autoFocus={!compact}
       compact={compact}
     />
   );
 
   return (
-    <div className="cc-page">
+    <div className={"cc-page" + (embedded ? " cc-embedded" : "")}>
       <div className="cc-main">
         {loadingSession ? (
           <div className="cc-hero">
@@ -1119,12 +1215,14 @@ function ConsoleInner() {
              是写给第一次来的人看的，但首页是每天都要经过的地方 —— 一句每天都
              要读一遍、读完什么也不用做的话，就是噪音。它的内容已经在使用手册里。 */
           <div className="cc-hero">
+            {/* 嵌入模式（悬浮球）里 Hero 只留一行小字：面板本来就只有几百像素高，
+                44px 的 logo + 24px 大标题会把输入框顶到看不见的地方。 */}
             <div className="cc-hero-brand">
-              <img src="/ivyea-logo.png" alt="Ivyea" className="cc-hero-logo" />
-              <h1 className="cc-hero-title">意念所至，行动随行</h1>
+              {!embedded && <img src="/ivyea-logo.png" alt="Ivyea" className="cc-hero-logo" />}
+              <h1 className="cc-hero-title">{embedded ? "有什么可以帮你？" : "意念所至，行动随行"}</h1>
             </div>
             <div className="cc-hero-composer">{composerNode(false)}</div>
-            {scenes.length > 0 && (
+            {!embedded && scenes.length > 0 && (
               <div className="cc-scenes">
                 {scenes.map((s) => (
                   <button
@@ -1312,7 +1410,9 @@ function ConsoleInner() {
         )}
       </div>
 
-      <ArtifactRail
+      {/* 产物栏在悬浮球里放不下，也不该放：面板的价值是"不离开当前页面问一句"，
+          真要看产物/待办/审批留痕，点开任务台。 */}
+      {!embedded && <ArtifactRail
         answers={turns.filter((t) => t.role === "assistant" && !t.failed).map((t) => t.text)}
         todos={todos}
         fileChanges={fileChanges}
@@ -1321,15 +1421,15 @@ function ConsoleInner() {
         model={model}
         readOnly={readOnly}
         usage={usage}
-      />
+      />}
     </div>
   );
 }
 
-export default function Console() {
+export default function Console(props: ConsoleEmbedProps = {}) {
   return (
     <ToastProvider>
-      <ConsoleInner />
+      <ConsoleInner {...props} />
     </ToastProvider>
   );
 }

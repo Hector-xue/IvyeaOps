@@ -38,6 +38,9 @@ git log 记得住「改了什么」，记不住「为什么不选另一条路」
 | [0018](./0018-token-stats-count-cache-tokens.md) | Token 统计把缓存计入总量，并接入 IvyeaAgent / DeepSeek Harness | 2026-08-21 |
 | [0019](./0019-bundle-webfonts.md) | 界面字体自带字库，直接放 public/fonts | 2026-08-21 |
 | [0020](./0020-attached-image-readout-belongs-to-the-user-message.md) | 附图的文字版归属于 user 消息，不再塞进 system | 2026-08-21 |
+| [0021](./0021-model-switch-is-per-session-not-global.md) | 任务台切模型只影响当前会话，改全局是另一条明路 | 2026-08-21 |
+| [0022](./0022-subscription-login-in-the-web-ui.md) | 订阅制模型的登录搬进网页，且只给管理员 | 2026-08-21 |
+| [0023](./0023-dock-renders-the-console-itself.md) | 悬浮球不再自己实现对话，直接渲染任务台 | 2026-08-21 |
 
 ## 模板
 

@@ -297,6 +297,120 @@ export type KnowledgeEvidencePayload = {
   rebuild?: boolean;
 };
 
+export type AgentModelCatalog = {
+  ok: boolean;
+  provider_id?: string;
+  label?: string;
+  models: string[];
+  default_model?: string;
+  /** live = 刚从端点拉的；cache = 24h 内的缓存；builtin = 内置兜底清单。 */
+  source?: string;
+  error?: string;
+};
+
+/** 这家 provider 的密钥配好了吗。oauth 那几档的字符串形态不止一种，统一在这里判。 */
+export function providerKeyReady(keyStatus: string): boolean {
+  const s = String(keyStatus || "");
+  if (!s || s.startsWith("missing:")) return false;
+  return s === "configured" || s.startsWith("configured:")
+    || s === "none" || s === "aws_sdk" || s === "valid" || s === "expired+refresh";
+}
+
+// ── 订阅制 provider 的登录（agent ≥ v1.15.5，仅管理员）──────────────────────
+// Claude 订阅 / Codex / Gemini / Qwen / Copilot 不是填 key 而是走 OAuth。
+// 凭据全程留在 agent 那边：这些接口来回传的只有授权链接、user_code 和用户粘回来
+// 的那段东西，**没有任何 token**。
+
+export type AuthProviderRow = {
+  id: string;
+  label: string;
+  /** device = 显示代码去输；paste = 粘回调内容；token = 直接填一个 token。 */
+  kind: "device" | "paste" | "token";
+  auth_type?: string;
+  /** not-authenticated / authenticated[+refresh] / expired[+refresh] / configured:ENV */
+  status: string;
+  ready: boolean;
+  expires_at?: number;
+  source?: string;
+  hint?: string;
+  models?: string[];
+};
+
+export type AuthStartResp = {
+  ok: boolean;
+  provider?: string;
+  kind?: "device" | "paste" | "token";
+  session?: string;
+  hint?: string;
+  /** paste 流程的授权链接。 */
+  url?: string;
+  /** device 流程要用户输进去的代码。 */
+  user_code?: string;
+  verification_uri?: string;
+  interval?: number;
+  expires_in?: number;
+  error?: string;
+};
+
+export type AuthPollResp = {
+  ok: boolean;
+  status?: "pending" | "ok" | "error";
+  interval?: number;
+  /** 暂时性问题（网关 5xx、网络抖动）。不是失败，但该让人知道在等什么。 */
+  note?: string;
+  error?: string;
+  auth?: { providers: AuthProviderRow[] };
+};
+
+export async function ivyeaAuthStatus() {
+  const { data } = await api.get<{ ok: boolean; providers: AuthProviderRow[] }>(
+    "/ivyea-agent/auth", { timeout: 20000 });
+  return data;
+}
+
+export async function ivyeaAuthStart(providerId: string) {
+  const { data } = await api.post<AuthStartResp>(
+    `/ivyea-agent/auth/${encodeURIComponent(providerId)}/start`, {}, { timeout: 60000 });
+  return data;
+}
+
+export async function ivyeaAuthPoll(providerId: string, session: string) {
+  const { data } = await api.post<AuthPollResp>(
+    `/ivyea-agent/auth/${encodeURIComponent(providerId)}/poll`, { session }, { timeout: 60000 });
+  return data;
+}
+
+export async function ivyeaAuthComplete(providerId: string, session: string, value: string) {
+  const { data } = await api.post<AuthPollResp>(
+    `/ivyea-agent/auth/${encodeURIComponent(providerId)}/complete`, { session, value },
+    { timeout: 90000 });
+  return data;
+}
+
+export async function ivyeaAuthLogout(providerId: string) {
+  const { data } = await api.post<AuthPollResp>(
+    `/ivyea-agent/auth/${encodeURIComponent(providerId)}/logout`, {}, { timeout: 30000 });
+  return data;
+}
+
+/** 登录状态的中文说法。agent 那边的取值不止一种形态，统一在这里翻。 */
+export function authStatusLabel(status: string): { text: string; tone: "ok" | "warn" | "off" } {
+  const s = String(status || "");
+  if (s.startsWith("configured:")) return { text: `已配置（来自 ${s.slice(11)}）`, tone: "ok" };
+  if (s === "authenticated" || s === "authenticated+refresh") return { text: "已登录", tone: "ok" };
+  if (s === "expired+refresh") return { text: "已过期（会自动续）", tone: "warn" };
+  if (s === "expired") return { text: "已过期，需重新登录", tone: "warn" };
+  return { text: "未登录", tone: "off" };
+}
+
+/** 内置 provider 的实时模型清单（agent 侧带 24h 缓存）。 */
+export async function ivyeaProviderModels(providerId: string, refresh = false) {
+  const { data } = await api.get<{ ok: boolean; catalog: AgentModelCatalog }>(
+    `/ivyea-agent/model/providers/${encodeURIComponent(providerId)}/models`,
+    { params: refresh ? { refresh: 1 } : undefined, timeout: 20000 });
+  return data;
+}
+
 export async function ivyeaAgentStatus() {
   const { data } = await api.get<IvyeaAgentStatus>("/ivyea-agent/status");
   return data;
@@ -388,6 +502,11 @@ export type IvyeaChatPayload = {
   inject_retrieval?: boolean;
   /** 显式指定本轮必须遵循的 skill id。 */
   skill?: string;
+  /**
+   * 本轮用哪个主脑模型（agent ≥ v1.15.4），形如 `openrouter:x-ai/grok-4.6`。
+   * 留空 = agent 的全局主脑。老 agent 会忽略它。
+   */
+  model?: string;
   /** 让 serve 按用户问题自动匹配 skill 并回发 skill_match 事件。 */
   auto_skill?: boolean;
   /**

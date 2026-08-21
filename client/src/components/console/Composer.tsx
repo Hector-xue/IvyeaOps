@@ -3,7 +3,8 @@
  *   `+ | 默认工作区 ▾ | 默认审批 ▾ | 广告分析规划助手 ▾ | gpt-5.6-sol ▾ | ➤`
  *
  * 这些 chip 不是装饰：每一枚都直接映射到 agent serve 的 chat payload 字段
- * （workspace / plan_mode+approval / skill / 模型），选了就真的按那个跑。
+ * （workspace / plan_mode+approval / skill / model），选了就真的按那个跑 ——
+ * 包括最右那枚模型芯片：它下发 payload.model，只对这条会话生效。
  */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import Icon from "../Icon";
@@ -16,12 +17,19 @@ import {
   type ApprovalMode,
 } from "../../lib/approvalModes";
 import type { ConsolePreset, IvyeaSkillInfo } from "../../api/ivyeaAgent";
+import ModelPicker from "./ModelPicker";
 
 /** `@` 引用的一条：把知识库里的东西真的带进本轮，而不只是在文字里提一嘴。 */
 export type ComposerRef = { id: string; title: string; path: string };
 
-/** `/` 菜单里的一条命令。 */
-type SlashItem = { key: string; label: string; hint?: string; run: () => void };
+/**
+ * `/` 菜单里的一条命令。
+ *
+ * keywords：**中文标签之外**的可搜词。菜单是按标签模糊匹配的，而 `/model` 这类
+ * 命令的标签是中文 —— 用户照着 CLI 的习惯打 `/model`，匹配不上就是一个空菜单
+ * （看起来像这条命令根本不存在）。
+ */
+type SlashItem = { key: string; label: string; hint?: string; keywords?: string; run: () => void };
 
 /*
  * 审批三档的定义搬到了 lib/approvalModes —— 任务台、能力市场的预设表、这里三处
@@ -60,7 +68,11 @@ export default function Composer({
   images = [],
   onImagesChange,
   modelLabel,
-  onModelClick,
+  modelValue = "",
+  onModelChange,
+  modelSwitchable = false,
+  onModelSettings,
+  onModelDefault,
   placeholder = "告诉 Ivyea 你想做什么，剩下的交给我……",
   autoFocus,
   compact,
@@ -90,12 +102,20 @@ export default function Composer({
   images?: string[];
   onImagesChange?: (next: string[]) => void;
   /**
-   * 当前主脑模型。**只显示，不在这里切**：agent 的模型是全局配置
-   * （/v1/model/configure），不支持按轮次覆盖；做成下拉框会是个点了没反应的假开关。
-   * 点它跳「系统配置」，那里才是真正切换的地方。
+   * 当前**实际生效**的主脑模型显示名（来自 /health 或本轮 start 事件）。
+   *
+   * 这里曾经只显示不可切：那时 agent 的模型是纯全局配置，做成下拉框会是个点了
+   * 没反应的假开关。agent ≥ v1.15.4 支持按轮次指定模型后才真的可切 —— 所以
+   * modelSwitchable 为假（老 agent）时仍然只跳「系统配置」，不给假开关。
    */
   modelLabel: string;
-  onModelClick: () => void;
+  /** 本会话选中的模型 id（`provider:model`）；"" = 跟随全局。 */
+  modelValue?: string;
+  onModelChange?: (id: string) => void;
+  modelSwitchable?: boolean;
+  onModelSettings: () => void;
+  /** 把选中的模型写成全局默认。不给就不显示那个按钮。 */
+  onModelDefault?: (id: string) => Promise<void>;
   placeholder?: string;
   autoFocus?: boolean;
   /** 会话态：贴底、少留白。 */
@@ -104,6 +124,8 @@ export default function Composer({
 }) {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  /** `/model` 命令用它叫开模型面板 —— 计数变化即触发，不必把 open 提上来。 */
+  const [modelOpen, setModelOpen] = useState(0);
 
   // ── `/` 命令与 `@` 引用 ────────────────────────────────────────────────────
   // 触发规则：光标前最后一个 token 以 / 或 @ 开头，且它处在行首或空白之后。
@@ -161,9 +183,19 @@ export default function Composer({
         run: () => onChange({ approval: m.value }),
       });
     }
+    // `/model` —— 和 IvyeaAgent CLI 里那条命令同名同义。终端里能这么切，
+    // 网页上也该能，不然同一个产品两套操作方式。
+    items.push({
+      key: "model",
+      label: "模型 · 切换主脑",
+      keywords: "model 模型 主脑 llm",
+      hint: modelSwitchable ? (modelValue ? modelValue : modelLabel) : "当前 Agent 版本不支持，去系统配置切换",
+      run: () => (modelSwitchable ? setModelOpen((n) => n + 1) : onModelSettings()),
+    });
     if (onNewTask) items.push({ key: "new", label: "新建任务", run: onNewTask });
     return items;
-  }, [presets, skills, scenes, onNewTask, onChange]);
+  }, [presets, skills, scenes, onNewTask, onChange,
+      modelSwitchable, modelValue, modelLabel, onModelSettings]);
 
   const matches = useMemo(() => {
     if (!menu) return [] as { key: string; label: string; hint?: string; run: () => void }[];
@@ -174,7 +206,9 @@ export default function Composer({
           key: "ref:" + r.id, label: r.title, hint: r.path.split("/").pop(),
           run: () => onPickedChange?.([...picked.filter((p) => p.id !== r.id), r]),
         }));
-    return pool.filter((it) => !q || it.label.toLowerCase().includes(q)).slice(0, 8);
+    return pool
+      .filter((it) => !q || (it.label + " " + ((it as SlashItem).keywords || "")).toLowerCase().includes(q))
+      .slice(0, 8);
   }, [menu, slashItems, references, picked, onPickedChange]);
 
   const [active, setActive] = useState(0);
@@ -439,15 +473,15 @@ export default function Composer({
         </div>
 
         <div className="cc-bar-right">
-          <button
-            type="button"
-            className="cc-chip cc-chip-model"
-            onClick={onModelClick}
-            title="当前主脑模型 · 点击去「系统配置」切换"
-          >
-            <Icon name="model" size={14} />
-            <span className="cc-chip-label">{modelLabel || "模型未配置"}</span>
-          </button>
+          <ModelPicker
+            currentLabel={modelLabel}
+            value={modelValue}
+            onChange={(id) => onModelChange?.(id)}
+            switchable={modelSwitchable}
+            onOpenSettings={onModelSettings}
+            onSetDefault={onModelDefault}
+            openSignal={modelOpen}
+          />
           {busy && onStop ? (
             <button type="button" className="cc-send cc-stop" onClick={onStop} title="停止本轮">
               <Icon name="stop" size={14} strokeWidth={3} />

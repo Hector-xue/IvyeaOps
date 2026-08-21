@@ -72,6 +72,87 @@ async def patch_settings(body: SettingsPatch, _u: str = Depends(require_user)):
     return {"settings": updated, "secret_keys": _SECRET_KEYS}
 
 
+# ── 模型清单：把"填模型名"从背默写变成挑一个 ────────────────────────────────
+# 四个槽位（主脑 / 全局兜底 / 视觉 / 生图）此前都是自由文本框：用户得自己记住
+# "Qwen/Qwen3-VL-30B-A3B-Instruct" 这种字符串，记错了也要等到真调用时才报错。
+# 这里按槽位解析出 provider + 地址 + 密钥，去问那个端点到底支持哪些模型。
+
+_SLOT_KEYS: Dict[str, Dict[str, str]] = {
+    "agent":     {"provider": "ivyea_agent_provider", "api_key": "ivyea_agent_api_key",
+                  "base_url": "ivyea_agent_base_url"},
+    "assistant": {"provider": "assistant_provider", "api_key": "assistant_api_key",
+                  "base_url": "assistant_base_url"},
+    "vision":    {"provider": "vision_provider", "api_key": "vision_api_key",
+                  "base_url": "vision_base_url"},
+    # 生图槽留空时**沿用 apimart 那套账号** —— 和 routers/assistant.py 的 _image_cfg
+    # 完全同一套优先级。两边各写一份必然走偏：面板列出来的模型来自 A 端点，
+    # 真生成时打的却是 B 端点。
+    "image":     {"provider": "", "api_key": "image_api_key", "base_url": "image_base_url",
+                  "fallback_api_key": "apimart_key", "fallback_base_url": "apimart_base"},
+}
+
+
+class ModelCatalogBody(BaseModel):
+    """slot 决定去问哪个端点；provider/base_url/api_key 允许现给。
+
+    现给是必须的：系统配置页在**保存之前**就要能看清单，那时新填的 key 还没落库。
+    三者都留空才回落到库里存的那份。
+    """
+
+    slot: str = "agent"
+    provider: str = ""
+    base_url: str = ""
+    api_key: str = ""
+    refresh: bool = False
+
+
+def _slot_endpoint(body: ModelCatalogBody, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    keys = _SLOT_KEYS.get(body.slot.strip().lower())
+    if keys is None:
+        return {}
+    provider = (body.provider or (cfg.get(keys.get("provider", "")) or "")).strip()
+    api_key = (body.api_key or (cfg.get(keys.get("api_key", "")) or "")).strip()
+    base_url = (body.base_url or (cfg.get(keys.get("base_url", "")) or "")).strip()
+    if not api_key and keys.get("fallback_api_key"):
+        api_key = str(cfg.get(keys["fallback_api_key"]) or "").strip()
+    if not base_url and keys.get("fallback_base_url"):
+        base_url = str(cfg.get(keys["fallback_base_url"]) or "").strip()
+    if not base_url and provider:
+        from app.services.ai_synthesis_service import ASSISTANT_PROVIDER_BASE
+        base_url = str(ASSISTANT_PROVIDER_BASE.get(provider, "") or "").strip()
+    return {"provider": provider, "base_url": base_url, "api_key": api_key,
+            "refresh": bool(body.refresh)}
+
+
+@router.post("/settings/model-catalog")
+async def model_catalog(body: ModelCatalogBody, _u: str = Depends(require_user)):
+    """列出某个槽位当前那套账号能用哪些模型。**永远不回显密钥。**"""
+    cfg = _hs.load()
+    payload = _slot_endpoint(body, cfg)
+    if not payload:
+        return {"ok": False, "error": "unknown_slot",
+                "catalog": {"ok": False, "models": [], "source": "none",
+                            "error": f"不认识的槽位：{body.slot}"}}
+    if not payload.get("provider") and not payload.get("base_url"):
+        return {"ok": False, "error": "not_configured",
+                "catalog": {"ok": False, "models": [], "source": "none",
+                            "error": "这个槽位还没选 Provider，也没填 Base URL。"}}
+    try:
+        from app.services import ivyea_agent_service
+        result = ivyea_agent_service.model_catalog(payload)
+    except Exception as exc:  # noqa: BLE001
+        # agent 没起来 / 是个不认识这个端点的老版本：面板不能因此打不开，
+        # 退回"手输模型名"那条路，并把原因说清楚。
+        logger.debug("model_catalog 走 agent 失败：%s", exc)
+        return {"ok": False, "error": "agent_unavailable",
+                "catalog": {"ok": False, "models": [], "source": "none",
+                            "error": f"取模型清单失败：{exc}"}}
+    catalog = result.get("catalog") if isinstance(result, dict) else None
+    return {"ok": bool(result.get("ok")) if isinstance(result, dict) else False,
+            "error": (result or {}).get("error", ""),
+            "catalog": catalog or {"ok": False, "models": [], "source": "none", "error": ""}}
+
+
 @router.post("/settings/test")
 async def test_setting(body: TestRequest, _u: str = Depends(require_user)):
     """Probe one config key with the provided (or stored) value."""
