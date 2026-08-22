@@ -3889,26 +3889,53 @@ button.af-line:hover{background:var(--bg2)}
   /* 手机上标题小一档，行高给足 —— 1.25 时中文的行盒比 clientHeight 高 3px，
      会被裁掉一线笔画。 */
   .cc-hero-title{font-size:24px;line-height:1.35}
-  /* 底栏在 390px 宽下装不下"附件+工作区+档位+模型+发送"：桌面靠左组 overflow
-     隐藏来保一行，手机上那会**把审批档位裁掉**——恰恰是最不能看不见的那一个。
-     所以窄屏允许折行。
-     **模型名不藏**：这枚芯片以前只是个跳转入口，收成一个图标无所谓；现在它是
-     "你正在跟哪个模型说话"的唯一显示位，也是切换入口 —— 藏掉名字，用户就只能
-     点开面板才知道自己在用哪个模型。底栏这一档本来就能折行，给它留个位置、
-     超长省略即可（900px 并不只是手机：半屏窗口、小笔记本都会落到这一档）。 */
-  .cc-bar{flex-wrap:wrap;row-gap:6px}
-  .cc-bar-left{overflow:visible;flex-wrap:wrap}
-  .cc-chip-model{padding:5px 8px;max-width:160px}
-  /* 底栏在手机上太占地方，能省的只有**工作区名字**这一处：
-     审批档位和模型名上面已经论证过不能藏（一个是安全档位、一个是"你在跟谁说话"
-     的唯一显示位），附件和发送本来就是图标。工作区不同 —— 文件夹图标已经说清了
-     它是什么，而"默认工作区"五个字里没有一个字是信息；真要看是哪个，点开抽屉，
-     选中项在里面高亮着。省下来的 ~75px 通常够把整条底栏收回一行。
-     标题仍带完整说明（title 属性），无障碍名靠 aria-label，都没丢。 */
-  .cc-bar-left [aria-label="工作区"] .xsel-label{display:none}
-  .cc-bar-left [aria-label="工作区"]{gap:2px;padding-left:8px;padding-right:6px}
-  /* 芯片整体收一档：手机上这排是参数不是主角。 */
-  .cc-bar .cc-chip{padding:5px 8px;gap:5px}
+  /* 底栏在 390px 宽下装不下"附件+工作区+档位+模型+发送"——**前提是它们都带字**。
+     以前的解法是折行，代价是输入框下面吃掉两行、第一行右边空一大片。
+     现在换解法：把带字的都收成图标，一行就装得下（实测 ~190px / 可用 316px），
+     不用再靠折行，也没有裁掉任何一个控件。 */
+  /* 底栏在手机上**只留图标、强制一行**。
+     以前这里的注释论证过"窄屏允许折行、审批和模型名都不能藏"，那个结论作废：
+     折行之后第一行右边空一大片、第二行只有模型名和发送键，占掉输入框下面两行
+     的高度，实机上就是难看。
+     全部图标化之后 390px 下实测只要 ~190px，一行绰绰有余。
+     **审批档位藏掉文字是安全的**：三档各有各的形状（只读=眼睛 / 审批放行=盾 /
+     完全放行=闪电，见 components/Icon.tsx），外加 tone 三色（常规/琥珀/红）和
+     只有它带边框，图标本身就把档位说清了；文字说明仍在 title 和抽屉里。
+     模型名是唯一留字的：图标化审批省下的 ~70px 正好够它留在同一行，长名字
+     自动省略。真嫌长，把下面 .cc-chip-model .cc-chip-label 也 display:none 即可。 */
+  .cc-bar{flex-wrap:nowrap;gap:6px}
+  /* flex:0 0 auto —— 左组是三个定宽图标，一格都不该压。桌面上它是 flex:1 1 auto
+     配 overflow:hidden（靠裁切保一行），照搬到手机端就出事：这里 overflow 是
+     visible，被压缩后内容直接**溢出压到右组上**（实测审批图标和模型芯片图标叠在
+     一起）。该让位的是模型名，它有 ellipsis。 */
+  .cc-bar-left{overflow:visible;flex-wrap:nowrap;gap:4px;flex:0 0 auto;min-width:0}
+  /* 右组必须**可收缩**（桌面是 flex:0 0 auto）：不然模型名再长也不让步，
+     发送键被顶出底栏（实测溢出 43px）。收缩的额度由模型名的 ellipsis 吃掉。 */
+  .cc-bar-right{gap:6px;flex:0 1 auto;min-width:0}
+  .cc-bar .cc-chip{padding:5px 7px;gap:4px}
+  /* 工作区、审批：只留图标；下拉箭头一起收掉 —— 五个控件排一行时，四个小三角
+     只是噪点，点开抽屉本来就有选中态。 */
+  /* 只留图标这一档**只给手机（≤640）**：640~900 这一段（平板竖屏、半屏窗口、
+     小笔记本）实测底栏有 726px，文字放得下，没有理由把标签藏掉。 */
+  @media (max-width: 640px){
+    .cc-bar-left [aria-label="工作区"] .xsel-label,
+    .cc-bar-left [aria-label="审批档位"] .xsel-label,
+    .cc-bar-left .xsel-caret{display:none}
+    .cc-bar-left [aria-label="工作区"],
+    .cc-bar-left [aria-label="审批档位"]{gap:0;padding-left:7px;padding-right:7px}
+  }
+  /* 模型名：能显示就显示，装不下才省略；芯片可压缩，保证永远不折行。
+     .mp-wrap 是 ModelPicker 自己的外壳，**它才是 .cc-bar-right 的 flex 子项** ——
+     漏掉它，min-width:auto 会挡住收缩，芯片一格不让、反过来朝左溢出压在审批
+     图标上（和 .cc-stats 那次是同一类错）。
+     选择器带上 .cc-bar-right —— 文件更靠后有一条同权重的 `.mp-wrap{flex:0 0 auto}`
+     （4808 行），不加这一层前缀会被它压过去，实测 flex-shrink 仍是 0。 */
+  .cc-bar-right .mp-wrap{min-width:0;flex:0 1 auto;display:flex}
+  .cc-bar-right .cc-chip-model{padding:5px 7px;max-width:none;min-width:0;flex:0 1 auto;width:100%}
+  .mp-caret{display:none}
+  /* 人设芯片（套了预设才有）也得能压缩，否则它会把这一行顶开。 */
+  .cc-chip-preset{min-width:0;max-width:5.5em;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto}
   .cc-rail{display:none}           /* 手机端不挤会话区 */
   .cc-thread{padding:12px 10px 6px}
   .cc-dock{padding:14px 10px 10px}
@@ -3917,20 +3944,14 @@ button.af-line:hover{background:var(--bg2)}
   .cs-detail{max-width:130px}
 }
 
-/* 手机上底栏必然折行：附件 + 工作区 + 审批 + 模型 + 发送，五样排不进一行。
-   **折了就要看起来是有意折的。** 右组默认 margin-left:auto 贴右，掉到第二行之后
-   整组还贴着右边，左侧空出一大片（实测 390px 下空 110px），两行各走各的 ——
-   那正是"乱"的来源。
-   改成右组独占一整行、两端对齐：模型芯片贴左（和上一行的附件按钮同一条左边线），
-   发送键贴右，中间那段空白从"缺口"变成"栏位"。模型名也因此拿到整行的宽度，
-   不必再截成 deepseek-v…（上一行截断、这一行整片空白，是最说不通的一种排版）。
-
-   断点取 640 而不是"真正折行的那一档"：折不折行取决于工作区名、审批档位、模型名
-   有多长（实测 601~640 之间，短标签能排一行、"审批放行"就排不下），CSS 判断不了。
-   取 640 的代价是短标签 + 601~640px 这一小段会多占一行 —— 但两行仍是对齐的，
-   而赌低了就会重新出现"右组孤零零贴右、左边空一片"的那个乱象。 */
+/* 这一段以前是"手机上底栏必然折行，那就把两行排整齐"的一整套办法：右组独占
+   一整行、两端对齐，好让折行看起来是有意的。
+   **前提被推翻了** —— 折行的根因是工作区、审批、模型三个控件都带字；把前两个
+   收成图标之后五样排得进一行，就不该再折。留下这条规则反而是"永远两行"的元凶。 */
 @media (max-width:640px){
-  .cc-bar-right{width:100%;margin-left:0;justify-content:space-between}
+  /* 这里以前是 `.cc-bar-right{width:100%}` —— 强制右组独占一整行，也就是"底栏
+     永远两行"的直接原因。图标化之后一行装得下，不再需要它。 */
+  .cc-bar-right{width:auto;margin-left:auto;justify-content:flex-end}
   .cc-chip-model{max-width:none;min-width:0;flex:0 1 auto}
 }
 
