@@ -1417,7 +1417,12 @@ body::after{
   .terminal-pane-wrap:fullscreen{border-radius:0;border:none}
   .terminal-pane-wrap:fullscreen iframe,
   .terminal-pane-wrap:fullscreen .terminal-live-pane{height:100%}
-  .terminal-workbench-mobile .terminal-session-item,
+  /* 这里以前是 `.terminal-workbench-mobile .terminal-session-item,` 和下面的
+     backdrop 粘在同一条规则上 —— 于是手机端**每个终端列表项都变成了整屏 50%
+     黑色遮罩**。又因为 .terminal-mobile-sheet 带 will-change:transform，它成了
+     fixed 的包含块，所有项 inset:0 全叠在抽屉里：两层黑摞起来把抽屉刷黑，
+     几条终端的文字压在同一行上。列表项的样式本来就在上面 .terminal-session-item
+     那条里，这里不需要任何声明。 */
   .terminal-sheet-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25;animation:term-bd-in .2s ease both}
   .terminal-mobile-sheet{position:fixed;left:10px;right:10px;bottom:10px;top:auto;max-height:min(62dvh,520px);z-index:26;border-radius:18px;padding:12px;box-shadow:0 14px 48px rgba(0,0,0,.5);background:linear-gradient(var(--bg2),var(--bg2)),linear-gradient(var(--bg-cover),var(--bg-cover)),var(--bg-cover);border:1px solid var(--b);animation:term-sheet-up .26s cubic-bezier(.16,1,.3,1) both;will-change:transform}
   .terminal-mobile-sheet::before{content:"";display:block;width:42px;height:4px;border-radius:999px;background:var(--b2);margin:0 auto 10px}
@@ -3894,6 +3899,16 @@ button.af-line:hover{background:var(--bg2)}
   .cc-bar{flex-wrap:wrap;row-gap:6px}
   .cc-bar-left{overflow:visible;flex-wrap:wrap}
   .cc-chip-model{padding:5px 8px;max-width:160px}
+  /* 底栏在手机上太占地方，能省的只有**工作区名字**这一处：
+     审批档位和模型名上面已经论证过不能藏（一个是安全档位、一个是"你在跟谁说话"
+     的唯一显示位），附件和发送本来就是图标。工作区不同 —— 文件夹图标已经说清了
+     它是什么，而"默认工作区"五个字里没有一个字是信息；真要看是哪个，点开抽屉，
+     选中项在里面高亮着。省下来的 ~75px 通常够把整条底栏收回一行。
+     标题仍带完整说明（title 属性），无障碍名靠 aria-label，都没丢。 */
+  .cc-bar-left [aria-label="工作区"] .xsel-label{display:none}
+  .cc-bar-left [aria-label="工作区"]{gap:2px;padding-left:8px;padding-right:6px}
+  /* 芯片整体收一档：手机上这排是参数不是主角。 */
+  .cc-bar .cc-chip{padding:5px 8px;gap:5px}
   .cc-rail{display:none}           /* 手机端不挤会话区 */
   .cc-thread{padding:12px 10px 6px}
   .cc-dock{padding:14px 10px 10px}
@@ -5032,4 +5047,28 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
   .home-topbar > [data-tour="home-source"] > *{flex:1 1 0;min-width:0}
   .home-topbar .market-mkt-wrap{flex-shrink:1}
   .home-topbar .market-mkt-btn{width:100%;justify-content:center}
+}
+
+/* ── 运营驾驶舱面板顶栏：手机端 ──────────────────────────────────────────
+   实测 390px 下这一块是散的：
+   · 「↗ 大盘流量」在 tab 条里已经写过一次，面板里又写一次；
+   · .pulse-input 定死 width:150px，被挤成 110px，placeholder 截成
+     「添加类目基丝」；
+   · 三个动作按钮（+添加基线 / 导入历史 / 立即记录）挤不下，第三个孤零零掉到
+     第二行左边；
+   · 日/周/月 那个分段控件是块级 flex 容器，默认撑满整行 306px，一个三档开关
+     长得比图表标题还壮。
+   手机端改成：标题让位、输入框独占一行、动作按钮平分一行、分段控件收成内容宽。 */
+@media (max-width: 680px){
+  .pulse-page{padding:12px}
+  .pulse-header{gap:6px}
+  /* tab 条已经指明在哪一栏，面板里这行标题是重复的；日期还留着。 */
+  .pulse-header-title{display:none}
+  .pulse-input-wrap{flex:1 1 100%;gap:6px}
+  .pulse-input{width:auto;flex:1 1 auto;min-width:0}
+  .pulse-input:focus{width:auto}
+  .pulse-header > .tbtn{flex:1 1 0;min-width:0;justify-content:center;white-space:nowrap}
+  /* 分段控件按内容收宽，别再占满整行。 */
+  .pulse-page .market-mode-toggle{width:fit-content;max-width:100%}
+  .pulse-page .market-mode-btn{flex:0 0 auto}
 }
