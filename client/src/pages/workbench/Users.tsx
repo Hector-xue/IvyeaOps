@@ -111,15 +111,18 @@ export default function Users() {
         <div className="market-empty"><div className="market-empty-icon">⊙</div><div className="market-empty-title">暂无注册用户</div></div>
       ) : (
         <div className="cat-table-wrap">
-          <table className="cat-table">
+          <table className="cat-table cat-table-cards">
             <thead><tr><th>邮箱</th><th>角色</th><th>状态</th><th>职位 / 已授权板块</th><th>注册时间</th><th>操作</th></tr></thead>
             <tbody>
               {users.map(u => (
+                /* data-label：手机端这张表会被 CSS 折成一张张卡片，列头整行消失，
+                   每格的名字改由 td::before 打出来 —— 没有它，卡片上就是一串
+                   没有标题的值。桌面端 ::before 不渲染，完全不受影响。 */
                 <tr key={u.id}>
-                  <td>{u.email}</td>
-                  <td>{u.role}</td>
-                  <td><span style={{ color: STATUS_COLOR[u.status] }}>{STATUS_LABEL[u.status] || u.status}</span></td>
-                  <td style={{ maxWidth: 280 }}>
+                  <td data-label="邮箱">{u.email}</td>
+                  <td data-label="角色">{u.role}</td>
+                  <td data-label="状态"><span style={{ color: STATUS_COLOR[u.status] }}>{STATUS_LABEL[u.status] || u.status}</span></td>
+                  <td data-label="职位 / 已授权板块" style={{ maxWidth: 280 }}>
                     {u.position && <span style={{ fontWeight: 600, marginRight: 6 }}>{u.position}</span>}
                     <span style={{ fontSize: "var(--fs-12)", color: "var(--t3)" }}>
                       {(u.permissions && u.permissions.length)
@@ -127,8 +130,8 @@ export default function Users() {
                         : "（仅基础板块）"}
                     </span>
                   </td>
-                  <td>{fmt(u.created_at)}</td>
-                  <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <td data-label="注册时间">{fmt(u.created_at)}</td>
+                  <td data-label="操作" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <button className="tbtn tbtn-acc" onClick={() => openEdit(u)}>授权</button>
                     {u.status !== "active" && <button className="tbtn tbtn-acc" onClick={() => setStatus(u, "active")}>启用</button>}
                     {u.status === "active" && <button className="tbtn" onClick={() => setStatus(u, "suspended")}>停用</button>}

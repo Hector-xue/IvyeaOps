@@ -133,6 +133,78 @@ const DEMO_PLAN = {
 };
 
 const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
+  /* ── 运营驾驶舱 / 用户管理 ────────────────────────────────────────────────
+     这几条以前没有，兜底的 `{}` 让 MarketTraffic 的 `items.filter` 直接把整页
+     炸成「页面渲染出错」—— 于是驾驶舱和用户管理在验证台上根本画不出来，
+     排版问题也就无从验起。字段名照抄 api/home.ts 的 interface，不是编的。 */
+  ["/home/market-watch", [
+    { id: "mw1", query: "wireless earbuds", marketplace: "US", data_source: "sorftime", label: "无线耳机", ts: 1780000000 },
+    { id: "mw2", query: "yoga mat", marketplace: "US", data_source: "sorftime", label: "瑜伽垫", ts: 1780100000 },
+    { id: "mw3", query: "desk lamp", marketplace: "DE", data_source: "sorftime", label: "台灯", ts: 1780200000 },
+  ]],
+  ["/home/market-series", (() => {
+    // MarketSeries 的字段是 market / own / competitor（见 api/home.ts）。
+    const days = Array.from({ length: 30 }, (_, i) =>
+      new Date(1780300000000 - (29 - i) * 86400000).toISOString().slice(0, 10));
+    return {
+      query: "wireless earbuds", marketplace: "US", data_source: "sorftime",
+      market: days.map((day, i) => ({
+        day,
+        search_volume: 42000 + Math.round(Math.sin(i / 4) * 6000) + i * 180,
+        total_sales: 8600 + Math.round(Math.cos(i / 5) * 900) + i * 40,
+        avg_price: 26.5 + Math.sin(i / 7) * 1.8,
+      })),
+      own: days.map((day, i) => ({ day, value: 320 + Math.round(Math.sin(i / 3) * 40) + i * 3 })),
+      competitor: days.map((day, i) => ({ day, value: 480 + Math.round(Math.cos(i / 3) * 55) + i * 2 })),
+    };
+  })()],
+  ["/home/keywords", [
+    { id: "k1", keyword: "wireless earbuds", marketplace: "US", data_source: "sorftime", label: "", ts: 1780000000, data: null, data_ts: null },
+    { id: "k2", keyword: "bluetooth headphones", marketplace: "US", data_source: "sorftime", label: "", ts: 1780100000, data: null, data_ts: null },
+  ]],
+  ["/home/keyword-pulse", []],
+  ["/home/watch-snapshots", []],
+  ["/home/watch", [
+    { id: "w1", asin: "B0CXXXX111", marketplace: "US", data_source: "sorftime", kind: "own", label: "自家主推", ts: 1780000000 },
+    { id: "w2", asin: "B0CYYYY222", marketplace: "US", data_source: "sorftime", kind: "competitor", label: "竞品 A", ts: 1780100000 },
+  ]],
+  ["/home/alerts", [
+    { asin: "B0CYYYY222", marketplace: "US", kind: "competitor", label: "竞品 A",
+      metric: "price", from: 29.99, to: 24.99, diff: -5, ts: 1780300000 },
+    { asin: "B0CXXXX111", marketplace: "US", kind: "own", label: "自家主推",
+      metric: "bsr", from: 1820, to: 2540, diff: 720, ts: 1780310000 },
+  ]],
+  ["/home/category-result", null],
+  ["/home/category", []],
+  ["/home/pulse", []],
+  ["/auth/admin/users", [
+    { id: 1, email: "admin@ivyea.com", role: "admin", status: "active",
+      created_at: 1779000000, approved_at: 1779000000, position: "运营负责人",
+      permissions: ["dashboard", "market", "playbook", "listing", "lingxing"] },
+    { id: 2, email: "operator-zhang@ivyea.com", role: "user", status: "active",
+      created_at: 1779500000, approved_at: 1779600000, position: "广告优化师",
+      permissions: ["lingxing", "market"] },
+    { id: 3, email: "newcomer@ivyea.com", role: "user", status: "pending",
+      created_at: 1780400000, approved_at: null, position: "", permissions: [] },
+    { id: 4, email: "left-the-company@ivyea.com", role: "user", status: "suspended",
+      created_at: 1778000000, approved_at: 1778100000, position: "选品", permissions: ["market"] },
+  ]],
+  ["/auth/admin/permissions-catalog", {
+    modules: [
+      { key: "dashboard", label: "运营驾驶舱", sensitive: false },
+      { key: "market", label: "市场调研", sensitive: false },
+      { key: "playbook", label: "打法推荐", sensitive: false },
+      { key: "listing", label: "Listing 工作台", sensitive: false },
+      { key: "lingxing", label: "领星广告", sensitive: true },
+      { key: "hub-settings", label: "系统配置", sensitive: true },
+    ],
+    positions: {
+      "运营负责人": ["dashboard", "market", "playbook", "listing", "lingxing"],
+      "广告优化师": ["lingxing", "market"],
+      "选品": ["market"],
+    },
+  }],
+
   // ?as=user —— 换成一个没被授予任何模块的注册用户。
   // 权限相关的界面（能力市场里哪些格子该出现）只有用非管理员身份打开才验得到：
   // require_module 对 admin 无条件放行，管理员视角下永远看不见问题。
@@ -212,9 +284,24 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
       source: "user", updated_at: ago(30), size_bytes: 2048, file_count: 1 },
   ], total: 2 }],
   ["/skill-market/status", { enabled: true, reachable: true, base_url: "https://mendao.example" }],
-  ["/skill-market/skills", { total: 1, items: [
+  // **简介长短必须拉开差距。** 卡片"有的高有的矮"只有在同一行里既有一句话的
+  // 简介、又有三行的简介时才看得见；清一色一句话的假数据永远验不出这个问题。
+  ["/skill-market/skills", { total: 6, items: [
     { slug: "ops/keyword-cluster", name: "关键词聚类", version: "1.0.0",
       summary: "把搜索词报表聚成可执行的词簇", author: "门道社区", installed: false },
+    { slug: "ops/negative-guard", name: "否词护栏", version: "2.1.0",
+      summary: "按点击、花费、转化三条线扫全部搜索词，挑出连续两周零单且花费超过阈值的低效词，生成可直接导入广告后台的否定精准/否定词组清单，并附上每一条的判定依据和回滚方式。",
+      author: "门道社区", installed: true },
+    { slug: "ops/bid-tuner", name: "竞价调优", version: "0.9.3",
+      summary: "按 ACOS 目标推荐竞价步长", author: "Hector", installed: false },
+    { slug: "ops/listing-audit", name: "Listing 体检", version: "1.4.2",
+      summary: "标题、五点、A+、图片、后台关键词逐项对照类目 Top 10 做差距分析，输出优先级排序的整改清单。",
+      author: "门道社区", installed: false },
+    { slug: "ops/review-digest", name: "评论摘要", version: "1.0.1",
+      summary: "把差评聚成产品问题清单", author: "门道社区", installed: false },
+    { slug: "ops/season-forecast", name: "季节性预测", version: "3.0.0",
+      summary: "按历史同期搜索量与出货量拟合季节曲线，给出未来 12 周的备货建议区间；数据不足 8 周时只给趋势方向，不给数值，避免拿噪声当预测。",
+      author: "Hector", installed: false },
   ] }],
   // 附图换句柄：任务台发送前会调它，图生图靠这个句柄把原图交给作图链路。
   ["/assistant/image/ref", { ref: "ivyea-ref://0000000000000abcd", bytes: 1234 }],
@@ -409,10 +496,16 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   ["/terminal/status", { active: true, running: true, url: "" }],
   ["/terminal/bash-history", { items: [] }],
   // 知识库工作台：页头统计 + 四个标签。
-  ["/brain/files", { files: [
-    { path: "amazon/ads/negative.md", title: "否词护栏", category: "ads", size: 2048, mtime: 1755300000 },
-    { path: "amazon/listing/main-image.md", title: "主图合规", category: "listing", size: 1024, mtime: 1755310000 },
-    { path: "amazon/policy/vat.md", title: "VAT 税务", category: "policy", size: 4096, mtime: 1755320000 },
+  // 字段名照抄 client.ts 的 BrainFileItem —— 这里原来写的是 `title`，组件读的是
+  // `name`，于是文件名整列都是空的（渲染出来只剩一个删除叉），漏验了一整块。
+  // **名字必须掺进真实的长条目**：手机端窄栏里"长到放不下的标题/路径"才是会撑破
+  // 布局的那一类，清一色四个字的短名字什么都验不出来。
+  ["/brain/files", { root: "~/brain", total: 5, files: [
+    { path: "amazon/ads/negative.md", name: "否词护栏", category: "ads", size: 2048, mtime: 1755300000, summary: "低效搜索词批量否定" },
+    { path: "amazon/ads/sp-structure-cold-start-playbook.md", name: "SP 广告投放结构与冷启动打法（美国站 2026 版）", category: "ads", size: 8192, mtime: 1755301000, summary: "冷启动分阶段预算与竞价" },
+    { path: "amazon/listing/main-image.md", name: "主图合规", category: "listing", size: 1024, mtime: 1755310000, summary: "主图白底与占比要求" },
+    { path: "amazon/policy/vat.md", name: "VAT 税务", category: "policy", size: 4096, mtime: 1755320000, summary: "欧洲站 VAT 申报" },
+    { path: "amazon/policy/eu-vat-jct-registration-and-filing-checklist.md", name: "欧盟 VAT / 日本 JCT 注册与申报核对清单", category: "policy", size: 6144, mtime: 1755321000, summary: "跨站点税务注册与申报" },
   ] }],
   ["/brain/uploads", { uploads: [] }],
   ["/brain/chat/status", { configured: true, provider: "ivyea-agent", model: "deepseek-v4-pro" }],
