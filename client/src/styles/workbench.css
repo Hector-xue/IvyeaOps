@@ -4888,3 +4888,43 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
   outline:none;resize:vertical}
 .sl-note{font-size:var(--fs-10);color:var(--t3);line-height:1.6}
 .sl-err{color:var(--red)}
+
+/* ── Token 日历热力图（GitHub 贡献图式）──────────────────────────────────
+   一格一天，深浅 = 当天 token。色阶是 --acc 单色向 --bg2 递退 —— 顺序型编码
+   只允许一个色相，所以 20 套主题各自的强调色都能直接套上，零硬编码颜色。
+   格子尺寸走 --hc/--hg 两个变量：字号自定义那套 --fs-* 在 mendao/lucent 主题里
+   是 13.5px，直接拿它当标签字号会把 11px 的行撑爆，这里让标签跟着格子走。 */
+.heat{--hc:11px;--hg:3px;position:relative}
+.heat-wrap{display:flex;gap:6px;align-items:flex-start}
+.heat-wd{display:grid;grid-template-rows:repeat(7,var(--hc));gap:var(--hg);
+  margin-top:calc(var(--hc) + var(--hg));flex:0 0 auto;text-align:right;
+  font-size:calc(var(--hc) - 2px);line-height:var(--hc);color:var(--t3)}
+.heat-scroll{flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;padding-bottom:2px}
+.heat-months{position:relative;height:calc(var(--hc) + var(--hg));white-space:nowrap;
+  font-size:calc(var(--hc) - 2px);line-height:var(--hc);color:var(--t3)}
+.heat-months span{position:absolute;top:0}
+.heat-grid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,var(--hc));
+  grid-auto-columns:var(--hc);gap:var(--hg);width:max-content}
+.heat-cell{width:var(--hc);height:var(--hc);border-radius:2px;box-sizing:border-box;
+  background:var(--bg2);border:1px solid var(--b);
+  outline:1px solid transparent;outline-offset:1px;transition:outline-color .1s}
+.heat-cell:hover{outline-color:var(--t2)}
+.heat-void{visibility:hidden}
+.heat-l1,.heat-l2,.heat-l3,.heat-l4,.heat-l5{border-color:transparent}
+.heat-l1{background:color-mix(in srgb,var(--acc) 20%,var(--bg2))}
+.heat-l2{background:color-mix(in srgb,var(--acc) 38%,var(--bg2))}
+.heat-l3{background:color-mix(in srgb,var(--acc) 58%,var(--bg2))}
+.heat-l4{background:color-mix(in srgb,var(--acc) 78%,var(--bg2))}
+.heat-l5{background:var(--acc)}
+.heat-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;
+  margin-top:8px;font-size:var(--fs-9);color:var(--t2);flex-wrap:wrap}
+.heat-foot b{color:var(--acc);font-weight:500}
+.heat-legend{display:flex;align-items:center;gap:3px;color:var(--t3);flex:0 0 auto;margin-left:auto}
+.heat-legend i{display:block;flex:0 0 auto}
+.heat-tabs{display:flex;justify-content:space-between;align-items:center;
+  margin-top:12px;padding-top:8px;border-top:1px solid var(--b);
+  font-size:var(--fs-9);color:var(--t3)}
+.heat-tip{position:fixed;z-index:80;transform:translate(-50%,-100%);pointer-events:none;
+  padding:6px 8px;border:1px solid var(--b2);border-radius:var(--r);background:var(--bg1);
+  font-size:var(--fs-10);line-height:1.5;color:var(--t);white-space:nowrap;
+  box-shadow:0 4px 16px rgba(0,0,0,.28);backdrop-filter:blur(8px)}

@@ -1244,7 +1244,8 @@ def token_usage(_user: str = Depends(require_user)) -> dict:
             rows.append(row)
         return sorted(rows, key=lambda x: x["total_tokens"], reverse=True)
 
-    daily = _to_list(daily_map, "day")[:90]
+    # 前端日历热力图要画满 26 周（182 天），截到 90 条就有一半格子是空的。
+    daily = _to_list(daily_map, "day")[:400]
     weekly = _to_list(weekly_map, "week")[:26]
     monthly = _to_list(monthly_map, "month")[:12]
     models = sorted(
