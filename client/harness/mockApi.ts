@@ -133,6 +133,78 @@ const DEMO_PLAN = {
 };
 
 const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
+  /* ── 运营驾驶舱 / 用户管理 ────────────────────────────────────────────────
+     这几条以前没有，兜底的 `{}` 让 MarketTraffic 的 `items.filter` 直接把整页
+     炸成「页面渲染出错」—— 于是驾驶舱和用户管理在验证台上根本画不出来，
+     排版问题也就无从验起。字段名照抄 api/home.ts 的 interface，不是编的。 */
+  ["/home/market-watch", [
+    { id: "mw1", query: "wireless earbuds", marketplace: "US", data_source: "sorftime", label: "无线耳机", ts: 1780000000 },
+    { id: "mw2", query: "yoga mat", marketplace: "US", data_source: "sorftime", label: "瑜伽垫", ts: 1780100000 },
+    { id: "mw3", query: "desk lamp", marketplace: "DE", data_source: "sorftime", label: "台灯", ts: 1780200000 },
+  ]],
+  ["/home/market-series", (() => {
+    // MarketSeries 的字段是 market / own / competitor（见 api/home.ts）。
+    const days = Array.from({ length: 30 }, (_, i) =>
+      new Date(1780300000000 - (29 - i) * 86400000).toISOString().slice(0, 10));
+    return {
+      query: "wireless earbuds", marketplace: "US", data_source: "sorftime",
+      market: days.map((day, i) => ({
+        day,
+        search_volume: 42000 + Math.round(Math.sin(i / 4) * 6000) + i * 180,
+        total_sales: 8600 + Math.round(Math.cos(i / 5) * 900) + i * 40,
+        avg_price: 26.5 + Math.sin(i / 7) * 1.8,
+      })),
+      own: days.map((day, i) => ({ day, value: 320 + Math.round(Math.sin(i / 3) * 40) + i * 3 })),
+      competitor: days.map((day, i) => ({ day, value: 480 + Math.round(Math.cos(i / 3) * 55) + i * 2 })),
+    };
+  })()],
+  ["/home/keywords", [
+    { id: "k1", keyword: "wireless earbuds", marketplace: "US", data_source: "sorftime", label: "", ts: 1780000000, data: null, data_ts: null },
+    { id: "k2", keyword: "bluetooth headphones", marketplace: "US", data_source: "sorftime", label: "", ts: 1780100000, data: null, data_ts: null },
+  ]],
+  ["/home/keyword-pulse", []],
+  ["/home/watch-snapshots", []],
+  ["/home/watch", [
+    { id: "w1", asin: "B0CXXXX111", marketplace: "US", data_source: "sorftime", kind: "own", label: "自家主推", ts: 1780000000 },
+    { id: "w2", asin: "B0CYYYY222", marketplace: "US", data_source: "sorftime", kind: "competitor", label: "竞品 A", ts: 1780100000 },
+  ]],
+  ["/home/alerts", [
+    { asin: "B0CYYYY222", marketplace: "US", kind: "competitor", label: "竞品 A",
+      metric: "price", from: 29.99, to: 24.99, diff: -5, ts: 1780300000 },
+    { asin: "B0CXXXX111", marketplace: "US", kind: "own", label: "自家主推",
+      metric: "bsr", from: 1820, to: 2540, diff: 720, ts: 1780310000 },
+  ]],
+  ["/home/category-result", null],
+  ["/home/category", []],
+  ["/home/pulse", []],
+  ["/auth/admin/users", [
+    { id: 1, email: "admin@ivyea.com", role: "admin", status: "active",
+      created_at: 1779000000, approved_at: 1779000000, position: "运营负责人",
+      permissions: ["dashboard", "market", "playbook", "listing", "lingxing"] },
+    { id: 2, email: "operator-zhang@ivyea.com", role: "user", status: "active",
+      created_at: 1779500000, approved_at: 1779600000, position: "广告优化师",
+      permissions: ["lingxing", "market"] },
+    { id: 3, email: "newcomer@ivyea.com", role: "user", status: "pending",
+      created_at: 1780400000, approved_at: null, position: "", permissions: [] },
+    { id: 4, email: "left-the-company@ivyea.com", role: "user", status: "suspended",
+      created_at: 1778000000, approved_at: 1778100000, position: "选品", permissions: ["market"] },
+  ]],
+  ["/auth/admin/permissions-catalog", {
+    modules: [
+      { key: "dashboard", label: "运营驾驶舱", sensitive: false },
+      { key: "market", label: "市场调研", sensitive: false },
+      { key: "playbook", label: "打法推荐", sensitive: false },
+      { key: "listing", label: "Listing 工作台", sensitive: false },
+      { key: "lingxing", label: "领星广告", sensitive: true },
+      { key: "hub-settings", label: "系统配置", sensitive: true },
+    ],
+    positions: {
+      "运营负责人": ["dashboard", "market", "playbook", "listing", "lingxing"],
+      "广告优化师": ["lingxing", "market"],
+      "选品": ["market"],
+    },
+  }],
+
   // ?as=user —— 换成一个没被授予任何模块的注册用户。
   // 权限相关的界面（能力市场里哪些格子该出现）只有用非管理员身份打开才验得到：
   // require_module 对 admin 无条件放行，管理员视角下永远看不见问题。
@@ -212,9 +284,24 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
       source: "user", updated_at: ago(30), size_bytes: 2048, file_count: 1 },
   ], total: 2 }],
   ["/skill-market/status", { enabled: true, reachable: true, base_url: "https://mendao.example" }],
-  ["/skill-market/skills", { total: 1, items: [
+  // **简介长短必须拉开差距。** 卡片"有的高有的矮"只有在同一行里既有一句话的
+  // 简介、又有三行的简介时才看得见；清一色一句话的假数据永远验不出这个问题。
+  ["/skill-market/skills", { total: 6, items: [
     { slug: "ops/keyword-cluster", name: "关键词聚类", version: "1.0.0",
       summary: "把搜索词报表聚成可执行的词簇", author: "门道社区", installed: false },
+    { slug: "ops/negative-guard", name: "否词护栏", version: "2.1.0",
+      summary: "按点击、花费、转化三条线扫全部搜索词，挑出连续两周零单且花费超过阈值的低效词，生成可直接导入广告后台的否定精准/否定词组清单，并附上每一条的判定依据和回滚方式。",
+      author: "门道社区", installed: true },
+    { slug: "ops/bid-tuner", name: "竞价调优", version: "0.9.3",
+      summary: "按 ACOS 目标推荐竞价步长", author: "Hector", installed: false },
+    { slug: "ops/listing-audit", name: "Listing 体检", version: "1.4.2",
+      summary: "标题、五点、A+、图片、后台关键词逐项对照类目 Top 10 做差距分析，输出优先级排序的整改清单。",
+      author: "门道社区", installed: false },
+    { slug: "ops/review-digest", name: "评论摘要", version: "1.0.1",
+      summary: "把差评聚成产品问题清单", author: "门道社区", installed: false },
+    { slug: "ops/season-forecast", name: "季节性预测", version: "3.0.0",
+      summary: "按历史同期搜索量与出货量拟合季节曲线，给出未来 12 周的备货建议区间；数据不足 8 周时只给趋势方向，不给数值，避免拿噪声当预测。",
+      author: "Hector", installed: false },
   ] }],
   // 附图换句柄：任务台发送前会调它，图生图靠这个句柄把原图交给作图链路。
   ["/assistant/image/ref", { ref: "ivyea-ref://0000000000000abcd", bytes: 1234 }],
@@ -409,10 +496,16 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   ["/terminal/status", { active: true, running: true, url: "" }],
   ["/terminal/bash-history", { items: [] }],
   // 知识库工作台：页头统计 + 四个标签。
-  ["/brain/files", { files: [
-    { path: "amazon/ads/negative.md", title: "否词护栏", category: "ads", size: 2048, mtime: 1755300000 },
-    { path: "amazon/listing/main-image.md", title: "主图合规", category: "listing", size: 1024, mtime: 1755310000 },
-    { path: "amazon/policy/vat.md", title: "VAT 税务", category: "policy", size: 4096, mtime: 1755320000 },
+  // 字段名照抄 client.ts 的 BrainFileItem —— 这里原来写的是 `title`，组件读的是
+  // `name`，于是文件名整列都是空的（渲染出来只剩一个删除叉），漏验了一整块。
+  // **名字必须掺进真实的长条目**：手机端窄栏里"长到放不下的标题/路径"才是会撑破
+  // 布局的那一类，清一色四个字的短名字什么都验不出来。
+  ["/brain/files", { root: "~/brain", total: 5, files: [
+    { path: "amazon/ads/negative.md", name: "否词护栏", category: "ads", size: 2048, mtime: 1755300000, summary: "低效搜索词批量否定" },
+    { path: "amazon/ads/sp-structure-cold-start-playbook.md", name: "SP 广告投放结构与冷启动打法（美国站 2026 版）", category: "ads", size: 8192, mtime: 1755301000, summary: "冷启动分阶段预算与竞价" },
+    { path: "amazon/listing/main-image.md", name: "主图合规", category: "listing", size: 1024, mtime: 1755310000, summary: "主图白底与占比要求" },
+    { path: "amazon/policy/vat.md", name: "VAT 税务", category: "policy", size: 4096, mtime: 1755320000, summary: "欧洲站 VAT 申报" },
+    { path: "amazon/policy/eu-vat-jct-registration-and-filing-checklist.md", name: "欧盟 VAT / 日本 JCT 注册与申报核对清单", category: "policy", size: 6144, mtime: 1755321000, summary: "跨站点税务注册与申报" },
   ] }],
   ["/brain/uploads", { uploads: [] }],
   ["/brain/chat/status", { configured: true, provider: "ivyea-agent", model: "deepseek-v4-pro" }],
@@ -446,66 +539,97 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
       "cost_usd": 27240.7241
     },
     "daily": [
-      {
-        "day": "2026-08-21",
-        "sessions": 3,
-        "input_tokens": 1582,
-        "output_tokens": 789975,
-        "cache_read_tokens": 139934767,
-        "cache_write_tokens": 2563077,
-        "total_tokens": 143289401,
-        "cost_usd": 105.7439
-      },
-      {
-        "day": "2026-08-20",
-        "sessions": 3,
-        "input_tokens": 12226,
-        "output_tokens": 884789,
-        "cache_read_tokens": 327820579,
-        "cache_write_tokens": 1697365,
-        "total_tokens": 330414959,
-        "cost_usd": 196.629
-      },
-      {
-        "day": "2026-08-19",
-        "sessions": 1,
-        "input_tokens": 1016,
-        "output_tokens": 306921,
-        "cache_read_tokens": 127520185,
-        "cache_write_tokens": 729204,
-        "total_tokens": 128557326,
-        "cost_usd": 75.9957
-      },
-      {
-        "day": "2026-08-18",
-        "sessions": 6,
-        "input_tokens": 106483,
-        "output_tokens": 1678110,
-        "cache_read_tokens": 1024843147,
-        "cache_write_tokens": 5791556,
-        "total_tokens": 1032419296,
-        "cost_usd": 586.545
-      },
-      {
-        "day": "2026-08-17",
-        "sessions": 1,
-        "input_tokens": 670,
-        "output_tokens": 377509,
-        "cache_read_tokens": 41812978,
-        "cache_write_tokens": 1261216,
-        "total_tokens": 43452373,
-        "cost_usd": 38.2302
-      },
-      {
-        "day": "2026-08-16",
-        "sessions": 6,
-        "input_tokens": 73525,
-        "output_tokens": 1949377,
-        "cache_read_tokens": 981840601,
-        "cache_write_tokens": 4567539,
-        "total_tokens": 988431042,
-        "cost_usd": 568.1969
-      }
+      {"day": "2026-08-21", "sessions": 6, "input_tokens": 5902, "output_tokens": 2373095, "cache_read_tokens": 746586632, "cache_write_tokens": 5336637, "total_tokens": 754302266, "cost_usd": 543.0976},
+      {"day": "2026-08-20", "sessions": 4, "input_tokens": 22214, "output_tokens": 885569, "cache_read_tokens": 327830563, "cache_write_tokens": 1697365, "total_tokens": 330435711, "cost_usd": 237.9137},
+      {"day": "2026-08-19", "sessions": 1, "input_tokens": 1016, "output_tokens": 306921, "cache_read_tokens": 127520185, "cache_write_tokens": 729204, "total_tokens": 128557326, "cost_usd": 92.5613},
+      {"day": "2026-08-18", "sessions": 6, "input_tokens": 106483, "output_tokens": 1678110, "cache_read_tokens": 1024843147, "cache_write_tokens": 5791556, "total_tokens": 1032419296, "cost_usd": 743.3419},
+      {"day": "2026-08-17", "sessions": 1, "input_tokens": 670, "output_tokens": 377509, "cache_read_tokens": 41812978, "cache_write_tokens": 1261216, "total_tokens": 43452373, "cost_usd": 31.2857},
+      {"day": "2026-08-16", "sessions": 6, "input_tokens": 73525, "output_tokens": 1949377, "cache_read_tokens": 981840601, "cache_write_tokens": 4567539, "total_tokens": 988431042, "cost_usd": 711.6704},
+      {"day": "2026-08-15", "sessions": 2, "input_tokens": 1488, "output_tokens": 657583, "cache_read_tokens": 140928349, "cache_write_tokens": 2109447, "total_tokens": 143696867, "cost_usd": 103.4617},
+      {"day": "2026-08-14", "sessions": 1, "input_tokens": 1260, "output_tokens": 427344, "cache_read_tokens": 182176767, "cache_write_tokens": 958079, "total_tokens": 183563450, "cost_usd": 132.1657},
+      {"day": "2026-08-13", "sessions": 1, "input_tokens": 81840, "output_tokens": 837736, "cache_read_tokens": 412802027, "cache_write_tokens": 3694725, "total_tokens": 417416328, "cost_usd": 300.5398},
+      {"day": "2026-08-12", "sessions": 1, "input_tokens": 81155, "output_tokens": 628242, "cache_read_tokens": 207330536, "cache_write_tokens": 2225344, "total_tokens": 210265277, "cost_usd": 151.391},
+      {"day": "2026-08-11", "sessions": 1, "input_tokens": 81155, "output_tokens": 628242, "cache_read_tokens": 207330536, "cache_write_tokens": 2225344, "total_tokens": 210265277, "cost_usd": 151.391},
+      {"day": "2026-08-10", "sessions": 4, "input_tokens": 425, "output_tokens": 112057, "cache_read_tokens": 10971154, "cache_write_tokens": 827631, "total_tokens": 11911267, "cost_usd": 8.5761},
+      {"day": "2026-08-09", "sessions": 1, "input_tokens": 663, "output_tokens": 25698, "cache_read_tokens": 2494257, "cache_write_tokens": 115923, "total_tokens": 2636541, "cost_usd": 1.8983},
+      {"day": "2026-08-08", "sessions": 1, "input_tokens": 4431, "output_tokens": 1925938, "cache_read_tokens": 1036208062, "cache_write_tokens": 14692718, "total_tokens": 1052831149, "cost_usd": 758.0384},
+      {"day": "2026-08-07", "sessions": 3, "input_tokens": 18125, "output_tokens": 44118, "cache_read_tokens": 20396244, "cache_write_tokens": 1209677, "total_tokens": 21668164, "cost_usd": 15.6011},
+      {"day": "2026-08-06", "sessions": 11, "input_tokens": 341802, "output_tokens": 807605, "cache_read_tokens": 260464933, "cache_write_tokens": 3210300, "total_tokens": 264824640, "cost_usd": 190.6737},
+      {"day": "2026-08-05", "sessions": 14, "input_tokens": 266170, "output_tokens": 963489, "cache_read_tokens": 415717261, "cache_write_tokens": 4933958, "total_tokens": 421880878, "cost_usd": 303.7542},
+      {"day": "2026-08-04", "sessions": 12, "input_tokens": 109904, "output_tokens": 604043, "cache_read_tokens": 287351952, "cache_write_tokens": 1338776, "total_tokens": 289404675, "cost_usd": 208.3714},
+      {"day": "2026-08-03", "sessions": 13, "input_tokens": 192236, "output_tokens": 254052, "cache_read_tokens": 14644453, "cache_write_tokens": 565375, "total_tokens": 15656116, "cost_usd": 11.2724},
+      {"day": "2026-08-02", "sessions": 2, "input_tokens": 16414, "output_tokens": 309374, "cache_read_tokens": 109430411, "cache_write_tokens": 616956, "total_tokens": 110373155, "cost_usd": 79.4687},
+      {"day": "2026-08-01", "sessions": 3, "input_tokens": 49039, "output_tokens": 761233, "cache_read_tokens": 315627623, "cache_write_tokens": 1430191, "total_tokens": 317868086, "cost_usd": 228.865},
+      {"day": "2026-07-31", "sessions": 6, "input_tokens": 142913, "output_tokens": 792344, "cache_read_tokens": 362339458, "cache_write_tokens": 2467060, "total_tokens": 365741775, "cost_usd": 263.3341},
+      {"day": "2026-07-30", "sessions": 7, "input_tokens": 172742, "output_tokens": 56936, "cache_read_tokens": 9773963, "cache_write_tokens": 748844, "total_tokens": 10752485, "cost_usd": 7.7418},
+      {"day": "2026-07-29", "sessions": 6, "input_tokens": 182339, "output_tokens": 338999, "cache_read_tokens": 122339600, "cache_write_tokens": 693234, "total_tokens": 123554172, "cost_usd": 88.959},
+      {"day": "2026-07-28", "sessions": 8, "input_tokens": 308197, "output_tokens": 636543, "cache_read_tokens": 246393015, "cache_write_tokens": 4504724, "total_tokens": 251842479, "cost_usd": 181.3266},
+      {"day": "2026-07-27", "sessions": 6, "input_tokens": 95979, "output_tokens": 1188015, "cache_read_tokens": 294188475, "cache_write_tokens": 5447559, "total_tokens": 300920028, "cost_usd": 216.6624},
+      {"day": "2026-07-26", "sessions": 7, "input_tokens": 21685, "output_tokens": 604032, "cache_read_tokens": 76034342, "cache_write_tokens": 1902635, "total_tokens": 78562694, "cost_usd": 56.5651},
+      {"day": "2026-07-25", "sessions": 6, "input_tokens": 66, "output_tokens": 17482, "cache_read_tokens": 1144435, "cache_write_tokens": 362498, "total_tokens": 1524481, "cost_usd": 1.0976},
+      {"day": "2026-07-24", "sessions": 6, "input_tokens": 77106, "output_tokens": 302372, "cache_read_tokens": 32595736, "cache_write_tokens": 1265007, "total_tokens": 34240221, "cost_usd": 24.653},
+      {"day": "2026-07-23", "sessions": 10, "input_tokens": 261374, "output_tokens": 986833, "cache_read_tokens": 202651166, "cache_write_tokens": 23120240, "total_tokens": 227019613, "cost_usd": 163.4541},
+      {"day": "2026-07-22", "sessions": 6, "input_tokens": 159336, "output_tokens": 853679, "cache_read_tokens": 118475130, "cache_write_tokens": 2610592, "total_tokens": 122098737, "cost_usd": 87.9111},
+      {"day": "2026-07-21", "sessions": 6, "input_tokens": 142258, "output_tokens": 354034, "cache_read_tokens": 59459568, "cache_write_tokens": 774110, "total_tokens": 60729970, "cost_usd": 43.7256},
+      {"day": "2026-07-20", "sessions": 7, "input_tokens": 194573, "output_tokens": 2829110, "cache_read_tokens": 967371197, "cache_write_tokens": 14192691, "total_tokens": 984587571, "cost_usd": 708.9031},
+      {"day": "2026-07-19", "sessions": 3, "input_tokens": 13939, "output_tokens": 970068, "cache_read_tokens": 139799764, "cache_write_tokens": 3913934, "total_tokens": 144697705, "cost_usd": 104.1823},
+      {"day": "2026-07-18", "sessions": 4, "input_tokens": 36762, "output_tokens": 264428, "cache_read_tokens": 23117686, "cache_write_tokens": 1089380, "total_tokens": 24508256, "cost_usd": 17.6459},
+      {"day": "2026-07-17", "sessions": 5, "input_tokens": 207710, "output_tokens": 184121, "cache_read_tokens": 13358555, "cache_write_tokens": 787604, "total_tokens": 14537990, "cost_usd": 10.4674},
+      {"day": "2026-07-16", "sessions": 7, "input_tokens": 438447, "output_tokens": 624964, "cache_read_tokens": 85941267, "cache_write_tokens": 2349207, "total_tokens": 89353885, "cost_usd": 64.3348},
+      {"day": "2026-07-15", "sessions": 3, "input_tokens": 41174, "output_tokens": 237225, "cache_read_tokens": 24613525, "cache_write_tokens": 604334, "total_tokens": 25496258, "cost_usd": 18.3573},
+      {"day": "2026-07-14", "sessions": 7, "input_tokens": 155661, "output_tokens": 1568661, "cache_read_tokens": 349715616, "cache_write_tokens": 5362418, "total_tokens": 356802356, "cost_usd": 256.8977},
+      {"day": "2026-07-13", "sessions": 16, "input_tokens": 148779, "output_tokens": 1376381, "cache_read_tokens": 427989275, "cache_write_tokens": 7377307, "total_tokens": 436891742, "cost_usd": 314.5621},
+      {"day": "2026-07-12", "sessions": 4, "input_tokens": 4, "output_tokens": 6276, "cache_read_tokens": 14752, "cache_write_tokens": 29526, "total_tokens": 50558, "cost_usd": 0.0364},
+      {"day": "2026-07-11", "sessions": 6, "input_tokens": 24373, "output_tokens": 18649, "cache_read_tokens": 2963078, "cache_write_tokens": 313649, "total_tokens": 3319749, "cost_usd": 2.3902},
+      {"day": "2026-07-10", "sessions": 5, "input_tokens": 55258, "output_tokens": 926668, "cache_read_tokens": 256464432, "cache_write_tokens": 5889888, "total_tokens": 263336246, "cost_usd": 189.6021},
+      {"day": "2026-07-09", "sessions": 4, "input_tokens": 49097, "output_tokens": 357156, "cache_read_tokens": 47528929, "cache_write_tokens": 709513, "total_tokens": 48644695, "cost_usd": 35.0242},
+      {"day": "2026-07-08", "sessions": 8, "input_tokens": 212366, "output_tokens": 29647, "cache_read_tokens": 2105088, "cache_write_tokens": 0, "total_tokens": 2347101, "cost_usd": 1.6899},
+      {"day": "2026-07-07", "sessions": 2, "input_tokens": 47030, "output_tokens": 178504, "cache_read_tokens": 13445402, "cache_write_tokens": 509392, "total_tokens": 14180328, "cost_usd": 10.2098},
+      {"day": "2026-07-06", "sessions": 7, "input_tokens": 91587452, "output_tokens": 199602, "cache_read_tokens": 1306752, "cache_write_tokens": 0, "total_tokens": 93093806, "cost_usd": 67.0275},
+      {"day": "2026-07-05", "sessions": 14, "input_tokens": 49814735, "output_tokens": 3618542, "cache_read_tokens": 924951516, "cache_write_tokens": 15816473, "total_tokens": 994201266, "cost_usd": 715.8249},
+      {"day": "2026-07-04", "sessions": 5, "input_tokens": 241421, "output_tokens": 2120323, "cache_read_tokens": 579568550, "cache_write_tokens": 11950190, "total_tokens": 593880484, "cost_usd": 427.5939},
+      {"day": "2026-07-03", "sessions": 6, "input_tokens": 133607, "output_tokens": 73661, "cache_read_tokens": 5554703, "cache_write_tokens": 508236, "total_tokens": 6270207, "cost_usd": 4.5145},
+      {"day": "2026-07-02", "sessions": 2, "input_tokens": 276572, "output_tokens": 3940264, "cache_read_tokens": 1498044968, "cache_write_tokens": 15395562, "total_tokens": 1517657366, "cost_usd": 1092.7133},
+      {"day": "2026-07-01", "sessions": 4, "input_tokens": 164647, "output_tokens": 818319, "cache_read_tokens": 167568731, "cache_write_tokens": 3055993, "total_tokens": 171607690, "cost_usd": 123.5575},
+      {"day": "2026-06-30", "sessions": 4, "input_tokens": 102807281, "output_tokens": 883176, "cache_read_tokens": 177902738, "cache_write_tokens": 1319568, "total_tokens": 282912763, "cost_usd": 203.6972},
+      {"day": "2026-06-29", "sessions": 6, "input_tokens": 167308921, "output_tokens": 3933450, "cache_read_tokens": 1410025200, "cache_write_tokens": 33390597, "total_tokens": 1614658168, "cost_usd": 1162.5539},
+      {"day": "2026-06-28", "sessions": 2, "input_tokens": 95889737, "output_tokens": 157962, "cache_read_tokens": 0, "cache_write_tokens": 0, "total_tokens": 96047699, "cost_usd": 69.1543},
+      {"day": "2026-06-27", "sessions": 3, "input_tokens": 239924, "output_tokens": 3606417, "cache_read_tokens": 1409690352, "cache_write_tokens": 33390597, "total_tokens": 1446927290, "cost_usd": 1041.7876},
+      {"day": "2026-06-26", "sessions": 2, "input_tokens": 193580, "output_tokens": 3049396, "cache_read_tokens": 1244972286, "cache_write_tokens": 26155049, "total_tokens": 1274370311, "cost_usd": 917.5466},
+      {"day": "2026-06-25", "sessions": 7, "input_tokens": 461132, "output_tokens": 2757623, "cache_read_tokens": 1086632464, "cache_write_tokens": 15778519, "total_tokens": 1105629738, "cost_usd": 796.0534},
+      {"day": "2026-06-24", "sessions": 11, "input_tokens": 449352757, "output_tokens": 2056216, "cache_read_tokens": 93436402, "cache_write_tokens": 954113, "total_tokens": 545799488, "cost_usd": 392.9756},
+      {"day": "2026-06-23", "sessions": 3, "input_tokens": 402766075, "output_tokens": 1219585, "cache_read_tokens": 787200, "cache_write_tokens": 0, "total_tokens": 404772860, "cost_usd": 291.4365},
+      {"day": "2026-06-22", "sessions": 5, "input_tokens": 209587510, "output_tokens": 644687, "cache_read_tokens": 377856, "cache_write_tokens": 0, "total_tokens": 210610053, "cost_usd": 151.6392},
+      {"day": "2026-06-21", "sessions": 5, "input_tokens": 129112411, "output_tokens": 426453, "cache_read_tokens": 1396736, "cache_write_tokens": 0, "total_tokens": 130935600, "cost_usd": 94.2736},
+      {"day": "2026-06-20", "sessions": 6, "input_tokens": 88203900, "output_tokens": 309256, "cache_read_tokens": 1742720, "cache_write_tokens": 0, "total_tokens": 90255876, "cost_usd": 64.9842},
+      {"day": "2026-06-19", "sessions": 5, "input_tokens": 35989482, "output_tokens": 132437, "cache_read_tokens": 1467776, "cache_write_tokens": 0, "total_tokens": 37589695, "cost_usd": 27.0646},
+      {"day": "2026-06-18", "sessions": 4, "input_tokens": 17140450, "output_tokens": 1150060, "cache_read_tokens": 379549888, "cache_write_tokens": 18176061, "total_tokens": 416016459, "cost_usd": 299.5319},
+      {"day": "2026-06-17", "sessions": 4, "input_tokens": 149752, "output_tokens": 194319, "cache_read_tokens": 8216235, "cache_write_tokens": 701575, "total_tokens": 9261881, "cost_usd": 6.6686},
+      {"day": "2026-06-16", "sessions": 8, "input_tokens": 771472, "output_tokens": 5367357, "cache_read_tokens": 1872320655, "cache_write_tokens": 50567863, "total_tokens": 1929027347, "cost_usd": 1388.8997},
+      {"day": "2026-06-15", "sessions": 13, "input_tokens": 911042, "output_tokens": 4497387, "cache_read_tokens": 1449900531, "cache_write_tokens": 43192443, "total_tokens": 1498501403, "cost_usd": 1078.921},
+      {"day": "2026-06-14", "sessions": 6, "input_tokens": 356481, "output_tokens": 3562712, "cache_read_tokens": 1289174243, "cache_write_tokens": 37973883, "total_tokens": 1331067319, "cost_usd": 958.3685},
+      {"day": "2026-06-13", "sessions": 5, "input_tokens": 103792, "output_tokens": 29006, "cache_read_tokens": 1332096, "cache_write_tokens": 0, "total_tokens": 1464894, "cost_usd": 1.0547},
+      {"day": "2026-06-12", "sessions": 9, "input_tokens": 480109, "output_tokens": 3256167, "cache_read_tokens": 1123343307, "cache_write_tokens": 29869653, "total_tokens": 1156949236, "cost_usd": 833.0034},
+      {"day": "2026-06-11", "sessions": 8, "input_tokens": 350732, "output_tokens": 2259949, "cache_read_tokens": 755845297, "cache_write_tokens": 13941447, "total_tokens": 772397425, "cost_usd": 556.1261},
+      {"day": "2026-06-10", "sessions": 10, "input_tokens": 53954730, "output_tokens": 1254984, "cache_read_tokens": 314478839, "cache_write_tokens": 2020674, "total_tokens": 371709227, "cost_usd": 267.6306},
+      {"day": "2026-06-09", "sessions": 9, "input_tokens": 5669725, "output_tokens": 104550, "cache_read_tokens": 2990303, "cache_write_tokens": 0, "total_tokens": 8764578, "cost_usd": 6.3105},
+      {"day": "2026-06-08", "sessions": 8, "input_tokens": 1287642, "output_tokens": 4475815, "cache_read_tokens": 1736636825, "cache_write_tokens": 16174575, "total_tokens": 1758574857, "cost_usd": 1266.1739},
+      {"day": "2026-06-07", "sessions": 19, "input_tokens": 419781, "output_tokens": 164311, "cache_read_tokens": 6428708, "cache_write_tokens": 163250, "total_tokens": 7176050, "cost_usd": 5.1668},
+      {"day": "2026-06-06", "sessions": 17, "input_tokens": 371252, "output_tokens": 56611, "cache_read_tokens": 2942754, "cache_write_tokens": 28945, "total_tokens": 3399562, "cost_usd": 2.4477},
+      {"day": "2026-06-05", "sessions": 14, "input_tokens": 653687, "output_tokens": 2792229, "cache_read_tokens": 783244527, "cache_write_tokens": 7913243, "total_tokens": 794603686, "cost_usd": 572.1147},
+      {"day": "2026-06-04", "sessions": 24, "input_tokens": 465139, "output_tokens": 1864967, "cache_read_tokens": 473277670, "cache_write_tokens": 9084227, "total_tokens": 484692003, "cost_usd": 348.9782},
+      {"day": "2026-06-03", "sessions": 23, "input_tokens": 426152, "output_tokens": 2020675, "cache_read_tokens": 631656129, "cache_write_tokens": 5961885, "total_tokens": 640064841, "cost_usd": 460.8467},
+      {"day": "2026-06-02", "sessions": 27, "input_tokens": 84053, "output_tokens": 1926, "cache_read_tokens": 261723, "cache_write_tokens": 45631, "total_tokens": 393333, "cost_usd": 0.2832},
+      {"day": "2026-06-01", "sessions": 17, "input_tokens": 364337, "output_tokens": 1261156, "cache_read_tokens": 239051141, "cache_write_tokens": 9557474, "total_tokens": 250234108, "cost_usd": 180.1686},
+      {"day": "2026-05-31", "sessions": 6, "input_tokens": 74964, "output_tokens": 1008891, "cache_read_tokens": 319722254, "cache_write_tokens": 7207799, "total_tokens": 328013908, "cost_usd": 236.17},
+      {"day": "2026-05-30", "sessions": 10, "input_tokens": 297844, "output_tokens": 5795574, "cache_read_tokens": 52497842, "cache_write_tokens": 17715191, "total_tokens": 76306451, "cost_usd": 54.9406},
+      {"day": "2026-05-29", "sessions": 13, "input_tokens": 228582, "output_tokens": 4154977, "cache_read_tokens": 384966492, "cache_write_tokens": 14957209, "total_tokens": 404307260, "cost_usd": 291.1012},
+      {"day": "2026-05-28", "sessions": 4, "input_tokens": 257677, "output_tokens": 33319, "cache_read_tokens": 604608, "cache_write_tokens": 0, "total_tokens": 895604, "cost_usd": 0.6448},
+      {"day": "2026-05-27", "sessions": 5, "input_tokens": 1997027, "output_tokens": 114602, "cache_read_tokens": 82279552, "cache_write_tokens": 0, "total_tokens": 84391181, "cost_usd": 60.7617},
+      {"day": "2026-05-26", "sessions": 13, "input_tokens": 1125266, "output_tokens": 2406112, "cache_read_tokens": 701572080, "cache_write_tokens": 14695463, "total_tokens": 719798921, "cost_usd": 518.2552},
+      {"day": "2026-05-25", "sessions": 5, "input_tokens": 1004207, "output_tokens": 41855, "cache_read_tokens": 2095104, "cache_write_tokens": 0, "total_tokens": 3141166, "cost_usd": 2.2616},
+      {"day": "2026-05-24", "sessions": 5, "input_tokens": 153570, "output_tokens": 1559307, "cache_read_tokens": 176689714, "cache_write_tokens": 4154175, "total_tokens": 182556766, "cost_usd": 131.4409},
+      {"day": "2026-05-23", "sessions": 11, "input_tokens": 359036, "output_tokens": 663234, "cache_read_tokens": 50513055, "cache_write_tokens": 1820526, "total_tokens": 53355851, "cost_usd": 38.4162}
     ],
     "weekly": [
       {

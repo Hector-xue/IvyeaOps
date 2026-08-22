@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useConfirm } from "../../components/ConfirmDialog";
 import {
   monitorLogs,
@@ -570,12 +570,223 @@ function Gauge({
 function fmtTokens(n: number): string {
   if (n < 1000) return String(n);
   if (n < 1_000_000) return (n / 1000).toFixed(1) + "K";
-  return (n / 1_000_000).toFixed(2) + "M";
+  if (n < 1_000_000_000) return (n / 1_000_000).toFixed(2) + "M";
+  return (n / 1_000_000_000).toFixed(2) + "B";
 }
 
 function fmtCredits(n?: number): string {
   if (!n) return "-";
   return n >= 100 ? n.toFixed(1) : n.toFixed(3);
+}
+
+/* ── Token 日历热力图（GitHub 贡献图式）─────────────────────────────────
+   一格 = 一天，深浅 = 当天总 token。取代原来那条只画 14 根柱子的柱状图：
+   数据源完全一样（data.daily 的 total_tokens），但时间跨度从 14 天变成 26 周。 */
+const HEAT_MAX_WEEKS = 26;
+const HEAT_MIN_WEEKS = 8;
+const HEAT_WD = ["一", "", "三", "", "五", "", "日"];
+
+function ymd(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+/** 分位阈值。**不能用 max 线性分档**：真机日用量从 5 万到 19 亿跨四个数量级，
+ *  线性五档会把一半的日子压进最浅一格，整张图看着像没在用。样本去重后不足 5 个
+ *  时分位数没意义（阈值会撞在一起），退回线性。 */
+function heatThresholds(vals: number[]): number[] {
+  const nz = vals.filter((v) => v > 0).sort((a, b) => a - b);
+  if (nz.length === 0) return [0, 0, 0, 0];
+  if (new Set(nz).size < 5) {
+    const max = nz[nz.length - 1];
+    return [0.2, 0.4, 0.6, 0.8].map((p) => max * p);
+  }
+  const q = (p: number) => nz[Math.min(nz.length - 1, Math.floor(p * nz.length))];
+  return [q(0.2), q(0.4), q(0.6), q(0.8)];
+}
+
+function heatLevel(v: number, th: number[]): number {
+  if (v <= 0) return 0;
+  return v <= th[0] ? 1 : v <= th[1] ? 2 : v <= th[2] ? 3 : v <= th[3] ? 4 : 5;
+}
+
+type HeatCell = { key: string; date: Date; row: Record<string, any> | null };
+
+function TokenHeatmap({ daily }: { daily: Array<Record<string, any>> }) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [tip, setTip] = useState<{ x: number; y: number; cell: HeatCell } | null>(null);
+
+  const view = useMemo(() => {
+    const byDay = new Map<string, Record<string, any>>();
+    for (const r of daily) byDay.set(r.day, r);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    // 列 = 周，行 = 周一…周日。末列恒为今天所在的这一周。
+    const dowMon = (today.getDay() + 6) % 7; // 周一 = 0
+    const thisMon = new Date(today);
+    thisMon.setDate(thisMon.getDate() - dowMon);
+
+    // 窗口最多 26 周，但**数据不够就收缩**：归档只到 91 天时，画满 26 周等于
+    // 左半张图全是空格子，看着像掉了数据。以最早有记录的那一周为界。
+    let weeks = HEAT_MAX_WEEKS;
+    const oldest = daily.reduce<string | null>(
+      (a, r) => ((r.total_tokens || 0) > 0 && (!a || r.day < a) ? r.day : a), null);
+    if (oldest) {
+      const [oy, om, od] = oldest.split("-").map(Number);
+      const od0 = new Date(oy, om - 1, od);
+      // 起点要对齐到**最早那天所在周的周一** —— 直接拿那天算跨度，会把它前面
+      // 同一周的日子挤到窗口外（实测 91 天的归档只画出 89 天）。
+      od0.setDate(od0.getDate() - ((od0.getDay() + 6) % 7));
+      const span = Math.round((thisMon.getTime() - od0.getTime()) / 86400000 / 7) + 1;
+      weeks = Math.min(HEAT_MAX_WEEKS, Math.max(HEAT_MIN_WEEKS, span));
+    }
+    const start = new Date(thisMon);
+    start.setDate(start.getDate() - (weeks - 1) * 7);
+
+    const columns: Array<Array<HeatCell | null>> = [];
+    const vals: number[] = [];
+    let sum = 0;
+    let activeDays = 0;
+    let peak: HeatCell | null = null;
+
+    for (let w = 0; w < weeks; w++) {
+      const col: Array<HeatCell | null> = [];
+      for (let d = 0; d < 7; d++) {
+        const dt = new Date(start);
+        dt.setDate(start.getDate() + w * 7 + d);
+        if (dt.getTime() > today.getTime()) {
+          col.push(null); // 未来的日子：占位撑住网格，但不画格子
+          continue;
+        }
+        const key = ymd(dt);
+        const row = byDay.get(key) || null;
+        const v = row?.total_tokens || 0;
+        if (v > 0) {
+          vals.push(v);
+          sum += v;
+          activeDays += 1;
+          if (!peak || v > (peak.row?.total_tokens || 0)) peak = { key, date: dt, row };
+        }
+        col.push({ key, date: dt, row });
+      }
+      columns.push(col);
+    }
+
+    // 月份标签：按月把列切成连续段，段首打标签。**窄段整段不打**（首尾那半个月
+    // 常常只占 1 列，标签会压到下一个月头上）—— 跳过的是标签，不是月份本身，
+    // 所以不会再出现「2月 → 4月」这种把整个 3 月吞掉的错位。
+    const months: Array<{ col: number; text: string }> = [];
+    const colMonth = columns.map((col) => (col.find((c) => c) as HeatCell | undefined)?.date.getMonth() ?? -1);
+    let segStart = 0;
+    for (let i = 1; i <= colMonth.length; i++) {
+      if (i < colMonth.length && colMonth[i] === colMonth[segStart]) continue;
+      if (colMonth[segStart] >= 0 && i - segStart >= 3) {
+        months.push({ col: segStart, text: `${colMonth[segStart] + 1}月` });
+      }
+      segStart = i;
+    }
+
+    return { columns, months, thresholds: heatThresholds(vals), sum, activeDays, peak, weeks };
+  }, [daily]);
+
+  // 默认滚到最右边 —— 最近的日子才是要看的。
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, [view]);
+
+  const { columns, months, thresholds, sum, activeDays, peak, weeks } = view;
+
+  return (
+    <div className="heat" onMouseLeave={() => setTip(null)}>
+      <div className="heat-wrap">
+        <div className="heat-wd">
+          {HEAT_WD.map((w, i) => (
+            <span key={i}>{w}</span>
+          ))}
+        </div>
+        <div className="heat-scroll" ref={scrollRef}>
+          <div className="heat-months">
+            {months.map((m) => (
+              <span key={m.col} style={{ left: `calc(${m.col} * (var(--hc) + var(--hg)))` }}>
+                {m.text}
+              </span>
+            ))}
+          </div>
+          <div className="heat-grid">
+            {columns.map((col, w) =>
+              col.map((cell, d) => {
+                if (!cell) return <div key={`${w}-${d}`} className="heat-cell heat-void" />;
+                const v = cell.row?.total_tokens || 0;
+                return (
+                  <div
+                    key={`${w}-${d}`}
+                    className={`heat-cell heat-l${heatLevel(v, thresholds)}`}
+                    onMouseEnter={(e) => {
+                      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      setTip({ x: r.left + r.width / 2, y: r.top, cell });
+                    }}
+                  />
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="heat-foot">
+        <span>
+          近 {weeks} 周合计 <b>{fmtTokens(sum)}</b>
+          <span className="neu">
+            {" · "}{activeDays} 天有记录{activeDays ? ` · 日均 ${fmtTokens(Math.round(sum / activeDays))}` : ""}
+            {peak ? ` · 峰值 ${fmtTokens(peak.row?.total_tokens || 0)}（${peak.key.slice(5)}）` : ""}
+          </span>
+        </span>
+        <span className="heat-legend">
+          少
+          <i className="heat-cell heat-l0" />
+          <i className="heat-cell heat-l1" />
+          <i className="heat-cell heat-l2" />
+          <i className="heat-cell heat-l3" />
+          <i className="heat-cell heat-l4" />
+          <i className="heat-cell heat-l5" />
+          多
+        </span>
+      </div>
+
+      {/* 贴着视口顶部的格子（页面刚滚到卡片露头时）气泡会飞出屏幕 —— 翻到格子下方 */}
+      {tip && (
+        <div
+          className="heat-tip"
+          style={
+            tip.y < 110
+              ? { left: tip.x, top: tip.y + 19, transform: "translate(-50%, 0)" }
+              : { left: tip.x, top: tip.y - 8 }
+          }
+        >
+          <div style={{ color: "var(--t2)" }}>{tip.cell.key}</div>
+          {tip.cell.row ? (
+            <>
+              <div>
+                总计 <b style={{ color: "var(--acc)" }}>{fmtTokens(tip.cell.row.total_tokens)}</b> Token
+              </div>
+              <div style={{ color: "var(--t2)" }}>
+                入 {fmtTokens(tip.cell.row.input_tokens)} · 出 {fmtTokens(tip.cell.row.output_tokens)} · 缓存{" "}
+                {fmtTokens((tip.cell.row.cache_read_tokens || 0) + (tip.cell.row.cache_write_tokens || 0))}
+              </div>
+              <div style={{ color: "var(--t2)" }}>
+                {tip.cell.row.sessions} 次会话 · ${(tip.cell.row.cost_usd || 0).toFixed(2)}
+              </div>
+            </>
+          ) : (
+            <div style={{ color: "var(--t3)" }}>无使用记录</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function TokenUsagePanel({ data }: { data: TokenUsageData }) {
@@ -588,10 +799,6 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
   const thisMonth = data.monthly[0];
   const todayTop = data.today_agents?.[0];
   const totals = data.totals;
-
-  // Bar chart data (last 14 entries of current tab)
-  const chartData = list.slice(0, 14).reverse();
-  const maxTokens = Math.max(...chartData.map((r: any) => r.total_tokens || 0), 1);
 
   return (
     <>
@@ -650,8 +857,14 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
       <div className="g2 mb14">
         {/* Chart + Table */}
         <div className="card">
-          <div className="ct" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>使用趋势</span>
+          <div className="ct">每日 Token 使用量</div>
+
+          {/* 日历热力图：一格一天，深浅 = 当天总 token */}
+          <TokenHeatmap daily={data.daily} />
+
+          {/* 明细表 —— 日/周/月三档只切这张表，热力图恒为日粒度 */}
+          <div className="heat-tabs">
+            <span>明细</span>
             <div style={{ display: "flex", gap: 0 }}>
               {(["daily", "weekly", "monthly"] as const).map((t) => (
                 <button
@@ -666,24 +879,7 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
             </div>
           </div>
 
-          {/* Bar chart */}
-          <div className="bchart" style={{ height: 56, marginBottom: 6 }}>
-            {chartData.map((row: any, i: number) => (
-              <div
-                key={i}
-                className="bar"
-                style={{ height: `${Math.max(2, (row.total_tokens / maxTokens) * 56)}px` }}
-                title={`${row[labelKey]}: ${fmtTokens(row.total_tokens)}`}
-              />
-            ))}
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--fs-9)", color: "var(--t3)" }}>
-            <span>{chartData[0]?.[labelKey] || ""}</span>
-            <span>{chartData[chartData.length - 1]?.[labelKey] || ""}</span>
-          </div>
-
-          {/* Table */}
-          <table className="tbl" style={{ marginTop: 10 }}>
+          <table className="tbl" style={{ marginTop: 6 }}>
             <thead>
               <tr>
                 <th>{tab === "daily" ? "日期" : tab === "weekly" ? "周" : "月份"}</th>
@@ -715,7 +911,7 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
 
         {/* Model breakdown */}
         <div className="card">
-          <div className="ct">模型分布 (30天)</div>
+          <div className="ct">模型分布（全量）</div>
           {data.models.length > 0 ? (
             <>
               {data.models.slice(0, 8).map((m, i) => {

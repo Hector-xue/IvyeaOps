@@ -613,7 +613,10 @@ const copyMessage = (m: ChatMsg) => {
                     <span style={{ flex: 1 }}>{cat} ({items.length})</span>
                   </div>
                   {!collapsed && (
-                  <div style={{ display: "grid", gap: 3 }}>
+                  // minmax(0,1fr)：默认的 auto 轨道会按行的 max-content 定宽，
+                  // 而行里的文件名/摘要都是 nowrap —— 于是轨道被撑到 368px 固定不变，
+                  // 手机端（390/360/320 实测都是 368）直接把卡片撑破、文件名被挤出屏幕。
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr)", gap: 3 }}>
                     {items.map((f) => (
                       <div key={f.path} data-file={f.path + " " + f.name} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                         <button className="tbtn" onClick={() => openFile(f.path)} style={{ flex: 1, textAlign: "left", color: f.path === (selectedFile?.path) ? "var(--acc)" : "var(--t2)", padding: "4px 8px", overflow: "hidden" }}>
