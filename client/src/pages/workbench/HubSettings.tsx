@@ -528,7 +528,7 @@ function LLMModelBlock({
     <div>
       <div style={{ fontSize: "var(--fs-11)", color: "var(--t2)", fontWeight: 600, marginBottom: 10 }}>
         {title}
-        {hint && <span style={{ fontWeight: 400, color: "var(--t3)", marginLeft: 8 }}>{hint}</span>}
+        {hint && <span className="hs-inline-hint" style={{ fontWeight: 400, color: "var(--t3)", marginLeft: 8 }}>{hint}</span>}
       </div>
 
       {inherit && inherit.length > 0 && (
@@ -847,7 +847,7 @@ function SelfCheckPanel() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
         <div>
           <div style={{ fontSize: "var(--fs-13)", fontWeight: 600, color: "var(--t)" }}>一键全部自检</div>
-          <div style={{ fontSize: "var(--fs-11)", color: "var(--t3)", marginTop: 2 }}>
+          <div className="hs-inline-hint" style={{ fontSize: "var(--fs-11)", color: "var(--t3)", marginTop: 2 }}>
             对每个已配置项做一次真实在线测试，一眼看清"配了但用不了"的项。
           </div>
         </div>
@@ -1434,7 +1434,27 @@ function AppearanceSection() {
  */
 const COLLAPSED_SECTIONS = new Set(["appearance"]);
 
+/** 说明文字的显隐开关。
+ *
+ *  **默认必须是"显示"。** 这些说明装的不是废话，是操作指引 ——「登录 sorftime.com
+ *  → 账户设置 → API」「留空 = 不带 Token」「保存后自动注册为 MCP 数据源」。默认藏
+ *  起来，第一次配置的人打开就是一排空输入框，不知道 key 从哪儿来。所以只记住
+ *  "用户主动关过"这件事：嫌烦的人点一次永久清爽，新用户第一次进来照样有指引。 */
+const HS_HELP_KEY = "ivyea-ops.hs.help";
+
+function useHelpVisible(): [boolean, (v: boolean) => void] {
+  const [on, setOn] = useState<boolean>(() => {
+    try { return localStorage.getItem(HS_HELP_KEY) !== "off"; } catch { return true; }
+  });
+  const set = (v: boolean) => {
+    setOn(v);
+    try { localStorage.setItem(HS_HELP_KEY, v ? "on" : "off"); } catch { /* 隐私模式下存不了，不影响本次会话 */ }
+  };
+  return [on, set];
+}
+
 export default function HubSettings({ focusSection = "" }: { focusSection?: string } = {}) {
+  const [helpOn, setHelpOn] = useHelpVisible();
   // 订阅登录那一段只给管理员看：凭据存在服务器上、由 agent 全局共用，
   // 谁登录全站就烧谁的额度。后端那几个端点也是 require_admin，这里只是别把
   // 一个按下去必然 403 的按钮摆在普通用户面前。
@@ -1488,15 +1508,23 @@ export default function HubSettings({ focusSection = "" }: { focusSection?: stri
   if (loadErr) return <div className="hs-error">加载失败：{loadErr}</div>;
 
   return (
-    <div className="hs-page">
+    <div className={"hs-page" + (helpOn ? "" : " hs-quiet")}>
 
       {/* ── Header ── */}
       <div className="hs-header">
         <span className="hs-header-icon">⊙</span>
-        <div>
+        <div className="hs-header-main">
           <div className="hs-header-title">系统配置</div>
           <div className="hs-header-sub">优先配置 IvyeaAgent、数据源和全局兜底大模型；低频项已放到页面下方。</div>
         </div>
+        <button
+          type="button"
+          className={"hs-help-toggle" + (helpOn ? " on" : "")}
+          onClick={() => setHelpOn(!helpOn)}
+          title={helpOn ? "隐藏每一项的说明文字，只留标签和输入框" : "显示每一项的说明文字（含取 key 的步骤）"}
+        >
+          {helpOn ? "◉ 说明已显示" : "○ 说明已隐藏"}
+        </button>
       </div>
 
       <AutodetectPanel onApply={applySuggestions} />
@@ -1719,7 +1747,7 @@ export default function HubSettings({ focusSection = "" }: { focusSection?: stri
           <div style={{ fontSize: "var(--fs-11)", color: "var(--t2)", fontWeight: 600, marginBottom: 2 }}>
             自定义生图接口（填了就用它，不再走 Apimart）
           </div>
-          <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginBottom: 8 }}>
+          <div className="hs-inline-hint" style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginBottom: 8 }}>
             任意兼容 OpenAI <code>/images/generations</code> 的平台均可：同步返回（b64/url）或 Apimart 式异步任务都支持。换平台时记得把上面的「模型名称」也改成该平台的模型名。
           </div>
         </div>

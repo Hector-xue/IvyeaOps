@@ -2423,8 +2423,8 @@ body::after{
 .hs-toggle-line{min-height:34px;display:flex;align-items:center;gap:8px;color:var(--t2);font-size:var(--fs-12);cursor:pointer}
 .hs-toggle-line input{accent-color:var(--acc)}
 .hs-field{display:flex;flex-direction:column;gap:4px}
-.hs-label{font-size:var(--fs-11);color:var(--t2);letter-spacing:.04em}
-.hs-hint{font-size:var(--fs-11);color:var(--t3);line-height:1.55}
+.hs-label{font-size:var(--fs-11);font-weight:600;color:var(--t);letter-spacing:.04em}
+.hs-hint{font-size:var(--fs-10);color:var(--t3);line-height:1.55}
 .hs-hint code{font-family:var(--font);background:var(--bg2);border:1px solid var(--b);padding:0 4px;border-radius:3px;font-size:var(--fs-105);color:var(--t2)}
 .hs-hint a{color:var(--blue);text-decoration:none;border-bottom:1px dashed currentColor}
 .hs-hint a:hover{color:var(--acc)}
@@ -4928,3 +4928,25 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
   padding:6px 8px;border:1px solid var(--b2);border-radius:var(--r);background:var(--bg1);
   font-size:var(--fs-10);line-height:1.5;color:var(--t);white-space:nowrap;
   box-shadow:0 4px 16px rgba(0,0,0,.28);backdrop-filter:blur(8px)}
+
+/* ── 系统配置：说明文字开关 ────────────────────────────────────────────────
+   .hs-quiet 挂在页面根上，把**介绍性**文字整体收起来。收的是"解释这是什么/
+   怎么取 key"的文字；**警示不收** —— .sl-warn 那句「账号存在服务器上、由
+   IvyeaAgent 全局共用」是用户按下"登录"之前有权知道的事，藏起来就是坑人。
+   .sl-note 也不收，那是登录流程里的实时状态，不是介绍。 */
+.hs-header-main{flex:1 1 auto;min-width:0}
+.hs-help-toggle{flex-shrink:0;align-self:center;padding:5px 12px;border-radius:999px;
+  border:1px solid var(--b);background:var(--bg2);color:var(--t3);
+  font-family:var(--font);font-size:var(--fs-10);cursor:pointer;
+  white-space:nowrap;transition:color .15s,border-color .15s,background .15s}
+.hs-help-toggle:hover{color:var(--t2);border-color:var(--b2)}
+.hs-help-toggle.on{color:var(--acc);border-color:color-mix(in srgb,var(--acc) 35%,transparent);
+  background:color-mix(in srgb,var(--acc) 7%,transparent)}
+.hs-quiet .hs-header-sub,
+.hs-quiet .hs-section-desc,
+.hs-quiet .hs-hint,
+.hs-quiet .hs-agent-card-desc,
+.hs-quiet .hs-agent-tools-hd em,
+.hs-quiet .hs-inline-hint{display:none}
+/* 说明一收，字段之间原本靠说明撑开的呼吸感就没了 —— 把行间距补回来一点。 */
+.hs-quiet .hs-fields{gap:14px}
