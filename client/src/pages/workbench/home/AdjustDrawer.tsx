@@ -3,6 +3,7 @@ import {
   confirmAdjust, createAdjust, fetchTicket, rejectAdjust,
   type AdjustPayload, type Ticket,
 } from "../../../api/cockpit";
+import { errText } from "../../../lib/errText";
 
 /**
  * 就地调整抽屉 —— 从看板发起一次广告改动。
@@ -56,7 +57,7 @@ export default function AdjustDrawer({ payload, onClose, onDone }: {
         } catch { stopPolling(); }
       }, 1500);
     } catch (e: any) {
-      setError(e?.response?.data?.detail || e.message || "创建失败");
+      setError(errText(e, "创建失败"));
     } finally {
       setBusy(false);
     }
@@ -70,7 +71,7 @@ export default function AdjustDrawer({ payload, onClose, onDone }: {
       setTicket(t);
       onDone?.(t);
     } catch (e: any) {
-      setError(e?.response?.data?.detail || e.message || "执行失败");
+      setError(errText(e, "执行失败"));
     } finally { setBusy(false); }
   };
 

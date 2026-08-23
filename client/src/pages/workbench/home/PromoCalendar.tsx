@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchPromotions, type PromoBoard, type PromoItem, type PromoKind } from "../../../api/cockpit";
+import { errText } from "../../../lib/errText";
 
 /**
  * 促销日历 —— 已报活动与优惠券的结束倒计时。
@@ -139,7 +140,7 @@ export default function PromoCalendar() {
     setError("");
     fetchPromotions({ includeEnded, force })
       .then(setBoard)
-      .catch(e => setError(e?.response?.data?.detail || e.message || "加载失败"))
+      .catch(e => setError(errText(e, "加载失败")))
       .finally(() => setLoading(false));
   };
 

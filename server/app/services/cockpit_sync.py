@@ -21,7 +21,7 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from app.core import hub_settings as _hs
 from app.core.config import settings

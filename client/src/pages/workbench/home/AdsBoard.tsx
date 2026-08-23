@@ -5,6 +5,7 @@ import {
   type HourlyResult, type Metrics,
 } from "../../../api/cockpit";
 import AdjustDrawer from "./AdjustDrawer";
+import { errText } from "../../../lib/errText";
 
 /**
  * 广告看板。
@@ -189,7 +190,7 @@ export default function AdsBoard() {
     setLoading(true); setError("");
     fetchAdsBoard({ days, force })
       .then(setBoard)
-      .catch(e => setError(e?.response?.data?.detail || e.message || "加载失败"))
+      .catch(e => setError(errText(e, "加载失败")))
       .finally(() => setLoading(false));
   };
 
@@ -205,7 +206,7 @@ export default function AdsBoard() {
     try {
       setHourly(await fetchHourly(c.sid, [c.campaign_id]));
     } catch (e: any) {
-      setError(e?.response?.data?.detail || e.message || "小时数据取不到");
+      setError(errText(e, "小时数据取不到"));
     } finally { setHourlyBusy(false); }
   };
 
