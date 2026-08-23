@@ -61,6 +61,8 @@ export interface HubSettings {
   alert_app_id: string;
   alert_app_secret: string;
   alert_chat_id: string;
+  // feishu = open.feishu.cn（国内）/ lark = open.larksuite.com（国际）
+  alert_feishu_domain: string;
   // Alert thresholds
   alert_threshold: number;
   alert_sustain: number;
@@ -257,5 +259,62 @@ export async function startAgentUpgrade(): Promise<{ started: boolean; already_r
 
 export async function getAgentUpgradeProgress(): Promise<AgentUpgradeProgress> {
   const { data } = await api.get<AgentUpgradeProgress>("/ivyea-agent/upgrade/progress", { timeout: 8000 });
+  return data;
+}
+
+
+// ── 飞书 / Lark 配置向导 ────────────────────────────────────────────────────
+// 凭据本身存在 hub settings（上面的 alert_* 那一组），保存时由后端下推给
+// IvyeaAgent。这里的接口拿的是**只有 agent 知道的那部分**：连通性、白名单、
+// relay 状态、巡检任务。它们只存 agent 一份，界面直接读写，不在 ops 侧留副本。
+
+export interface FeishuStep {
+  key: string; title: string; done: boolean; detail: string; hint: string;
+}
+export interface FeishuChannel { ready: boolean; blockers: string[]; note: string; }
+export interface FeishuPatrolJob {
+  name: string; task: string; enabled: boolean; every_minutes: number;
+  channel: string; notify: boolean; scope: string; sids: string[]; sid: string;
+  last_run: number;
+}
+export interface FeishuStatus {
+  ok: boolean;
+  error?: string;
+  hint?: string;
+  app?: { app_id: string; app_id_masked: string; configured: boolean; secret_configured: boolean; domain: string; source: string };
+  chat?: { chat_id: string; configured: boolean };
+  webhook?: { configured: boolean; url_masked: string };
+  gates?: { allowed_senders: string[]; allowed_chats: string[] };
+  relay?: { state: string; running: boolean | null; detail: string };
+  patrol?: {
+    jobs: FeishuPatrolJob[]; any_enabled: boolean; pushing_to_feishu: number;
+    timer: { state: string; running: boolean | null; detail: string };
+  };
+  probe?: { ran: boolean; ok?: boolean; error?: string; chat_count?: number };
+  channels?: Record<string, FeishuChannel>;
+  steps?: FeishuStep[];
+  last_test_at?: number;
+}
+
+export async function getFeishuStatus(probe = false): Promise<FeishuStatus> {
+  const { data } = await api.get<FeishuStatus>("/settings/feishu", {
+    params: probe ? { probe: 1 } : undefined,
+    // probe 会真的去飞书换 token，比本地读配置慢得多
+    timeout: probe ? 40000 : 15000,
+  });
+  return data;
+}
+
+export interface FeishuActionResp {
+  ok: boolean; error?: string; note?: string;
+  chats?: { chat_id: string; name: string }[];
+  members?: { open_id: string; name: string }[];
+  message_id?: string;
+  created?: string[]; replaced?: string[];
+  patrol?: FeishuStatus["patrol"];
+}
+
+export async function feishuAction(body: Record<string, unknown>): Promise<FeishuActionResp> {
+  const { data } = await api.post<FeishuActionResp>("/settings/feishu", body, { timeout: 40000 });
   return data;
 }

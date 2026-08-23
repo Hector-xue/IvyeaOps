@@ -86,11 +86,17 @@ _DEFAULTS: Dict[str, Any] = {
     # AI 花费预算（美元/月）。0 = 不设预算。超了发一次通知，见 services/budget。
     "ai_budget_monthly_usd": 0,
     "ai_budget_alerted_month": "",
-    # Feishu notifications
+    # 飞书 / Lark：**一处填写，两处落地**。
+    # 这一组既喂 IvyeaOps 自己的服务器告警（scripts/cpu_alert.py），
+    # 也在保存时下推给 IvyeaAgent，供店铺巡检卡片 / 审批回调 / 飞书对话使用
+    # （见 services/ivyea_agent_service.sync_feishu_settings）。
+    # 键名保留 alert_ 前缀是为了不动存量安装的配置文件和环境变量。
     "alert_webhook": "",
     "alert_app_id": "",
     "alert_app_secret": "",
     "alert_chat_id": "",
+    # feishu = open.feishu.cn（国内）；lark = open.larksuite.com（国际）
+    "alert_feishu_domain": "feishu",
     # CPU alert thresholds
     "alert_threshold": 80,
     "alert_sustain": 5,
@@ -262,6 +268,7 @@ _ENV_MAP: Dict[str, str] = {
     "alert_app_id": "IVYEA_OPS_ALERT_APP_ID",
     "alert_app_secret": "IVYEA_OPS_ALERT_APP_SECRET",
     "alert_chat_id": "IVYEA_OPS_ALERT_CHAT_ID",
+    "alert_feishu_domain": "IVYEA_OPS_ALERT_FEISHU_DOMAIN",
     "alert_threshold": "IVYEA_OPS_ALERT_THRESHOLD",
     "alert_sustain": "IVYEA_OPS_ALERT_SUSTAIN",
     "alert_cooldown": "IVYEA_OPS_ALERT_COOLDOWN",

@@ -5,7 +5,9 @@ import {
   getSettings, patchSettings, getHealth, changePassword,
   testSetting, autodetectSettings, selfCheckSettings, getAgentVersion,
   startAgentUpgrade, getAgentUpgradeProgress, slotModelCatalog,
+  getFeishuStatus, feishuAction,
   type HubSettings, type HealthResp, type TestResult, type SelfCheckResp,
+  type FeishuStatus,
 } from "../../api/settings";
 import { installAgentStreamUrl } from "../../api/setup";
 import {
@@ -823,7 +825,7 @@ function AdvancedBlock({ children }: { children: React.ReactNode }) {
         <span style={{ display: "inline-block", transition: "transform .15s", transform: open ? "rotate(90deg)" : "none" }}>▶</span>
         <span className="hs-advanced-toggle-label">高级选项</span>
         <span className="hs-advanced-toggle-sub">
-          {open ? "点击收起" : "Token 监控 · Imgflow · 飞书通知 · CPU 告警 · 内嵌服务 · Kiro"}
+          {open ? "点击收起" : "Token 监控 · Imgflow · 内嵌服务 · Kiro · 资讯源"}
         </span>
       </button>
       {open && <div className="hs-advanced-body">{children}</div>}
@@ -992,6 +994,7 @@ const EMPTY: HubSettings = {
   imgflow_url: "http://127.0.0.1:3001",
   brain_root: "", openai_api_key: "",
   alert_webhook: "", alert_app_id: "", alert_app_secret: "", alert_chat_id: "",
+  alert_feishu_domain: "feishu",
   alert_threshold: 80, alert_sustain: 5, alert_cooldown: 30,
   dashboard_url: "", terminal_url: "",
   hermes_bin: "", codex_bin: "", claude_bin: "", kiro_cli_bin: "",
@@ -1010,6 +1013,340 @@ const EMPTY: HubSettings = {
 
 // ── 外观 / 显示：字体族 + 全局字号（即时生效 + localStorage，无后端）───────────────
 /** 通知渠道与 AI 预算。管理员专属；非管理员拿到 403 就整块不渲染。 */
+/** 飞书 / Lark —— 一处配置，四条链路。
+ *
+ *  以前这里叫「飞书通知」，实际只喂 CPU 告警一条链路；店铺巡检卡片、审批按钮、
+ *  飞书对话那三条各自读 IvyeaAgent 和 relay 的配置文件，界面上完全看不见。
+ *  结果是同一个飞书应用要在三个地方各填一遍，任何一处漏填的表现都是
+ *  「保存成功，但就是收不到消息」——没有任何报错。
+ *
+ *  现在凭据只填一次：存进 hub settings（服务器告警那条链路自己用，agent 挂了
+ *  它照样报警），保存时后端顺手下推给 IvyeaAgent（巡检 / 审批 / 对话共用）。
+ *  白名单和巡检任务只存 agent 一份，这里直接读写，不在 ops 侧留副本。
+ */
+function FeishuSection({ vals, set, save }: {
+  vals: Partial<HubSettings>;
+  set: <K extends keyof HubSettings>(k: K, v: HubSettings[K]) => void;
+  save: (keys: (keyof HubSettings)[], vals: Partial<HubSettings>) => Promise<void>;
+}) {
+  const [st, setSt] = useState<FeishuStatus | null>(null);
+  const [busy, setBusy] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [chats, setChats] = useState<{ chat_id: string; name: string }[] | null>(null);
+  const [members, setMembers] = useState<{ open_id: string; name: string }[] | null>(null);
+  const [senders, setSenders] = useState<string[]>([]);
+  const [patrol, setPatrol] = useState({
+    l1: false, l1min: 20, l2: false, daily: false, scope: "all", sids: "",
+  });
+
+  const reload = useCallback(async (probe = false) => {
+    try {
+      const s = await getFeishuStatus(probe);
+      setSt(s);
+      setSenders(s.gates?.allowed_senders || []);
+      const jobs = s.patrol?.jobs || [];
+      const l1 = jobs.find((j) => j.task === "store_l1");
+      const l2 = jobs.find((j) => j.task === "store_l2");
+      const daily = jobs.find((j) => j.task === "store_daily");
+      const any = l1 || l2 || daily;
+      setPatrol({
+        l1: !!l1?.enabled, l1min: Math.round(l1?.every_minutes || 20),
+        l2: !!l2?.enabled, daily: !!daily?.enabled,
+        scope: any?.scope === "all" ? "all" : "sids",
+        // 旧的单店任务用的是 sid 单数，界面统一按列表展示
+        sids: (any?.scope === "all" ? [] : [...(any?.sids || []), any?.sid || ""])
+          .filter(Boolean).join(","),
+      });
+    } catch (e: any) {
+      setSt({ ok: false, error: errText(e, "读取失败") });
+    }
+  }, []);
+  useEffect(() => { void reload(); }, [reload]);
+
+  const run = async (name: string, fn: () => Promise<void>) => {
+    setBusy(name); setMsg(null);
+    try { await fn(); } catch (e: any) { setMsg({ ok: false, text: errText(e, "操作失败") }); }
+    finally { setBusy(""); }
+  };
+
+  const flash = (ok: boolean, text: string) => {
+    setMsg({ ok, text });
+    if (ok) setTimeout(() => setMsg(null), 8000);
+  };
+
+  const doChats = () => run("chats", async () => {
+    const r = await feishuAction({ action: "chats" });
+    setChats(r.chats || []);
+    if (!r.ok) flash(false, r.error || "列群失败");
+    else if (r.note) flash(true, r.note);
+  });
+
+  const doMembers = () => run("members", async () => {
+    const r = await feishuAction({ action: "members", chat_id: vals.alert_chat_id || "" });
+    setMembers(r.members || []);
+    if (!r.ok) flash(false, r.error || "列成员失败（多半是缺 im:chat:readonly 权限）");
+  });
+
+  const doWhitelist = () => run("whitelist", async () => {
+    const r = await feishuAction({ action: "whitelist", allowed_senders: senders });
+    flash(!!r.ok, r.ok ? `审批白名单已更新：${senders.length} 人` : (r.error || "保存失败"));
+    await reload();
+  });
+
+  const doPatrol = () => run("patrol", async () => {
+    const sids = patrol.sids.split(/[,\s]+/).filter(Boolean);
+    const r = await feishuAction({
+      action: "patrol",
+      scope: patrol.scope, sids,
+      channel: "feishu_app",
+      l1: { enabled: patrol.l1, every_minutes: patrol.l1min },
+      l2: { enabled: patrol.l2, every_hours: 1 },
+      daily: { enabled: patrol.daily, every_hours: 24 },
+    });
+    if (!r.ok) { flash(false, r.error || "巡检设置失败"); return; }
+    const replaced = (r.replaced || []).length
+      ? `；已收编旧任务 ${(r.replaced || []).join("、")}` : "";
+    flash(true, ((r.created || []).length
+      ? `已启用 ${(r.created || []).length} 条巡检任务` : "已关闭全部巡检任务") + replaced);
+    await reload();
+  });
+
+  const doTest = () => run("test", async () => {
+    // 先把输入框里的凭据存下来再测：不然改完直接点测试，测的还是旧凭据，
+    // 结果对不上会让人以为是飞书坏了。
+    await save(["alert_app_id", "alert_app_secret", "alert_chat_id",
+      "alert_feishu_domain", "alert_webhook"], vals);
+    const r = await feishuAction({ action: "test", chat_id: vals.alert_chat_id || "" });
+    flash(!!r.ok, r.ok ? "已发出，去飞书里看看收到没有" : (r.error || "发送失败"));
+    await reload();
+  });
+
+  const toggleSender = (id: string) =>
+    setSenders((cur) => cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]);
+
+  const CH_LABEL: [string, string][] = [
+    ["text_alert", "文本告警"], ["cards", "交互卡片"],
+    ["approval", "点按钮改领星"], ["chat", "在飞书里对话"],
+    ["patrol_push", "店铺巡检推送"],
+  ];
+
+  return (
+    <Section
+      title="飞书 / Lark"
+      desc="一处配置，四件事共用：服务器告警 · 店铺巡检卡片 · 点按钮直接改领星 · 在飞书里和 AI 对话。"
+      keys={["alert_webhook", "alert_app_id", "alert_app_secret", "alert_chat_id",
+        "alert_feishu_domain", "alert_threshold", "alert_sustain", "alert_cooldown"]}
+      vals={vals} onSave={save}
+    >
+      {/* 向导：每一步的 ✓ 都由真实状态决定，不由「点过下一步」决定 */}
+      {st?.steps && (
+        <div className="hs-steps">
+          {st.steps.map((s, i) => (
+            <div key={s.key} className={"hs-step" + (s.done ? " hs-step-done" : "")}>
+              <span className="hs-step-no">{s.done ? "✓" : i + 1}</span>
+              <div className="hs-step-body">
+                <div className="hs-step-title">{s.title}</div>
+                <div className="hs-step-detail">{s.detail || s.hint}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {st && st.ok === false && (
+        <div className="hs-hint" style={{ color: "var(--red)" }}>
+          {st.error}{st.hint ? ` —— ${st.hint}` : ""}
+        </div>
+      )}
+
+      {/* 能力矩阵：webhook 能发文本但永远点不了按钮，这条差别必须写明 */}
+      {st?.channels && (
+        <div className="hs-caps">
+          {CH_LABEL.map(([k, label]) => {
+            const c = st.channels?.[k];
+            if (!c) return null;
+            return (
+              <div key={k} className={"hs-cap" + (c.ready ? " hs-cap-ok" : "")}
+                title={c.blockers.join("；") || c.note}>
+                <Dot ok={c.ready} />
+                <span>{label}</span>
+                {!c.ready && <em>{c.blockers[0]}</em>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="hs-field-group-title">应用凭据（发卡片、收按钮、对话都靠它）</div>
+      {/* 两处各存一份是有意的（看门狗不能依赖 agent），但"agent 那边配了、这边空着"
+          必须说出来 —— 否则用户看着满屏 ✓，却收不到任何 CPU 告警，且毫无线索。 */}
+      {st?.app?.configured && !vals.alert_app_id && (
+        <div className="hs-hint" style={{ color: "var(--red)" }}>
+          IvyeaAgent 侧已有凭据 <code>{st.app.app_id_masked}</code>，但这里是空的。
+          巡检卡片和审批照常工作，<b>服务器 CPU 告警发不出去</b> —— 它是独立进程跑的看门狗，
+          只读这一份（agent 挂了它还要能报警）。把同一个应用填进来即可。
+          <button className="hs-test-btn" type="button" style={{ marginLeft: 8 }}
+            onClick={() => set("alert_app_id", st.app?.app_id || "")}>
+            带入 App ID
+          </button>
+        </div>
+      )}
+      <div className="hs-row3">
+        <Field label={<><Tag kind="req">必填</Tag>App ID</>} hint="cli_ 开头">
+          <TxtInput value={vals.alert_app_id || ""} onChange={(v) => set("alert_app_id", v)} placeholder="cli_xxx" />
+        </Field>
+        <Field label={<><Tag kind="req">必填</Tag>App Secret</>} hint="换应用后旧 token 会自动作废">
+          <SecretInput value={vals.alert_app_secret || ""} onChange={(v) => set("alert_app_secret", v)} placeholder="App Secret" />
+        </Field>
+        <Field label="域名" hint="国内飞书 / 国际 Lark">
+          <SheetSelect value={vals.alert_feishu_domain || "feishu"}
+            onChange={(v) => set("alert_feishu_domain", v)}
+            options={[{ value: "feishu", label: "飞书 open.feishu.cn" },
+            { value: "lark", label: "Lark open.larksuite.com" }]} />
+        </Field>
+      </div>
+      <div className="hs-hint">
+        飞书开放平台 → 创建企业自建应用 → 「凭证与基础信息」拿这两个值。权限至少要
+        <code>im:message</code>、<code>im:message:send_as_bot</code>、<code>im:chat:readonly</code>，
+        <b>改完权限记得发布版本</b>，否则调用会一直报 99991672。
+      </div>
+
+      <div className="hs-field-group-title">接收会话</div>
+      <Field label="Chat ID" hint={<>
+        把机器人拉进群后，群设置里能看到会话 ID（<code>oc_</code> 开头）。
+        下面的「列出机器人所在的群」<b>列不出来是正常的</b> —— 飞书只列应用可管理的群，
+        直接粘 ID 一样能用。
+      </>}>
+        <div className="hs-test-row" style={{ gap: 8 }}>
+          <TxtInput value={vals.alert_chat_id || ""} onChange={(v) => set("alert_chat_id", v)} placeholder="oc_..." />
+          <button className="hs-test-btn" type="button" onClick={doChats} disabled={!!busy}>
+            {busy === "chats" ? "查询中…" : "列出机器人所在的群"}
+          </button>
+        </div>
+        {chats && chats.length > 0 && (
+          <div className="hs-pick">
+            {chats.map((c) => (
+              <button key={c.chat_id} type="button" className="hs-pick-item"
+                onClick={() => set("alert_chat_id", c.chat_id)}>
+                {c.name || "(未命名群)"}<em>{c.chat_id}</em>
+              </button>
+            ))}
+          </div>
+        )}
+      </Field>
+
+      <div className="hs-field-group-title">谁能点审批按钮</div>
+      <Field label="审批白名单" hint={<>
+        卡片上的「批准执行」会<b>真的去改领星</b>。<b>留空不是所有人都能点，是所有人都不能点</b> ——
+        改钱的权限不设默认放行。这一项存在 IvyeaAgent 侧，保存后 relay 立即生效，不用重启。
+      </>}>
+        <div className="hs-test-row" style={{ gap: 8 }}>
+          <button className="hs-test-btn" type="button" onClick={doMembers}
+            disabled={!!busy || !vals.alert_chat_id}>
+            {busy === "members" ? "查询中…" : "从群里选人"}
+          </button>
+          <button className="hs-test-btn" type="button" onClick={doWhitelist} disabled={!!busy}>
+            {busy === "whitelist" ? "保存中…" : `保存白名单（${senders.length} 人）`}
+          </button>
+        </div>
+        {members && (
+          <div className="hs-pick">
+            {members.length === 0 && <span className="hs-hint">没列到成员，多半是缺 im:chat:readonly 权限。</span>}
+            {members.map((m) => (
+              <label key={m.open_id} className="hs-toggle-line" style={{ marginRight: 12 }}>
+                <input type="checkbox" checked={senders.includes(m.open_id)}
+                  onChange={() => toggleSender(m.open_id)} />
+                <span>{m.name || m.open_id}</span>
+              </label>
+            ))}
+          </div>
+        )}
+        {senders.length > 0 && (
+          <div className="hs-hint">当前放行：{senders.map((s) => s.slice(0, 12) + "…").join("、")}</div>
+        )}
+      </Field>
+
+      <div className="hs-field-group-title">店铺巡检推送</div>
+      <Field label="定时巡检" hint={<>
+        库存断货、活动被暂停、预算被外部改动、ACOS 超标… 异常推成卡片发到上面那个群。
+        {st?.patrol?.timer?.running === false && <b style={{ color: "var(--red)" }}>
+          {" "}触发器 ivyea-schedule.timer 没启用，任务注册了也不会跑。</b>}
+      </>}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+          <label className="hs-toggle-line">
+            <input type="checkbox" checked={patrol.l1}
+              onChange={(e) => setPatrol({ ...patrol, l1: e.target.checked })} />
+            <span>实时层 L1</span>
+          </label>
+          <NumInput value={patrol.l1min} onChange={(v) => setPatrol({ ...patrol, l1min: v })}
+            min={5} max={720} unit="分钟" />
+          <label className="hs-toggle-line">
+            <input type="checkbox" checked={patrol.l2}
+              onChange={(e) => setPatrol({ ...patrol, l2: e.target.checked })} />
+            <span>日内层 L2（每小时）</span>
+          </label>
+          <label className="hs-toggle-line">
+            <input type="checkbox" checked={patrol.daily}
+              onChange={(e) => setPatrol({ ...patrol, daily: e.target.checked })} />
+            <span>每日早报</span>
+          </label>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginTop: 6 }}>
+          <SheetSelect value={patrol.scope} onChange={(v) => setPatrol({ ...patrol, scope: v })}
+            options={[{ value: "all", label: "全部店铺" }, { value: "sids", label: "指定店铺" }]} />
+          {patrol.scope === "sids" && (
+            <TxtInput value={patrol.sids} onChange={(v) => setPatrol({ ...patrol, sids: v })}
+              placeholder="店铺 SID，逗号分隔，如 1863,1872" />
+          )}
+          <button className="hs-test-btn" type="button" onClick={doPatrol} disabled={!!busy}>
+            {busy === "patrol" ? "应用中…" : "应用巡检设置"}
+          </button>
+        </div>
+      </Field>
+
+      <div className="hs-field-group-title">兜底与自检</div>
+      <Field label={<><Tag kind="opt">可选</Tag>群机器人 Webhook</>} hint={<>
+        应用发不出去时的兜底通道（纯文本）。<b>它没有回调，永远点不了按钮</b> ——
+        只配它的话，卡片和审批都不会有。群机器人要设关键词 “IvyeaOps” 或 “CPU”。
+      </>}>
+        <SecretInput value={vals.alert_webhook || ""} onChange={(v) => set("alert_webhook", v)}
+          placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..." />
+        <TestButton settingKey="alert_webhook" value={vals.alert_webhook} label="发测试消息" />
+      </Field>
+      <div className="hs-test-row" style={{ gap: 8 }}>
+        <button className="hs-test-btn" type="button" onClick={doTest} disabled={!!busy}>
+          {busy === "test" ? "发送中…" : "保存并发一张测试卡片"}
+        </button>
+        <button className="hs-test-btn" type="button" onClick={() => run("probe", () => reload(true))}
+          disabled={!!busy}>
+          {busy === "probe" ? "检测中…" : "重新检测"}
+        </button>
+        {msg && (
+          <span className={"hs-test-result " + (msg.ok ? "ok" : "err")}>
+            {msg.ok ? "✓" : "✗"} {msg.text}
+          </span>
+        )}
+      </div>
+
+      <div className="hs-field-group-title">服务器 CPU 告警阈值</div>
+      <div className="hs-hint">
+        这三项只管本机 CPU 看门狗（<code>scripts/cpu_alert.py</code>，独立进程跑）。
+        它<b>不经过 IvyeaAgent</b> —— agent 挂了、8765 不通了，它还得能把消息发出来。
+      </div>
+      <div className="hs-row3">
+        <Field label="触发阈值">
+          <NumInput value={vals.alert_threshold ?? 80} onChange={(v) => set("alert_threshold", v)} min={10} max={9999} unit="%" />
+        </Field>
+        <Field label="持续时长">
+          <NumInput value={vals.alert_sustain ?? 5} onChange={(v) => set("alert_sustain", v)} min={1} max={60} unit="分钟" />
+        </Field>
+        <Field label="冷却时间">
+          <NumInput value={vals.alert_cooldown ?? 30} onChange={(v) => set("alert_cooldown", v)} min={1} max={1440} unit="分钟" />
+        </Field>
+      </div>
+    </Section>
+  );
+}
+
 function NotifySection({
   vals, set, save,
 }: {
@@ -1764,6 +2101,11 @@ export default function HubSettings({ focusSection = "" }: { focusSection?: stri
         <TestButton settingKey="image_base_url" value={vals.image_base_url} label="测试自定义生图接口" />
       </Section>
 
+      {/* 飞书放在折叠线**之上**：它现在同时管服务器告警、店铺巡检卡片、审批按钮
+          和飞书对话四条链路，是第一次部署就要配的东西。塞进「系统状态与更多设置」
+          里等于没有——没人会为了找配置去点开一个叫「系统状态」的折叠块。 */}
+      <FeishuSection vals={vals} set={set} save={save} />
+
       {/* ── 系统状态及以下：默认折叠，点开查看 ── */}
       <div className="hs-advanced">
         <button type="button" className="hs-advanced-toggle" onClick={() => setSysOpen(o => !o)}>
@@ -1935,42 +2277,6 @@ export default function HubSettings({ focusSection = "" }: { focusSection?: stri
 
       {/* -- 区块 3 & 4: 通知 + 高级（折叠） -- */}
       <AdvancedBlock>
-
-        {/* 飞书通知 */}
-        <Section
-          title="飞书 / Lark 通知"
-          desc="CPU 告警推送到飞书群。Webhook（渠道 A）和自建应用（渠道 B）任选其一。"
-          keys={["alert_webhook", "alert_app_id", "alert_app_secret", "alert_chat_id", "alert_threshold", "alert_sustain", "alert_cooldown"]}
-          vals={vals} onSave={save}
-        >
-          <Field label="Webhook 地址" hint={<>群机器人 → 添加自定义机器人，复制 URL。设关键词 "IvyeaOps" 或 "CPU"。</>}>
-            <SecretInput value={vals.alert_webhook} onChange={v => set("alert_webhook", v)}
-              placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..." />
-            <TestButton settingKey="alert_webhook" value={vals.alert_webhook} label="发测试消息" />
-          </Field>
-          <div className="hs-row3">
-            <Field label="App ID" hint="cli_ 开头">
-              <TxtInput value={vals.alert_app_id} onChange={v => set("alert_app_id", v)} placeholder="cli_xxx" />
-            </Field>
-            <Field label="App Secret">
-              <SecretInput value={vals.alert_app_secret} onChange={v => set("alert_app_secret", v)} placeholder="App Secret" />
-            </Field>
-            <Field label="Chat ID" hint="oc_ 开头">
-              <TxtInput value={vals.alert_chat_id} onChange={v => set("alert_chat_id", v)} placeholder="oc_..." />
-            </Field>
-          </div>
-          <div className="hs-row3" style={{ marginTop: 8 }}>
-            <Field label="触发阈值">
-              <NumInput value={vals.alert_threshold} onChange={v => set("alert_threshold", v)} min={10} max={9999} unit="%" />
-            </Field>
-            <Field label="持续时长">
-              <NumInput value={vals.alert_sustain} onChange={v => set("alert_sustain", v)} min={1} max={60} unit="分钟" />
-            </Field>
-            <Field label="冷却时间">
-              <NumInput value={vals.alert_cooldown} onChange={v => set("alert_cooldown", v)} min={1} max={1440} unit="分钟" />
-            </Field>
-          </div>
-        </Section>
 
         {/* 高级 / 运维 */}
         <Section

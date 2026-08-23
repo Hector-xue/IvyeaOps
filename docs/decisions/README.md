@@ -41,6 +41,7 @@ git log 记得住「改了什么」，记不住「为什么不选另一条路」
 | [0021](./0021-model-switch-is-per-session-not-global.md) | 任务台切模型只影响当前会话，改全局是另一条明路 | 2026-08-21 |
 | [0022](./0022-subscription-login-in-the-web-ui.md) | 订阅制模型的登录搬进网页，且只给管理员 | 2026-08-21 |
 | [0023](./0023-dock-renders-the-console-itself.md) | 悬浮球不再自己实现对话，直接渲染任务台 | 2026-08-21 |
+| [0024](./0024-one-feishu-config-two-places-to-land.md) | 飞书只填一次；凭据落两处，看门狗那份不许依赖 agent | 2026-08-23 |
 
 ## 模板
 
