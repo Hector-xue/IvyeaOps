@@ -5093,3 +5093,37 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
   .pulse-page .market-mode-toggle{width:fit-content;max-width:100%}
   .pulse-page .market-mode-btn{flex:0 0 auto}
 }
+
+/* ── 飞书配置向导 ─────────────────────────────────────────────────────────
+   步骤条的 ✓ 由**可核实的状态**点亮（凭据在不在、relay 跑没跑、测试发出去没有），
+   不由"用户点过下一步"点亮 —— 后者只会让人以为配好了。 */
+.hs-steps{display:grid;gap:2px;border:1px solid var(--b);border-radius:8px;background:var(--bg2);padding:6px}
+.hs-step{display:flex;gap:10px;align-items:flex-start;padding:6px 8px;border-radius:6px}
+.hs-step-done{background:color-mix(in srgb,var(--acc) 6%,transparent)}
+.hs-step-no{flex-shrink:0;width:18px;height:18px;border-radius:999px;border:1px solid var(--b2);color:var(--t3);font-size:var(--fs-10);line-height:16px;text-align:center;margin-top:1px}
+.hs-step-done .hs-step-no{color:var(--acc);border-color:color-mix(in srgb,var(--acc) 45%,transparent)}
+.hs-step-body{min-width:0}
+.hs-step-title{font-size:var(--fs-11);color:var(--t);font-weight:600}
+.hs-step-detail{font-size:var(--fs-10);color:var(--t3);line-height:1.5;overflow-wrap:anywhere}
+.hs-caps{display:flex;flex-wrap:wrap;gap:8px}
+.hs-cap{display:flex;align-items:center;gap:5px;font-size:var(--fs-10);color:var(--t2);border:1px solid var(--b);border-radius:999px;padding:3px 10px;background:var(--bg2);min-width:0}
+.hs-cap-ok{border-color:color-mix(in srgb,var(--acc) 35%,transparent)}
+.hs-cap em{font-style:normal;color:var(--t3);max-width:26ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hs-pick{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.hs-pick-item{display:flex;flex-direction:column;align-items:flex-start;gap:1px;font-family:var(--font);font-size:var(--fs-10);color:var(--t2);background:var(--bg2);border:1px solid var(--b);border-radius:6px;padding:5px 10px;cursor:pointer;transition:border-color .12s,color .12s}
+.hs-pick-item:hover{border-color:var(--acc);color:var(--t)}
+.hs-pick-item em{font-style:normal;color:var(--t3);font-size:var(--fs-95)}
+/* 手机端：能力芯片只留结论。理由不是嫌挤——380px 下"点按钮改领星"这四个字会被
+   后面那句阻塞原因挤成两行，反而看不清哪几项是通的。完整原因仍在 title 里。 */
+@media(max-width:600px){.hs-cap em{display:none}}
+/* 巡检档位：一档一块，把"多久一次"和"这一档在管什么"放在一起。
+   五档排成一行会挤到看不清各自管什么，所以按最小宽度自动换行。 */
+.hs-tiers{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.hs-tier{border:1px solid var(--b);background:var(--bg2);border-radius:8px;padding:8px 10px;display:grid;gap:2px;min-width:0}
+.hs-tier-on{border-color:color-mix(in srgb,var(--acc) 35%,transparent);background:color-mix(in srgb,var(--acc) 5%,var(--bg2))}
+.hs-tier .hs-toggle-line{min-height:22px;font-weight:600;color:var(--t)}
+.hs-tier-desc{font-size:var(--fs-10);color:var(--t3);line-height:1.5}
+.hs-tier-every{margin-top:4px}
+/* 亚马逊站点表：一行一个站点，窄屏堆叠。 */
+.hs-mkt-row{display:grid;grid-template-columns:90px 1fr 1fr 1fr auto;gap:8px;align-items:center;margin-bottom:6px}
+@media(max-width:700px){.hs-mkt-row{grid-template-columns:1fr 1fr}}

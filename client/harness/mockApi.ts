@@ -432,9 +432,85 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
       image_model: "", image_api_key: "", image_base_url: "",
       text_ai_providers: "ivyea-agent,deepseek,assistant",
       vision_ai_providers: "apimart,openai,assistant",
+      // ?nocred=1 —— 装成"agent 那边配好了、ops 这边空着"，专验那条红字提示
+      ...(new URLSearchParams(location.search).get("nocred") === "1"
+        ? { alert_app_id: "", alert_app_secret: "" }
+        : { alert_app_id: "cli_demo0336427e785d", alert_app_secret: "demo-secret" }),
+      alert_chat_id: "oc_demo7a0933a4af7e82980367a", alert_feishu_domain: "feishu",
+      alert_webhook: "", alert_threshold: 80, alert_sustain: 5, alert_cooldown: 30,
     },
-    secret_keys: ["apimart_key", "ivyea_agent_api_key", "vision_api_key"],
+    secret_keys: ["apimart_key", "ivyea_agent_api_key", "vision_api_key", "alert_app_secret",
+                  "alert_webhook"],
   }],
+  // 亚马逊官方 API。**故意给"凭据配好了、站点只配了一半"**：
+  // 全绿的话，未配置态和逐步自检那两条分支根本渲染不到。
+  ["/settings/amazon", () => ({
+    ok: true, configured: true, ads_configured: false, ads_uses_own_app: false,
+    region: "eu", spapi_host: "https://sellingpartnerapi-eu.amazon.com",
+    ads_host: "https://advertising-api-eu.amazon.com",
+    seller_id: "A23SU2M9XL8R0O",
+    marketplaces: [
+      { sid: "1863", marketplace_id: "A1F83G8C2ARO7P", name: "欧洲-UK",
+        country: "UK", region: "eu", ads_profile_id: "3344556677" },
+      { sid: "1864", marketplace_id: "APJ6JRA9NG5V4", name: "欧洲-IT",
+        country: "IT", region: "eu", ads_profile_id: "" },
+    ],
+    marketplace_count: 2, with_ads_profile: 1,
+    catalog: [
+      { marketplace_id: "ATVPDKIKX0DER", country: "US", region: "na" },
+      { marketplace_id: "A1F83G8C2ARO7P", country: "UK", region: "eu" },
+      { marketplace_id: "APJ6JRA9NG5V4", country: "IT", region: "eu" },
+      { marketplace_id: "A1VC38T7YXB528", country: "JP", region: "fe" },
+    ],
+  })],
+  // 飞书配置向导。**故意给一个"配了一半"的状态**：全绿的话，未完成步骤和
+  // 能力矩阵里的 blockers 那两条分支根本渲染不到，等于没验。
+  ["/settings/feishu", () => ({
+    ok: true,
+    app: { app_id: "cli_demo0336427e785d", app_id_masked: "cli_de…5d", configured: true,
+           secret_configured: true, domain: "feishu", source: "env" },
+    chat: { chat_id: "oc_demo7a0933a4af7e82980367a", configured: true },
+    webhook: { configured: false, url_masked: "" },
+    gates: { allowed_senders: [], allowed_chats: [] },
+    relay: { state: "active", running: true, detail: "feishu-ivyea-relay.service 运行中" },
+    patrol: {
+      jobs: [{ name: "patrol-l1", task: "store_l1", enabled: true, every_minutes: 60,
+               channel: "feishu_app", notify: true, scope: "all", sids: [], sid: "",
+               last_run: 0 }],
+      any_enabled: true, pushing_to_feishu: 1,
+      defaults: {
+        l1: { task: "store_l1", label: "实时层 L1", every_minutes: 60,
+              desc: "库存断货 / 活动被暂停 / 预算被外部改动 / listing 上下架" },
+        l2: { task: "store_l2", label: "日内层 L2", every_minutes: 720,
+              desc: "当日花费突增 / 曝光归零 / 点击暴涨零转化" },
+        daily: { task: "store_daily", label: "每日早报", every_minutes: 1440,
+                 desc: "昨日指标 + 环比 + 待你决定的建议（带按钮）" },
+        weekly: { task: "store_weekly", label: "每周周报", every_minutes: 10080,
+                  desc: "本周 vs 上周 + 本周批了/执行了什么（只回顾，无按钮）" },
+        monthly: { task: "store_monthly", label: "每月月报", every_minutes: 43200,
+                   desc: "本月 vs 上月，同样只回顾" },
+      },
+      timer: { state: "active", running: true, detail: "ivyea-schedule.timer 运行中" },
+    },
+    probe: { ran: false },
+    channels: {
+      text_alert: { ready: true, blockers: [], note: "" },
+      cards: { ready: true, blockers: [], note: "" },
+      approval: { ready: false, blockers: ["审批白名单为空 —— 按安全默认，此时没有人能点按钮"], note: "" },
+      chat: { ready: true, blockers: [], note: "" },
+      patrol_push: { ready: true, blockers: [], note: "" },
+    },
+    steps: [
+      { key: "app", title: "创建自建应用，填 App ID / App Secret", done: true, detail: "cli_de…5d", hint: "" },
+      { key: "permission", title: "开权限并发布版本", done: false, detail: "未验证", hint: "需要 im:message 等权限" },
+      { key: "chat", title: "选一个接收会话（群）", done: true, detail: "oc_demo7a0933a4af7e82980367a", hint: "" },
+      { key: "whitelist", title: "指定谁能点审批按钮", done: false, detail: "空 —— 按安全默认，没有人能点", hint: "" },
+      { key: "relay", title: "启动长连接接收端 relay", done: true, detail: "feishu-ivyea-relay.service 运行中", hint: "" },
+      { key: "patrol", title: "打开店铺巡检并推到飞书", done: true, detail: "1 条任务在推", hint: "" },
+      { key: "test", title: "发一条测试消息确认真能收到", done: false, detail: "未测试", hint: "" },
+    ],
+    last_test_at: 0,
+  })],
   // ?catalogfail=1 —— 装成中转商问不到清单（实测 Apimart 余额不足会返回 402）。
   // 那条降级路径（"常见模型名"兜底 + 说清原因 + 仍可手输）只有这种数据下才渲染得出来。
   ["/settings/model-catalog", () => (

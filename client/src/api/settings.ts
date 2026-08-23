@@ -61,6 +61,8 @@ export interface HubSettings {
   alert_app_id: string;
   alert_app_secret: string;
   alert_chat_id: string;
+  // feishu = open.feishu.cn（国内）/ lark = open.larksuite.com（国际）
+  alert_feishu_domain: string;
   // Alert thresholds
   alert_threshold: number;
   alert_sustain: number;
@@ -257,5 +259,116 @@ export async function startAgentUpgrade(): Promise<{ started: boolean; already_r
 
 export async function getAgentUpgradeProgress(): Promise<AgentUpgradeProgress> {
   const { data } = await api.get<AgentUpgradeProgress>("/ivyea-agent/upgrade/progress", { timeout: 8000 });
+  return data;
+}
+
+
+// ── 飞书 / Lark 配置向导 ────────────────────────────────────────────────────
+// 凭据本身存在 hub settings（上面的 alert_* 那一组），保存时由后端下推给
+// IvyeaAgent。这里的接口拿的是**只有 agent 知道的那部分**：连通性、白名单、
+// relay 状态、巡检任务。它们只存 agent 一份，界面直接读写，不在 ops 侧留副本。
+
+export interface FeishuStep {
+  key: string; title: string; done: boolean; detail: string; hint: string;
+}
+export interface FeishuChannel { ready: boolean; blockers: string[]; note: string; }
+export interface FeishuPatrolJob {
+  name: string; task: string; enabled: boolean; every_minutes: number;
+  channel: string; notify: boolean; scope: string; sids: string[]; sid: string;
+  last_run: number;
+}
+export interface FeishuStatus {
+  ok: boolean;
+  error?: string;
+  hint?: string;
+  app?: { app_id: string; app_id_masked: string; configured: boolean; secret_configured: boolean; domain: string; source: string };
+  chat?: { chat_id: string; configured: boolean };
+  webhook?: { configured: boolean; url_masked: string };
+  gates?: { allowed_senders: string[]; allowed_chats: string[] };
+  relay?: { state: string; running: boolean | null; detail: string };
+  patrol?: {
+    jobs: FeishuPatrolJob[]; any_enabled: boolean; pushing_to_feishu: number;
+    // 各档的默认间隔与说明由 agent 给（唯一真源），前端不再写第二份默认值
+    defaults: Record<string, { task: string; label: string; desc: string; every_minutes: number }>;
+    timer: { state: string; running: boolean | null; detail: string };
+  };
+  probe?: { ran: boolean; ok?: boolean; error?: string; chat_count?: number };
+  channels?: Record<string, FeishuChannel>;
+  steps?: FeishuStep[];
+  last_test_at?: number;
+}
+
+export async function getFeishuStatus(probe = false): Promise<FeishuStatus> {
+  const { data } = await api.get<FeishuStatus>("/settings/feishu", {
+    params: probe ? { probe: 1 } : undefined,
+    // probe 会真的去飞书换 token，比本地读配置慢得多
+    timeout: probe ? 40000 : 15000,
+  });
+  return data;
+}
+
+export interface FeishuActionResp {
+  ok: boolean; error?: string; note?: string;
+  chats?: { chat_id: string; name: string }[];
+  members?: { open_id: string; name: string }[];
+  message_id?: string;
+  created?: string[]; replaced?: string[];
+  patrol?: FeishuStatus["patrol"];
+}
+
+export async function feishuAction(body: Record<string, unknown>): Promise<FeishuActionResp> {
+  const { data } = await api.post<FeishuActionResp>("/settings/feishu", body, { timeout: 40000 });
+  return data;
+}
+
+// ── 亚马逊官方 API（SP-API / Ads API）────────────────────────────────────────
+// 凭据只存 IvyeaAgent 一侧，这里全程只经手"要填什么"和"通没通"，不留副本。
+
+export interface AmazonMarketplace {
+  sid: string;
+  marketplace_id: string;
+  name: string;
+  country?: string;
+  region?: string;
+  ads_profile_id: string;
+  seller_id?: string;
+}
+export interface AmazonStatus {
+  ok: boolean;
+  error?: string;
+  hint?: string;
+  configured?: boolean;
+  ads_configured?: boolean;
+  ads_uses_own_app?: boolean;
+  region?: string;
+  spapi_host?: string;
+  ads_host?: string;
+  seller_id?: string;
+  marketplaces?: AmazonMarketplace[];
+  marketplace_count?: number;
+  with_ads_profile?: number;
+  catalog?: { marketplace_id: string; country: string; region: string }[];
+}
+export interface AmazonVerifyResp {
+  ok: boolean;
+  error?: string;
+  steps?: { step: string; ok: boolean; detail: string; hint: string }[];
+  profiles?: { profile_id: string; country: string; type: string; name: string; marketplace_id: string }[];
+}
+
+export async function getAmazonStatus(): Promise<AmazonStatus> {
+  const { data } = await api.get<AmazonStatus>("/settings/amazon", { timeout: 15000 });
+  return data;
+}
+
+export async function saveAmazonConfig(body: Record<string, unknown>): Promise<AmazonStatus> {
+  const { data } = await api.post<AmazonStatus>("/settings/amazon", body, { timeout: 30000 });
+  return data;
+}
+
+export async function amazonAction(action: string): Promise<AmazonVerifyResp> {
+  // verify 会真的换 token + 打库存接口 + 列广告档案，比本地读配置慢得多
+  const { data } = await api.post<AmazonVerifyResp>("/settings/amazon/action", { action },
+    { timeout: 120000 });
   return data;
 }

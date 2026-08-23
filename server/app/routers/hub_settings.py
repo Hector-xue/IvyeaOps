@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 
 import httpx
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.core import hub_settings as _hs
 from app.core.security import require_user
@@ -35,6 +35,14 @@ _HERMES_SYNC_KEYS = {
 
 _IVYEA_AGENT_SYNC_KEYS = {
     "ivyea_agent_provider", "ivyea_agent_model", "ivyea_agent_api_key", "ivyea_agent_base_url",
+}
+
+# 飞书凭据改了就要同步给 IvyeaAgent —— 这一份同时供巡检卡片、审批回调、
+# 飞书对话使用。不同步的话，界面上换了应用，服务器告警走新应用、
+# 巡检卡片还在用旧的，而且没有任何地方看得出来。
+_FEISHU_SYNC_KEYS = {
+    "alert_app_id", "alert_app_secret", "alert_chat_id",
+    "alert_feishu_domain", "alert_webhook",
 }
 
 
@@ -69,7 +77,120 @@ async def patch_settings(body: SettingsPatch, _u: str = Depends(require_user)):
             ivyea_agent_service.sync_model_settings(updated, force=True)
         except Exception:
             logger.debug("ivyea_agent_service.ensure_available 失败（旁路，已忽略）", exc_info=True)
+    if _FEISHU_SYNC_KEYS & body.settings.keys():
+        try:
+            from app.services import ivyea_agent_service
+            ivyea_agent_service.sync_feishu_settings(updated)
+        except Exception:
+            logger.debug("sync_feishu_settings 失败（旁路，已忽略）", exc_info=True)
     return {"settings": updated, "secret_keys": _SECRET_KEYS}
+
+
+# ── 飞书配置向导 ────────────────────────────────────────────────────────────
+# 状态与辅助动作都在 IvyeaAgent 那边（凭据、白名单、巡检任务都归它管），
+# 这里只做一层带鉴权的转发，不在 ops 侧另存一份状态。
+
+class FeishuAction(BaseModel):
+    # 巡检档位（l1 / l2 / daily / weekly / monthly …）由 **IvyeaAgent** 定义，
+    # 界面也是按它回的 patrol.defaults 渲染的。这里不再逐个列字段：
+    # 列了就得每加一档改一次 ops，忘了改的那一档会被 pydantic 静默丢掉 ——
+    # 表现是"界面上勾了周报、保存成功、什么都没发生"。
+    model_config = ConfigDict(extra="allow")
+
+    action: str
+    chat_id: str = ""
+    text: str = ""
+    # 白名单（谁能点审批按钮）
+    allowed_senders: List[str] | None = None
+    allowed_chats: List[str] | None = None
+    # 巡检任务
+    scope: str = "all"
+    sids: List[str] | None = None
+    exclude_sids: List[str] | None = None
+    channel: str = "feishu_app"
+
+
+@router.get("/settings/feishu")
+async def feishu_setup_status(probe: bool = False, _u: str = Depends(require_user)):
+    """向导要显示的全部状态。``probe=1`` 会真的去飞书换一次 token。"""
+    from app.services import ivyea_agent_service
+    try:
+        return ivyea_agent_service.feishu_status(probe=probe)
+    except Exception as exc:  # noqa: BLE001 —— agent 没起来时给人话，别 500
+        return {"ok": False, "error": str(exc),
+                "hint": "IvyeaAgent 本地服务（默认 127.0.0.1:8765）没连上。"
+                        "服务器告警那条链路不受影响，但巡检卡片和审批需要它。"}
+
+
+@router.post("/settings/feishu")
+async def feishu_setup_action(body: FeishuAction, _u: str = Depends(require_user)):
+    """向导的动作：列群 / 列成员 / 发测试 / 存白名单 / 配巡检任务。"""
+    from app.services import ivyea_agent_service
+
+    payload = body.model_dump(exclude_none=True)
+    action = str(payload.pop("action", "")).strip()
+    try:
+        if action == "whitelist":
+            return ivyea_agent_service.configure_feishu({
+                k: v for k, v in payload.items()
+                if k in ("allowed_senders", "allowed_chats")
+            })
+        return ivyea_agent_service.feishu_action({"action": action, **payload})
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+# ── 亚马逊官方 API ──────────────────────────────────────────────────────────
+# 与飞书那组不同，凭据只存 IvyeaAgent 一侧：这里没有"agent 挂了也要能用"的场景。
+
+class AmazonConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    # 空串一律当"不改"（界面上没填的框会老实传空串），要清除得在 clear 里点名
+    client_id: str = ""
+    client_secret: str = ""
+    refresh_token: str = ""
+    ads_client_id: str = ""
+    ads_client_secret: str = ""
+    ads_refresh_token: str = ""
+    seller_id: str | None = None
+    region: str | None = None
+    marketplaces: List[Dict[str, Any]] | None = None
+    clear: List[str] | None = None
+
+
+class AmazonAction(BaseModel):
+    action: str
+
+
+@router.get("/settings/amazon")
+async def amazon_status(_u: str = Depends(require_user)):
+    from app.services import ivyea_agent_service
+    try:
+        return ivyea_agent_service.amazon_status()
+    except Exception as exc:  # noqa: BLE001 —— agent 没起来时给人话，别 500
+        return {"ok": False, "error": str(exc),
+                "hint": "IvyeaAgent 本地服务（默认 127.0.0.1:8765）没连上。"
+                        "亚马逊凭据存在它那边，它不在就没法读写。"}
+
+
+@router.post("/settings/amazon")
+async def amazon_configure(body: AmazonConfig, _u: str = Depends(require_user)):
+    from app.services import ivyea_agent_service
+    try:
+        return ivyea_agent_service.configure_amazon(body.model_dump(exclude_none=True))
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@router.post("/settings/amazon/action")
+async def amazon_do(body: AmazonAction, _u: str = Depends(require_user)):
+    """verify（真打一次接口）/ profiles（列广告档案，用来填 profileId）。"""
+    from app.services import ivyea_agent_service
+    try:
+        return ivyea_agent_service.amazon_action(body.model_dump())
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
 
 
 # ── 模型清单：把"填模型名"从背默写变成挑一个 ────────────────────────────────

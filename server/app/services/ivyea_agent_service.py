@@ -1137,3 +1137,78 @@ def service_stop(payload: dict[str, Any]) -> dict[str, Any]:
 
 def service_autostart(payload: dict[str, Any]) -> dict[str, Any]:
     return request_json("POST", "/v1/system/service/autostart", payload)
+
+
+# ── 飞书：一处配置，四条链路 ────────────────────────────────────────────────
+# IvyeaOps 的系统配置页是**唯一的填写入口**，写完两边各存一份：
+#   · hub_settings.json  → CPU/服务器告警（scripts/cpu_alert.py，cron 里跑）
+#   · agent ~/.ivyea     → 巡检卡片 / 审批回调 / 飞书对话 / relay 白名单
+# 故意不让前者去读后者：cpu_alert 是**看门狗**，agent 挂了、8765 不通了它还得
+# 能把消息发出去。看门狗依赖被看的那个进程的配置，等于在最需要报警时没有报警。
+
+def feishu_status(probe: bool = False) -> dict[str, Any]:
+    return request_json("GET", "/v1/config/feishu" + ("?probe=1" if probe else ""),
+                        timeout=max(_timeout(), 30.0) if probe else None)
+
+
+def configure_feishu(payload: dict[str, Any]) -> dict[str, Any]:
+    return request_json("POST", "/v1/config/feishu", payload, timeout=max(_timeout(), 20.0))
+
+
+def feishu_action(payload: dict[str, Any]) -> dict[str, Any]:
+    """向导里的辅助动作：test / chats / members / patrol。"""
+    return request_json("POST", "/v1/config/feishu/action", payload,
+                        timeout=max(_timeout(), 30.0))
+
+
+def _agent_feishu_payload(settings: dict[str, Any]) -> dict[str, Any]:
+    """把 Hub Settings 的飞书那一组组成 agent 的 /v1/config/feishu 入参。
+
+    **空值不下推**（agent 侧同样按"空 = 不动"处理）：界面上没填的框会老实传空串，
+    把它当"清除"就会出现「打开系统配置、什么都没改、保存一下飞书就瞎了」。
+    白名单和巡检任务不在这里——它们只存在 agent 一侧，由界面直接调 action 端点维护，
+    存两份必然长期不一致。
+    """
+    pairs = {
+        "app_id": settings.get("alert_app_id"),
+        "app_secret": settings.get("alert_app_secret"),
+        "chat_id": settings.get("alert_chat_id"),
+        "domain": settings.get("alert_feishu_domain"),
+        "webhook_url": settings.get("alert_webhook"),
+    }
+    return {k: str(v).strip() for k, v in pairs.items() if str(v or "").strip()}
+
+
+def sync_feishu_settings(settings: dict[str, Any] | None = None) -> dict[str, Any]:
+    """把飞书凭据推给 agent。失败只记日志——保存设置这件事不该被 agent 拖垮。"""
+    if settings is None:
+        from app.core import hub_settings
+        settings = hub_settings.load()
+    payload = _agent_feishu_payload(settings)
+    if not payload:
+        return {"ok": True, "skipped": True, "reason": "feishu_unconfigured"}
+    try:
+        return configure_feishu(payload)
+    except IvyeaAgentError as exc:
+        # 老版本 serve 没有 /v1/config/feishu；CPU 告警那条链路不受影响，照常保存。
+        logger.debug("configure_feishu 失败（旁路，已忽略）：%s", exc)
+        return {"ok": False, "error": str(exc)}
+
+
+# ── 亚马逊官方 API（SP-API / Ads API）────────────────────────────────────────
+# 凭据只存 IvyeaAgent 一侧（~/.ivyea/.env），ops 不留副本：与飞书那组不同，
+# 这里没有"agent 挂了也要能用"的场景 —— 取数本来就是 agent 干的活。
+# 存两份的唯一后果是长期不一致。
+
+def amazon_status() -> dict[str, Any]:
+    return request_json("GET", "/v1/config/amazon")
+
+
+def configure_amazon(payload: dict[str, Any]) -> dict[str, Any]:
+    return request_json("POST", "/v1/config/amazon", payload, timeout=max(_timeout(), 20.0))
+
+
+def amazon_action(payload: dict[str, Any]) -> dict[str, Any]:
+    """verify 会真的去打亚马逊（换 token + 库存接口 + 广告档案），给足超时。"""
+    return request_json("POST", "/v1/config/amazon/action", payload,
+                        timeout=max(_timeout(), 90.0))
