@@ -273,31 +273,6 @@ if ($env:IVYEA_OPS_INSTALL_LEGACY_AI -eq "1") {
     Write-Host "  旧链路安装路径会被 IvyeaOps 自动发现；如未识别，可在「系统配置 → 智能体」里填路径。" -ForegroundColor Yellow
 }
 
-# ── 4.6 可选：Listing 采集服务 (amazon-image-workflow, 经 Docker) ─────────────
-# 自包含 docker-compose（自带 Postgres）；免费抓取、零密钥。没 Docker 就跳过，
-# Listing 其余功能照常（手填 + AI），仅无法自动抓竞品。
-if (Test-Path "$RepoRoot\amazon-image-workflow\docker-compose.yml") {
-    if (Test-Cmd "docker") {
-        Write-Host ""
-        $scrape = Read-Host "启动 Listing 采集服务（amazon-image-workflow，Docker，免密钥）？(y/N)"
-        if ($scrape -eq "y" -or $scrape -eq "Y") {
-            Write-Info "启动采集服务（首次构建镜像，较慢）..."
-            Push-Location "$RepoRoot\amazon-image-workflow"
-            try {
-                & docker compose up -d --build
-                Write-Info "  采集服务已启动（:3001）。IvyeaOps 默认已指向它。"
-            } catch {
-                Write-Warn "采集服务启动失败，可稍后手动：cd amazon-image-workflow; docker compose up -d --build"
-            }
-            Pop-Location
-        }
-    } else {
-        Write-Warn "未检测到 Docker —— Listing 采集服务需要 Docker Desktop。装上后："
-        Write-Warn "  cd amazon-image-workflow; docker compose up -d --build"
-        Write-Warn "（不装也行：Listing 其余功能照常，仅无法自动抓竞品。）"
-    }
-}
-
 # ── 5. 桌面快捷方式（默认后台启动，不常驻终端窗口）──────────────────────────────
 $Launcher = "$RepoRoot\启动 IvyeaOps (后台).vbs"
 $DebugLauncher = "$RepoRoot\启动 IvyeaOps.bat"

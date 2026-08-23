@@ -47,8 +47,6 @@ export interface HubSettings {
   news_feeds: string;
   // Market data
   sorftime_key: string;
-  // Listing Generator
-  imgflow_url: string;
   // GBrain
   brain_root: string;
   openai_api_key: string;
@@ -129,7 +127,6 @@ export interface HealthResp {
   ivyea_agent: RunnerStatus;
   apimart: RunnerStatus;
   sorftime: RunnerStatus;
-  imgflow: RunnerStatus;
   brain_root: RunnerStatus;
   openai: RunnerStatus;
   runners: {

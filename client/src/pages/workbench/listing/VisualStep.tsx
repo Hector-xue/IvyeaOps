@@ -3,9 +3,10 @@
 // 数据流重做：编排在服务端，刷新页面不丢任何进行中的工作。
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, Check, ChevronDown, Download, Image as ImageIcon, Info,
+  AlertTriangle, Check, ChevronDown, Download, FileStack, Image as ImageIcon, Info,
   Layers3, Loader2, Maximize2, RefreshCw, ShieldCheck, Sparkles, WandSparkles,
 } from "lucide-react";
+import { fetchPsd, messageOf } from "./api";
 import JobProgress from "./JobProgress";
 import { useToast } from "./toast";
 import type { ListingState } from "./useListingProject";
@@ -64,7 +65,7 @@ function Pill({ tone = "neutral", children }: { tone?: string; children: React.R
 export default function VisualStep({ state }: { state: ListingState }) {
   const notify = useToast();
   const {
-    creativeSets, refImages, scrape, analysis, copyResult, jobs, renderJobs,
+    project, creativeSets, refImages, scrape, analysis, copyResult, jobs, renderJobs,
     runPlan, runRenderImage, runRenderSet, runReviewSet, persistPlan, applyPlan,
   } = state;
 
@@ -76,6 +77,7 @@ export default function VisualStep({ state }: { state: ListingState }) {
   const [selected, setSelected] = useState(0);
   const [preview, setPreview] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [psdBusy, setPsdBusy] = useState("");
 
   const plan: Plan | null = creativeSets[deliverable] ?? null;
   const images = useMemo(() => plan?.images ?? [], [plan]);
@@ -164,6 +166,25 @@ export default function VisualStep({ state }: { state: ListingState }) {
       versions: versions.slice(-8),
       human_reviewed: false,
     }, true);
+  }
+
+  /** 单张成图导出 PSD：成图一层 + 隐藏的产品真值一层，可直接进 Photoshop。 */
+  async function downloadPsd(image: PlanImage) {
+    if (!project?.id || !image.final_url) return;
+    const slot = String(image.slot || "");
+    setPsdBusy(slot);
+    try {
+      const { blob, name } = await fetchPsd(project.id, deliverable, slot);
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = name;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (error) {
+      notify("error", `PSD 导出失败：${messageOf(error)}`);
+    } finally {
+      setPsdBusy("");
+    }
   }
 
   async function downloadSet() {
@@ -468,7 +489,16 @@ export default function VisualStep({ state }: { state: ListingState }) {
                     {cardRunning(selected) ? <><Loader2 className="spin" size={14} /> 处理中</> : active.final_url
                       ? <><RefreshCw size={14} /> 重做这张</> : <><Sparkles size={14} /> 图文直出</>}
                   </button>
-                  {active.final_url && <a className="vs-icon-button" href={active.final_url} download title="下载"><Download size={15} /></a>}
+                  {active.final_url && <a className="vs-icon-button" href={active.final_url} download title="下载 PNG"><Download size={15} /></a>}
+                  {active.final_url && (
+                    <button className="vs-icon-button" type="button"
+                      disabled={psdBusy === String(active.slot || "")}
+                      title="下载 PSD（成图 + 隐藏的产品真值图层，可直接进 Photoshop）"
+                      onClick={() => void downloadPsd(active)}>
+                      {psdBusy === String(active.slot || "")
+                        ? <Loader2 className="spin" size={15} /> : <FileStack size={15} />}
+                    </button>
+                  )}
                 </div>
 
                 <div className={`vs-source-warning ${activeBlocked ? "is-missing" : "is-bound"}`}>

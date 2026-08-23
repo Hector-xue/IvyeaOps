@@ -8,7 +8,6 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -19,7 +18,6 @@ from .common import (
     IMAGES_DIR, _cached_white_product_source, _db, _parse_copy_result,
     _white_background_score, project_row, update_project,
 )
-from .scrape import _imgflow_base
 
 logger = logging.getLogger("ivyea.routers.listing.projects")
 
@@ -60,32 +58,17 @@ def list_projects(_user: str = Depends(require_user)):
 async def create_project(body: CreateProjectReq, _user: str = Depends(require_user)):
     pid = str(uuid.uuid4())[:8]
     now = time.time()
-    # Try to create an imgflow project for auto-scraping. If the 采集 service
-    # isn't running (no Docker / not deployed), fall back to a LOCAL-ONLY project
-    # so the user can still fill product info manually + upload images + run AI
-    # analysis / copy / prompts. Only the "auto-scrape competitor" step needs it.
-    imgflow_id = None
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(f"{_imgflow_base()}/projects", json={
-                "asin": body.asin, "marketplace": body.marketplace,
-                "supplierUrl": body.supplier_url or "",
-            })
-        if resp.status_code in (200, 201):
-            data = resp.json()
-            imgflow_id = data.get("id") or data.get("project", {}).get("id")
-    except httpx.RequestError:
-        imgflow_id = None  # 采集服务不可达 → 本地项目
-
+    # 建项目就是纯本地一行记录：采集走本机 curl / 本机浏览器，不再向任何外部
+    # 采集服务注册（旧实现要 POST 一个 Docker 服务，没装 Docker 的用户每次建项目
+    # 都得干等连接超时）。imgflow_project_id 列保留但恒空，仅为老库兼容。
     conn = _db()
     conn.execute(
-        "INSERT INTO listing_projects (id,asin,marketplace,imgflow_project_id,status,created_at,updated_at) VALUES (?,?,?,?,'created',?,?)",
-        (pid, body.asin, body.marketplace, str(imgflow_id or ""), now, now)
+        "INSERT INTO listing_projects (id,asin,marketplace,imgflow_project_id,status,created_at,updated_at) VALUES (?,?,?,'','created',?,?)",
+        (pid, body.asin, body.marketplace, now, now)
     )
     conn.commit()
     conn.close()
-    return {"id": pid, "imgflow_id": imgflow_id, "asin": body.asin,
-            "scrape_available": imgflow_id is not None}
+    return {"id": pid, "asin": body.asin, "scrape_available": True}
 
 
 @router.get("/projects/{project_id}")

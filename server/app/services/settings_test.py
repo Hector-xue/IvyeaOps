@@ -500,15 +500,6 @@ async def test_value(key: str, value: Optional[str]) -> Dict[str, Any]:
     if key in ("image_api_key", "image_model"):
         return await _probe_image_gen()
 
-    if key == "imgflow_url":
-        # imgflow's root may not respond to GET; try /api/health or /
-        if not val:
-            return _err("未填写")
-        for path in ("/api/health", "/"):
-            res = await _probe_url(val.rstrip("/") + path, label="imgflow")
-            if res["ok"]:
-                return res
-        return res  # last one
     if key in ("dashboard_url", "terminal_url"):
         return await _probe_url(val)
 
@@ -547,7 +538,6 @@ _SELF_CHECK_KEYS = [
     ("sorftime_key", "Sorftime Key"),
     ("sif_key", "SIF Key"),
     ("sellersprite_key", "卖家精灵 Key"),
-    ("imgflow_url", "图片处理后端"),
     ("alert_webhook", "告警 Webhook"),
 ]
 

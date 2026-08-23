@@ -116,7 +116,18 @@ const DEMO_PLAN = {
       selling_point: "纯白底主图", headline: "", asset_mode: "generate",
       text_on_image: false, canvas: "2000x2000", evidence: "产品实拍",
       render_prompt: "white background product shot", final_url: "",
+      product_source_url: "https://example.com/p.jpg", slot: "main", role: "白底主图",
+    },
+    // 第二张**必须有成图**：单张下载（PNG / PSD）和成图墙只在 final_url 存在时才
+    // 渲染，全是空图的方案里它们根本挂不上去，等于验不到。
+    {
+      shot_type: "hero_feature", layout: "poster_hero", product_presence: "hero",
+      selling_point: "一箱装下两周行李", headline: "PACK TWO WEEKS", asset_mode: "generate",
+      text_on_image: true, canvas: "2000x2000", evidence: "容量实测",
+      render_prompt: "hero feature poster", slot: "sub1", role: "核心利益",
+      final_url: "/art/bg.png", base_url: "/art/bg.png",
       product_source_url: "https://example.com/p.jpg",
+      human_reviewed: true, render_qa: { ready: true, score: 92 },
     },
   ],
   quality: {
@@ -553,10 +564,15 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   ["/listing/projects/p-demo", () => ({
     id: "p-demo", asin: "B0DEMO0001", marketplace: "US", status: "planned",
     title: "便携旅行收纳箱", created_at: Date.now() / 1000, updated_at: Date.now() / 1000,
-    scrape_data: JSON.stringify({ title: "便携旅行收纳箱", bullets: [], images: [] }),
+    // 采集只拿到 1 张白底图 + 本机没浏览器 —— 这正是 ProductStep 那条兜底提示的
+    // 触发条件（Docker 按钮拆掉后，这里要能验出取代它的是重试 + 浏览器提示）。
+    scrape_data: JSON.stringify({
+      title: "便携旅行收纳箱", bullets: ["硬壳防摔", "可扩容 8L"], images: [],
+      reference_images: ["/art/bg.png"], scrape_source: "sorftime",
+      full_images_available: false, browser_available: false,
+    }),
     analysis_data: null, copy_result: null, copy_job_id: null,
     creative_sets: JSON.stringify({ gallery: DEMO_PLAN }),
-    imgflow_project_id: null,
   })],
   ["/listing/projects", [{
     id: "p-demo", asin: "B0DEMO0001", marketplace: "US", status: "planned",
@@ -1063,7 +1079,6 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
       ivyea_agent: { ok: true, detail: "127.0.0.1:8765" },
       apimart: { ok: false, detail: "未配置" },
       sorftime: { ok: true, detail: "已配置" },
-      imgflow: { ok: false, detail: "未配置" },
       ollama: { ok: false, detail: "未安装" },
       brain_root: { ok: true, detail: "~/.ivyea/knowledge" },
       openai: { ok: false, detail: "未配置" },
