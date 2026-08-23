@@ -3,9 +3,7 @@ import { useRef, useState } from "react";
 import {
   Check, CloudDownload, ImagePlus, Loader2, RefreshCw, Sparkles, X,
 } from "lucide-react";
-import { imgflowStart, messageOf } from "./api";
 import JobProgress from "./JobProgress";
-import { useToast } from "./toast";
 import type { ListingState } from "./useListingProject";
 
 function SaveBadge({ state }: { state: string }) {
@@ -17,14 +15,12 @@ function SaveBadge({ state }: { state: string }) {
 }
 
 export default function ProductStep({ state }: { state: ListingState }) {
-  const notify = useToast();
   const {
     scrape, analysis, productInfo, setProductInfo, saveState, jobs,
     refImages, uploadRefs, deleteRef, runScrape, runAnalyze,
   } = state;
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [imgflowStarting, setImgflowStarting] = useState(false);
   const [preview, setPreview] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -41,18 +37,6 @@ export default function ProductStep({ state }: { state: ListingState }) {
     }
   }
 
-  async function handleStartImgflow() {
-    setImgflowStarting(true);
-    try {
-      const r = await imgflowStart() as { detail?: string };
-      notify("success", r.detail || "采集服务已在后台启动（首次构建可能需要几分钟）");
-    } catch (error) {
-      notify("error", `启动采集服务失败：${messageOf(error)}`);
-    } finally {
-      setImgflowStarting(false);
-    }
-  }
-
   return (
     <div className="lst-step">
       {preview && (
@@ -66,7 +50,7 @@ export default function ProductStep({ state }: { state: ListingState }) {
         <div className="lst-section-head">
           <div>
             <h3>ASIN 采集</h3>
-            <p>本机直连 Amazon 抓取标题、五点与完整主图组；被反爬拦截时自动走兜底。</p>
+            <p>本机直连 Amazon 抓取标题、五点与完整主图组；被反爬拦截时自动改用本机浏览器渲染，无需安装任何东西。</p>
           </div>
           <div className="lst-section-actions">
             <button className="lst-btn primary" onClick={() => void runScrape()} disabled={scraping}>
@@ -87,12 +71,12 @@ export default function ProductStep({ state }: { state: ListingState }) {
             </div>
             {summary.source === "sorftime" && (
               <div className="lst-callout warn">
-                <strong>这次只采到 1 张白底主图。</strong>正常情况下系统会本机直连 Amazon 自动抓取完整主图组（最多 7 张）。
-                多半是临时被反爬拦截——<strong>先点「重新采集」重试一两次</strong>，通常就能拿到完整组。反复失败再考虑
-                Docker 兜底采集服务：
-                <button className="lst-btn" style={{ marginLeft: 8 }} disabled={imgflowStarting} onClick={() => void handleStartImgflow()}>
-                  {imgflowStarting ? "启动中…" : "启动 Docker 采集服务"}
-                </button>
+                <strong>这次只采到 1 张白底主图。</strong>正常情况下系统先本机直连 Amazon 抓完整主图组（最多 7 张），
+                被拦截时再用本机浏览器渲染一次，两条都没过才会退到这张。多半是临时被反爬拦截——
+                <strong>点「重新采集」重试一两次</strong>通常就能拿到完整组。
+                {summary.browserMissing && (
+                  <> 另外本机没检测到 Chrome / Edge / Chromium，浏览器兜底这一层是跳过的；装上任意一个可多一次机会。</>
+                )}
               </div>
             )}
             {summary.title && (

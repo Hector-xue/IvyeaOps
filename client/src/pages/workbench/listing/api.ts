@@ -40,7 +40,31 @@ export const uploadImage = async (id: string, file: File) => {
 export const deleteUploadedImage = async (id: string, filename: string) =>
   (await api.delete(`/projects/${id}/uploaded-image/${encodeURIComponent(filename)}`)).data;
 
-export const imgflowStart = async () => (await api.post("/imgflow/start")).data;
+/** 拉某张成图的 PSD（分层文件）。服务端要做 RLE 压缩，1600×1600 约两三秒。 */
+export const fetchPsd = async (id: string, deliverable: string, slot: string) => {
+  let resp;
+  try {
+    resp = await api.get(`/projects/${id}/psd`, {
+      params: { deliverable, slot }, responseType: "blob", timeout: 180000,
+    });
+  } catch (error) {
+    // responseType:"blob" 会把 JSON 错误体也包成 Blob，不拆开的话用户只看到
+    // "Request failed with status code 400"，真正的原因（这张还没渲染等）全丢了。
+    const data = (error as { response?: { data?: unknown } }).response?.data;
+    if (data instanceof Blob) {
+      const text = await data.text();
+      let detail = text;
+      try { detail = JSON.parse(text).detail || text; } catch { /* 非 JSON：原样带出 */ }
+      throw new Error(detail || "PSD 导出失败");
+    }
+    throw error;
+  }
+  const disposition = String(resp.headers["content-disposition"] || "");
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+  const plain = /filename="([^"]+)"/i.exec(disposition);
+  const name = encoded ? decodeURIComponent(encoded[1]) : plain ? plain[1] : "listing.psd";
+  return { blob: resp.data as Blob, name };
+};
 
 export const saveCreativeSet = async (id: string, deliverable: string, plan: unknown) =>
   (await api.post(`/projects/${id}/creative-set`, { deliverable, plan }, { timeout: 120000 })).data;

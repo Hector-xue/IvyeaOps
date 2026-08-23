@@ -1,5 +1,5 @@
 """Localhost must bypass a system/VPN proxy so the embedded IvyeaAgent (:8765),
-imgflow (:3001) etc. don't 502 through the proxy on Windows/macOS."""
+server-terminal etc. don't 502 through the proxy on Windows/macOS."""
 from __future__ import annotations
 
 import os

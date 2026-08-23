@@ -22,7 +22,7 @@ function asList(value: unknown): string[] {
 }
 
 export function parseScrape(project: ProjectDetail | null): { data: Record<string, unknown> | null; summary: ScrapeSummary } {
-  const empty: ScrapeSummary = { title: "", bullets: [], description: "", images: [], source: "", fullImagesAvailable: false };
+  const empty: ScrapeSummary = { title: "", bullets: [], description: "", images: [], source: "", fullImagesAvailable: false, browserMissing: false };
   if (!project?.scrape_data) return { data: null, summary: empty };
   try {
     const data = JSON.parse(project.scrape_data) as Record<string, unknown>;
@@ -36,6 +36,8 @@ export function parseScrape(project: ProjectDetail | null): { data: Record<strin
         images: asList(data.reference_images || data.imageUrls || data.images || product.images),
         source: String(data.scrape_source || ""),
         fullImagesAvailable: Boolean(data.full_images_available),
+        // 采集时后端探到本机有没有 Chrome/Edge/Chromium：没有就少了浏览器兜底那一层
+        browserMissing: data.browser_available === false,
       },
     };
   } catch {

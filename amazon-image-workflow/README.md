@@ -1,3 +1,16 @@
+> ## ⚠️ 已停用：IvyeaOps 不再依赖这个服务
+>
+> 从 2026-08-23 起，Listing 工作台的采集**完全在 IvyeaOps 进程内完成**：
+> 本机 curl 直连 Amazon → 本机浏览器（Chrome/Edge/Chromium）无头渲染 → Sorftime 兜底。
+> **用户不需要再安装 Docker**，安装脚本也不再询问是否启动本服务。
+>
+> 拆除的原因见 [ADR-0025](../docs/decisions/0025-scrape-without-docker.md)：这个容器的
+> 免费采集路径本来就是同一份 `curl`，唯一独有的是 puppeteer 那层真浏览器，现已由本机
+> 已装浏览器顶替（Windows 自带 Edge，等于零安装）。
+>
+> 目录保留只为历史与自建参考，IvyeaOps 里**没有任何代码再调用它**（`imgflow_url` 配置项
+> 也已移除）。
+
 # amazon-image-workflow（Listing 采集服务）
 
 IvyeaOps「Listing 工作台」的**采集后端**:输入竞品 ASIN，抓取其标题/五点/图片，

@@ -5,7 +5,6 @@ import json
 import logging
 from typing import Optional
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.security import require_user
@@ -17,7 +16,6 @@ from .common import (
     _strip_json, project_row, update_project,
 )
 from .jobs import JobHandle, start_job
-from .scrape import _imgflow_base
 
 logger = logging.getLogger("ivyea.routers.listing.analyze")
 
@@ -108,7 +106,7 @@ def _fallback_analysis(row, scrape_data: dict, analysis_data: dict) -> dict:
 
 
 async def run_analyze(project_id: str, handle: Optional[JobHandle] = None) -> dict:
-    """Run skill-enhanced AI analysis + imgflow deep analysis (COSMO/Rufus/SIF)."""
+    """技能增强的 AI 结构化分析（含全部图片的视觉分析）。"""
 
     def progress(stage: str, message: str, value: float) -> None:
         if handle:
@@ -131,20 +129,7 @@ async def run_analyze(project_id: str, handle: Optional[JobHandle] = None) -> di
             "vision", f"视觉分析第 {lo}-{hi} 张（共 {total} 张）…", 0.1 + 0.4 * hi / total),
     )
 
-    # 1. Call imgflow deep analysis (COSMO/Rufus/SIF/Sorftime)
-    imgflow_analysis = {}
-    imgflow_id = row["imgflow_project_id"]
-    if imgflow_id:
-        progress("imgflow", "获取 imgflow 深度分析…", 0.55)
-        try:
-            async with httpx.AsyncClient(timeout=180) as client:
-                resp = await client.post(f"{_imgflow_base()}/analysis/{imgflow_id}")
-                if resp.status_code == 200:
-                    imgflow_analysis = resp.json()
-        except Exception:
-            logger.debug("resp = await client.post 失败（旁路，已忽略）", exc_info=True)
-
-    # 2. Skill-enhanced AI analysis
+    # 1. Skill-enhanced AI analysis
     progress("analyze", "AI 结构化分析中（走统一降级链）…", 0.65)
     prompt = f"""你是Amazon产品分析专家。基于以下专业知识和产品信息，进行深度分析。
 
@@ -157,8 +142,6 @@ async def run_analyze(project_id: str, handle: Optional[JobHandle] = None) -> di
 ## 产品图片视觉分析（采集 + 上传的全部图片）
 {image_insights or "（未配置视觉模型或暂无图片）"}
 
-## imgflow深度分析数据
-{json.dumps(imgflow_analysis, ensure_ascii=False)[:2000] if imgflow_analysis else "未获取到"}
 
 请输出结构化分析（JSON格式）：
 {{
@@ -192,7 +175,7 @@ async def run_analyze(project_id: str, handle: Optional[JobHandle] = None) -> di
         from .ai import text_chain_label
         warning = f"AI 当前不可用（{text_chain_label()} 均失败），已使用本地规则生成基础分析。原因：{str(e.detail)[:220]}"
 
-    combined = {"ai_analysis": content, "imgflow": imgflow_analysis, "image_insights": image_insights}
+    combined = {"ai_analysis": content, "image_insights": image_insights}
     if fallback_used:
         combined["fallback"] = True
         combined["warning"] = warning

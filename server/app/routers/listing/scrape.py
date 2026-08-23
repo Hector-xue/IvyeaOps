@@ -1,5 +1,11 @@
-"""ASIN 采集：本机 curl 直连 Amazon（主路径）→ imgflow Docker 服务（兜底）→
-sorftime 单图兜底。采集以后台 job 形式运行，进度实时可见。"""
+"""ASIN 采集：本机 curl 直连 Amazon（主路径）→ 本机无头浏览器兜底 →
+sorftime 单图兜底。整条链**零 Docker、零外部服务**，采集以后台 job 形式运行，
+进度实时可见。
+
+历史：这里曾把 amazon-image-workflow（一套 docker-compose 应用）当兜底采集服务，
+用户为此得先装 Docker Desktop。看过它的实现后拆掉了 —— 它的免费路径就是同一份
+curl + puppeteer，唯一独有的是「真浏览器」这一层，现在由本机已装的
+Chrome/Edge/Chromium 无头模式顶上（Windows 自带 Edge，等于零安装）。"""
 from __future__ import annotations
 
 import asyncio
@@ -7,13 +13,12 @@ import logging
 import json
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Optional
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.core.config import settings
 from app.core.security import require_user
 
 from .common import project_row, update_project
@@ -22,146 +27,6 @@ from .jobs import JobHandle, start_job
 logger = logging.getLogger("ivyea.routers.listing.scrape")
 
 router = APIRouter()
-
-
-def _imgflow_base() -> str:
-    from app.core import hub_settings
-    url = hub_settings.get("imgflow_url") or "http://127.0.0.1:3001"
-    return str(url).rstrip("/") + "/api"
-
-
-_COMPOSE_FILES = ("docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml")
-
-
-def _imgflow_dir() -> Optional[Path]:
-    """Locate the amazon-image-workflow project dir (the Docker 采集服务). Honours
-    the optional `imgflow_dir` setting, else looks for it next to / under the
-    IvyeaOps install root. Returns None when not found."""
-    from app.core import hub_settings
-    candidates: list[Path] = []
-    configured = hub_settings.get("imgflow_dir")
-    if configured:
-        candidates.append(Path(str(configured)))
-    # runtime_root() resolves to the exe's dir when frozen (Windows x64) and the
-    # repo root from source — using __file__.parents[N] would point inside the
-    # PyInstaller _MEIPASS temp dir for the exe and never find the shipped folder.
-    from app.core.version import runtime_root
-    root = runtime_root()
-    candidates += [root / "amazon-image-workflow", root.parent / "amazon-image-workflow",
-                   Path(__file__).resolve().parents[4] / "amazon-image-workflow"]
-    for d in candidates:
-        try:
-            if d.is_dir() and any((d / f).exists() for f in _COMPOSE_FILES):
-                return d
-        except Exception:
-            continue
-    return None
-
-
-_DOCKER_DL = "https://www.docker.com/products/docker-desktop/"
-
-
-def _docker_bin() -> Optional[str]:
-    """Find the docker CLI. shutil.which covers the normal case; we also probe
-    Docker Desktop's standard install path so a Docker that was installed *after*
-    IvyeaOps started (PATH not refreshed in our process) is still found without
-    forcing a restart."""
-    import shutil
-    found = shutil.which("docker")
-    if found:
-        return found
-    for p in (
-        Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Docker" / "Docker" / "resources" / "bin" / "docker.exe",
-        Path(os.environ.get("ProgramW6432", r"C:\Program Files")) / "Docker" / "Docker" / "resources" / "bin" / "docker.exe",
-        Path(os.environ.get("LOCALAPPDATA", "")) / "Docker" / "Docker" / "resources" / "bin" / "docker.exe",
-    ):
-        try:
-            if p.is_file():
-                return str(p)
-        except Exception:
-            continue
-    return None
-
-
-def _docker_running(docker: str) -> bool:
-    """True when the Docker daemon is up (`docker info` succeeds). Docker Desktop
-    can be installed but not started — compose would then fail with a daemon
-    error, so we check first to give a clear 'start Docker Desktop' message."""
-    import subprocess
-    from app.core.proc import no_window_kwargs
-    try:
-        r = subprocess.run([docker, "info"], capture_output=True, text=True,
-                           timeout=12, **no_window_kwargs())
-        return r.returncode == 0
-    except Exception:
-        return False
-
-
-@router.get("/imgflow/status")
-async def imgflow_status(_u: str = Depends(require_user)):
-    """Report whether the 采集服务 is reachable, its dir is found, and Docker is
-    installed + running — drives the 'start collection service' button in the UI."""
-    d = _imgflow_dir()
-    reachable = False
-    try:
-        async with httpx.AsyncClient(timeout=2) as client:
-            r = await client.get(_imgflow_base())
-            reachable = r.status_code < 500
-    except Exception:
-        reachable = False
-    docker = _docker_bin()
-    return {
-        "reachable": reachable,
-        "dir": str(d) if d else "",
-        "docker_installed": bool(docker),
-        "docker_running": bool(docker) and _docker_running(docker),
-    }
-
-
-@router.post("/imgflow/start")
-def imgflow_start(_u: str = Depends(require_user)):
-    """One-click start of the local Docker 采集服务. Only brings up the `backend`
-    service (+ its postgres dependency) — the listing board talks to :3001 and
-    doesn't need the workflow's own Next.js frontend, so we skip that build.
-    Runs detached, logging to data/imgflow-start.log (the --build can take
-    minutes, so we never block)."""
-    import subprocess
-    from app.core.proc import no_window_kwargs
-
-    d = _imgflow_dir()
-    if not d:
-        raise HTTPException(400, "未找到 amazon-image-workflow 目录。请把该项目放在 IvyeaOps "
-                                 "同级目录，或在「系统配置」设置 imgflow_dir 指向它，再试。")
-    docker = _docker_bin()
-    if not docker:
-        raise HTTPException(400, f"未检测到 Docker。这个「完整主图组」采集服务是一套 Docker 应用，"
-                                 f"请先安装 Docker Desktop（{_DOCKER_DL}）。装完启动它（等托盘鲸鱼图标变绿），"
-                                 f"若仍提示未检测到，重启一次 IvyeaOps 让其识别 Docker，再点此按钮。")
-    if not _docker_running(docker):
-        raise HTTPException(400, "检测到 Docker 已安装，但 Docker 引擎未运行。请先启动 Docker Desktop，"
-                                 "等托盘鲸鱼图标变绿（不再转圈）后再点此按钮。")
-
-    log_path = settings.data_dir / "imgflow-start.log"
-    try:
-        logf = open(log_path, "ab")
-        kw = dict(no_window_kwargs())
-        if os.name == "nt":  # detach on Windows so stopping the app won't kill the build
-            kw["creationflags"] = kw.get("creationflags", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
-        else:
-            kw["start_new_session"] = True
-        # `backend` pulls in its depends_on (postgres) automatically; skipping the
-        # frontend service makes the first build much faster.
-        subprocess.Popen([docker, "compose", "up", "-d", "--build", "backend"],
-                         cwd=str(d), stdout=logf, stderr=subprocess.STDOUT, **kw)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(500, f"启动采集服务失败：{exc}") from exc
-    return {
-        "ok": True,
-        "dir": str(d),
-        "log": str(log_path),
-        "detail": "采集服务正在后台启动（docker compose up -d --build backend），首次构建可能需要几分钟"
-                  "（拉取 postgres 镜像 + 构建后端）。完成后重新「采集ASIN数据」即可拿到完整主图组。",
-    }
 
 
 # ─── Native Amazon scrape (no Docker) ──────────────────────────────────────────
@@ -184,10 +49,30 @@ def _amazon_domain(marketplace: str) -> str:
     return _MKT_DOMAIN.get((marketplace or "US").upper(), "amazon.com")
 
 
+# Amazon serves the same photo at many sizes under one media id:
+#   .../images/I/71abc._AC_SX679_.jpg  ← thumbnail modifier
+#   .../images/I/71abc.jpg             ← the original upload (full resolution)
+# Keying on the media id keeps one photo from filling the set at 4 sizes, and
+# dropping the modifier upgrades any thumbnail we found to the original.
+_MEDIA_RE = re.compile(
+    r"^(https?://.+/images/I/)([A-Za-z0-9_+%-]+?)(?:\._[^./]*)?\.(jpg|jpeg|png)$", re.I)
+
+
+def _media_key(url: str) -> str:
+    m = _MEDIA_RE.match(url.split("?")[0])
+    return m.group(2) if m else url
+
+
+def _hires_url(url: str) -> str:
+    m = _MEDIA_RE.match(url.split("?")[0])
+    return f"{m.group(1)}{m.group(2)}.{m.group(3)}" if m else url
+
+
 def _parse_amazon_html(html_text: str) -> dict:
     """Extract title / bullets / full main-image set from raw Amazon product HTML.
-    Images come from the inline "hiRes" (then "large") JSON, not the DOM thumbnails
-    (which are injected by JS post-load and absent from static HTML)."""
+    Images come from the inline "hiRes" (then "large") JSON — the static HTML has
+    no rendered thumbnails. The data-a-dynamic-image pass below only ever fires on
+    a rendered DOM (the headless-browser fallback), where that JSON may be gone."""
     import html as _html
     images: list[str] = []
     seen: set[str] = set()
@@ -196,11 +81,32 @@ def _parse_amazon_html(html_text: str) -> dict:
             break
         for m in re.finditer(pat, html_text):
             u = m.group(1)
-            if u not in seen:
-                seen.add(u)
+            key = _media_key(u)
+            if key not in seen:
+                seen.add(key)
                 images.append(u)
             if len(images) >= 7:
                 break
+
+    # Rendered-DOM path (headless browser): the carousel thumbnails carry the
+    # whole main-image set in data-a-dynamic-image={url: [w,h]} — mine it when
+    # the inline hiRes JSON isn't present, upgrading each hit to the original.
+    if not images:
+        for m in re.finditer(r'data-a-dynamic-image="([^"]*)"', html_text):
+            blob = _html.unescape(m.group(1))
+            for um in re.finditer(r'"(https?://[^"]+)"\s*:\s*\[\s*(\d+)\s*,\s*(\d+)\s*\]', blob):
+                if min(int(um.group(2)), int(um.group(3))) < 500:
+                    continue  # icon / swatch, not a main image
+                full = _hires_url(um.group(1))
+                key = _media_key(full)
+                if key not in seen:
+                    seen.add(key)
+                    images.append(full)
+                if len(images) >= 7:
+                    break
+            if len(images) >= 7:
+                break
+
     if not images:
         m = re.search(r'id="landingImage"[^>]*data-old-hires="(https?://[^"]+)"', html_text) \
             or re.search(r'id="landingImage"[^>]*src="(https?://[^"]+)"', html_text)
@@ -296,20 +202,111 @@ async def _scrape_amazon_native(asin: str, marketplace: str, attempts: int = 5,
             logger.debug("os.remove 失败（旁路，已忽略）", exc_info=True)
 
 
+# ─── Headless-browser fallback (still no Docker) ───────────────────────────────
+# Replaces what the old amazon-image-workflow container contributed (puppeteer).
+# We drive a browser the machine ALREADY has: Chrome / Edge / Chromium. Windows
+# 10/11 ship Edge, so for the target user this needs no install at all — and
+# unlike curl it executes JS and presents a genuine browser fingerprint, which is
+# what gets through when the plain request is challenged.
+
+def _browser_bin() -> Optional[str]:
+    """Locate a local Chromium-family browser, or None when the machine has none."""
+    import shutil
+    for name in ("google-chrome", "google-chrome-stable", "chromium",
+                 "chromium-browser", "chrome", "msedge"):
+        found = shutil.which(name)
+        if found:
+            return found
+    candidates: list[Path] = []
+    if os.name == "nt":
+        pf = os.environ.get("ProgramFiles", r"C:\Program Files")
+        pf86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+        local = os.environ.get("LOCALAPPDATA", "")
+        for root in (pf, pf86, local):
+            if not root:
+                continue
+            candidates += [Path(root) / "Google/Chrome/Application/chrome.exe",
+                           Path(root) / "Microsoft/Edge/Application/msedge.exe"]
+    elif sys.platform == "darwin":
+        candidates += [Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+                       Path("/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
+                       Path("/Applications/Chromium.app/Contents/MacOS/Chromium")]
+    for c in candidates:
+        try:
+            if c.is_file():
+                return str(c)
+        except OSError:
+            continue
+    return None
+
+
+async def _scrape_amazon_browser(asin: str, marketplace: str, on_progress=None) -> Optional[dict]:
+    """Render the product page in the local browser (headless) and parse the DOM.
+
+    Returns None when no browser is installed or the page still came back as an
+    anti-bot challenge. Uses --dump-dom (a plain stdout dump — no CDP client, no
+    node, no extra dependency) with a throwaway profile dir so it can never touch
+    the user's real browser session.
+
+    subprocess.run in a worker thread, NOT asyncio.create_subprocess_exec — the
+    async variant needs a ProactorEventLoop on Windows and raises
+    NotImplementedError under uvicorn's loop there (same trap as the curl path)."""
+    import shutil
+    import subprocess
+    import tempfile
+    from app.core.proc import no_window_kwargs
+
+    browser = _browser_bin()
+    if not browser:
+        logger.info("[scrape-browser] 本机未找到 Chrome/Edge/Chromium — 跳过浏览器兜底")
+        return None
+    if on_progress:
+        on_progress(browser)
+    url = f"https://www.{_amazon_domain(marketplace)}/dp/{asin}"
+    profile = tempfile.mkdtemp(prefix="ivyea_cdp_")
+    args = [browser, "--headless=new", "--disable-gpu", "--disable-extensions",
+            "--disable-background-networking", "--no-first-run",
+            "--no-default-browser-check", "--mute-audio",
+            f"--user-data-dir={profile}", "--window-size=1280,2400",
+            "--virtual-time-budget=15000", f"--user-agent={_REAL_UA}",
+            "--dump-dom", url]
+    if os.name != "nt":
+        # Self-hosted installs commonly run as root, where Chrome refuses to start
+        # with its sandbox on. We only ever load one fixed URL in a throwaway profile.
+        args.insert(1, "--no-sandbox")
+    try:
+        cp = await asyncio.to_thread(
+            subprocess.run, args,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=90,
+            **no_window_kwargs())
+        dom = (cp.stdout or b"").decode("utf-8", "replace")
+    except Exception as exc:  # noqa: BLE001 — browser missing/crashed is just a miss
+        logger.info("[scrape-browser] %s 启动失败：%s", asin, exc)
+        return None
+    finally:
+        shutil.rmtree(profile, ignore_errors=True)
+
+    blocked = bool(re.search(r"Type the characters you see in this image", dom, re.I)) or \
+        bool(re.search(r"we just need to make sure you're not a robot", dom, re.I))
+    parsed = _parse_amazon_html(dom) if not blocked else {}
+    n_imgs = len(parsed.get("imageUrls") or [])
+    logger.info("[scrape-browser] %s: %dB blocked=%s imgs=%d", asin, len(dom), blocked, n_imgs)
+    return parsed if n_imgs else None
+
+
 async def run_scrape(project_id: str, handle: Optional[JobHandle] = None) -> dict:
-    """采集管线：native → imgflow → sorftime，最后写回项目。可被 job 引擎或
-    agent 桥接直接 await。"""
+    """采集管线：curl 直连 → 本机无头浏览器 → sorftime，最后写回项目。
+    可被 job 引擎或 agent 桥接直接 await。"""
 
     def progress(stage: str, message: str, value: float) -> None:
         if handle:
             handle.update(stage=stage, message=message, progress=value)
 
-    row = project_row(project_id, "asin, marketplace, imgflow_project_id")
+    row = project_row(project_id, "asin, marketplace")
     if not row:
         raise HTTPException(404)
     asin = row["asin"]
     marketplace = row["marketplace"] or "US"
-    imgflow_id = row["imgflow_project_id"]
 
     data: dict = {}
 
@@ -327,19 +324,22 @@ async def run_scrape(project_id: str, handle: Optional[JobHandle] = None) -> dic
     except Exception:
         logger.debug("nd = await _scrape_amazon_native 失败（旁路，已忽略）", exc_info=True)
 
-    # 1) Optional: imgflow scrape (amazon-image-workflow on :3001) — fallback for
-    #    users who run the Docker service and where curl was blocked by anti-bot.
-    imgflow_ok = False
-    if not native_ok and imgflow_id:
-        progress("imgflow", "直连被拦截，尝试 Docker 采集服务…", 0.6)
+    # 1) Headless local browser — same full main-image set, no Docker. Only runs
+    #    when the plain request was challenged, since it costs a few seconds.
+    browser_ok = False
+    if not native_ok:
+        progress("browser", "直连被拦截，改用本机浏览器渲染采集…", 0.6)
         try:
-            async with httpx.AsyncClient(timeout=120) as client:
-                resp = await client.post(f"{_imgflow_base()}/scrape/{imgflow_id}")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    imgflow_ok = bool(data.get("imageUrls") or data.get("images"))
+            bd = await _scrape_amazon_browser(
+                asin, marketplace,
+                on_progress=lambda exe: progress(
+                    "browser", f"本机浏览器渲染采集中（{Path(exe).name}）…", 0.65),
+            )
+            if bd and bd.get("imageUrls"):
+                data = bd
+                browser_ok = True
         except Exception:
-            logger.debug("resp = await client.post 失败（旁路，已忽略）", exc_info=True)
+            logger.debug("_scrape_amazon_browser 失败（旁路，已忽略）", exc_info=True)
 
     # 2) If both returned nothing, fall back to sorftime product_detail.
     #    NOTE: sorftime only carries ONE (white-background) main image, so this
@@ -394,10 +394,11 @@ async def run_scrape(project_id: str, handle: Optional[JobHandle] = None) -> dic
 
     data["scrape_source"] = (
         "native" if native_ok else
-        "imgflow" if imgflow_ok else
+        "browser" if browser_ok else
         "sorftime" if image_urls else "none"
     )
-    data["full_images_available"] = native_ok or imgflow_ok
+    data["full_images_available"] = native_ok or browser_ok
+    data["browser_available"] = bool(_browser_bin())
 
     progress("save", "写入采集结果…", 0.95)
     # 保留 manual / uploaded_images / 白底检测等既有字段，采集只更新采集面。

@@ -826,7 +826,7 @@ function AdvancedBlock({ children }: { children: React.ReactNode }) {
         <span style={{ display: "inline-block", transition: "transform .15s", transform: open ? "rotate(90deg)" : "none" }}>▶</span>
         <span className="hs-advanced-toggle-label">高级选项</span>
         <span className="hs-advanced-toggle-sub">
-          {open ? "点击收起" : "Token 监控 · Imgflow · 内嵌服务 · Kiro · 资讯源"}
+          {open ? "点击收起" : "Token 监控 · 内嵌服务 · Kiro · 资讯源"}
         </span>
       </button>
       {open && <div className="hs-advanced-body">{children}</div>}
@@ -992,7 +992,6 @@ const EMPTY: HubSettings = {
   text_ai_providers: "ivyea-agent,assistant,deepseek,codex,claude",
   vision_ai_providers: "openai,assistant", deepseek_api_key: "", news_feeds: "",
   sorftime_key: "", sif_key: "", sellersprite_key: "",
-  imgflow_url: "http://127.0.0.1:3001",
   brain_root: "", openai_api_key: "",
   alert_webhook: "", alert_app_id: "", alert_app_secret: "", alert_chat_id: "",
   alert_feishu_domain: "feishu",
@@ -2577,8 +2576,8 @@ export default function HubSettings({ focusSection = "" }: { focusSection?: stri
         {/* 高级 / 运维 */}
         <Section
           title="高级 / 运维"
-          desc="Listing 图片后端、嵌入服务 URL、Token 监控 DB 路径、Kiro 集成等。通常无需改动。"
-          keys={["imgflow_url", "dashboard_url", "terminal_url", "hermes_db", "codex_db", "claude_projects_dir",
+          desc="嵌入服务 URL、Token 监控 DB 路径、Kiro 集成等。通常无需改动。"
+          keys={["dashboard_url", "terminal_url", "hermes_db", "codex_db", "claude_projects_dir",
             "kiro_cli_bin", "kiro_gateway_db", "kiro_cli_db", "kiro_cli_sessions_dir",
             "feishu_codex_db", "hermes_node_bin", "bun_bin", "news_feeds"]}
           vals={vals} onSave={save}
@@ -2588,11 +2587,6 @@ export default function HubSettings({ focusSection = "" }: { focusSection?: stri
             hint={<>「资讯」板块的抓取源，每行一条 <code>url | 来源名 | 分类</code>（分类 = <code>ai_industry</code> 或 <code>amazon_seller</code>）。留空 = 用内置默认源。</>}>
             <AreaInput value={vals.news_feeds} onChange={v => set("news_feeds", v)} rows={4}
               placeholder={"https://example.com/feed.xml | 来源名 | ai_industry\nhttps://.../rss | 卖家资讯 | amazon_seller"} />
-          </Field>
-          <div className="hs-field-group-title">图片处理后端</div>
-          <Field label={<><Tag kind="opt">可选</Tag>Imgflow 地址</>} hint={<>Listing 图片处理后端，默认 <code>http://127.0.0.1:3001</code>。</>}>
-            <TxtInput value={vals.imgflow_url} onChange={v => set("imgflow_url", v)} placeholder="http://127.0.0.1:3001" />
-            <TestButton settingKey="imgflow_url" value={vals.imgflow_url} label="测试" />
           </Field>
           <div className="hs-row3">
             <Field label="仪表盘地址">

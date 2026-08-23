@@ -164,6 +164,12 @@
 .lst-final-wall figcaption{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:6px 8px;font-size:var(--fs-9);color:var(--t2)}
 .lst-final-wall figcaption i{display:inline-flex;align-items:center;gap:3px;color:var(--t3);font-style:normal}
 .lst-final-wall figcaption i.ok{color:var(--acc)}
+.lst-final-wall figcaption span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lst-final-wall figcaption i{white-space:nowrap}
+.lst-final-actions{display:flex;gap:5px;padding:0 8px 7px}
+.lst-final-actions a,.lst-final-actions button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:3px;height:23px;padding:0 6px;border:1px solid var(--b);border-radius:5px;background:var(--bg);color:var(--t2);font-size:var(--fs-9);text-decoration:none;cursor:pointer;transition:border-color .12s,color .12s}
+.lst-final-actions a:hover,.lst-final-actions button:hover:not(:disabled){border-color:var(--acc);color:var(--acc)}
+.lst-final-actions button:disabled{opacity:.6;cursor:progress}
 
 /* ── 响应式 ───────────────────────────────────────────────────────────── */
 @media (max-width: 900px){

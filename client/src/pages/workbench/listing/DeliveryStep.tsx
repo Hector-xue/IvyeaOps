@@ -1,12 +1,17 @@
-// 第四步：交付 —— 完整文案导出（复制 / .txt 下载）+ 成图墙 + 交付就绪清单。
+// 第四步：交付 —— 完整文案导出（复制 / .txt 下载）+ 成图墙（PNG / PSD 单张下载）
+// + 交付就绪清单。
 import { useMemo, useState } from "react";
-import { Check, Copy, Download, FileText, X } from "lucide-react";
+import { Check, Copy, Download, FileStack, FileText, Loader2, X } from "lucide-react";
+import { fetchPsd, messageOf } from "./api";
+import { useToast } from "./toast";
 import type { ListingState } from "./useListingProject";
 
 export default function DeliveryStep({ state }: { state: ListingState }) {
   const { project, copyResult, creativeSets, analysis } = state;
+  const notify = useToast();
   const [copied, setCopied] = useState(false);
   const [preview, setPreview] = useState("");
+  const [psdBusy, setPsdBusy] = useState("");
 
   const fullText = useMemo(() => {
     const res = copyResult;
@@ -57,6 +62,25 @@ export default function DeliveryStep({ state }: { state: ListingState }) {
     }
     return items;
   }, [creativeSets, copyResult, analysis]);
+
+  /** 单张成图导出 PSD（成图层 + 隐藏的产品真值层）。服务端压缩要两三秒，给个 spinner。 */
+  async function downloadPsd(deliverable: string, slot: string) {
+    if (!project?.id) return;
+    const key = `${deliverable}-${slot}`;
+    setPsdBusy(key);
+    try {
+      const { blob, name } = await fetchPsd(project.id, deliverable, slot);
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = name;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (error) {
+      notify("error", `PSD 导出失败：${messageOf(error)}`);
+    } finally {
+      setPsdBusy("");
+    }
+  }
 
   function copyAll() {
     void navigator.clipboard.writeText(fullText).then(() => {
@@ -124,22 +148,35 @@ export default function DeliveryStep({ state }: { state: ListingState }) {
         <div className="lst-section-head">
           <div>
             <h3>成图墙</h3>
-            <p>已生成的套图与 A+ 图片；整套打包在「③ 视觉套图」里下载。</p>
+            <p>已生成的套图与 A+ 图片。单张可下 PNG 或 PSD（PSD 带成图层 + 隐藏的产品真值层）；整套打包在「③ 视觉套图」里下载。</p>
           </div>
         </div>
         {finals.length ? (
           <div className="lst-final-wall">
-            {finals.map((item) => (
-              <figure key={`${item.deliverable}-${item.slot}`} onClick={() => setPreview(item.final_url!)}>
-                <img src={item.final_url!} alt={item.role} />
-                <figcaption>
-                  <span>{item.deliverable === "aplus" ? "A+" : "套图"} · {item.role}</span>
-                  {item.human_reviewed
-                    ? <i className="ok"><Check size={10} /> 可交付</i>
-                    : <i><Download size={10} /> 草稿</i>}
-                </figcaption>
-              </figure>
-            ))}
+            {finals.map((item) => {
+              const key = `${item.deliverable}-${item.slot}`;
+              return (
+                <figure key={key} onClick={() => setPreview(item.final_url!)}>
+                  <img src={item.final_url!} alt={item.role} />
+                  <figcaption>
+                    <span>{item.deliverable === "aplus" ? "A+" : "套图"} · {item.role}</span>
+                    {item.human_reviewed
+                      ? <i className="ok"><Check size={10} /> 可交付</i>
+                      : <i>草稿</i>}
+                  </figcaption>
+                  <div className="lst-final-actions" onClick={(e) => e.stopPropagation()}>
+                    <a href={item.final_url!} download title="下载 PNG"><Download size={11} /> PNG</a>
+                    <button type="button" disabled={psdBusy === key}
+                      title="下载 PSD（成图 + 隐藏的产品真值图层，可直接进 Photoshop）"
+                      onClick={() => void downloadPsd(String(item.deliverable), String(item.slot || ""))}>
+                      {psdBusy === key
+                        ? <><Loader2 size={11} className="spin" /> 导出中</>
+                        : <><FileStack size={11} /> PSD</>}
+                    </button>
+                  </div>
+                </figure>
+              );
+            })}
           </div>
         ) : (
           <div className="lst-empty-hint">还没有成图。请先到「③ 视觉套图」策划并生成。</div>

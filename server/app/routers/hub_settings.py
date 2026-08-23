@@ -380,7 +380,6 @@ async def settings_health(_u: str = Depends(require_user)):
             return {"ok": True, "detail": f"CLI 已安装 · {found}；{detail}"}
         return {"ok": False, "detail": "未安装 IvyeaAgent"}
 
-    imgflow_url = (cfg.get("imgflow_url") or "http://127.0.0.1:3001").rstrip("/")
     brain_root = cfg.get("brain_root") or ""
     if not brain_root:
         brain_root = __import__("os").environ.get("IVYEA_OPS_BRAIN_ROOT") or str(Path.home() / "brain")
@@ -390,8 +389,6 @@ async def settings_health(_u: str = Depends(require_user)):
     # IvyeaAgent 的语义检索是随包自带的 ONNX 模型，装完即用、不需要任何服务，
     # 所以这一项连同它的状态行、安装按钮和 `ollama_base_url` 配置一起去掉了。
     # （Ollama 作为**本地大模型 provider** 仍然可用，那是另一回事，见首启向导。）
-    imgflow_result = await _check_http(imgflow_url + "/")
-
     from app.core import integrations as _integ
 
     def _vision_detail(tier: int, label: str) -> str:
@@ -446,7 +443,6 @@ async def settings_health(_u: str = Depends(require_user)):
         "ivyea_agent": ivyea_agent_result,
         "apimart":   _check_key("apimart_key", "API Key 已设置"),
         "sorftime":  _check_key("sorftime_key", "API Key 已设置"),
-        "imgflow":   imgflow_result,
         "brain_root": {
             "ok": Path(brain_root).exists(),
             "detail": brain_root if Path(brain_root).exists() else f"目录不存在：{brain_root}",

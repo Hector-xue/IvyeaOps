@@ -36,7 +36,6 @@ export interface ProjectDetail extends Omit<ProjectSummary, "active_jobs"> {
   copy_result?: string | null;
   copy_job_id?: string | null;
   creative_sets?: string | null;
-  imgflow_project_id?: string | null;
 }
 
 export interface ProductInfo {
@@ -53,6 +52,7 @@ export interface ScrapeSummary {
   images: string[];
   source: string;
   fullImagesAvailable: boolean;
+  browserMissing: boolean;
 }
 
 export interface UploadedRef {
