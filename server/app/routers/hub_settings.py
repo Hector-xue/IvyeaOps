@@ -140,6 +140,59 @@ async def feishu_setup_action(body: FeishuAction, _u: str = Depends(require_user
         return {"ok": False, "error": str(exc)}
 
 
+# ── 亚马逊官方 API ──────────────────────────────────────────────────────────
+# 与飞书那组不同，凭据只存 IvyeaAgent 一侧：这里没有"agent 挂了也要能用"的场景。
+
+class AmazonConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    # 空串一律当"不改"（界面上没填的框会老实传空串），要清除得在 clear 里点名
+    client_id: str = ""
+    client_secret: str = ""
+    refresh_token: str = ""
+    ads_client_id: str = ""
+    ads_client_secret: str = ""
+    ads_refresh_token: str = ""
+    seller_id: str | None = None
+    region: str | None = None
+    marketplaces: List[Dict[str, Any]] | None = None
+    clear: List[str] | None = None
+
+
+class AmazonAction(BaseModel):
+    action: str
+
+
+@router.get("/settings/amazon")
+async def amazon_status(_u: str = Depends(require_user)):
+    from app.services import ivyea_agent_service
+    try:
+        return ivyea_agent_service.amazon_status()
+    except Exception as exc:  # noqa: BLE001 —— agent 没起来时给人话，别 500
+        return {"ok": False, "error": str(exc),
+                "hint": "IvyeaAgent 本地服务（默认 127.0.0.1:8765）没连上。"
+                        "亚马逊凭据存在它那边，它不在就没法读写。"}
+
+
+@router.post("/settings/amazon")
+async def amazon_configure(body: AmazonConfig, _u: str = Depends(require_user)):
+    from app.services import ivyea_agent_service
+    try:
+        return ivyea_agent_service.configure_amazon(body.model_dump(exclude_none=True))
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@router.post("/settings/amazon/action")
+async def amazon_do(body: AmazonAction, _u: str = Depends(require_user)):
+    """verify（真打一次接口）/ profiles（列广告档案，用来填 profileId）。"""
+    from app.services import ivyea_agent_service
+    try:
+        return ivyea_agent_service.amazon_action(body.model_dump())
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
 # ── 模型清单：把"填模型名"从背默写变成挑一个 ────────────────────────────────
 # 四个槽位（主脑 / 全局兜底 / 视觉 / 生图）此前都是自由文本框：用户得自己记住
 # "Qwen/Qwen3-VL-30B-A3B-Instruct" 这种字符串，记错了也要等到真调用时才报错。

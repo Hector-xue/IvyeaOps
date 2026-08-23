@@ -320,3 +320,55 @@ export async function feishuAction(body: Record<string, unknown>): Promise<Feish
   const { data } = await api.post<FeishuActionResp>("/settings/feishu", body, { timeout: 40000 });
   return data;
 }
+
+// ── 亚马逊官方 API（SP-API / Ads API）────────────────────────────────────────
+// 凭据只存 IvyeaAgent 一侧，这里全程只经手"要填什么"和"通没通"，不留副本。
+
+export interface AmazonMarketplace {
+  sid: string;
+  marketplace_id: string;
+  name: string;
+  country?: string;
+  region?: string;
+  ads_profile_id: string;
+  seller_id?: string;
+}
+export interface AmazonStatus {
+  ok: boolean;
+  error?: string;
+  hint?: string;
+  configured?: boolean;
+  ads_configured?: boolean;
+  ads_uses_own_app?: boolean;
+  region?: string;
+  spapi_host?: string;
+  ads_host?: string;
+  seller_id?: string;
+  marketplaces?: AmazonMarketplace[];
+  marketplace_count?: number;
+  with_ads_profile?: number;
+  catalog?: { marketplace_id: string; country: string; region: string }[];
+}
+export interface AmazonVerifyResp {
+  ok: boolean;
+  error?: string;
+  steps?: { step: string; ok: boolean; detail: string; hint: string }[];
+  profiles?: { profile_id: string; country: string; type: string; name: string; marketplace_id: string }[];
+}
+
+export async function getAmazonStatus(): Promise<AmazonStatus> {
+  const { data } = await api.get<AmazonStatus>("/settings/amazon", { timeout: 15000 });
+  return data;
+}
+
+export async function saveAmazonConfig(body: Record<string, unknown>): Promise<AmazonStatus> {
+  const { data } = await api.post<AmazonStatus>("/settings/amazon", body, { timeout: 30000 });
+  return data;
+}
+
+export async function amazonAction(action: string): Promise<AmazonVerifyResp> {
+  // verify 会真的换 token + 打库存接口 + 列广告档案，比本地读配置慢得多
+  const { data } = await api.post<AmazonVerifyResp>("/settings/amazon/action", { action },
+    { timeout: 120000 });
+  return data;
+}

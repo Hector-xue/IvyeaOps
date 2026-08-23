@@ -442,6 +442,27 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
     secret_keys: ["apimart_key", "ivyea_agent_api_key", "vision_api_key", "alert_app_secret",
                   "alert_webhook"],
   }],
+  // 亚马逊官方 API。**故意给"凭据配好了、站点只配了一半"**：
+  // 全绿的话，未配置态和逐步自检那两条分支根本渲染不到。
+  ["/settings/amazon", () => ({
+    ok: true, configured: true, ads_configured: false, ads_uses_own_app: false,
+    region: "eu", spapi_host: "https://sellingpartnerapi-eu.amazon.com",
+    ads_host: "https://advertising-api-eu.amazon.com",
+    seller_id: "A23SU2M9XL8R0O",
+    marketplaces: [
+      { sid: "1863", marketplace_id: "A1F83G8C2ARO7P", name: "欧洲-UK",
+        country: "UK", region: "eu", ads_profile_id: "3344556677" },
+      { sid: "1864", marketplace_id: "APJ6JRA9NG5V4", name: "欧洲-IT",
+        country: "IT", region: "eu", ads_profile_id: "" },
+    ],
+    marketplace_count: 2, with_ads_profile: 1,
+    catalog: [
+      { marketplace_id: "ATVPDKIKX0DER", country: "US", region: "na" },
+      { marketplace_id: "A1F83G8C2ARO7P", country: "UK", region: "eu" },
+      { marketplace_id: "APJ6JRA9NG5V4", country: "IT", region: "eu" },
+      { marketplace_id: "A1VC38T7YXB528", country: "JP", region: "fe" },
+    ],
+  })],
   // 飞书配置向导。**故意给一个"配了一半"的状态**：全绿的话，未完成步骤和
   // 能力矩阵里的 blockers 那两条分支根本渲染不到，等于没验。
   ["/settings/feishu", () => ({
