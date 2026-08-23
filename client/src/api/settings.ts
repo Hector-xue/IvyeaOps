@@ -288,6 +288,8 @@ export interface FeishuStatus {
   relay?: { state: string; running: boolean | null; detail: string };
   patrol?: {
     jobs: FeishuPatrolJob[]; any_enabled: boolean; pushing_to_feishu: number;
+    // 各档的默认间隔与说明由 agent 给（唯一真源），前端不再写第二份默认值
+    defaults: Record<string, { task: string; label: string; desc: string; every_minutes: number }>;
     timer: { state: string; running: boolean | null; detail: string };
   };
   probe?: { ran: boolean; ok?: boolean; error?: string; chat_count?: number };

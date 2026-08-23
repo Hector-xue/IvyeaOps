@@ -5116,3 +5116,11 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 /* 手机端：能力芯片只留结论。理由不是嫌挤——380px 下"点按钮改领星"这四个字会被
    后面那句阻塞原因挤成两行，反而看不清哪几项是通的。完整原因仍在 title 里。 */
 @media(max-width:600px){.hs-cap em{display:none}}
+/* 巡检档位：一档一块，把"多久一次"和"这一档在管什么"放在一起。
+   五档排成一行会挤到看不清各自管什么，所以按最小宽度自动换行。 */
+.hs-tiers{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.hs-tier{border:1px solid var(--b);background:var(--bg2);border-radius:8px;padding:8px 10px;display:grid;gap:2px;min-width:0}
+.hs-tier-on{border-color:color-mix(in srgb,var(--acc) 35%,transparent);background:color-mix(in srgb,var(--acc) 5%,var(--bg2))}
+.hs-tier .hs-toggle-line{min-height:22px;font-weight:600;color:var(--t)}
+.hs-tier-desc{font-size:var(--fs-10);color:var(--t3);line-height:1.5}
+.hs-tier-every{margin-top:4px}

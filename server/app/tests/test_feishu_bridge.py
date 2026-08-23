@@ -63,3 +63,19 @@ def test_domain_key_exists_so_international_installs_can_switch(monkeypatch):
     from app.core import hub_settings
 
     assert hub_settings._DEFAULTS["alert_feishu_domain"] == "feishu"
+
+
+def test_patrol_tiers_are_not_dropped_by_the_proxy():
+    """档位由 IvyeaAgent 定义（l1/l2/daily/weekly/monthly，以后可能更多）。
+
+    ops 这一层若逐个列字段，新增一档就会被 pydantic 静默丢掉 ——
+    表现是「界面上勾了周报、保存成功、什么都没发生」，最难查的那种假开关。
+    """
+    from app.routers.hub_settings import FeishuAction
+
+    body = FeishuAction(action="patrol", scope="all",
+                        weekly={"enabled": True, "every_minutes": 10080},
+                        monthly={"enabled": True, "every_minutes": 43200})
+    payload = body.model_dump(exclude_none=True)
+    assert payload["weekly"] == {"enabled": True, "every_minutes": 10080}
+    assert payload["monthly"] == {"enabled": True, "every_minutes": 43200}

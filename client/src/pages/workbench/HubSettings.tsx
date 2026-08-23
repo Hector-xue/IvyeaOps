@@ -7,7 +7,7 @@ import {
   startAgentUpgrade, getAgentUpgradeProgress, slotModelCatalog,
   getFeishuStatus, feishuAction,
   type HubSettings, type HealthResp, type TestResult, type SelfCheckResp,
-  type FeishuStatus,
+  type FeishuStatus, type FeishuPatrolJob,
 } from "../../api/settings";
 import { installAgentStreamUrl } from "../../api/setup";
 import {
@@ -1024,6 +1024,20 @@ const EMPTY: HubSettings = {
  *  它照样报警），保存时后端顺手下推给 IvyeaAgent（巡检 / 审批 / 对话共用）。
  *  白名单和巡检任务只存 agent 一份，这里直接读写，不在 ops 侧留副本。
  */
+/** 这一档用分钟还是小时做单位：按默认值定，不随当前值变。 */
+function unitOf(defaultMinutes: number): number {
+  return defaultMinutes >= 120 ? 60 : 1;
+}
+
+/** 间隔的人话。60→「每小时」、720→「每 12 小时」、10080→「每周」。 */
+function fmtEvery(minutes: number): string {
+  if (minutes % 43200 === 0) return minutes === 43200 ? "每月" : `每 ${minutes / 43200} 个月`;
+  if (minutes % 10080 === 0) return minutes === 10080 ? "每周" : `每 ${minutes / 10080} 周`;
+  if (minutes % 1440 === 0) return minutes === 1440 ? "每天" : `每 ${minutes / 1440} 天`;
+  if (minutes % 60 === 0) return minutes === 60 ? "每小时" : `每 ${minutes / 60} 小时`;
+  return `每 ${minutes} 分钟`;
+}
+
 function FeishuSection({ vals, set, save }: {
   vals: Partial<HubSettings>;
   set: <K extends keyof HubSettings>(k: K, v: HubSettings[K]) => void;
@@ -1035,9 +1049,12 @@ function FeishuSection({ vals, set, save }: {
   const [chats, setChats] = useState<{ chat_id: string; name: string }[] | null>(null);
   const [members, setMembers] = useState<{ open_id: string; name: string }[] | null>(null);
   const [senders, setSenders] = useState<string[]>([]);
-  const [patrol, setPatrol] = useState({
-    l1: false, l1min: 20, l2: false, daily: false, scope: "all", sids: "",
-  });
+  // 档位不再写死三个：agent 的 patrol.defaults 给出有哪些档、默认多久一次、
+  // 以及每一档在管什么。前端再写一份默认值的话，实际生效的永远是小的那个。
+  const [patrol, setPatrol] = useState<{
+    tiers: Record<string, { enabled: boolean; minutes: number }>;
+    scope: string; sids: string;
+  }>({ tiers: {}, scope: "all", sids: "" });
 
   const reload = useCallback(async (probe = false) => {
     try {
@@ -1045,14 +1062,20 @@ function FeishuSection({ vals, set, save }: {
       setSt(s);
       setSenders(s.gates?.allowed_senders || []);
       const jobs = s.patrol?.jobs || [];
-      const l1 = jobs.find((j) => j.task === "store_l1");
-      const l2 = jobs.find((j) => j.task === "store_l2");
-      const daily = jobs.find((j) => j.task === "store_daily");
-      const any = l1 || l2 || daily;
+      const defaults = s.patrol?.defaults || {};
+      const tiers: Record<string, { enabled: boolean; minutes: number }> = {};
+      let any: FeishuPatrolJob | undefined;
+      for (const [key, def] of Object.entries(defaults)) {
+        const job = jobs.find((j) => j.task === def.task);
+        if (job) any = any || job;
+        tiers[key] = {
+          enabled: !!job?.enabled,
+          minutes: Math.round(job?.every_minutes || def.every_minutes),
+        };
+      }
       setPatrol({
-        l1: !!l1?.enabled, l1min: Math.round(l1?.every_minutes || 20),
-        l2: !!l2?.enabled, daily: !!daily?.enabled,
-        scope: any?.scope === "all" ? "all" : "sids",
+        tiers,
+        scope: any?.scope === "all" ? "all" : (any ? "sids" : "all"),
         // 旧的单店任务用的是 sid 单数，界面统一按列表展示
         sids: (any?.scope === "all" ? [] : [...(any?.sids || []), any?.sid || ""])
           .filter(Boolean).join(","),
@@ -1095,13 +1118,15 @@ function FeishuSection({ vals, set, save }: {
 
   const doPatrol = () => run("patrol", async () => {
     const sids = patrol.sids.split(/[,\s]+/).filter(Boolean);
+    const tiers: Record<string, unknown> = {};
+    for (const [key, t] of Object.entries(patrol.tiers)) {
+      tiers[key] = { enabled: t.enabled, every_minutes: t.minutes };
+    }
     const r = await feishuAction({
       action: "patrol",
       scope: patrol.scope, sids,
       channel: "feishu_app",
-      l1: { enabled: patrol.l1, every_minutes: patrol.l1min },
-      l2: { enabled: patrol.l2, every_hours: 1 },
-      daily: { enabled: patrol.daily, every_hours: 24 },
+      ...tiers,
     });
     if (!r.ok) { flash(false, r.error || "巡检设置失败"); return; }
     const replaced = (r.replaced || []).length
@@ -1271,24 +1296,37 @@ function FeishuSection({ vals, set, save }: {
         {st?.patrol?.timer?.running === false && <b style={{ color: "var(--red)" }}>
           {" "}触发器 ivyea-schedule.timer 没启用，任务注册了也不会跑。</b>}
       </>}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
-          <label className="hs-toggle-line">
-            <input type="checkbox" checked={patrol.l1}
-              onChange={(e) => setPatrol({ ...patrol, l1: e.target.checked })} />
-            <span>实时层 L1</span>
-          </label>
-          <NumInput value={patrol.l1min} onChange={(v) => setPatrol({ ...patrol, l1min: v })}
-            min={5} max={720} unit="分钟" />
-          <label className="hs-toggle-line">
-            <input type="checkbox" checked={patrol.l2}
-              onChange={(e) => setPatrol({ ...patrol, l2: e.target.checked })} />
-            <span>日内层 L2（每小时）</span>
-          </label>
-          <label className="hs-toggle-line">
-            <input type="checkbox" checked={patrol.daily}
-              onChange={(e) => setPatrol({ ...patrol, daily: e.target.checked })} />
-            <span>每日早报</span>
-          </label>
+        <div className="hs-tiers">
+          {Object.entries(st?.patrol?.defaults || {}).map(([key, def]) => {
+            const tier = patrol.tiers[key] || { enabled: false, minutes: def.every_minutes };
+            const setTier = (patch: Partial<typeof tier>) => setPatrol({
+              ...patrol, tiers: { ...patrol.tiers, [key]: { ...tier, ...patch } },
+            });
+            return (
+              <div key={key} className={"hs-tier" + (tier.enabled ? " hs-tier-on" : "")}>
+                <label className="hs-toggle-line">
+                  <input type="checkbox" checked={tier.enabled}
+                    onChange={(e) => setTier({ enabled: e.target.checked })} />
+                  <span>{def.label}</span>
+                </label>
+                <div className="hs-tier-desc">{def.desc}</div>
+                <div className="hs-tier-every">
+                  {/* 分钟级的两档才给输入框改；日报/周报/月报的周期改起来没意义，
+                      写成文字反而一眼看清各档节奏差多少。
+                      单位按**这一档的默认值**定死，不看当前值 —— 看当前值的话，
+                      把 12 小时改成 1 小时的瞬间输入框会跳成「60 分钟」。 */}
+                  {def.every_minutes < 1440 ? (
+                    <NumInput value={Math.round(tier.minutes / unitOf(def.every_minutes))}
+                      onChange={(v) => setTier({ minutes: v * unitOf(def.every_minutes) })}
+                      min={1} max={999}
+                      unit={unitOf(def.every_minutes) === 60 ? "小时一次" : "分钟一次"} />
+                  ) : (
+                    <span className="hs-hint">{fmtEvery(tier.minutes)}一次</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginTop: 6 }}>
           <SheetSelect value={patrol.scope} onChange={(v) => setPatrol({ ...patrol, scope: v })}

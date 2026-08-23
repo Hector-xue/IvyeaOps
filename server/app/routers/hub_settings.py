@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 
 import httpx
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.core import hub_settings as _hs
 from app.core.security import require_user
@@ -91,6 +91,12 @@ async def patch_settings(body: SettingsPatch, _u: str = Depends(require_user)):
 # 这里只做一层带鉴权的转发，不在 ops 侧另存一份状态。
 
 class FeishuAction(BaseModel):
+    # 巡检档位（l1 / l2 / daily / weekly / monthly …）由 **IvyeaAgent** 定义，
+    # 界面也是按它回的 patrol.defaults 渲染的。这里不再逐个列字段：
+    # 列了就得每加一档改一次 ops，忘了改的那一档会被 pydantic 静默丢掉 ——
+    # 表现是"界面上勾了周报、保存成功、什么都没发生"。
+    model_config = ConfigDict(extra="allow")
+
     action: str
     chat_id: str = ""
     text: str = ""
@@ -102,9 +108,6 @@ class FeishuAction(BaseModel):
     sids: List[str] | None = None
     exclude_sids: List[str] | None = None
     channel: str = "feishu_app"
-    l1: Dict[str, Any] | None = None
-    l2: Dict[str, Any] | None = None
-    daily: Dict[str, Any] | None = None
 
 
 @router.get("/settings/feishu")
