@@ -5127,3 +5127,10 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 /* 亚马逊站点表：一行一个站点，窄屏堆叠。 */
 .hs-mkt-row{display:grid;grid-template-columns:90px 1fr 1fr 1fr auto;gap:8px;align-items:center;margin-bottom:6px}
 @media(max-width:700px){.hs-mkt-row{grid-template-columns:1fr 1fr}}
+/* 缺件提醒条：不是"提示"，是"点这里补上"。所以按钮和话放在同一条里，
+   用红边把它和普通 hint 区分开 —— 用户漏装这两样的后果是功能静默失灵。 */
+.hs-callout{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between;
+  border:1px solid color-mix(in srgb,var(--red) 35%,transparent);
+  background:color-mix(in srgb,var(--red) 6%,transparent);
+  border-radius:8px;padding:8px 12px;margin:6px 0;font-size:var(--fs-11);color:var(--t2)}
+.hs-callout .hs-hint{display:block;margin-top:2px}

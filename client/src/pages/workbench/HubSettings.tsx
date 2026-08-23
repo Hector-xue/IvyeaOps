@@ -1352,6 +1352,16 @@ function FeishuSection({ vals, set, save }: {
     await reload();
   });
 
+  // 网页用户没有终端。"请自行 pip install / 写 systemd 单元"对他等于
+  // "这个功能你用不了" —— 所以装接收端、装触发器都得能从界面点。
+  const doInstall = (what: "install_relay" | "install_timer") => run(what, async () => {
+    const r = await feishuAction({ action: what });
+    const label = what === "install_relay" ? "飞书接收端" : "巡检触发器";
+    flash(!!r.ok, r.ok ? `${label}已安装并启动`
+      : (r.hint || r.error || `${label}安装未完成`));
+    await reload();
+  });
+
   const doTest = () => run("test", async () => {
     // 先把输入框里的凭据存下来再测：不然改完直接点测试，测的还是旧凭据，
     // 结果对不上会让人以为是飞书坏了。
@@ -1396,6 +1406,22 @@ function FeishuSection({ vals, set, save }: {
       {st && st.ok === false && (
         <div className="hs-hint" style={{ color: "var(--red)" }}>
           {st.error}{st.hint ? ` —— ${st.hint}` : ""}
+        </div>
+      )}
+
+      {st?.relay && st.relay.running === false && st.relay.can_install && (
+        <div className="hs-callout">
+          <div>
+            <b>卡片按钮现在点了没反应</b> —— 接收端没装。
+            <span className="hs-hint">
+              {st.relay.sdk === false ? "点一下会先装飞书 SDK（约 42MB），再写服务并启动。"
+                : "点一下写服务并启动。"}
+            </span>
+          </div>
+          <button className="hs-test-btn" type="button" disabled={!!busy}
+            onClick={() => doInstall("install_relay")}>
+            {busy === "install_relay" ? "安装中…" : "一键安装接收端"}
+          </button>
         </div>
       )}
 
@@ -1510,8 +1536,20 @@ function FeishuSection({ vals, set, save }: {
       <Field label="定时巡检" hint={<>
         库存断货、活动被暂停、预算被外部改动、ACOS 超标… 异常推成卡片发到上面那个群。
         {st?.patrol?.timer?.running === false && <b style={{ color: "var(--red)" }}>
-          {" "}触发器 ivyea-schedule.timer 没启用，任务注册了也不会跑。</b>}
+          {" "}触发器没启用，任务注册了也不会跑。</b>}
       </>}>
+        {st?.patrol?.timer?.running === false && st.patrol.timer.can_install && (
+          <div className="hs-callout">
+            <div>
+              <b>下面这些开关现在不会生效</b> —— 触发器没启用。
+              <span className="hs-hint">点一下装上，每 5 分钟唤醒一次问「谁到点了」。</span>
+            </div>
+            <button className="hs-test-btn" type="button" disabled={!!busy}
+              onClick={() => doInstall("install_timer")}>
+              {busy === "install_timer" ? "安装中…" : "一键启用触发器"}
+            </button>
+          </div>
+        )}
         <div className="hs-tiers">
           {Object.entries(st?.patrol?.defaults || {}).map(([key, def]) => {
             const tier = patrol.tiers[key] || { enabled: false, minutes: def.every_minutes };
