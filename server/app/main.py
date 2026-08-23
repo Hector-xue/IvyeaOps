@@ -29,6 +29,7 @@ from app.core.skill_paths import (
     studio_paths_summary,
 )
 from app.routers import ad_audit, amazon, auth, brain, health, ivyea_agent, monitor, news, skill, terminal
+from app.routers import cockpit as cockpit_router
 from app.routers import listing as listing_router
 from app.routers import image_translate as image_translate_router
 from app.routers import market as market_router
@@ -325,6 +326,15 @@ async def lifespan(app: FastAPI):
 
     _archive_task = None if skip_bg else asyncio.create_task(_token_archive_loop(), name="token-archiver")
 
+    # 驾驶舱预热（gated by cockpit_sync_enabled，默认关）。广告看板冷启动实测
+    # 24.7 秒/天/9店，页面直连没法用，只能后台把缓存灌满。
+    try:
+        from app.services.cockpit_sync import scheduler_loop as _cockpit_loop
+        _cockpit_task = None if skip_bg else asyncio.create_task(_cockpit_loop(), name="cockpit-sync")
+    except Exception as e:
+        _cockpit_task = None
+        logger.warning("cockpit sync scheduler skipped: %s", e)
+
     # 领星 weekly advisory automation scheduler (gated by lingxing_auto_enabled).
     try:
         from app.services.lingxing_automation import scheduler_loop as _lx_auto_loop
@@ -360,7 +370,7 @@ async def lifespan(app: FastAPI):
     yield
     # skip_bg 时这些任务压根没起，值是 None —— 统一按"有才取消/等待"处理，
     # 免得关停路径上冒 AttributeError（那会让每个测试的 teardown 都吐一堆噪音）。
-    for _task in (_warm_task, _scheduler_task, _watchdog_task, _market_task,
+    for _task in (_warm_task, _scheduler_task, _watchdog_task, _market_task, _cockpit_task,
                   _archive_task, _lingxing_auto_task):
         if _task is not None:
             _task.cancel()
@@ -629,6 +639,8 @@ app.include_router(git_router.router, prefix="/api", tags=["git"], dependencies=
 app.include_router(setup_router.router, prefix="/api", tags=["setup"], dependencies=_ADMIN)
 app.include_router(autofix_router.router, prefix="/api", tags=["autofix"], dependencies=_ADMIN)
 app.include_router(lingxing_router.router, prefix="/api/lingxing", tags=["lingxing"], dependencies=_ADMIN)
+# 驾驶舱的促销/广告面：数据同源于领星，写通道也同一条 —— 权限就跟着领星走。
+app.include_router(cockpit_router.router, prefix="/api/cockpit", tags=["cockpit"], dependencies=_ADMIN)
 # --- Open to all registered users (analytical; AI forced HTTP-only) ---
 app.include_router(market_router.router, prefix="/api/market", tags=["market"])
 app.include_router(playbook_router.router, prefix="/api/playbook", tags=["playbook"])

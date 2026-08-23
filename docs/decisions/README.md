@@ -43,6 +43,7 @@ git log 记得住「改了什么」，记不住「为什么不选另一条路」
 | [0023](./0023-dock-renders-the-console-itself.md) | 悬浮球不再自己实现对话，直接渲染任务台 | 2026-08-21 |
 | [0024](./0024-one-feishu-config-two-places-to-land.md) | 飞书只填一次；凭据落两处，看门狗那份不许依赖 agent | 2026-08-23 |
 | [0025](./0025-scrape-without-docker.md) | Listing 采集去掉 Docker，兜底改用本机浏览器 | 2026-08-23 |
+| [0026](./0026-cockpit-daily-ops-panels.md) | 驾驶舱接日常运营数据：促销倒计时、广告看板、小幅止血直调走快车道 | 2026-08-23 |
 
 ## 模板
 

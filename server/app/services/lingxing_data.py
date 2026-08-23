@@ -29,7 +29,35 @@ def _col(key: str, label: str) -> Dict[str, str]:
     return {"key": key, "label": label}
 
 
-# dataset key -> spec. ``params`` types: string|int|date|sids (csv→list[int]).
+def _promo_dataset(key: str, label: str, route: str, *,
+                   extra_columns: List[Dict[str, str]],
+                   hint: str = "") -> Dict[str, Any]:
+    """四个促销活动列表接口共用的规格（形状完全一致，只有返回字段不同）。
+
+    窗口默认「过去 30 天 ~ 未来 60 天」：倒计时要看的是**还没结束**的活动，
+    但已经开始的活动其 start_date 在过去，所以窗口必须两头都留。
+    领星限制单次查询跨度 ≤90 天，30+60=90 正好贴着上限。
+    """
+    return {
+        "label": f"促销·{label}", "group": "促销", "route": route, "method": "POST",
+        "params": [
+            {"name": "start_date", "type": "date", "default": "-30d", "label": "活动起(≤90天跨度)"},
+            {"name": "end_date", "type": "date", "default": "+60d", "label": "活动止"},
+            {"name": "sids", "type": "sids", "label": "店铺SID(逗号分隔,可空=全部)"},
+            {"name": "length", "type": "int", "default": 200}, {"name": "offset", "type": "int", "default": 0},
+        ],
+        "columns": [_col("promotion_id", "活动ID"), _col("name", "名称"),
+                    _col("origin_status", "平台状态"),
+                    _col("promotion_start_time", "开始"), _col("promotion_end_time", "结束"),
+                    *extra_columns,
+                    _col("sales_amount", "销售额"), _col("sales_volume", "销量"),
+                    _col("last_sync_time", "最后同步")],
+        "hint": hint,
+        "promo_kind": key,
+    }
+
+
+# dataset key -> spec. ``params`` types: string|int|date|sids/ints (csv→list[int]).
 # ``date`` defaults accept relative tokens like "-1d"/"-7d" resolved at call time.
 READ_DATASETS: Dict[str, Dict[str, Any]] = {
     "sellers": {
@@ -173,6 +201,74 @@ READ_DATASETS: Dict[str, Dict[str, Any]] = {
         "columns": [_col("asin", "ASIN"), _col("storeName", "店铺"), _col("totalSalesAmount", "销售额"),
                     _col("totalAdsCost", "广告花费"), _col("grossProfit", "毛利"), _col("grossRate", "毛利率")],
     },
+    # --- 促销活动 ------------------------------------------------------------
+    # 领星这块数据**不是 API 直连亚马逊拿的**，是「LINGXING助手」浏览器插件抓回
+    # 去的（官方原话：需要登录助手保持后台在线）。所以每条记录都带 last_sync_time，
+    # 上层必须把新鲜度如实显示出来 —— 插件掉线时倒计时会静静地停在旧值上，
+    # 那比没有倒计时更危险。
+    #
+    # 四个接口形状完全一致（start_date/end_date/sids/offset/length，窗口 ≤90 天），
+    # 差别只在返回字段，所以用一个工厂生成。
+    "promo_coupon": _promo_dataset(
+        "coupon", "优惠券", "/basicOpen/promotionalActivities/coupon/list",
+        extra_columns=[_col("discount", "折扣"), _col("budget", "预算"), _col("cost", "已花"),
+                       _col("draw_quantity", "领取"), _col("exchange_quantity", "兑换")],
+        hint="优惠券活动：起止时间用于倒计时，budget/cost 用于预算耗尽预警。",
+    ),
+    "promo_seckill": _promo_dataset(
+        "seckill", "秒杀(BD/LD)", "/basicOpen/promotionalActivities/secKill/list",
+        extra_columns=[_col("promotion_type", "类型"), _col("product_quantity", "商品数"),
+                       _col("seckill_fee", "秒杀费"), _col("sold_rate", "售出率"),
+                       _col("page_view", "浏览量")],
+        hint="秒杀：promotion_type 1=Best Deal 2=Lightning Deal。",
+    ),
+    "promo_manage": _promo_dataset(
+        "manage", "管理促销", "/basicOpen/promotionalActivities/manage/list",
+        extra_columns=[_col("promotion_type", "类型"), _col("product_quantity", "商品数")],
+        hint="管理促销。注意路由里的 manage 是业务名词不是动词 —— 读写判定见 "
+             "lingxing_openapi.classify_route 的注释。",
+    ),
+    "promo_vip_discount": _promo_dataset(
+        "vip_discount", "会员/Prime 折扣", "/basicOpen/promotionalActivities/vipDiscount/list",
+        extra_columns=[_col("customer_target", "面向人群"), _col("product_quantity", "商品数")],
+        hint="Prime 专享折扣 / 会员折扣。",
+    ),
+    "promo_listing": {
+        "label": "ASIN 维度促销", "group": "促销", "route": "/basicOpen/promotion/listingList",
+        "method": "POST",
+        "params": [
+            {"name": "site_date", "required": True, "type": "date", "default": "0d", "label": "站点日期"},
+            {"name": "start_time", "type": "date", "default": "-30d", "label": "活动起(≤90天跨度)"},
+            {"name": "end_time", "type": "date", "default": "+60d", "label": "活动止"},
+            {"name": "sids", "type": "sids", "label": "店铺SID(逗号分隔,可空=全部)"},
+            {"name": "status", "type": "ints", "default": "0,1,2,3", "label": "促销状态(0其他 1进行中 2已过期 3未开始)"},
+            {"name": "product_status", "type": "ints", "default": "1", "label": "商品状态(-1删除 0停售 1在售)"},
+            {"name": "promotion_category", "type": "ints", "default": "1,2,3,4",
+             "label": "促销类型(1券 2秒杀 3管理促销 4会员折扣)"},
+            {"name": "length", "type": "int", "default": 200}, {"name": "offset", "type": "int", "default": 0},
+        ],
+        "columns": [_col("asin", "ASIN"), _col("item_name", "标题"), _col("seller_sku", "MSKU"),
+                    _col("store_name", "店铺"), _col("sales_price", "优惠价"),
+                    _col("afn_fulfillable_quantity", "FBA可售")],
+        "hint": "**按 ASIN** 列促销窗口（promotion_list 里带每条促销的起止时间与类型）—— "
+                "「哪个 ASIN 的券要结束了」只能从这里拿，活动列表接口不带 ASIN。",
+    },
+    # --- 广告·小时级 ----------------------------------------------------------
+    # 亚马逊后台看小时数据很难受，这是驾驶舱「比后台好用」的底牌之一。
+    # 代价：一次调用只能取**一个活动**一天的 24 个点，撞限流很快 ——
+    # 只能后台同步进缓存，绝不能让页面直连。
+    "sp_campaign_hour": {
+        "label": "SP 活动小时数据", "group": "广告", "route": "/pb/openapi/newad/spCampaignHourData",
+        "method": "POST",
+        "params": [
+            {"name": "report_date", "required": True, "type": "date", "default": "0d", "label": "报表日期(近60天)"},
+            {"name": "campaign_id", "required": True, "type": "int", "label": "广告活动ID"},
+        ],
+        "columns": [_col("hour", "小时"), _col("impressions", "曝光"), _col("clicks", "点击"),
+                    _col("cost", "花费"), _col("orders", "订单"), _col("sales", "销售额"),
+                    _col("acos", "ACOS"), _col("cpc", "CPC")],
+        "hint": "单个活动当天 24 小时的曲线。按活动逐个取，注意限流。",
+    },
 }
 
 
@@ -193,8 +289,10 @@ def _resolve_date(token: Any) -> Any:
     if not isinstance(token, str) or not token:
         return token
     t = token.strip()
-    if t.endswith("d") and (t[:-1].lstrip("-").isdigit()):
-        days = int(t[:-1])
+    if t.endswith("d") and (t[:-1].lstrip("+-").isdigit()):
+        days = int(t[:-1].lstrip("+"))
+        if t.startswith("-"):
+            days = -abs(days)
         return (datetime.now(timezone.utc) + timedelta(days=days)).strftime("%Y-%m-%d")
     return token
 
@@ -216,7 +314,7 @@ def _coerce(spec_params: List[Dict[str, Any]], given: Dict[str, Any]) -> Dict[st
                 val = int(val)
             except (TypeError, ValueError):
                 raise ValueError(f"参数 {name} 需为整数")
-        elif typ == "sids":
+        elif typ in ("sids", "ints"):
             if isinstance(val, str):
                 val = [int(x) for x in val.replace("，", ",").split(",") if x.strip().isdigit()]
             elif isinstance(val, list):

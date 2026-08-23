@@ -224,6 +224,24 @@ _DEFAULTS: Dict[str, Any] = {
     "lingxing_cooldown_days": 7,          # don't re-touch the same entity within N days
     "lingxing_bid_floor": 0.02,           # min bid
     "lingxing_bid_ceiling": 0,            # max bid (0 = no cap beyond break-even logic)
+    # --- 驾驶舱直调「快车道」 ------------------------------------------------
+    # 小幅止血动作（降预算 / 降 bid / 暂停）跳过三重 LLM 复核，直接进"等人确认"。
+    # 三条硬约束写在 lingxing_operate.fast_lane_decision 里，不可绕过：
+    #   ① 只放行**变小**的方向和 paused，放量一律走全复核；
+    #   ② 幅度必须 ≤ fast_lane_max_pct；
+    #   ③ **只在「逐项确认」档生效** —— 自主执行档下复核是最后一道闸，不能省。
+    # 默认关：老用户升级后行为与升级前一模一样，要不要放开由他自己决定。
+    "lingxing_fast_lane_enabled": False,
+    "lingxing_fast_lane_max_pct": 15,     # 快车道允许的最大改动幅度(%)
+    # --- 驾驶舱后台预热 ------------------------------------------------------
+    # 广告看板冷启动实测 9 个店 × 1 天要 24.7 秒（限流 340ms/次），页面直连没法看。
+    # 后台按周期把数据灌进缓存，页面永远读缓存。
+    "cockpit_sync_enabled": False,        # 默认关，用户开了才后台拉数据
+    "cockpit_sync_minutes": 30,           # 预热间隔（分钟）
+    "cockpit_sync_days": 7,               # 预热多少天的广告报表
+    # 注意：促销临期 / 广告异常的**飞书提醒不在这里**，在 IvyeaAgent 的巡检规则里
+    # （它有节流去重、卡片版式、审批按钮和定时器）。这边再放一套阈值只会变成
+    # 两处配置打架、或者一个根本不生效的开关。阈值在「系统配置 → 飞书」那一屏。
     # --- External-integration paths ----------------------------------------
     # Optional: IvyeaOps works standalone without any of these, but the
     # monitor page and agent picker light up when you point at the right
