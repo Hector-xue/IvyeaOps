@@ -174,12 +174,16 @@ def _ivyea_install_shell(root: Path) -> str:
     sibling = root.parent / "ivyea-agent"
     if not local and sibling.is_dir():
         local = str(sibling)
+    # **带上 [feishu] extra**：飞书接收端（卡片按钮回调 + 飞书对话）要用官方 SDK。
+    # 不带的话，用户配完飞书、卡片也收到了，一点按钮什么都不发生——而他没有
+    # 任何线索，因为缺的东西根本不在他机器上。装了它，接收端就跟着 agent 的
+    # serve 自动跑起来，用户一个按钮都不用点。
     if local and Path(local).expanduser().is_dir():
-        target = "-e " + shlex.quote(str(Path(local).expanduser()))
+        target = "-e " + shlex.quote(str(Path(local).expanduser()) + "[feishu]")
     else:
         repo = os.environ.get("IVYEA_AGENT_REPO", "https://github.com/Hector-xue/ivyea-agent.git")
         ref = os.environ.get("IVYEA_AGENT_REF", "main")
-        target = shlex.quote(f"git+{repo}@{ref}")
+        target = shlex.quote(f"ivyea-agent[feishu] @ git+{repo}@{ref}")
 
     py = shlex.quote(sys.executable)
     ivyea = shlex.quote(_ivyea_bin(root) or str(Path(sys.executable).resolve().parent / "ivyea"))
