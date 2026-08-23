@@ -79,3 +79,42 @@ def test_patrol_tiers_are_not_dropped_by_the_proxy():
     payload = body.model_dump(exclude_none=True)
     assert payload["weekly"] == {"enabled": True, "every_minutes": 10080}
     assert payload["monthly"] == {"enabled": True, "every_minutes": 43200}
+
+
+# ── 与飞书无关、但同属"界面说已配好、别处说没配"这一类的坑 ──────────────────
+
+def test_subscription_login_counts_as_ready():
+    """任务台的模型选择器和系统配置的订阅登录必须给出同一个答案。
+
+    实测（本机 Codex 已登录）：agent 回的 key_status 是 authenticated+refresh，
+    而原判定只认 configured / expired+refresh —— 于是系统配置显示"已登录"、
+    任务台却把它归到「未配置密钥 · 去登录」，点进去发现已经登录了。
+    """
+    import re
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parents[3] / "client/src/api/ivyeaAgent.ts"
+    body = re.search(r"export function providerKeyReady[\s\S]*?\n}", src.read_text("utf-8"))
+    assert body, "providerKeyReady 不见了？"
+    for status in ("authenticated", "authenticated+refresh"):
+        assert f'"{status}"' in body.group(0), f"{status} 没被算作就绪"
+
+
+def test_lingxing_mcp_url_is_upgraded_to_https(monkeypatch):
+    """http 会 302 到 https，而 httpx 默认不跟随重定向（POST 更不会）。
+
+    表现是"地址填得对、key 也对，就是连不上"。历史默认值和存量库里存的都是 http，
+    所以纠正必须发生在**读**的时候：只改默认值救不了已经存了 http 的机器。
+    """
+    from app.core import hub_settings
+    from app.services import lingxing_service
+
+    monkeypatch.setattr(hub_settings, "get",
+                        lambda k, d=None: "http://openmcp.lingxing.com/mcp-servers/lingxing-mcp"
+                        if k == "lingxing_mcp_url" else d)
+    assert lingxing_service._url().startswith("https://")
+
+    # 自建/内网的 http 地址不动 —— 那是用户自己的选择，不该替他改协议
+    monkeypatch.setattr(hub_settings, "get",
+                        lambda k, d=None: "http://127.0.0.1:9000/mcp" if k == "lingxing_mcp_url" else d)
+    assert lingxing_service._url() == "http://127.0.0.1:9000/mcp"

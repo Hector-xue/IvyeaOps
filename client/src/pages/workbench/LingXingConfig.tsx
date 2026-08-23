@@ -58,7 +58,10 @@ export default function LingXingConfig() {
     const u: Record<string, any> = { lingxing_openapi_host: host, lingxing_openapi_appid: appid };
     if (secret) u.lingxing_openapi_secret = secret;
     if (mcp) u.lingxing_mcp_key = mcp;
-    await patch(u, "凭证已保存"); setSecret(""); setMcp("");
+    // 密钥不回显，保存后清空输入框；提示里要说明这不是没存上
+    const what = [secret && "AppSecret", mcp && "MCP key"].filter(Boolean).join(" 与 ");
+    await patch(u, what ? `凭证已保存（${what} 已加密存库，输入框按惯例清空）` : "凭证已保存");
+    setSecret(""); setMcp("");
   }
   async function test() {
     setBusy(true); setMsg(""); setProbe(null);
@@ -83,8 +86,10 @@ export default function LingXingConfig() {
           <Field label="AppID"><input value={appid} onChange={(e) => setAppid(e.target.value)} style={{ ...inputStyle, width: 200 }} /></Field>
           <Field label={`AppSecret ${s.lingxing_openapi_secret ? "（已配置，留空不改）" : "（未配置）"}`}>
             <input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} style={{ ...inputStyle, width: 220 }} placeholder={s.lingxing_openapi_secret ? "••••••••" : "填入"} /></Field>
-          <Field label={`MCP key（可选）${s.lingxing_mcp_key ? "（已配置）" : ""}`}>
-            <input type="password" value={mcp} onChange={(e) => setMcp(e.target.value)} style={{ ...inputStyle, width: 160 }} placeholder="可不填" /></Field>
+          {/* 与 AppSecret 同一套措辞：密钥保存后输入框会清空、只留"已配置"，
+              不写清"留空不改"的话，看起来像是保存失败又把已有的值弄丢了。 */}
+          <Field label={`MCP key（可选）${s.lingxing_mcp_key ? "（已配置，留空不改）" : "（未配置）"}`}>
+            <input type="password" value={mcp} onChange={(e) => setMcp(e.target.value)} style={{ ...inputStyle, width: 200 }} placeholder={s.lingxing_mcp_key ? "••••••••（已保存）" : "可不填"} /></Field>
           <Btn primary onClick={saveCreds} disabled={busy}>保存凭证</Btn>
         </div>
       </Card>

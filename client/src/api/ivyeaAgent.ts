@@ -312,7 +312,14 @@ export type AgentModelCatalog = {
 export function providerKeyReady(keyStatus: string): boolean {
   const s = String(keyStatus || "");
   if (!s || s.startsWith("missing:")) return false;
+  // authenticated / authenticated+refresh 是**订阅登录成功**后的取值（Codex、
+  // Claude 订阅、Gemini CLI、Qwen…）。漏掉它们的后果很别扭：系统配置里明明
+  // 显示"已登录"，任务台的模型选择器却把它归到「未配置密钥 · 去登录」，
+  // 点进去又发现已经登录了。
+  // 注意原先连 expired+refresh（**已过期**、靠 refresh token 自动续）都算就绪，
+  // 唯独刚登录成功的不算 —— 纯属遗漏。
   return s === "configured" || s.startsWith("configured:")
+    || s === "authenticated" || s === "authenticated+refresh"
     || s === "none" || s === "aws_sdk" || s === "valid" || s === "expired+refresh";
 }
 

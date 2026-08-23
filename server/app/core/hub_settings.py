@@ -141,7 +141,8 @@ _DEFAULTS: Dict[str, Any] = {
     # MCP backbone (optional — AI-native tools for the analysis agent once an
     # X-Mcp-Key is generated in 领星后台).
     "lingxing_mcp_key": "",
-    "lingxing_mcp_url": "http://openmcp.lingxing.com/mcp-servers/lingxing-mcp",
+    # 必须 https：http 会 302 到 https，而 httpx 默认不跟随重定向（见 lingxing_service._url）
+    "lingxing_mcp_url": "https://openmcp.lingxing.com/mcp-servers/lingxing-mcp",
     # Master enable for the whole integration (panels + automation). Off = the
     # gateway refuses every call. Default off.
     "lingxing_enabled": False,

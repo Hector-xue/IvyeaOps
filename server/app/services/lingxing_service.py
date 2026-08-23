@@ -271,7 +271,17 @@ def _key() -> str:
 
 
 def _url() -> str:
-    return (_hs.get("lingxing_mcp_url") or "").strip()
+    """领星 MCP 地址。**http 会被升到 https。**
+
+    实测（2026-08-23）：``http://openmcp.lingxing.com/...`` 返回 302 跳到 https，
+    而 httpx 默认**不跟随重定向**、POST 更不会 —— 表现是"地址填得对、key 也对，
+    就是连不上"。历史默认值写的正是 http，存量安装库里存的也是 http，
+    所以这里在读的时候纠正：只改默认值救不了已经存了 http 的那些机器。
+    """
+    url = (_hs.get("lingxing_mcp_url") or "").strip()
+    if url.lower().startswith("http://") and "lingxing.com" in url.lower():
+        return "https://" + url[len("http://"):]
+    return url
 
 
 def is_master_enabled() -> bool:

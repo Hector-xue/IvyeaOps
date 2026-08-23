@@ -27,6 +27,7 @@ import {
   ivyeaMcpUpsert,
   ivyeaModelProviders,
   ivyeaSkills,
+  providerKeyReady,
   providerModelId,
   type AgentMcpServer,
   type ConsolePreset,
@@ -593,7 +594,10 @@ function AgentsTab() {
               <div className="cap-card-head">
                 <i>◉</i>
                 <b>{p.label || p.id}</b>
-                {p.key_status === "configured" && <span className="cap-tag">已配置</span>}
+                {/* 订阅登录（Codex / Claude 订阅 / Gemini CLI…）的取值是
+                    authenticated[+refresh]，不是 configured。只认后者的话，
+                    明明登录好了这里却不打标。 */}
+                {providerKeyReady(String(p.key_status || "")) && <span className="cap-tag">已配置</span>}
               </div>
               <div className="cap-card-desc">
                 {shown.length
