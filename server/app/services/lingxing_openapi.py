@@ -21,6 +21,7 @@ import asyncio
 import base64
 import hashlib
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -43,21 +44,70 @@ class LingXingOpenAPIError(RuntimeError):
 
 
 # --- read/write route classification ----------------------------------------
-# Writes carry one of these markers in the path; everything else is a read.
 # The operate switch + triple-review are the real guard — this is the backstop
 # that stops a read-path call from ever hitting a mutating route.
-_WRITE_MARKERS = (
-    "/manage/", "/put", "/create", "/update", "/delete", "/modify", "/save",
-    "/add", "/edit", "/del", "/operate", "/adjust", "/cancel", "/confirm",
-    "/submit", "/audit", "/set", "/remove", "/push", "/sync", "/import",
-)
+#
+# 判定看**最后一段的动词**，不做全路径子串匹配。子串匹配栽过两次，两个方向都栽：
+#
+# * 误判读为写：``/basicOpen/promotionalActivities/manage/list``（查促销活动列表）
+#   撞上 ``/manage/`` —— 但那里的 manage 是"管理促销"这个业务名词，不是动词。
+#   结果整条促销数据在只读通道上被拒。
+# * 漏判写为读：``/basicOpen/adReport/spTarget/archiveNegatives``（归档否定词，
+#   真·写操作）一个标记都没撞上，被当成读。真正拦住它的只有操作开关，
+#   backstop 这一层是空的。
+#
+# 领星的路由都是「命名空间/动作」结构，动作在最后一段且以动词打头
+# （``putSpCampaign`` / ``addKeywords`` / ``archiveNegatives`` / ``list``）。
+# 取最后一段开头那串连续小写字母做**全词**比对：``addressList`` 取到的是
+# "address" 而不是 "add"，天然不会误伤。
+_WRITE_VERBS = frozenset({
+    "put", "post", "create", "add", "update", "modify", "edit", "save", "set",
+    "delete", "del", "remove", "archive", "cancel", "confirm", "submit",
+    "approve", "reject", "operate", "adjust", "enable", "disable", "bind",
+    "unbind", "push", "sync", "import", "upload", "batch",
+})
+
+# 整段就是这些词的（不是词头），一样算写。``/fba/operate/xxx`` 这类把动词放在
+# 中间的路由靠这条兜住。
+_WRITE_SEGMENTS = frozenset({
+    "put", "create", "add", "update", "modify", "edit", "save", "delete",
+    "remove", "archive", "cancel", "operate", "adjust", "import", "upload",
+})
+
+#: 明确登记的写路由 —— ops 只会调这几条写接口（与 ``lingxing_operate.OP_TYPES``
+#: 对应，测试里钉住两者一致）。登记表优先于任何启发式。
+WRITE_ROUTES = frozenset({
+    "/basicOpen/adReport/manage/putSpCampaign",
+    "/basicOpen/adReport/manage/putSpKeyword",
+    "/basicOpen/adReport/manage/putSpTarget",
+    "/basicOpen/adReport/manage/putSpAdGroup",
+    "/basicOpen/adReport/spTarget/addKeywords",
+    "/basicOpen/adReport/spTarget/addNegativeKeywords",
+    "/basicOpen/adReport/spTarget/archiveNegatives",
+})
+
+_LEADING_LOWER = re.compile(r"^[a-z]+")
+
+
+def _norm(route: str) -> str:
+    return "/" + (route or "").strip().strip("/")
 
 
 def classify_route(route: str) -> str:
-    r = (route or "").strip().lower()
+    r = (route or "").strip()
     if not r:
         return "unknown"
-    return "write" if any(m in r for m in _WRITE_MARKERS) else "read"
+    if _norm(r) in WRITE_ROUTES:
+        return "write"
+    segments = [s for s in r.split("/") if s]
+    if not segments:
+        return "unknown"
+    if any(s.lower() in _WRITE_SEGMENTS for s in segments):
+        return "write"
+    head = _LEADING_LOWER.match(segments[-1])
+    if head and head.group(0) in _WRITE_VERBS:
+        return "write"
+    return "read"
 
 
 # --- signing ----------------------------------------------------------------

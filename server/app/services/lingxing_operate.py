@@ -432,6 +432,93 @@ async def review_intent(intent: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # --- ticket lifecycle -------------------------------------------------------
+# --- 直调「快车道」 ----------------------------------------------------------
+# 驾驶舱要能顺手改一个预算/竞价。走完整的三重 LLM 复核要十几秒，那就没人会用，
+# 于是运营又回到亚马逊后台去改 —— 一个没人用的安全流程，安全性等于零。
+#
+# 所以给**小幅止血动作**开一条快车道：跳过 LLM 复核，直接进"等人确认"。
+# 三条约束是硬的，写在代码里，任何调用方都绕不过：
+#
+#   ① **方向必须是止血**：数值只能调小，状态只能转 paused。
+#      放量（提预算 / 加 bid / enable）永远走全复核 —— 花钱的方向上，
+#      慢十几秒不算代价。
+#   ② **幅度 ≤ fast_lane_max_pct**（默认 15%）。
+#   ③ **只在「逐项确认」档生效**。自主执行档下没有人看着，复核就是最后一道闸，
+#      那时候省掉它等于无人监督地改线上数据。
+#
+# 没被跳过的只有确定性护栏（check_guardrails）和人工确认 —— 这两道**一道没少**，
+# 回滚快照照常在执行前抓。
+_STANCH_STATE = "paused"
+
+
+def fast_lane_decision(intent: Dict[str, Any]) -> Dict[str, Any]:
+    """判断这个意图能不能免 LLM 复核。返回 {eligible, reason, checks}。"""
+    checks: List[Dict[str, Any]] = []
+
+    def add(name: str, ok: bool, detail: str) -> bool:
+        checks.append({"name": name, "ok": bool(ok), "detail": detail})
+        return bool(ok)
+
+    cfg = _hs.load()
+    ok = add("switch", bool(cfg.get("lingxing_fast_lane_enabled")),
+             "快车道已开启" if cfg.get("lingxing_fast_lane_enabled") else "快车道未开启（默认关）")
+    # ③ 只在「逐项确认」档生效
+    ok = add("human_gate", bool(cfg.get("lingxing_operate_require_human", True)),
+             "逐项确认档，人还在闸口上" if cfg.get("lingxing_operate_require_human", True)
+             else "自主执行档：无人确认时不能再省掉复核") and ok
+
+    op = OP_TYPES.get(intent.get("op_type") or "")
+    ok = add("op_supported", bool(op) and op["category"] != "add",
+             "改数值/状态类操作" if (op and op["category"] != "add")
+             else "加词/否词不走快车道（没有幅度可度量）") and ok
+    if not op or op["category"] == "add":
+        return {"eligible": False, "reason": "操作类型不支持快车道", "checks": checks}
+
+    nf = op["num_field"]
+    change = intent.get("change") or {}
+    before = intent.get("before") or {}
+    new_state = change.get("state")
+
+    # ① 方向必须是止血
+    direction_ok, direction_detail = False, "没有可判定方向的改动"
+    if new_state and new_state != _STANCH_STATE:
+        direction_ok, direction_detail = False, f"状态改为 {new_state} 属于放量，走全复核"
+    elif change.get(nf) is not None and before.get(nf) not in (None, ""):
+        try:
+            old, new = float(before[nf]), float(change[nf])
+            direction_ok = new < old
+            direction_detail = (f"{op['num_label']} {old} → {new}（调小，止血）" if direction_ok
+                                else f"{op['num_label']} {old} → {new}（不是调小）")
+        except (TypeError, ValueError):
+            direction_ok, direction_detail = False, "数值无法比较"
+    elif new_state == _STANCH_STATE:
+        direction_ok, direction_detail = True, "暂停投放（止血）"
+    elif change.get(nf) is not None:
+        direction_ok, direction_detail = False, "拿不到当前值，无法确认是调小"
+    ok = add("stanch_direction", direction_ok, direction_detail) and ok
+
+    # ② 幅度封顶
+    max_pct = float(cfg.get("lingxing_fast_lane_max_pct") or 15)
+    pct_ok, pct_detail = True, "仅状态变更，无幅度"
+    if change.get(nf) is not None and before.get(nf):
+        try:
+            old, new = float(before[nf]), float(change[nf])
+            pct = abs(new - old) / old * 100 if old else 999
+            pct_ok = pct <= max_pct
+            pct_detail = f"幅度 {pct:.1f}% {'≤' if pct_ok else '>'} 上限 {max_pct:g}%"
+        except (TypeError, ValueError, ZeroDivisionError):
+            pct_ok, pct_detail = False, "无法计算幅度"
+    ok = add("magnitude", pct_ok, pct_detail) and ok
+
+    failed = [c["detail"] for c in checks if not c["ok"]]
+    return {
+        "eligible": bool(ok),
+        "reason": "小幅止血动作，免 AI 复核，仍需你点确认" if ok else "；".join(failed),
+        "checks": checks,
+        "max_pct": max_pct,
+    }
+
+
 def _verdict_status(reviewed_ok: bool, guard_ok: bool) -> str:
     if not guard_ok:
         return "guardrail_blocked"
@@ -486,7 +573,15 @@ async def _process_ticket(tid: str) -> None:
             t["status"] = "guardrail_blocked"
             _save(t)
             return
+        fast = fast_lane_decision(intent)
+        t["fast_lane"] = fast
         _save(t)
+        if fast["eligible"]:
+            # 护栏已过 + 方向是止血 + 幅度小 + 还得人点确认 → 不再花十几秒过 LLM。
+            t["reviews"] = None
+            t["status"] = "awaiting_human"
+            _save(t)
+            return
         rev = await review_intent(intent)
         t["reviews"] = rev
         t["status"] = _verdict_status(rev["approved"], guard["ok"])
@@ -506,6 +601,7 @@ async def create_ticket(intent: Dict[str, Any], source: str = "manual") -> Dict[
         "id": uuid.uuid4().hex[:12], "created_at": _now(), "source": source,
         "status": "reviewing", "intent": intent, "reviews": None, "guardrail": None,
         "snapshot": None, "result": None, "decided_by": "", "error": "",
+        "fast_lane": None,
     }
     _save(t)
     asyncio.create_task(_process_ticket(t["id"]), name=f"lingxing-ticket-{t['id']}")
