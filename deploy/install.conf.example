@@ -34,9 +34,6 @@ CPU_ALERT_LOG=/var/log/IvyeaOps/cpu-alert.log
 # claudecodeui at https://${SERVER_NAME}/cli/
 CLAUDECODEUI_PORT=5175
 
-# amazon-image-workflow web at /imgflow and API at /imgflow-api/
-IMGFLOW_WEB_PORT=3000
-IMGFLOW_API_PORT=3001
 
 # skill-studio static dist served at /skill-studio/
 SKILL_STUDIO_DIST=/var/www/skill-studio

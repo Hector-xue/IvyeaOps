@@ -6,6 +6,16 @@
 
 ---
 
+## [Unreleased]
+
+### 移除
+
+- **删掉 `amazon-image-workflow/` 子项目**。v1.12.13 起 Listing 采集已完全不依赖它
+  （本机 curl → 本机无头浏览器 → Sorftime），仓库里没有任何代码再调用，留着只会让人
+  以为还要装 Docker。发行包因此也不再携带这套 Express + Next.js + Prisma 的源码。
+  连带清掉：服务监控里那两条进程条目、nginx 模板里的 `/imgflow`、`/imgflow-api` 三个
+  location 与 `IMGFLOW_WEB_PORT` / `IMGFLOW_API_PORT` 两个部署变量。
+
 ## [v1.12.13] - 2026-08-23
 
 ### 变更
