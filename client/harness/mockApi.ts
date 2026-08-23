@@ -472,7 +472,12 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
     chat: { chat_id: "oc_demo7a0933a4af7e82980367a", configured: true },
     webhook: { configured: false, url_masked: "" },
     gates: { allowed_senders: [], allowed_chats: [] },
-    relay: { state: "active", running: true, detail: "feishu-ivyea-relay.service 运行中" },
+    // ?relay=off —— 装机第一天的样子：接收端没装、触发器没启用。
+    // 全绿的话那两个「一键安装」按钮根本渲染不到，等于没验。
+    relay: new URLSearchParams(location.search).get("relay") === "off"
+      ? { state: "inactive", running: false, sdk: false, can_install: true,
+          detail: "接收端未运行 —— 先装 SDK：pip install \"ivyea-agent[feishu]\"，再 `ivyea relay install`" }
+      : { state: "active", running: true, sdk: true, detail: "ivyea-feishu-relay.service 运行中" },
     patrol: {
       jobs: [{ name: "patrol-l1", task: "store_l1", enabled: true, every_minutes: 60,
                channel: "feishu_app", notify: true, scope: "all", sids: [], sid: "",
@@ -490,23 +495,37 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
         monthly: { task: "store_monthly", label: "每月月报", every_minutes: 43200,
                    desc: "本月 vs 上月，同样只回顾" },
       },
-      timer: { state: "active", running: true, detail: "ivyea-schedule.timer 运行中" },
+      timer: new URLSearchParams(location.search).get("relay") === "off"
+        ? { state: "inactive", running: false, can_install: true,
+            detail: "ivyea-schedule.timer 未启用 —— 注册的 3 个任务不会被触发" }
+        : { state: "active", running: true, detail: "ivyea-schedule.timer 运行中（3 个任务在册）" },
     },
     probe: { ran: false },
     channels: {
       text_alert: { ready: true, blockers: [], note: "" },
       cards: { ready: true, blockers: [], note: "" },
       approval: { ready: false, blockers: ["审批白名单为空 —— 按安全默认，此时没有人能点按钮"], note: "" },
-      chat: { ready: true, blockers: [], note: "" },
-      patrol_push: { ready: true, blockers: [], note: "" },
+      chat: new URLSearchParams(location.search).get("relay") === "off"
+        ? { ready: false, blockers: ["relay 未运行"], note: "" }
+        : { ready: true, blockers: [], note: "" },
+      patrol_push: new URLSearchParams(location.search).get("relay") === "off"
+        ? { ready: false, blockers: ["触发器未启用，注册的巡检任务不会被触发"], note: "" }
+        : { ready: true, blockers: [], note: "" },
     },
     steps: [
       { key: "app", title: "创建自建应用，填 App ID / App Secret", done: true, detail: "cli_de…5d", hint: "" },
       { key: "permission", title: "开权限并发布版本", done: false, detail: "未验证", hint: "需要 im:message 等权限" },
       { key: "chat", title: "选一个接收会话（群）", done: true, detail: "oc_demo7a0933a4af7e82980367a", hint: "" },
       { key: "whitelist", title: "指定谁能点审批按钮", done: false, detail: "空 —— 按安全默认，没有人能点", hint: "" },
-      { key: "relay", title: "启动长连接接收端 relay", done: true, detail: "feishu-ivyea-relay.service 运行中", hint: "" },
-      { key: "patrol", title: "打开店铺巡检并推到飞书", done: true, detail: "1 条任务在推", hint: "" },
+      ...(new URLSearchParams(location.search).get("relay") === "off"
+        ? [{ key: "relay", title: "启动长连接接收端 relay", done: false,
+             detail: "接收端未运行", hint: "不装的话卡片按钮点了不会有任何反应" },
+           { key: "patrol", title: "打开店铺巡检并推到飞书", done: false,
+             detail: "触发器未启用", hint: "" }]
+        : [{ key: "relay", title: "启动长连接接收端 relay", done: true,
+             detail: "ivyea-feishu-relay.service 运行中", hint: "" },
+           { key: "patrol", title: "打开店铺巡检并推到飞书", done: true,
+             detail: "1 条任务在推", hint: "" }]),
       { key: "test", title: "发一条测试消息确认真能收到", done: false, detail: "未测试", hint: "" },
     ],
     last_test_at: 0,

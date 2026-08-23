@@ -285,12 +285,12 @@ export interface FeishuStatus {
   chat?: { chat_id: string; configured: boolean };
   webhook?: { configured: boolean; url_masked: string };
   gates?: { allowed_senders: string[]; allowed_chats: string[] };
-  relay?: { state: string; running: boolean | null; detail: string };
+  relay?: { state: string; running: boolean | null; detail: string; sdk?: boolean; can_install?: boolean };
   patrol?: {
     jobs: FeishuPatrolJob[]; any_enabled: boolean; pushing_to_feishu: number;
     // 各档的默认间隔与说明由 agent 给（唯一真源），前端不再写第二份默认值
     defaults: Record<string, { task: string; label: string; desc: string; every_minutes: number }>;
-    timer: { state: string; running: boolean | null; detail: string };
+    timer: { state: string; running: boolean | null; detail: string; can_install?: boolean };
   };
   probe?: { ran: boolean; ok?: boolean; error?: string; chat_count?: number };
   channels?: Record<string, FeishuChannel>;
@@ -313,6 +313,9 @@ export interface FeishuActionResp {
   members?: { open_id: string; name: string }[];
   message_id?: string;
   created?: string[]; replaced?: string[];
+  // install_relay / install_timer 的返回
+  steps?: { cmd: string; ok: boolean; detail: string }[];
+  hint?: string;
   patrol?: FeishuStatus["patrol"];
 }
 
