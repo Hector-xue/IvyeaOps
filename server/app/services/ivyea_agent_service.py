@@ -468,8 +468,11 @@ def upgrade_agent(progress=None) -> dict[str, Any]:
         # **不再加 --no-deps**（原来是为了快）：版本之间会新增依赖——v1.13.0 就加了
         # Pillow 和 rapidocr-onnxruntime。跳过依赖的话，升级"成功"了但新功能
         # 装完即坏，而且坏得很安静（本地视觉探测到缺 Pillow 就直接判不可用）。
+        # 带 [feishu] extra：飞书接收端的 SDK。少了它，用户配完飞书、卡片也收到了，
+        # 一点按钮什么都不发生 —— 而且不报错。装了它，接收端跟着 serve 自动起来。
         install = _run_step([py, "-m", "pip", "install", "--no-cache-dir",
-                             "--force-reinstall", f"git+{repo}@{ref}"], timeout=900.0)
+                             "--force-reinstall",
+                             f"ivyea-agent[feishu] @ git+{repo}@{ref}"], timeout=900.0)
     _p("restarting", 80)
     _run_step([cli, "self", "service-stop"], timeout=20.0)   # stop old serve
     restart = start_local_service()                          # start fresh (new code)
