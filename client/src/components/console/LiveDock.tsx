@@ -18,6 +18,7 @@
  * 比没有更糟，用户会拿它当承诺。
  */
 import { useState } from "react";
+import Icon from "../Icon";
 import IvyGrow from "./IvyGrow";
 import { formatMs, type ConsoleStep } from "../../lib/stepLabels";
 import type { RailTodo } from "./ArtifactRail";
@@ -32,6 +33,20 @@ export type LiveDockProps = {
   todos: RailTodo[];
   onStop?: () => void;
 };
+
+/**
+ * 长路径/长命令**从中间省略**。
+ *
+ * 这一行只有一行的位置，而尾部截断（`/etc/nginx/conf.d/ops.ivy…`）恰好把最有
+ * 信息量的那一半 —— 文件名 —— 切掉了，读者只知道"在动 /etc 里的某个东西"。
+ * 留头留尾，省略中间。
+ */
+function middleEllipsis(text: string, max = 56): string {
+  const flat = String(text || "").replace(/\s+/g, " ").trim();
+  if (flat.length <= max) return flat;
+  const tail = Math.max(12, Math.floor(max * 0.55));
+  return flat.slice(0, max - tail - 1) + "…" + flat.slice(flat.length - tail);
+}
 
 const isDone = (t: RailTodo) => String(t.status || "") === "completed";
 const isDoing = (t: RailTodo) => String(t.status || "") === "in_progress";
@@ -75,11 +90,17 @@ export default function LiveDock({
               aria-expanded={open}
               title={open ? "收起计划" : "展开 Agent 的计划"}>
         <span className={"ld-icon" + (now.thinking ? " ld-think" : " ld-work")}>
-          {now.thinking ? <IvyGrow /> : now.icon}
+          {/* `step.icon` 存的是**图标名**（"tool-read"），不是字形。直接塞进 JSX
+              会把这几个字母画在卡片上、压着标题 —— 用户截图里那句"文字有些错乱"
+              就是它。活动行那边一直是 <Icon name={step.icon}/>，这里对齐。 */}
+          {now.thinking ? <IvyGrow /> : <Icon name={now.icon || "step-tool"} size={14} />}
         </span>
         <span className="ld-now">
           <span className="ld-label">{now.label}</span>
-          {now.detail && <span className="ld-detail">{now.detail}</span>}
+          {/* detail 常常是一整条绝对路径或一整行命令。给 title，行内截断。 */}
+          {now.detail && (
+            <span className="ld-detail" title={now.detail}>{middleEllipsis(now.detail)}</span>
+          )}
         </span>
         {/* 下一步：Agent 自己排的队，没有就整块不出现。 */}
         {next?.content && (
@@ -89,10 +110,17 @@ export default function LiveDock({
           </span>
         )}
         <span className="ld-tail">
-          {todos.length > 0 && <span className="ld-count">{done}/{todos.length}</span>}
+          {todos.length > 0 && (
+            <span className="ld-count" title={`计划完成 ${done}/${todos.length}`}>
+              <span className="ld-bar"><i style={{ width: `${Math.round(done / todos.length * 100)}%` }} /></span>
+              {done}/{todos.length}
+            </span>
+          )}
           {realSteps > 0 && <span>第 {realSteps} 步</span>}
-          {elapsedMs !== undefined && <span>{formatMs(elapsedMs)}</span>}
-          {todos.length > 0 && <span className="ld-caret">{open ? "▾" : "▸"}</span>}
+          {elapsedMs !== undefined && <span className="ld-ms">{formatMs(elapsedMs)}</span>}
+          {todos.length > 0 && (
+            <span className="ld-caret"><Icon name={open ? "chev-up" : "chev-down"} size={13} /></span>
+          )}
         </span>
       </button>
       {onStop && (
@@ -101,14 +129,20 @@ export default function LiveDock({
         </button>
       )}
       {open && todos.length > 0 && (
-        <ol className="ld-plan scroll-thin">
-          {todos.map((t, i) => (
-            <li key={i} className={isDone(t) ? "ld-t-done" : isDoing(t) ? "ld-t-doing" : "ld-t-todo"}>
-              <i>{isDone(t) ? "✓" : isDoing(t) ? "▶" : "○"}</i>
-              <span>{t.content || "（这条计划没写内容）"}</span>
-            </li>
-          ))}
-        </ol>
+        <div className="ld-plan-wrap">
+          {/* 展开区直接接一列待办会显得突兀，而且看不出这列东西是谁排的。 */}
+          <div className="ld-plan-head">Agent 排的计划</div>
+          <ol className="ld-plan scroll-thin">
+            {todos.map((t, i) => (
+              <li key={i} className={isDone(t) ? "ld-t-done" : isDoing(t) ? "ld-t-doing" : "ld-t-todo"}>
+                <i>{isDone(t) ? <Icon name="step-ok" size={12} strokeWidth={2.6} />
+                              : isDoing(t) ? <IvyGrow />
+                              : <span className="ld-dot" />}</i>
+                <span>{t.content || "（这条计划没写内容）"}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
       )}
     </div>
   );

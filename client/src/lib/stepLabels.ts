@@ -60,6 +60,11 @@ const TOOL_VERBS: Record<string, string> = {
   web_search: "联网搜索", web_fetch: "抓取网页",
   knowledge_search: "查知识库", skill_search: "查技能", recall: "回忆记忆",
   remember: "记住结论",
+  // 记忆那一组此前一个都没映射 —— 界面上显示的是英文原名，还被这一列的定宽
+  // 截成 "memory..."（用户截图里就是它）。定宽是为了让整块对齐，不能因为一个
+  // 没配文案的工具去改宽度；缺的是文案，补文案。
+  memory_write: "记住", memory_search: "翻记忆", memory_read: "读记忆",
+  core_memory_view: "看核心记忆", core_memory_edit: "改核心记忆",
   todo_write: "更新计划", progress_update: "汇报进度", self_critique: "自我复核",
   dispatch_subagent: "派发子任务",
   run_patrol: "跑巡检", run_account_diagnosis: "账户诊断", propose_actions: "生成调整建议",
@@ -106,6 +111,8 @@ const TOOL_ICONS: Record<string, string> = {
   glob: "tool-files", list_dir: "tool-files",
   knowledge_search: "step-knowledge", skill_search: "step-skill",
   recall: "tool-memory", remember: "tool-memory",
+  memory_write: "tool-memory", memory_search: "tool-memory", memory_read: "tool-memory",
+  core_memory_view: "tool-memory", core_memory_edit: "tool-memory",
   todo_write: "step-plan", progress_update: "step-plan", self_critique: "step-plan",
 };
 

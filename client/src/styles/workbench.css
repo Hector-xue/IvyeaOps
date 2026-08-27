@@ -3359,7 +3359,7 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
   background:color-mix(in srgb,var(--ivy) 7%,var(--bg1));
   animation:ld-in .2s var(--ease)}
 @keyframes ld-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
-.ld-main{flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:6px 10px;
+.ld-main{flex:1;min-width:0;display:flex;align-items:center;gap:9px;padding:8px 12px;
   background:transparent;border:none;cursor:pointer;text-align:left;
   font-family:var(--font);font-size:var(--fs-10);color:var(--t2)}
 .ld-icon{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
@@ -3368,27 +3368,42 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .ld-work{color:var(--t2)}
 /* 「在干什么」可以被挤窄，但**永远保留一段**：它是这一条存在的理由。 */
 .ld-now{display:flex;align-items:baseline;gap:6px;min-width:6em;flex:1 1 auto;overflow:hidden}
-.ld-label{color:var(--t);white-space:nowrap;flex-shrink:0}
+.ld-label{color:var(--t);white-space:nowrap;flex-shrink:0;font-weight:500}
 .ld-detail{color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 /* 「接下来」先被挤掉 —— 它是加分项，当前状态才是必需品。 */
 .ld-next{display:flex;align-items:baseline;gap:5px;min-width:0;flex:0 1 auto;overflow:hidden;
   color:var(--ivy)}
 .ld-arrow{flex-shrink:0;opacity:.75}
 .ld-next-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.ld-tail{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0;
-  padding-left:8px;color:var(--t3);font-size:var(--fs-95);white-space:nowrap}
-.ld-count{color:var(--ivy)}
-.ld-caret{opacity:.8}
-.ld-stop{flex-shrink:0;margin:6px 8px 6px 0;padding:0 12px;border-radius:var(--r);
+.ld-tail{margin-left:auto;display:flex;align-items:center;gap:10px;flex-shrink:0;
+  padding-left:10px;color:var(--t3);font-size:var(--fs-95);white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+/* 计划完成度：数字旁边给一小条进度。一眼能看出"快完了"还是"刚开头"，
+   而 3/7 这个数要读一下才知道。 */
+.ld-count{display:inline-flex;align-items:center;gap:6px;color:var(--ivy)}
+.ld-bar{display:inline-block;width:34px;height:3px;border-radius:2px;
+  background:color-mix(in srgb,var(--ivy) 22%,transparent);overflow:hidden}
+.ld-bar i{display:block;height:100%;border-radius:2px;background:var(--ivy);
+  transition:width var(--dur) var(--ease)}
+/* 用时用等宽数字，否则每 250ms 刷一次会让整条尾巴左右抖。 */
+.ld-ms{font-variant-numeric:tabular-nums;min-width:4.2em;text-align:right}
+.ld-caret{display:inline-flex;align-items:center;opacity:.75}
+.ld-stop{flex-shrink:0;margin:8px 10px 8px 0;padding:0 13px;border-radius:var(--r);
   border:1px solid var(--b2);background:var(--bg2);color:var(--t2);cursor:pointer;
   font-family:var(--font);font-size:var(--fs-95)}
 .ld-stop:hover{border-color:var(--red);color:var(--red)}
 /* 展开的计划。给个上限并自己滚 —— 20 条待办不能把输入框顶出屏幕。 */
-.ld-plan{flex-basis:100%;margin:0;padding:4px 12px 8px 12px;list-style:none;
-  max-height:168px;overflow-y:auto;border-top:1px solid var(--b);
-  font-size:var(--fs-95);line-height:1.75}
-.ld-plan li{display:flex;gap:8px;align-items:baseline}
-.ld-plan i{font-style:normal;flex-shrink:0;width:1em;text-align:center}
+.ld-plan-wrap{flex-basis:100%;border-top:1px solid color-mix(in srgb,var(--ivy) 20%,var(--b));
+  background:color-mix(in srgb,var(--ivy) 4%,transparent)}
+.ld-plan-head{padding:7px 12px 3px 12px;color:var(--t3);font-size:var(--fs-9);
+  letter-spacing:.02em}
+.ld-plan{margin:0;padding:0 12px 9px 12px;list-style:none;
+  max-height:168px;overflow-y:auto;font-size:var(--fs-95);line-height:1.8}
+.ld-plan li{display:flex;gap:9px;align-items:flex-start;padding:1px 0}
+.ld-plan i{font-style:normal;flex-shrink:0;width:1.1em;height:1.5em;
+  display:inline-flex;align-items:center;justify-content:center}
+/* 未开始那条用一个空心点，别用字形 ○ —— 字形在不同字体下大小差得离谱。 */
+.ld-dot{width:6px;height:6px;border-radius:50%;border:1.5px solid currentColor;opacity:.5}
 .ld-t-done{color:var(--t3);text-decoration:line-through;text-decoration-color:var(--b2)}
 .ld-t-doing{color:var(--t)}
 .ld-t-doing i{color:var(--ivy)}
@@ -3499,6 +3514,15 @@ button.af-line:hover{background:var(--bg2)}
 
 .cc-answer{font-size:var(--fs-12);line-height:1.8;color:var(--t2);border:1px solid var(--b);
   border-radius:var(--r);background:var(--bg1);padding:10px 13px}
+/* 旁白段 —— 一轮里"边做边说"的那几句（见 components/console/TurnBody）。
+   **自成一类，不复用 .cc-answer**：安静/琉璃两套皮肤对那个类有 !important 的
+   去盒子规则，挂上去自己的样式会被整段抹掉（实测 computed 是 0px/transparent）。
+   形态上只留一条引线：它是过程里的旁白，不是这一轮的结论。 */
+.cc-narration{font-size:var(--fs-115);line-height:1.75;color:var(--t2);
+  padding:1px 0 2px 12px;margin:2px 0 4px;
+  border-left:2px solid color-mix(in srgb,var(--ivy) 30%,var(--bg1))}
+.cc-narration>*:first-child{margin-top:0}
+.cc-narration>*:last-child{margin-bottom:0}
 .cc-answer-error{color:var(--red);border-color:rgba(248,113,113,.35);white-space:pre-wrap}
 /* 「只读档挡下了写操作」的提示。用琥珀色不用红色：这不是故障，是档位选择。 */
 .cc-blocked{display:flex;align-items:center;gap:9px;flex-wrap:wrap;

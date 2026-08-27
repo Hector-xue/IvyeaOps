@@ -682,6 +682,28 @@ def chat_session(session_id: str,
     return _call(svc.chat_session, session_id, turns, before)
 
 
+@router.get("/chat/sessions/{session_id}/live")
+def chat_session_live(session_id: str,
+                      from_seq: int = Query(0, alias="from", ge=0),
+                      info: dict[str, Any] = Depends(require_user_info)) -> StreamingResponse:
+    """订阅这条会话正在跑的那一轮。
+
+    任务台切走再切回来、刷新、甚至换台机器打开同一条会话，都从这里把执行过程接上
+    —— 此前那份进度只活在发起它的那个标签页的内存里，页面一卸载就没了，用户看到的
+    是"只剩自己发的那句话，后台明明在跑却什么都看不到"。
+
+    **要鉴权**：这条流里跑的是整轮对话的正文和执行细节。
+    """
+    principal, is_admin = _principal_info(info)
+    if not console_sessions.can_access(session_id, principal, is_admin):
+        raise HTTPException(status_code=403, detail="这条会话不属于你")
+    return StreamingResponse(
+        svc.chat_session_live(session_id, from_seq),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @router.delete("/chat/sessions/{session_id}")
 def chat_session_delete(session_id: str) -> dict[str, Any]:
     return _call(svc.chat_session_delete, session_id)
