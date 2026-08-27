@@ -664,7 +664,7 @@ export type IvyeaStreamHandlers = {
      */
     onReasoning?: (data: { text?: string }) => void;
     /**
-     * 接进一条**已经在跑**的轮次时，回放开始（agent ≥ v1.16.3）。
+     * 接进一条**已经在跑**的轮次时，回放开始（agent ≥ v1.15.17）。
      * data.running 说这一轮还在不在跑，seq 是回放到哪一条 —— 断线重连时带回去。
      */
     onLiveBegin?: (data: { running?: boolean; seq?: number; dropped?: number;
@@ -791,7 +791,7 @@ export async function ivyeaChatSessions(limit = 30) {
  * 别改回按条数取：一次提问能产生几十条消息，按条切会把用户自己发的那句话挤出窗口 ——
  * 这正是"刷新之后我发的指令不见了"的成因。
  */
-/** 这条会话现在有没有一轮正在跑（agent ≥ v1.16.3）。老 agent 不回报 → undefined。 */
+/** 这条会话现在有没有一轮正在跑（agent ≥ v1.15.17）。老 agent 不回报 → undefined。 */
 export type IvyeaLiveStatus = { running?: boolean; seq?: number; started_ms?: number };
 
 export async function ivyeaChatSession(
