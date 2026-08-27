@@ -9,6 +9,7 @@ import asyncio
 import threading as _threading
 import time as _time
 from typing import Annotated, Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
@@ -1094,6 +1095,129 @@ def agent_mcp_servers() -> dict[str, Any]:
         "claude_servers": agent_mcp.claude_servers(),
         "managed": sorted(agent_mcp.MANAGED_SERVERS),
     }
+
+
+# ── 记忆管理 ────────────────────────────────────────────────────────────────
+#
+# 记忆里装的是"这个人是谁、他定过什么规矩、agent 从他身上推断出了什么"。
+# 在此之前这些只能从命令行看 —— 看不见就不敢信，推断错了也没地方改。
+#
+# 权限分两档：**读要登录、写要管理员**。记忆含个人信息与经营数据，
+# 而写入会直接改变 agent 以后的行为（核心记忆每轮都进上下文）。
+
+
+class MemoryWriteBody(BaseModel):
+    operation: str = "add"
+    name: str = ""
+    content: str = ""
+    category: str = ""
+    description: str = ""
+    keywords: str = ""
+    links: str = ""
+    scope: str = ""
+    valid_from: str = ""
+    valid_until: str = ""
+
+
+class MemoryNameBody(BaseModel):
+    name: str = ""
+
+
+class MemoryCoreBody(BaseModel):
+    block: str = ""
+    operation: str = "append"
+    content: str = ""
+    old: str = ""
+
+
+class MemoryPruneBody(BaseModel):
+    days: int = 0
+    dry_run: bool = True
+
+
+@router.get("/memory/list")
+def memory_list(scope: str = "", include_expired: bool = False,
+                _user: str = Depends(require_user)) -> dict[str, Any]:
+    return _call(svc.request_json, "GET",
+                 f"/v1/memory/list?scope={quote(scope)}"
+                 f"&include_expired={'1' if include_expired else '0'}")
+
+
+@router.get("/memory/get")
+def memory_get(name: str, category: str = "",
+               _user: str = Depends(require_user)) -> dict[str, Any]:
+    return _call(svc.request_json, "GET",
+                 f"/v1/memory/get?name={quote(name)}&category={quote(category)}")
+
+
+@router.get("/memory/history")
+def memory_history(name: str, category: str = "",
+                   _user: str = Depends(require_user)) -> dict[str, Any]:
+    return _call(svc.request_json, "GET",
+                 f"/v1/memory/history?name={quote(name)}&category={quote(category)}")
+
+
+@router.get("/memory/pending")
+def memory_pending(_user: str = Depends(require_user)) -> dict[str, Any]:
+    return _call(svc.request_json, "GET", "/v1/memory/pending")
+
+
+@router.get("/memory/stats")
+def memory_stats(_user: str = Depends(require_user)) -> dict[str, Any]:
+    return _call(svc.request_json, "GET", "/v1/memory/stats")
+
+
+@router.get("/memory/core")
+def memory_core(block: str = "", _user: str = Depends(require_user)) -> dict[str, Any]:
+    return _call(svc.request_json, "GET", f"/v1/memory/core?block={quote(block)}")
+
+
+@router.get("/memory/episodes")
+def memory_episodes(query: str = "", limit: int = 30,
+                    _user: str = Depends(require_user)) -> dict[str, Any]:
+    return _call(svc.request_json, "GET",
+                 f"/v1/memory/episodes?query={quote(query)}&limit={int(limit)}")
+
+
+@router.post("/memory/write")
+def memory_write(body: MemoryWriteBody,
+                 _admin: str = Depends(require_admin)) -> dict[str, Any]:
+    """人工增改删。写进去的会被标成"用户亲口说的"（满置信），
+    而且从此 agent 的反思不许再改它。"""
+    return _call(svc.request_json, "POST", "/v1/memory/write", _payload(body))
+
+
+@router.post("/memory/confirm")
+def memory_confirm(body: MemoryNameBody,
+                   _admin: str = Depends(require_admin)) -> dict[str, Any]:
+    """确认一条推断。这是**唯一**能让置信度越过"不确定线"的路径 ——
+    自动攒够观察次数也只是转正，仍然标着推断。"""
+    return _call(svc.request_json, "POST", "/v1/memory/confirm", _payload(body))
+
+
+@router.post("/memory/reject")
+def memory_reject(body: MemoryNameBody,
+                  _admin: str = Depends(require_admin)) -> dict[str, Any]:
+    return _call(svc.request_json, "POST", "/v1/memory/reject", _payload(body))
+
+
+@router.post("/memory/core")
+def memory_core_write(body: MemoryCoreBody,
+                      _admin: str = Depends(require_admin)) -> dict[str, Any]:
+    """改核心记忆。它每轮都进上下文，改错的影响面比普通记忆大得多。"""
+    return _call(svc.request_json, "POST", "/v1/memory/core", _payload(body))
+
+
+@router.post("/memory/reflect")
+def memory_reflect(_admin: str = Depends(require_admin)) -> dict[str, Any]:
+    return _call(svc.request_json, "POST", "/v1/memory/reflect", {"force": True})
+
+
+@router.post("/memory/prune")
+def memory_prune(body: MemoryPruneBody,
+                 _admin: str = Depends(require_admin)) -> dict[str, Any]:
+    """清理过期对话记录。**不可逆**，所以默认 dry_run，且 agent 侧首次真删前会备份 DB。"""
+    return _call(svc.request_json, "POST", "/v1/memory/prune", _payload(body))
 
 
 @router.post("/mcp/servers")

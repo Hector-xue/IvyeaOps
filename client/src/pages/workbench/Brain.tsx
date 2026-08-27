@@ -4,6 +4,7 @@ import { useConfirm } from "../../components/ConfirmDialog";
 import BrainMarkdown from "./BrainMarkdown";
 import SheetSelect from "../../components/SheetSelect";
 import KnowledgeGovernancePanel from "./KnowledgeGovernance";
+import MemoryPanel from "./MemoryPanel";
 import {
   brainChatStatus,
   brainChatMigrateToAgent,
@@ -53,7 +54,7 @@ function toChatMessages(sid: string, messages: { role: string; content: string }
     .map((m, i) => ({ id: `${sid}-${i}`, role: m.role, content: m.content || "" }));
 }
 
-type Tab = "governance" | "upload" | "search" | "pages" | "templates" | "settings";
+type Tab = "governance" | "upload" | "search" | "pages" | "templates" | "settings" | "memory";
 
 // 按**来这一页要干什么**排，不按功能清单排：
 //   搜索 = 找一条知识（最高频，多数人来就是为了这个）
@@ -68,6 +69,9 @@ const PRIMARY_TABS: { key: Tab; label: string }[] = [
   { key: "pages", label: "页面" },
   { key: "upload", label: "上传" },
   { key: "governance", label: "治理中心" },
+  // 记忆和知识是两回事，但都属于"这个大脑里装了什么"，所以同页而不同标签：
+  // 知识是**外部事实**（有来源、要引证），记忆是**关于你的事**（有溯源、要你确认）。
+  { key: "memory", label: "记忆" },
 ];
 
 // 空状态的 Amazon 运营快捷提问（点击直接发送）
@@ -497,6 +501,8 @@ const copyMessage = (m: ChatMsg) => {
       </div>
 
       {tab === "governance" && <KnowledgeGovernancePanel />}
+
+      {tab === "memory" && <MemoryPanel />}
 
 
       {tab === "upload" && (

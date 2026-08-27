@@ -422,6 +422,57 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
     ],
   }],
   ["/ivyea-agent/console/presets", { ok: true, presets: [] }],
+
+  // ── 记忆面板 ──────────────────────────────────────────────────────────────
+  // 假数据要**覆盖每一种视觉分支**，否则验证台看着好看、真实数据一来就露馅：
+  // 推断/你说过的、不常用（已退出常驻目录）、已过期、待确认的观察次数。
+  ["/ivyea-agent/memory/pending", {
+    ok: true, total: 2,
+    pending: [
+      { name: "汇报偏好", category: "feedback", description: "从行为推断的：他似乎更想先看结论再看过程",
+        body: "多次在长回答后要求「先说结论」。", source: "reflection", confidence: 0.49,
+        uncertain: true, evidence: "3 条支撑 · 取自 2026-08-01~08-14 的 120 条经历",
+        sightings: 2, promote_after: 3 },
+      { name: "发版节奏", category: "user", description: "（反思建议修改一条你亲口定的规矩，需你确认）",
+        body: "他习惯开发完就发版。", source: "reflection", confidence: 0.56, uncertain: true,
+        evidence: "3 条支撑", sightings: 1, promote_after: 3 },
+    ],
+  }],
+  ["/ivyea-agent/memory/list", {
+    ok: true, total: 4,
+    entries: [
+      { name: "发版纪律", category: "feedback", description: "未经批准绝不 push / 发版",
+        source: "user", confidence: 1.0, uncertain: false, updated: "2026-08-26",
+        decay: { score: 0.91, in_index: true }, valid: true },
+      { name: "领星广告方法论", category: "domain", description: "规则引擎 + LLM 复核，数据不够不动手",
+        source: "user", confidence: 1.0, uncertain: false, updated: "2026-08-22",
+        decay: { score: 0.74, in_index: true }, valid: true },
+      { name: "汇报语言", category: "user", description: "推断：日常沟通用中文",
+        source: "reflection", confidence: 0.62, uncertain: true, updated: "2026-08-10",
+        decay: { score: 0.31, in_index: false }, valid: true },
+      { name: "旧活动预算表", category: "project", description: "2026 上半年的预算安排",
+        source: "manual", confidence: 1.0, uncertain: false, updated: "2026-06-30",
+        decay: { score: 0.12, in_index: false }, valid: false },
+    ],
+  }],
+  ["/ivyea-agent/memory/core", {
+    ok: true, limit: 4000,
+    blocks: [
+      { block: "user", file: "USER.md", hint: "关于用户本人的长期事实：身份、角色、偏好、说话/汇报方式、绝对红线。",
+        text: "# 用户画像（USER.md）\n\n- [2026-08-20] 汇报一律用中文，先结论后过程。\n- [2026-08-22] 未经我明确批准，绝不 push / 发版。\n" },
+      { block: "agents", file: "AGENTS.md", hint: "账户运营打法与边界：目标 ACoS、保护词、否词/调价阈值、禁区。",
+        text: "# 账户运营指令（AGENTS.md）\n\n- [2026-08-18] 品牌词永远不否。\n- [2026-08-18] 单次调价不超过 15%，冷却 7 天。\n" },
+    ],
+  }],
+  ["/ivyea-agent/memory/stats", {
+    ok: true, running: false,
+    store: { total: 4, by_category: { feedback: 1, domain: 1, user: 1, project: 1 },
+             dir: "/root/.ivyea/memory", index_chars: 1322 },
+    core: { user: { file: "USER.md", exists: true, chars: 128, limit: 4000, crowded: false },
+            agents: { file: "AGENTS.md", exists: true, chars: 96, limit: 4000, crowded: false } },
+    reflect: { auto: true, last_reflect: "2026-08-27 20:35", pending_episodes: 5, threshold: 8, ready: false },
+    episodes: { indexed: 427, tokenized: 427, db: "/root/.ivyea/memory.db" },
+  }],
   // 能力市场的三个数据源。真实部署里 /skill/* 和 /skill-market/* 都挂在
   // require_module("skill-hub") 后面，没这个模块的用户会 403 —— 前端要在
   // 请求之前就把对应区块收起来，这里给的是**有权限时**该看到的样子。
