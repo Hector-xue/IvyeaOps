@@ -24,6 +24,7 @@ export type TurnBodyProps = {
   steps?: ConsoleStep[];
   thoughts?: Thought[];
   skills?: MatchedSkill[];
+  memoryRecall?: string[];
   running?: boolean;
   failed?: boolean;
   elapsedMs?: number;
@@ -52,7 +53,7 @@ function blocksOf(text: string, segments: { seq: number; text: string }[],
 }
 
 export default function TurnBody({
-  text, segments = [], steps = [], thoughts = [], skills = [],
+  text, segments = [], steps = [], thoughts = [], skills = [], memoryRecall = [],
   running, failed, elapsedMs, liveThought = "", onPickImage,
 }: TurnBodyProps) {
   const blocks = blocksOf(text, segments, steps.length);
@@ -97,6 +98,8 @@ export default function TurnBody({
                               .map((t) => ({ ...t, seq: t.seq - b.from }))}
             // 技能只在第一组显示一次 —— 它说的是"这一轮选了什么技能"，不是每一组。
             skills={b.from === 0 ? skills : []}
+            // 记忆同理：召回发生在这一轮开口之前，只属于第一组。
+            memoryRecall={b.from === 0 ? memoryRecall : []}
             // 计时和"正在跑"只属于最后一组：前面那些组早就跑完了。
             elapsedMs={isLast ? elapsedMs : undefined}
             running={isLast ? running : false}

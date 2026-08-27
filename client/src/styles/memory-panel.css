@@ -1,0 +1,98 @@
+/* 记忆面板。跟着工作台既有的 token 走（--t1/--t2/--line/--card），不另起一套配色。 */
+
+.mem-panel { display: flex; flex-direction: column; gap: 12px; }
+
+.mem-head { display: flex; align-items: center; gap: 8px; }
+.mem-hint { color: var(--t2); font-size: var(--fs-11); }
+
+.mem-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+.mem-tab {
+  position: relative; padding: 6px 12px; background: none; border: none; cursor: pointer;
+  color: var(--t2); font-size: var(--fs-12); border-bottom: 2px solid transparent;
+}
+.mem-tab:hover { color: var(--t1); }
+.mem-tab.on { color: var(--t1); border-bottom-color: var(--accent, #2563eb); font-weight: 600; }
+.mem-badge {
+  margin-left: 6px; padding: 0 6px; border-radius: 9px; font-size: 10px;
+  background: var(--chip-bg, rgba(37, 99, 235, .12)); color: var(--accent, #2563eb);
+}
+
+.mem-body { display: flex; flex-direction: column; gap: 10px; }
+
+.mem-msg {
+  padding: 8px 10px; border-radius: 6px; cursor: pointer;
+  background: var(--chip-bg, rgba(37, 99, 235, .08)); color: var(--t1); font-size: var(--fs-12);
+}
+
+.mem-card {
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+  background: var(--card); display: flex; flex-direction: column; gap: 6px;
+}
+.mem-card-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mem-desc { color: var(--t1); font-size: var(--fs-12); }
+.mem-sub { color: var(--t2); font-size: var(--fs-11); }
+.mem-sub.bad { color: var(--danger, #dc2626); }
+
+.mem-tag {
+  padding: 1px 7px; border-radius: 10px; font-size: 11px; white-space: nowrap;
+  background: var(--chip-bg, rgba(0, 0, 0, .05)); color: var(--t2);
+}
+
+/* 记忆正文经常是多行结论，等宽 + 保留换行才读得下去；但要能横向滚，不能撑破布局。 */
+.mem-pre {
+  margin: 0; padding: 8px 10px; border-radius: 6px; background: var(--pre-bg, rgba(0, 0, 0, .04));
+  font-size: var(--fs-11); line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+  max-height: 320px; overflow: auto;
+}
+
+.mem-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.mem-textarea {
+  width: 100%; min-height: 180px; resize: vertical; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--t1);
+  font-family: var(--mono, ui-monospace, monospace); font-size: var(--fs-11); line-height: 1.6;
+}
+
+.mem-search {
+  padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--card); color: var(--t1); font-size: var(--fs-12);
+}
+
+.mem-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--card);
+}
+.mem-row-main {
+  flex: 1; min-width: 0; text-align: left; background: none; border: none; cursor: pointer;
+  display: flex; flex-direction: column; gap: 3px; color: inherit; padding: 0;
+}
+.mem-row-t { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+.mem-empty {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 18px; border: 1px dashed var(--line); border-radius: 8px;
+  color: var(--t2); font-size: var(--fs-12);
+}
+
+.mem-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.mem-stat {
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--card);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.mem-stat b { font-size: 20px; line-height: 1.2; }
+.mem-stat span { color: var(--t2); font-size: var(--fs-11); }
+
+.mem-modal {
+  position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, .38);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.mem-modal-box {
+  width: min(760px, 100%); max-height: 84vh; overflow: auto;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .mem-row { flex-wrap: wrap; }
+  .mem-tabs { overflow-x: auto; }
+}

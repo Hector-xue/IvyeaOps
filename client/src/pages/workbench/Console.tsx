@@ -128,6 +128,9 @@ type Turn = {
    */
   segments?: { seq: number; text: string }[];
   skills?: MatchedSkill[];
+  /** 这一轮开口前自动召回了哪几条长期记忆（agent 回报的 memory_recall 事件）。
+   *  界面必须自己说出来 —— 模型经常不提，用户会以为记忆压根没生效。 */
+  memoryRecall?: string[];
   approvals?: { req: IvyeaPermissionRequest; decision?: string }[];
   elapsedMs?: number;
   running?: boolean;
@@ -1232,6 +1235,7 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
                         steps={t.steps || []}
                         thoughts={t.thoughts || []}
                         skills={t.skills || []}
+                        memoryRecall={t.memoryRecall || []}
                         elapsedMs={t.elapsedMs}
                         running={t.running}
                         failed={t.failed}

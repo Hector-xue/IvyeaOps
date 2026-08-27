@@ -633,6 +633,7 @@ export type IvyeaStreamHandlers = {
     onStep?: (data: IvyeaStepEvent) => void;
     /** 本轮命中的 skill。 */
     onSkillMatch?: (data: IvyeaSkillMatch) => void;
+    onMemoryRecall?: (data: { count?: number; names?: string[] }) => void;
     /** 需要人工确认的写操作。 */
     onPermission?: (data: IvyeaPermissionRequest) => void;
     /** Agent 改过一个文件（带 diff）。 */
@@ -752,6 +753,9 @@ async function pumpSse(res: Response, handlers: IvyeaStreamHandlers) {
     else if (event === "todos") handlers.onTodos?.(typeof data === "string" ? {} : data || {});
     else if (event === "step") handlers.onStep?.(data);
     else if (event === "skill_match") handlers.onSkillMatch?.(data);
+    // 记忆召回同样必须显式分流：落进下面的 onEvent 兜底会被当成"老 agent 的自由
+    // 文本叙述"，于是一串 {"count":3,...} 直接印在对话里。
+    else if (event === "memory_recall") handlers.onMemoryRecall?.(typeof data === "string" ? {} : data || {});
     else if (event === "file_change") handlers.onFileChange?.(data);
     else if (event === "permission_request") handlers.onPermission?.(data);
     else if (event === "permission_timeout") handlers.onPermissionTimeout?.(data);
@@ -1453,4 +1457,124 @@ export async function consoleSessionApprovals(sessionId: string) {
   const { data } = await api.get<{ ok: boolean; approvals: ConsoleApproval[] }>(
     `/ivyea-agent/console/sessions/${encodeURIComponent(sessionId)}/approvals`);
   return data.approvals || [];
+}
+
+// ── 记忆管理 ────────────────────────────────────────────────────────────────
+//
+// 记忆里装的是"我是谁、我定过什么规矩、agent 从我身上推断出了什么"。
+// 读只要登录，写要管理员 —— 写入会直接改变 agent 以后的行为。
+
+export type MemoryEntry = {
+  name: string;
+  category: string;
+  description?: string;
+  keywords?: string;
+  links?: string;
+  created?: string;
+  updated?: string;
+  body?: string;
+  scope?: string;
+  valid?: boolean;
+  valid_from?: string;
+  valid_until?: string;
+  /** 谁写的：user=你亲口说的 / manual=手写文件 / reflection=agent 推断的 */
+  source?: string;
+  confidence?: number;
+  evidence?: string;
+  /** 置信度低于"不确定线"，界面上必须标出来 —— 推断和你说过的话不能混为一谈 */
+  uncertain?: boolean;
+  /** 遗忘打分：in_index=false 表示它已退出常驻索引，但仍可被检索到 */
+  decay?: { score?: number; in_index?: boolean };
+  history_count?: number;
+  backlinks?: string[];
+  sightings?: number;
+  promote_after?: number;
+};
+
+export type MemoryStats = {
+  ok: boolean;
+  store: { total: number; by_category: Record<string, number>; dir: string; index_chars: number };
+  core: Record<string, { file: string; exists: boolean; chars: number; limit: number; crowded: boolean }>;
+  reflect: { auto: boolean; last_reflect: string; pending_episodes: number; threshold: number; ready: boolean };
+  episodes: { indexed?: number; tokenized?: number; db?: string };
+  running?: boolean;
+};
+
+export async function ivyeaMemoryList(scope = "") {
+  const { data } = await api.get<{ ok: boolean; entries: MemoryEntry[]; total: number }>(
+    "/ivyea-agent/memory/list", { params: { scope } },
+  );
+  return data;
+}
+
+export async function ivyeaMemoryGet(name: string, category = "") {
+  const { data } = await api.get<{ ok: boolean; entry?: MemoryEntry; message?: string }>(
+    "/ivyea-agent/memory/get", { params: { name, category } },
+  );
+  return data;
+}
+
+export async function ivyeaMemoryHistory(name: string, category = "") {
+  const { data } = await api.get<{ ok: boolean; versions: MemoryEntry[]; total: number }>(
+    "/ivyea-agent/memory/history", { params: { name, category } },
+  );
+  return data;
+}
+
+export async function ivyeaMemoryPending() {
+  const { data } = await api.get<{ ok: boolean; pending: MemoryEntry[]; total: number }>(
+    "/ivyea-agent/memory/pending",
+  );
+  return data;
+}
+
+export async function ivyeaMemoryStats() {
+  const { data } = await api.get<MemoryStats>("/ivyea-agent/memory/stats");
+  return data;
+}
+
+export async function ivyeaMemoryCore(block = "") {
+  const { data } = await api.get<{
+    ok: boolean; limit: number;
+    blocks?: { block: string; file: string; hint: string; text: string }[];
+    block?: string; text?: string;
+  }>("/ivyea-agent/memory/core", { params: { block } });
+  return data;
+}
+
+export async function ivyeaMemoryEpisodes(query: string, limit = 30) {
+  const { data } = await api.get<{ ok: boolean; episodes: { text: string; ts: number }[] }>(
+    "/ivyea-agent/memory/episodes", { params: { query, limit } },
+  );
+  return data;
+}
+
+export async function ivyeaMemoryWrite(body: Partial<MemoryEntry> & { operation: string }) {
+  const { data } = await api.post<{ ok: boolean; message?: string }>(
+    "/ivyea-agent/memory/write", body,
+  );
+  return data;
+}
+
+export async function ivyeaMemoryDecide(name: string, action: "confirm" | "reject") {
+  const { data } = await api.post<{ ok: boolean; message?: string }>(
+    `/ivyea-agent/memory/${action}`, { name },
+  );
+  return data;
+}
+
+export async function ivyeaMemoryCoreWrite(body: {
+  block: string; operation: string; content?: string; old?: string;
+}) {
+  const { data } = await api.post<{ ok: boolean; message?: string; drift?: boolean }>(
+    "/ivyea-agent/memory/core", body,
+  );
+  return data;
+}
+
+export async function ivyeaMemoryReflect() {
+  const { data } = await api.post<{ ok: boolean; started: boolean; message?: string }>(
+    "/ivyea-agent/memory/reflect", {},
+  );
+  return data;
 }
