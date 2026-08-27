@@ -1700,7 +1700,7 @@ function NotifySection({
   return (
     <Section
       title="通知与 AI 预算"
-      desc="机器在服务器上跑，人在别处。任务挂了、这个月花超了，直接推到你手机上。"
+      desc="机器在那头跑，人在别处。任务挂了、这个月花超了，直接推到你手机上。"
       keys={["notify_webhook", "notify_events", "ai_budget_monthly_usd"]}
       vals={vals} onSave={save}
     >
@@ -2083,7 +2083,7 @@ function useHelpVisible(): [boolean, (v: boolean) => void] {
 
 export default function HubSettings({ focusSection = "" }: { focusSection?: string } = {}) {
   const [helpOn, setHelpOn] = useHelpVisible();
-  // 订阅登录那一段只给管理员看：凭据存在服务器上、由 agent 全局共用，
+  // 订阅登录那一段只给管理员看：凭据存在本机、由 agent 全局共用，
   // 谁登录全站就烧谁的额度。后端那几个端点也是 require_admin，这里只是别把
   // 一个按下去必然 403 的按钮摆在普通用户面前。
   const { role } = useAuth();

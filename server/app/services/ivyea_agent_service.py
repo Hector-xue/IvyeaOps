@@ -265,6 +265,9 @@ def start_local_service() -> dict[str, Any]:
         token = _token()
         if token:
             env["IVYEA_API_TOKEN"] = token   # serve reads the token from env
+        # 下面 stdout 接的是 DEVNULL —— 不是控制台，Windows 就会按系统代码页(GBK)
+        # 编码，agent 的中文开场白直接编不出来、serve 崩在第一行输出上。
+        env.setdefault("PYTHONUTF8", "1")
         try:
             proc = subprocess.Popen(
                 cmd, cwd=str(ops_settings.root_dir), env=env,
