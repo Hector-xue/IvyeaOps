@@ -633,6 +633,7 @@ export type IvyeaStreamHandlers = {
     onStep?: (data: IvyeaStepEvent) => void;
     /** 本轮命中的 skill。 */
     onSkillMatch?: (data: IvyeaSkillMatch) => void;
+    onMemoryRecall?: (data: { count?: number; names?: string[] }) => void;
     /** 需要人工确认的写操作。 */
     onPermission?: (data: IvyeaPermissionRequest) => void;
     /** Agent 改过一个文件（带 diff）。 */
@@ -752,6 +753,9 @@ async function pumpSse(res: Response, handlers: IvyeaStreamHandlers) {
     else if (event === "todos") handlers.onTodos?.(typeof data === "string" ? {} : data || {});
     else if (event === "step") handlers.onStep?.(data);
     else if (event === "skill_match") handlers.onSkillMatch?.(data);
+    // 记忆召回同样必须显式分流：落进下面的 onEvent 兜底会被当成"老 agent 的自由
+    // 文本叙述"，于是一串 {"count":3,...} 直接印在对话里。
+    else if (event === "memory_recall") handlers.onMemoryRecall?.(typeof data === "string" ? {} : data || {});
     else if (event === "file_change") handlers.onFileChange?.(data);
     else if (event === "permission_request") handlers.onPermission?.(data);
     else if (event === "permission_timeout") handlers.onPermissionTimeout?.(data);

@@ -10,6 +10,7 @@
 const INJECTION_MARKERS = [
   "\n\n[Ivyea Skill：",
   "\n\n[Ivyea 本地知识检索",
+  "\n\n[Ivyea 记忆召回",
   "\n\n[Ivyea 内置亚马逊知识库",
   "\n\n[任务范围锁定",
   "\n\n[工程上下文]",

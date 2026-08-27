@@ -41,9 +41,11 @@ const FEED_TAIL = 120;
 type FeedItem =
   | { kind: "think"; key: string; text: string }
   | { kind: "step"; key: string; step: ConsoleStep }
-  | { kind: "skills"; key: string; skills: MatchedSkill[] };
+  | { kind: "skills"; key: string; skills: MatchedSkill[] }
+  | { kind: "memory"; key: string; names: string[] };
 
-function build(steps: ConsoleStep[], thoughts: Thought[], skills: MatchedSkill[]): FeedItem[] {
+function build(steps: ConsoleStep[], thoughts: Thought[], skills: MatchedSkill[],
+               memoryRecall: string[] = []): FeedItem[] {
   const items: FeedItem[] = [];
   const bySeq = new Map<number, Thought[]>();
   for (const t of thoughts) {
@@ -51,6 +53,8 @@ function build(steps: ConsoleStep[], thoughts: Thought[], skills: MatchedSkill[]
     rows.push(t);
     bySeq.set(t.seq, rows);
   }
+  // 记忆排在技能前面：它发生在这一轮最开头（开口前先回忆）。
+  if (memoryRecall.length) items.push({ kind: "memory", key: "mem", names: memoryRecall });
   if (skills.length) items.push({ kind: "skills", key: "sk", skills });
   for (let i = 0; i <= steps.length; i++) {
     // 想在前、做在后：这一段思考是在第 i 步**之前**冲刷的。
@@ -107,12 +111,13 @@ function StepLine({ step }: { step: ConsoleStep }) {
 }
 
 export default function ActivityFeed({
-  steps, thoughts = [], skills = [], running, elapsedMs, liveThought = "",
+  steps, thoughts = [], skills = [], memoryRecall = [], running, elapsedMs, liveThought = "",
 }: {
   steps: ConsoleStep[];
   /** 模型的思考，按批成段（agent ≥ v1.10.3 且开了 stream_reasoning）。没有就是没有。 */
   thoughts?: Thought[];
   skills?: MatchedSkill[];
+  memoryRecall?: string[];
   running?: boolean;
   elapsedMs?: number;
   /** 还没被冲刷成段的那一段思考 —— 正在想的话就该边想边显示（同样只占一行）。 */
@@ -120,7 +125,8 @@ export default function ActivityFeed({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [showAll, setShowAll] = useState(false);
-  const items = useMemo(() => build(steps, thoughts, skills), [steps, thoughts, skills]);
+  const items = useMemo(() => build(steps, thoughts, skills, memoryRecall),
+                        [steps, thoughts, skills, memoryRecall]);
   const live = running && liveThought.trim() ? oneLine(liveThought) : "";
 
   if (!items.length && !running) return null;
@@ -170,6 +176,21 @@ export default function ActivityFeed({
                     <i className="af-icon"><Icon name="step-think" size={14} /></i>
                     <span className="af-kind">思考</span>
                     <span className="af-text">· {oneLine(item.text)}</span>
+                  </div>
+                </div>
+              );
+            }
+            if (item.kind === "memory") {
+              return (
+                <div className="af-item" key={item.key}>
+                  <div className="af-line af-think">
+                    <span className="af-mark" />
+                    <i className="af-icon">🧠</i>
+                    <span className="af-kind">记忆</span>
+                    <span className="af-text">
+                      · 回忆了 {item.names.length} 条 ·{" "}
+                      {item.names.map((n) => n.split("/").pop()).join("、")}
+                    </span>
                   </div>
                 </div>
               );

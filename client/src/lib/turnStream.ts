@@ -48,6 +48,8 @@ export type TurnPatchable = {
   steps?: ConsoleStep[];
   thoughts?: Thought[];
   skills?: MatchedSkill[];
+  /** 本轮自动召回的记忆条目名。运行时给的确定性信号，不依赖模型在回答里提。 */
+  memoryRecall?: string[];
   approvals?: { req: IvyeaPermissionRequest; decision?: string }[];
   reasoning?: string;
   readonlyBlocked?: number;
@@ -173,6 +175,7 @@ export function createTurnStream(deps: TurnStreamDeps): TurnStream {
     },
     onContext: (d) => deps.setCtxUsage(d),
     onSkillMatch: (d) => deps.patch({ skills: (d?.skills || []) as MatchedSkill[] }),
+    onMemoryRecall: (d) => deps.patch({ memoryRecall: (d?.names || []) as string[] }),
     onStep: (ev) => {
       // 顺序就是叙述的顺序：想 → 说 → 做。先把这一批思考收成一条，再把刚说完的
       // 那段话封段，最后记这一步。
