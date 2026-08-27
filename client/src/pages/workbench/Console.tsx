@@ -13,7 +13,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../App";
-import { MarkdownReport } from "../../lib/reportFormat";
 import { imageRef, streamChat, type ChatMsg } from "../../api/assistant";
 import { restoreSession } from "../../lib/sessionRestore";
 import { ToastProvider, useToast } from "../../components/toast";
@@ -27,8 +26,10 @@ import {
   type ConsoleStep,
 } from "../../lib/stepLabels";
 import { useStickToBottom } from "../../lib/useStickToBottom";
+import { createTurnStream } from "../../lib/turnStream";
 import { aggregateStats, mergeStats, type ServerStats, type TurnMetrics } from "../../lib/turnStats";
-import ActivityFeed, { type MatchedSkill, type Thought } from "../../components/console/ActivityFeed";
+import { type MatchedSkill, type Thought } from "../../components/console/ActivityFeed";
+import TurnBody from "../../components/console/TurnBody";
 import StatsBar from "../../components/console/StatsBar";
 import ContextMeter from "../../components/console/ContextMeter";
 import DockMeta from "../../components/console/DockMeta";
@@ -49,6 +50,7 @@ import {
   ivyeaAgentChat,
   ivyeaAgentStatus,
   ivyeaAgentChatStream,
+  ivyeaAgentSessionLive,
   ivyeaAwaitSessionAnswer,
   ivyeaChatPermission,
   ivyeaChatSession,
@@ -117,6 +119,14 @@ type Turn = {
   text: string;
   /** assistant 专用 —— 这一轮的执行过程。 */
   steps?: ConsoleStep[];
+  /**
+   * 正文的分段：每段是"两次工具调用之间说的那段话"，seq = 说完时已有多少步。
+   *
+   * 有了它，一轮才能按发生顺序铺成「说一段 → 做几件事 → 再说一段」，而不是
+   * 所有工具堆一坨、所有话拼一坨（用户原话："一大堆叠在一起"）。
+   * 从存档恢复的轮次没有它 —— 那种情况下每条 assistant 消息本来就是独立一轮。
+   */
+  segments?: { seq: number; text: string }[];
   skills?: MatchedSkill[];
   approvals?: { req: IvyeaPermissionRequest; decision?: string }[];
   elapsedMs?: number;
@@ -530,6 +540,9 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
         setTurns(page.turns.map((t) => ({ ...t, id: uid(), restored: true })));
         setEarlier({ hasMore: page.hasMore, from: page.from, loading: false });
         setSessionId(urlSession);
+        // 这条会话正跑着一轮 —— 接进去把执行过程补上。没有这一句，切走再切回来
+        // 看到的就是"只剩自己发的那句话"，而后台其实一直在干活。
+        if (d?.live?.running) void attachLiveTurn(urlSession, d.live.started_ms);
         // 这条会话此前累计的用时/用量。老 agent 不回报 → null → 统计条只显示几轮几步。
         setServerStats(page.stats || null);
         // 历史会话的上下文占用由详情接口带回来（老 agent 没有这个字段 → 保持不显示）。
@@ -594,6 +607,86 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
   const patchTurn = useCallback((id: string, patch: Partial<Turn> | ((t: Turn) => Partial<Turn>)) => {
     setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, ...(typeof patch === "function" ? patch(t) : patch) } : t)));
   }, []);
+
+  // ── 事件流 → 界面状态（直连与"接进活轮"共用同一份，见 lib/turnStream）──────
+  const makeTurnStream = useCallback((aiId: string, extra?: {
+    onSessionId?: (id: string) => void;
+    onFinal?: (d: any) => void;
+  }) => createTurnStream({
+    patch: (patch) => patchTurn(aiId, patch as any),
+    notify,
+    setFileChanges,
+    setTodos,
+    setCtxUsage,
+    setModel,
+    setReadOnly,
+    onSessionId: extra?.onSessionId,
+    onFinal: extra?.onFinal,
+  }), [patchTurn, notify]);
+
+  /**
+   * 接进一条**已经在跑**的轮次，把进度补进 aiId 这一格。
+   *
+   * 用在两处：断链之后（管子断了但轮次没断），以及打开一条正在跑的会话时。
+   * 回 false = 接不上（老 agent 没有这个端点 / 这一轮已经收尾）。
+   */
+  const followLive = useCallback(async (
+    sid: string, aiId: string, signal?: AbortSignal,
+  ): Promise<boolean> => {
+    const stream = makeTurnStream(aiId);
+    let attached = false;
+    try {
+      await ivyeaAgentSessionLive(sid, {
+        ...stream.handlers,
+        onLiveBegin: () => { attached = true; },
+      }, { signal });
+    } catch {
+      return attached;      // 404 = 这条会话没有活轮；其余按接不上处理
+    } finally {
+      stream.finish();
+    }
+    return attached;
+  }, [makeTurnStream]);
+
+  /**
+   * 打开会话时发现它正在跑 —— 造一格 assistant 轮次接住进度。
+   *
+   * 这就是"切走再切回来 / 刷新 / 换台机器"能看到执行过程的那条路。此前这些情况下
+   * 页面上只剩用户自己发的那句话（它在轮次开始时就落盘了），执行过程和正文要等
+   * 整轮跑完再刷新一次才"一下子全出来"。
+   */
+  const attachLiveTurn = useCallback(async (sid: string, startedMs?: number) => {
+    const aiId = uid();
+    const startedAt = startedMs || Date.now();
+    setTurns((prev) => [...prev, {
+      id: aiId, role: "assistant", text: "", steps: [], skills: [], approvals: [],
+      running: true, metrics: { startedAt },
+    }]);
+    setBusy(true);
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    const tick = window.setInterval(
+      () => patchTurn(aiId, { elapsedMs: Date.now() - startedAt }), 250);
+    const ok = await followLive(sid, aiId, ctrl.signal);
+    window.clearInterval(tick);
+    patchTurn(aiId, (t) => ({
+      running: false,
+      elapsedMs: Date.now() - startedAt,
+      // 这里的「停止」断的是**看**，不是那一轮 —— 轮次跑在 agent 里，与这条连接
+      // 无关。说成"已停止"会让人以为任务被掐了，然后对着还在动的会话发懵。
+      ...(ctrl.signal.aborted && !t.text
+        ? { text: "（已停止查看，这一轮仍在后台继续；回到这条会话可以再接上）" }
+        : {}),
+    }));
+    setBusy(false);
+    abortRef.current = null;
+    if (!ok) {
+      // 一格都没接到（这一轮刚好在我们接进去之前收尾了）：把空壳撤掉，
+      // 别在时间线上留一格什么都没有的空回答。
+      setTurns((prev) => prev.filter((t) => t.id !== aiId || t.text || (t.steps || []).length));
+    }
+    notifyConsoleSessionsChanged(sid);
+  }, [followLive, patchTurn]);
 
   // ── 审批决策 ─────────────────────────────────────────────────────────────
   const decide = useCallback(async (turnId: string, req: IvyeaPermissionRequest, choice: string) => {
@@ -798,16 +891,11 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
     }
 
     const startedAt = Date.now();
-    // 计时只用局部变量，收尾时一次性写进 turn。**绝不能每个 token 都 setState** ——
-    // 这条流一秒钟能来上百个 token，那样等于把刚做完的"按帧批量落地"又拆回去。
-    let firstTokenAt = 0;
-    let lastTokenAt = 0;
-    let turnUsage: any = null;
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     let liveSid = sessionId;
-    let noteSeq = 0;
-    let finalText = "";
+    /** 断链后从落盘里捞回来的回答（正常路径下是空的，正文在 stream.text()）。 */
+    let recovered = "";
     const sentAt = Math.floor(Date.now() / 1000);
     const { plan_mode, approval } = approvalPayload(composer.approval);
 
@@ -816,53 +904,33 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
       250,
     );
 
-    // token 按帧批量落地。一个字一次 setState 时，长报告的 markdown 每秒被重解析
-    // 几十遍；合并到一帧一次，内容一模一样，但渲染成本掉一个数量级。
-    let pending = "";
-    let pendingThink = "";
-    let flushRaf = 0;
-    const flushTokens = () => {
-      flushRaf = 0;
-      const add = pending;
-      const think = pendingThink;
-      pending = "";
-      pendingThink = "";
-      if (add) patchTurn(aiId, (t) => ({ text: t.text + add }));
-      // 思考流走同一帧：它比正文更碎（模型逐字想），一条一次 setState 会把
-      // 活动行刷成每秒几十次重绘。只留尾部，活动行只看最后一句。
-      if (think) {
-        // reasoning 装的是**还没成段的那一段**：边想边显示，想完（去调工具了）就被
-        // flushThought 收成一段落进 thoughts。只留开头，理由见 REASONING_HEAD。
-        patchTurn(aiId, (t) => ({
-          reasoning: ((t.reasoning || "") + think).slice(0, REASONING_HEAD),
-        }));
-      }
-    };
-    const cancelFlush = () => {
-      if (flushRaf) { window.cancelAnimationFrame(flushRaf); flushRaf = 0; }
-      pending = "";
-    };
-    // 收尾：还没落地的那一帧要补上，否则回答会缺最后几个字。
-    const finishFlush = () => {
-      if (flushRaf) window.cancelAnimationFrame(flushRaf);
-      flushTokens();
-    };
-    /**
-     * 把"到此为止想的这一段"收成叙述里的一条。
-     *
-     * 触发点是**它开始动手**（下一个 step 到达）或这一轮收尾 —— 那才是一段思考
-     * 真正结束的时刻。按句号切会把一段完整的推理碎成几十条，铺在页面上是字墙。
-     */
-    const flushThought = () => {
-      finishFlush();                       // 先把还在缓冲里的思考落地，别丢半句
-      patchTurn(aiId, (t) => {
-        const text = (t.reasoning || "").trim();
-        if (!text) return {};
-        const rows = [...(t.thoughts || []), { seq: (t.steps || []).length, text }];
-        // 一轮里思考段数有上限：几百段时界面自己会折叠，但 state 也不该无限长。
-        return { thoughts: rows.slice(-THOUGHTS_MAX), reasoning: "" };
-      });
-    };
+    // 事件 → 界面状态只此一份（lib/turnStream）。**从别处接进这一轮时走的是同一份**
+    // —— 自己发起看到的过程，和切回来看到的过程，必须是同一个东西。
+    const stream = makeTurnStream(aiId, {
+      onSessionId: (id) => {
+        // 新会话要**立刻**进左栏。原来只在整轮跑完时广播一次，而一轮动辄几分钟 ——
+        // 这段时间里左栏看不见这条会话，用户只能刷新整页才看到它。
+        if (id !== liveSid) notifyConsoleSessionsChanged(id);
+        liveSid = id;
+        setSessionId(id);
+        // 新会话的 id 此前只存进内存 state，没进网址。切换页面再切回时组件重建，
+        // 找不到该恢复哪条会话，界面回空白 —— 用户会以为指令没发出去，然后把同一句
+        // 话再打一遍（真实投诉就是这么来的）。把 id 同步写进 URL，让「新建会话」和
+        // 「点历史会话」走同一套 ?session= 恢复逻辑。
+        //
+        // replace 不污染后退历史；读的是 window.location 而不是渲染闭包里的
+        // urlSession —— 这个回调活在流里，闭包是发消息那一刻的旧值。
+        if (embedded) {
+          onSessionChange?.(id);
+        } else if (new URLSearchParams(window.location.search).get("session") !== id) {
+          navigate(`/console?session=${encodeURIComponent(id)}`, { replace: true });
+        }
+      },
+      onFinal: (d) => {
+        if (d?.session_id) setSessionId(d.session_id);
+        if (d?.usage) setUsage(d.usage);
+      },
+    });
 
     try {
       await ivyeaAgentChatStream(
@@ -895,145 +963,11 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
           stream_reasoning: true,
           ops_context: { board: "console", pathname: "/console" },
         },
-        {
-          onFileChange: (d) => setFileChanges((prev) => [...prev, d]),
-          onStart: (d) => {
-            if (d?.session_id) {
-              // 新会话要**立刻**进左栏。原来只在整轮跑完时广播一次，而一轮动辄几分钟——
-              // 这段时间里左栏看不见这条会话，用户只能刷新整页才看到它。
-              // 带上 id：左栏取回来发现还没有这条（agent 侧刚落库，有一拍延迟）会自己再取一次。
-              if (d.session_id !== liveSid) notifyConsoleSessionsChanged(d.session_id);
-              liveSid = d.session_id;
-              setSessionId(d.session_id);
-              // 新会话的 id 此前只存进内存 state，没进网址。切换页面再切回时组件重建，
-              // 找不到该恢复哪条会话，界面回空白 —— 用户会以为指令没发出去，然后把
-              // 同一句话再打一遍（真实投诉就是这么来的）。把 id 同步写进 URL，让
-              // 「新建会话」和「点历史会话」走同一套 ?session= 恢复逻辑。
-              //
-              // replace 不污染后退历史；读的是 window.location 而不是渲染闭包里的
-              // urlSession —— 这个回调活在流里，闭包是发消息那一刻的旧值。地址栏已经
-              // 指向这条会话时（在历史会话里继续问）就不写，省掉每轮一次白折腾。
-              // 恢复 effect 那边 urlSession===sessionId 会直接 return，不会重复拉取、
-              // 也不会 abort 掉正在跑的这一轮（e2e/session-url.mjs 钉住了这一条）。
-              if (embedded) {
-                onSessionChange?.(d.session_id);
-              } else if (new URLSearchParams(window.location.search).get("session") !== d.session_id) {
-                navigate(`/console?session=${encodeURIComponent(d.session_id)}`, { replace: true });
-              }
-            }
-            if (d?.model) setModel(typeof d.model === "string" ? d.model : d.model?.model || "");
-            if (typeof d?.read_only === "boolean") setReadOnly(d.read_only);
-          },
-          onContext: (d) => setCtxUsage(d),
-          onSkillMatch: (d) => {
-            patchTurn(aiId, { skills: (d?.skills || []) as MatchedSkill[] });
-          },
-          onStep: (ev) => {
-            // 先把"想到现在为止的这一段"收成一条，再记这一步 —— 顺序就是叙述的顺序：
-            // 想 → 做 → 想 → 做。收在这里而不是收在思考流里，是因为"这一批想完了"
-            // 的唯一可靠信号就是它开始动手了。
-            flushThought();
-            patchTurn(aiId, (t) => ({ steps: mergeStep(t.steps || [], stepFromEvent(ev)) }));
-          },
-          // 计划**当场**落地：原来只在 onFinal 收一次，于是"接下来要干什么"要等这一轮
-          // 跑完才看得到 —— 而那正是最不需要它的时刻。（老 agent 不发这条事件，
-          // 那就还是只有收尾那一份，界面上不显示下一步，不编。）
-          onTodos: (d) => {
-            if (Array.isArray(d?.todos)) setTodos(d.todos as RailTodo[]);
-          },
-          onPermission: (req) => {
-            patchTurn(aiId, (t) => ({ approvals: [...(t.approvals || []), { req }] }));
-          },
-          onPermissionTimeout: (d) => {
-            patchTurn(aiId, (t) => ({
-              approvals: (t.approvals || []).map((a) =>
-                a.req.request_id === d.request_id ? { ...a, decision: "deny" } : a),
-            }));
-            notify("warn", "审批等待超时，这一步已自动取消。");
-          },
-          onEvent: (d) => {
-            // 自由文本叙述是**老版本 agent 的兜底**（< v1.9 只发人话、没有结构化
-            // 步骤）。新版两种都发，而它们说的是同一批动作 —— 实测一次带工具的
-            // 提问会来 44 条 step + 46 条 event，两个都渲染就等于每个动作出现两
-            // 次，且文本那份没有上限，几十行糊满整页把回答挤没了。
-            //
-            // 所以：**这一轮只要收到过结构化步骤，就不再渲染叙述。**
-            const line = String(d?.text || "").trim().split("\n").filter(Boolean).pop() || "";
-            if (!line) return;
-            patchTurn(aiId, (t) => {
-              const steps = t.steps || [];
-              if (steps.some((x) => x.phase !== "note")) return {};   // 有结构化的，叙述丢掉
-              // 真·老版本路径：注记也要有上限，否则长任务照样能刷满屏。
-              const notes = steps.filter((x) => x.phase === "note");
-              const next = [...steps, noteStep(line, noteSeq++)];
-              return { steps: notes.length >= MAX_NOTES ? next.slice(next.length - MAX_NOTES) : next };
-            });
-          },
-          onToken: (chunk) => {
-            finalText += chunk;
-            pending += chunk;
-            const now = Date.now();
-            if (!firstTokenAt) firstTokenAt = now;
-            lastTokenAt = now;
-            if (!flushRaf) flushRaf = window.requestAnimationFrame(flushTokens);
-          },
-          // 模型的思考流。没有会思考的模型时这条永远不来 —— 活动行退回显示工具步骤，
-          // 不伪造一句"正在思考"。
-          onReasoning: (d) => {
-            const t = String(d?.text || "");
-            if (!t) return;
-            pendingThink += t;
-            if (!flushRaf) flushRaf = window.requestAnimationFrame(flushTokens);
-          },
-          // 正文的分段边界。门禁打回 = 整篇重写，旧稿作废（不清就是"同一张表连出
-          // 三遍"）；去调工具 = 这段没说完，只断段不丢字。判据见 answerResetDiscards。
-          onAnswerReset: (d) => {
-            const reason = String(d?.reason || "");
-            if (!answerResetDiscards(reason)) {
-              pending += "\n\n";                 // 两段之间留个空行，别糊成一段
-              if (!flushRaf) flushRaf = window.requestAnimationFrame(flushTokens);
-              return;
-            }
-            cancelFlush();
-            finalText = "";
-            const note = GATE_NOTE[reason] || "正在重写这段回答";
-            patchTurn(aiId, (t) => ({
-              text: "",
-              // 字凭空少了，必须说一声 —— 否则用户只会看到回答突然被清空。
-              steps: mergeStep(t.steps || [], noteStep(note, noteSeq++)),
-            }));
-          },
-          onFinal: (d) => {
-            // final 到达时，手里常常还攥着没落地的一帧 token —— 收尾那几个字和 final
-            // 多半在**同一个网络分片**里到，rAF 还没来得及跑。所以这里分两种走法：
-            //   · final 自带规范文本（引证门通过后的终稿）→ 草稿作废，整体替换；
-            //   · final 不带文本（老 agent、兜底通道）→ 必须把那一帧**补落地**。
-            // 原来两种情况都 cancelFlush()，而 cancelFlush 会把 pending 清空 ——
-            // 于是不带文本的那一档，回答的最后一句就凭空少了。
-            if (d?.text) cancelFlush();
-            else finishFlush();
-            if (d?.session_id) setSessionId(d.session_id);
-            if (typeof d?.readonly_blocked === "number" && d.readonly_blocked > 0) {
-              patchTurn(aiId, { readonlyBlocked: d.readonly_blocked });
-            }
-            if (Array.isArray(d?.todos)) setTodos(d.todos);
-            if (d?.usage) { setUsage(d.usage); turnUsage = d.usage; }
-            // 收尾这一份算的是"本轮结束后"的位置 —— 下一轮就是从这里起步的。
-            if (d?.context) setCtxUsage(d.context as IvyeaContextUsage);
-            // final.text 是引证门通过后的规范文本，整体替换 —— 流式期间的中间草稿
-            // （引证重写前）不留脏文本。
-            if (d?.text) { finalText = String(d.text); patchTurn(aiId, { text: finalText }); }
-          },
-          onError: (d) => {
-            const err: any = new Error(String(d?.detail || d?.error || "模型暂不可用"));
-            err.explicit = d?.error !== "bridge_error";
-            throw err;
-          },
-        },
+        stream.handlers,
         { signal: ctrl.signal },
       );
     } catch (e: any) {
-      finishFlush();
+      stream.finish();
       if (ctrl.signal.aborted) {
         patchTurn(aiId, (t) => ({ running: false, text: t.text || "（已停止）" }));
         window.clearInterval(tick);
@@ -1045,12 +979,17 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
         // serve 显式宣告轮次失败（模型报错/额度不足）：直接展示，绝不傻等。
         patchTurn(aiId, { failed: true, running: false, text: String(e?.message || "模型暂不可用") });
       } else if (liveSid) {
-        // 传输断链，但 serve 端的轮次独立继续执行并会落盘 —— 不重发（重发会把同
-        // 一个多分钟的 agentic 轮次再跑一遍），改为等待落盘的回答。
-        patchTurn(aiId, { text: "连接中断，但模型仍在后台继续，正在等待结果…" });
-        const answer = await ivyeaAwaitSessionAnswer(liveSid, sentAt);
-        if (answer) { finalText = answer; patchTurn(aiId, { text: answer }); }
-        else patchTurn(aiId, { failed: true, text: "这轮时间较长，后台仍在处理；完成后可在会话历史里查看。" });
+        // 传输断链，但 serve 端的轮次独立继续执行 —— 不重发（重发会把同一个多分钟的
+        // agentic 轮次再跑一遍），**改为接回活轮日志**：断的只是这根管子，进度一条
+        // 都没丢，重新接上就能继续看它跑，而不是干等一个结果。
+        // 接不上（老 agent 没有这个端点）才退回轮询落盘的回答。
+        const followed = await followLive(liveSid, aiId, ctrl.signal);
+        if (!followed) {
+          patchTurn(aiId, { text: "连接中断，但模型仍在后台继续，正在等待结果…" });
+          const answer = await ivyeaAwaitSessionAnswer(liveSid, sentAt);
+          if (answer) { recovered = answer; patchTurn(aiId, { text: answer }); }
+          else patchTurn(aiId, { failed: true, text: "这轮时间较长，后台仍在处理；完成后可在会话历史里查看。" });
+        }
       } else {
         // 连会话都没建起来、一个字也没出来 —— 多半是 agent 没起。退回
         // /api/assistant/chat 的多 provider 兜底链，纯聊这一档至少还能用。
@@ -1061,8 +1000,7 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
         }
       }
     } finally {
-      finishFlush();
-      flushThought();          // 最后一批思考后面没有 step 了，收尾时收进去
+      stream.finish();         // 没落地的那一帧 + 最后一批思考，收尾时补进去
       window.clearInterval(tick);
       // 这一轮完了通知左栏再取一次：预览、时间要更新，而标题是服务端跑完这一轮才
       // 由模型起的（SessionRail 收到这条会延后再补取一次，正好接住它）。
@@ -1074,9 +1012,9 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
         // 整轮丢弃反而让统计条在最需要解释的那一轮上变成空白。
         metrics: {
           ...(t.metrics || { startedAt }),
-          firstTokenAt: firstTokenAt || undefined,
-          lastTokenAt: lastTokenAt || undefined,
-          usage: turnUsage || t.metrics?.usage,
+          firstTokenAt: stream.firstTokenAt() || undefined,
+          lastTokenAt: stream.lastTokenAt() || undefined,
+          usage: stream.usage() || t.metrics?.usage,
         },
       }));
       setBusy(false);
@@ -1084,7 +1022,8 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
     }
 
     notifyConsoleSessionsChanged();     // 新会话进左栏 / 已有会话更新时间
-    if (finalText.trim()) void loadFollowUps(text, finalText);
+    const answered = recovered || stream.text();
+    if (answered.trim()) void loadFollowUps(text, answered);
     // images / picked 必须在依赖里：send 里读了它们。漏掉的话这个回调会闭包住
     // 旧值 —— 贴完图不打字直接发，图就丢了（之前靠"总会先打字"侥幸没暴露）。
   }, [composer, busy, sessionId, images, picked, agentTakesAttachments,
@@ -1285,22 +1224,20 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
                     </div>
                   ) : (
                     <div className="cc-ai wb-enter" key={t.id}>
-                      <ActivityFeed
+                      {/* 正文与执行过程按发生顺序交错 —— 说一段、做几件事、再说一段。
+                          见 components/console/TurnBody 顶部那段"为什么要交错"。 */}
+                      <TurnBody
+                        text={t.text}
+                        segments={t.segments}
                         steps={t.steps || []}
                         thoughts={t.thoughts || []}
                         skills={t.skills || []}
                         elapsedMs={t.elapsedMs}
                         running={t.running}
+                        failed={t.failed}
                         liveThought={t.reasoning}
+                        onPickImage={pickAnswerImage}
                       />
-                      {t.text && (
-                        <div
-                          className={"cc-answer" + (t.failed ? " cc-answer-error" : "")}
-                          onClick={pickAnswerImage}
-                        >
-                          {t.failed ? t.text : <MarkdownReport text={t.text} />}
-                        </div>
-                      )}
                       {/*
                         * 正文和输入框之间的收尾。跑的过程中不出现 —— 正在写的一段
                         * 话底下挂一排"复制/重新生成"，等于请用户复制一份还没写完的

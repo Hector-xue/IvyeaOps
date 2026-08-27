@@ -618,9 +618,12 @@ export function answerResetDiscards(reason?: string): boolean {
   return String(reason || "").startsWith("gate:");
 }
 
-export async function ivyeaAgentChatStream(
-  payload: IvyeaChatPayload,
-  handlers: {
+/**
+ * 一条 agent 事件流的处理器。**直连（POST /chat/stream）和接进活轮
+ * （GET /chat/sessions/{id}/live）共用这一套** —— 两条路必须把同一轮任务渲染成
+ * 同一个东西，共用类型和共用分发是第一道保证。
+ */
+export type IvyeaStreamHandlers = {
     onStart?: (data: any) => void;
     onToken?: (text: string) => void;
     onFinal?: (data: any) => void;
@@ -660,7 +663,19 @@ export async function ivyeaAgentChatStream(
      * 主脑不吐思考时这条永远不来，活动行退回显示工具步骤。
      */
     onReasoning?: (data: { text?: string }) => void;
-  },
+    /**
+     * 接进一条**已经在跑**的轮次时，回放开始（agent ≥ v1.15.17）。
+     * data.running 说这一轮还在不在跑，seq 是回放到哪一条 —— 断线重连时带回去。
+     */
+    onLiveBegin?: (data: { running?: boolean; seq?: number; dropped?: number;
+                           started_ms?: number; reasoning?: string }) => void;
+    /** 活轮日志播完了（这一轮已经收尾）。 */
+    onLiveEnd?: (data: { ended_ms?: number }) => void;
+};
+
+export async function ivyeaAgentChatStream(
+  payload: IvyeaChatPayload,
+  handlers: IvyeaStreamHandlers,
   opts?: { signal?: AbortSignal },
 ) {
   const res = await fetch("/api/ivyea-agent/chat/stream", {
@@ -670,6 +685,31 @@ export async function ivyeaAgentChatStream(
     body: JSON.stringify(payload),
     signal: opts?.signal,
   });
+  return pumpSse(res, handlers);
+}
+
+/**
+ * 接进这条会话**正在跑的那一轮**：先把已经发生的事件回放一遍，再实时跟随。
+ *
+ * 为什么必须有这条路：一轮任务的执行过程此前只活在发起它的那个标签页的内存里。
+ * 切到别的会话/板块再切回来、刷新、换台机器打开同一条会话 —— 进度全都看不到，
+ * 只剩自己发的那句话干挂着，得等整轮跑完再刷新一次才"一下子全出来"。
+ *
+ * 轮次本身与这条连接无关（agent 侧独立跑完并落盘），所以随便接、随便断。
+ */
+export async function ivyeaAgentSessionLive(
+  sessionId: string,
+  handlers: IvyeaStreamHandlers,
+  opts?: { signal?: AbortSignal; from?: number },
+) {
+  const res = await fetch(
+    `/api/ivyea-agent/chat/sessions/${encodeURIComponent(sessionId)}/live?from=${Math.max(0, opts?.from || 0)}`,
+    { method: "GET", credentials: "include", signal: opts?.signal },
+  );
+  return pumpSse(res, handlers);
+}
+
+async function pumpSse(res: Response, handlers: IvyeaStreamHandlers) {
   if (!res.ok || !res.body) {
     let detail = "";
     try {
@@ -715,6 +755,10 @@ export async function ivyeaAgentChatStream(
     else if (event === "file_change") handlers.onFileChange?.(data);
     else if (event === "permission_request") handlers.onPermission?.(data);
     else if (event === "permission_timeout") handlers.onPermissionTimeout?.(data);
+    // 活轮回放的边界事件。同样必须显式分流 —— 落进 onEvent 会被当成老 agent 的
+    // 自由文本叙述，在时间线上凭空多出两行没有正文的注记。
+    else if (event === "live_begin") handlers.onLiveBegin?.(typeof data === "string" ? {} : data || {});
+    else if (event === "live_end") handlers.onLiveEnd?.(typeof data === "string" ? {} : data || {});
     else handlers.onEvent?.(data);
   };
   while (true) {
@@ -747,10 +791,14 @@ export async function ivyeaChatSessions(limit = 30) {
  * 别改回按条数取：一次提问能产生几十条消息，按条切会把用户自己发的那句话挤出窗口 ——
  * 这正是"刷新之后我发的指令不见了"的成因。
  */
+/** 这条会话现在有没有一轮正在跑（agent ≥ v1.15.17）。老 agent 不回报 → undefined。 */
+export type IvyeaLiveStatus = { running?: boolean; seq?: number; started_ms?: number };
+
 export async function ivyeaChatSession(
   sessionId: string, opts?: { turns?: number; before?: number },
 ) {
-  const { data } = await api.get<{ ok: boolean; session: IvyeaChatSessionDetail }>(
+  const { data } = await api.get<{ ok: boolean; session: IvyeaChatSessionDetail;
+                                   live?: IvyeaLiveStatus }>(
     `/ivyea-agent/chat/sessions/${encodeURIComponent(sessionId)}`,
     { params: { turns: opts?.turns, before: opts?.before } },
   );

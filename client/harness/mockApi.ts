@@ -511,6 +511,13 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
           breakdown: { system: 1520, tools: 6910, messages },
         },
       },
+      // ?live=1 —— 装成"这条会话正跑着一轮"。真 agent 在会话详情里回这一行
+      // （service.chat_session_detail 的 live），前端据此接进活轮日志。
+      // 不铺这条，"切走再切回来能看到进度"这条链路在验证台里一次都验不到 ——
+      // 而它恰恰是这次要修的那个毛病。
+      ...(new URLSearchParams(location.search).get("live") === "1"
+        ? { live: { running: true, seq: 3, started_ms: Date.now() - 42_000 } }
+        : {}),
     };
   }],
   ["/ivyea-agent/chat/sessions", { ok: true, sessions: [] }],
@@ -1376,6 +1383,14 @@ export function installMockApi(): void {
         ];
         for (const t of think) { await beat(1200); send("reasoning", { text: t }); }
         await beat(700);
+        // **工具之前先说一段话** —— 真 agent 就是这么干的（模型先写"我先去查一下"，
+        // 再调工具，回来接着说）。假流里此前一个字都不在工具之前，于是"分段汇报"
+        // 这件事在验证台里永远看不出来，改坏了也验不到。
+        for (const t of ["先确认数据源。", "我并行看一下本地有没有报表文件、",
+                         "以及已配置的 MCP 数据源里有没有广告相关的工具。"]) {
+          await beat(320); send("token", { text: t });
+        }
+        await beat(400);
         // 一批常规工具：界面上应该折成"搜索 2 次 · 读了 2 个文件 · 跑了 1 条命令"
         for (const [i, st] of [["grep", "搜索内容"], ["glob", "查找文件"],
                                ["read_file", "读取文件"], ["read_file", "读取文件"],
@@ -1392,6 +1407,12 @@ export function installMockApi(): void {
           await beat(900); send("reasoning", { text: t });
         }
         await beat(600);
+        // 第二段话：上一批工具的结论，下一批工具的理由。
+        for (const t of ["\n\nMCP 数据源是 sorftime，偏选品，没有广告报表拉取工具。",
+                         "那就用本地这份搜索词报表跑，缺的字段回头再补。"]) {
+          await beat(320); send("token", { text: t });
+        }
+        await beat(400);
         send("step", { type: "step", id: "s1", seq: 1, phase: "tool", name: "读取报表",
                        tool: "read_report", status: "running" });
         await beat(2200);
@@ -1420,7 +1441,7 @@ export function installMockApi(): void {
           await beat(2500);
         }
         await beat(600);
-        for (const t of ["先说结论：", "这一周花费涨了 34%，", "其中 28% 来自单次点击成本上升。"]) {
+        for (const t of ["\n\n## 先说结论\n\n", "这一周花费涨了 34%，", "其中 28% 来自单次点击成本上升。"]) {
           await beat(500); send("token", { text: t });
         }
         send("final", { session_id: "s-live", turn_id: "t-live",
@@ -1434,12 +1455,59 @@ export function installMockApi(): void {
     }), { status: 200, headers: { "content-type": "text/event-stream" } });
   };
 
+  /**
+   * 活轮日志的回放流（`GET /chat/sessions/{id}/live`）。
+   *
+   * 形状照抄 agent 的 live_turn.follow：先 live_begin，再把已经发生过的事件按
+   * 原顺序补一遍（正文和工具**交错**，这是分段汇报的凭据），最后继续实时跟随。
+   */
+  const liveStream = () => {
+    const enc = new TextEncoder();
+    const beat = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    return new Response(new ReadableStream({
+      async start(ctrl) {
+        const send = (event: string, data: unknown) =>
+          ctrl.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        send("live_begin", { running: true, seq: 6, dropped: 0,
+                             started_ms: Date.now() - 42_000 });
+        send("start", { session_id: "s-live", model: "deepseek-v4-pro", read_only: true });
+        send("todos", { todos: [
+          { content: "确认数据源与口径", status: "completed" },
+          { content: "拉搜索词报表，找浪费最集中的词根", status: "in_progress" },
+          { content: "给出否词与竞价的具体动作", status: "pending" },
+        ] });
+        // —— 回放：这一轮在别的标签页里已经跑掉的部分 ——
+        send("token", { text: "先确认数据源。本地报表和 MCP 数据源我并行看了一遍。" });
+        for (const [i, st] of [["grep", 40], ["read_file", 120], ["run_command", 320]].entries()) {
+          send("step", { type: "step", id: "r" + i, seq: i, phase: "tool",
+                         name: st[0], status: "ok", ms: st[1] });
+        }
+        send("token", { text: "\n\nsorftime 没有广告报表拉取工具，改用本地那份搜索词报表。" });
+        send("step", { type: "step", id: "r9", seq: 3, phase: "tool", name: "read_report",
+                       status: "running" });
+        // —— 跟随：回放完之后继续实时往下跑 ——
+        await beat(2000);
+        send("step", { type: "step", id: "r9", seq: 3, phase: "tool", name: "read_report",
+                       status: "ok", ms: 2000 });
+        for (const t of ["\n\n## 先说结论\n\n", "这一周花费涨了 34%，", "其中 28% 来自单次点击成本上升。"]) {
+          await beat(400); send("token", { text: t });
+        }
+        send("final", { session_id: "s-live", usage: { prompt_tokens: 9860, completion_tokens: 178 } });
+        send("live_end", { ended_ms: Date.now() });
+        ctrl.close();
+      },
+    }), { status: 200, headers: { "content-type": "text/event-stream" } });
+  };
+
   // MainLayout 的健康检查走的是裸 fetch，不经过 axios 实例。
   const realFetch = window.fetch.bind(window);
   window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.toString();
     if (url.startsWith("/api/assistant/chat")) {
       return Promise.resolve(sse(["兜底通道", "答的这一段。"]));
+    }
+    if (/\/api\/ivyea-agent\/chat\/sessions\/[^/]+\/live/.test(url)) {
+      return Promise.resolve(liveStream());
     }
     if (url.startsWith("/api/ivyea-agent/chat/stream")) {
       // 发出去的 payload 留一份：附图这类字段"前端明明处理了、agent 却没收到"的

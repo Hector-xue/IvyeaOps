@@ -16,7 +16,8 @@
     "test:approval": "node e2e/approval-modes.mjs",
     "test:restore": "node e2e/session-restore.mjs",
     "test:session-url": "node e2e/session-url.mjs",
-    "test:live-dock": "node e2e/live-dock.mjs"
+    "test:live-dock": "node e2e/live-dock.mjs",
+    "test:live-turn": "node e2e/live-turn.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",

@@ -265,6 +265,9 @@ def start_local_service() -> dict[str, Any]:
         token = _token()
         if token:
             env["IVYEA_API_TOKEN"] = token   # serve reads the token from env
+        # 下面 stdout 接的是 DEVNULL —— 不是控制台，Windows 就会按系统代码页(GBK)
+        # 编码，agent 的中文开场白直接编不出来、serve 崩在第一行输出上。
+        env.setdefault("PYTHONUTF8", "1")
         try:
             proc = subprocess.Popen(
                 cmd, cwd=str(ops_settings.root_dir), env=env,
@@ -666,6 +669,20 @@ def chat_session(session_id: str, turns: Any = 8, before: Any = None) -> dict[st
     if before is not None:
         query += f"&before={max(0, _paging_int(before, 0))}"
     return request_json("GET", f"/v1/chat/sessions/{safe_id}{query}")
+
+
+def chat_session_live(session_id: str, from_seq: int = 0) -> Any:
+    """接进这条会话**正在跑的那一轮**：先回放已发生的事件，再实时跟随。
+
+    这是"切走再回来 / 刷新 / 换台机器还能看到进度"的那条路。轮次本身跟这条连接
+    没有关系（agent 侧独立跑），所以随便接随便断。
+
+    超时必须给足：这条连接要挂到轮次结束，而一轮可以跑几十分钟。agent 每 15 秒
+    发一次 SSE 注释保活，所以"静默超时"不会误伤。
+    """
+    safe_id = urllib.parse.quote(session_id.strip(), safe="")
+    return request_stream("GET", f"/v1/chat/sessions/{safe_id}/live?from={max(0, int(from_seq or 0))}",
+                          timeout=max(_timeout(), 3600.0))
 
 
 def chat_session_delete(session_id: str) -> dict[str, Any]:

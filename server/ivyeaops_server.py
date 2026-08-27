@@ -14,6 +14,25 @@ from pathlib import Path
 
 logger = logging.getLogger("ivyeaops_server")
 
+
+def _force_utf8_stdio() -> None:
+    """把 stdout/stderr 钉成 UTF-8。**必须在任何分支之前跑。**
+
+    IvyeaOps 起内置 agent 时走 `<exe> agent-serve …`，子进程的 stdout 是
+    NUL / 日志文件 / 管道 —— 不是控制台。Windows 上 Python 这时按系统代码页
+    编码（中文机器 = GBK），而 agent 的开场白里有 ✓、正文全是中文：一个字符
+    编不出来就是 UnicodeEncodeError，serve 当场退出，用户只看到
+    "All connection attempts failed"。（实测崩过，v1.15.16 之前。）
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+        except Exception:
+            logger.debug("stream.reconfigure 失败（旁路，已忽略）", exc_info=True)
+
+
+_force_utf8_stdio()
+
 # Run the bundled IvyeaAgent's serve straight from this exe — checked BEFORE the
 # heavy IvyeaOps imports so the frozen package needs no separate Python/pip/agent
 # install. IvyeaOps starts this via `<exe> agent-serve --host … --port …`.
@@ -223,14 +242,9 @@ def _bootstrap_frozen_env() -> None:
         sys.stdout = (logs_dir / "ivyeaops.out.log").open("a", encoding="utf-8", buffering=1)
     if sys.stderr is None:
         sys.stderr = (logs_dir / "ivyeaops.err.log").open("a", encoding="utf-8", buffering=1)
-    # When a console *is* attached (the control window), it defaults to the
-    # system code page (GBK on 中文 Windows). Printing the app's Chinese log
-    # lines then raises UnicodeEncodeError and can crash startup — force UTF-8.
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
-        except Exception:
-            logger.debug("stream.reconfigure 失败（旁路，已忽略）", exc_info=True)
+    # 上面刚把 None 的流换成了日志文件对象，得对新流再钉一次（模块顶上那次
+    # 作用在旧流上）。控制台也一样：附了控制台时它默认走系统代码页。
+    _force_utf8_stdio()
 
     env_file = root / "server" / ".env"
     if env_file.exists():

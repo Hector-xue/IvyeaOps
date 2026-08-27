@@ -109,6 +109,10 @@ async function run() {
                                    // 背景图是运行时由服务端提供的绝对路径（/art/bg.png），
                                    // 打包器解析不到也不需要解析 —— 这条用例量的是排版，不是背景。
                                    "--external:/art/*",
+                                   // 字体同理：@font-face 里是运行时的绝对路径
+                                   // （/fonts/*.woff2），打包器解析不到就直接报错，
+                                   // 整条用例连页面都跑不起来。这条量的是排版不是字形。
+                                   "--external:/fonts/*",
                                    `--outfile=${path.join(work, "bundle.js")}`],
                            { cwd: path.resolve("."), encoding: "utf8" });
   if (bundle.status !== 0) throw new Error(bundle.stderr || bundle.stdout || "harness bundle failed");
