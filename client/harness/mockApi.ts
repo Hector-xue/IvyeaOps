@@ -404,6 +404,12 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
     ],
     total: 189, offset: 0, has_more: true,
   }],
+  // 谁在跑（左栏的闪烁标记）。字段照抄 routers/ivyea_agent.chat_live_sessions。
+  // 挑第 3 条（"测试"）是故意的：它不是列表里的第一条，验的是"标记跟着 id 走"
+  // 而不是"第一行永远在闪"。
+  ["/ivyea-agent/chat/live-sessions", {
+    ok: true, available: true, sessions: [{ id: "s3", started_ms: Date.now() - 42_000, seq: 12 }],
+  }],
   // 目录选择器。字段名照抄 server/app/agents/routers/files.py 的 browse_filesystem。
   ["/agents/browse-filesystem", {
     path: "/root", parent: "/",
@@ -1346,16 +1352,41 @@ const delayFor = (url: string): number => {
   return 0;
 };
 
+/**
+ * 页面送进来的追加指令（POST /chat/inject）。agentStream 跑到那一段时把它们回播成
+ * `injected` 事件 —— 这条来回必须真的走一遍：只发事件不收请求，验的就只是渲染，
+ * 而"说出去的话有没有真的送到"恰恰是这个功能的全部。
+ */
+const injected: { id: string; text: string }[] = [];
+
+/**
+ * 「停止」按下之后置位。假流在每一拍读它 —— 验证台里必须能复现"真的停下来"，
+ * 否则验的只是按钮变没变样，而这个功能的全部意义在于**它真的不再往下跑**。
+ */
+const stopped = { at: 0 };
+
 /** 装上假适配器。必须在 render 之前调用。 */
 export function installMockApi(): void {
-  const reply = (config: { url?: string; baseURL?: string }) => {
+  const reply = (config: { url?: string; baseURL?: string; data?: unknown }) => {
     // 用 baseURL + url 去匹配：Listing 等板块各自 axios.create 了实例，
     // 它们的 config.url 是 "/projects" 这种**相对自己 baseURL** 的短路径，
     // 只看 url 会和别的板块撞名。
     const base = (config.baseURL || "/api").replace(/^\/api/, "");
     const full = base + (config.url || "");
+    let body: any = {};
+    try { body = JSON.parse(String(config.data || "{}")); } catch { /* 非 JSON 请求 */ }
     return {
-      data: match(full || config.url || ""),
+      data: full.startsWith("/ivyea-agent/chat/inject")
+        ? (() => {
+            const item = { id: "inj-" + (injected.length + 1), text: String(body.text || "") };
+            injected.push(item);
+            return { ok: true, accepted: true, item, pending: injected.length };
+          })()
+        : full.startsWith("/ivyea-agent/chat/cancel")
+        ? (((stopped.at = Date.now())), { ok: true, cancelled: true })
+      : full.startsWith("/ivyea-agent/chat/question")
+          ? (((window as any).__lastQuestionAnswer = body), { ok: true })
+          : match(full || config.url || ""),
       status: 200,
       statusText: "OK",
       headers: {},
@@ -1379,6 +1410,13 @@ export function installMockApi(): void {
   // AI 问答那一页并进任务台后，"agent 掉线还能纯聊"这条退路就只剩这一个入口了，
   // 它坏没坏在真实页面上验不到就等于没验。
   const agentDown = new URLSearchParams(location.search).get("agentdown") === "1";
+  /**
+   * 开关必须在**装配时**读一次记住，不能在流跑到一半时现读 `location.search`：
+   * 任务台拿到 session_id 之后会 `navigate("/console?session=…", {replace:true})`
+   * 把地址栏整个换掉，那一刻起 `?followups=1` 就不在地址里了 —— 现读的话这一段
+   * 永远不会执行，而症状是"验证台里什么都没发生"，根本看不出是开关掉了。
+   */
+  const wantFollowups = new URLSearchParams(location.search).get("followups") === "1";
 
   /** 一段真的 SSE —— 兜底通道读的是流，喂 JSON 它一个字也解不出来。 */
   const sse = (chunks: string[]) => new Response(
@@ -1402,11 +1440,21 @@ export function installMockApi(): void {
    */
   const agentStream = () => {
     const enc = new TextEncoder();
+    stopped.at = 0;
+    // 每一拍都看一眼有没有人按停止 —— 真 agent 是在模型流的每个事件和每个工具步
+    // 边界读中止标志的，这里照同一个粒度模拟。
     const beat = (ms: number) => new Promise((r) => setTimeout(r, ms));
     return new Response(new ReadableStream({
       async start(ctrl) {
         const send = (event: string, data: unknown) =>
           ctrl.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        const halted = () => {
+          if (!stopped.at) return false;
+          send("cancelled", { session_id: "s-live", text: "（这一轮被你停掉了）",
+                              injected_pending: [] });
+          ctrl.close();
+          return true;
+        };
         send("start", { session_id: "s-live", turn_id: "t-live", model: "deepseek-v4-pro",
                         approval: "none", read_only: true });
         // 上下文用量：真 agent 在第一个 token 之前就发一份，收尾再发一份（见
@@ -1432,7 +1480,11 @@ export function installMockApi(): void {
           "再看是点击涨了还是单次点击成本涨了。",
           "手里没有报表，得先查数据源。",
         ];
-        for (const t of think) { await beat(1200); send("reasoning", { text: t }); }
+        for (const t of think) {
+          await beat(1200);
+          if (halted()) return;
+          send("reasoning", { text: t });
+        }
         await beat(700);
         // **工具之前先说一段话** —— 真 agent 就是这么干的（模型先写"我先去查一下"，
         // 再调工具，回来接着说）。假流里此前一个字都不在工具之前，于是"分段汇报"
@@ -1446,6 +1498,7 @@ export function installMockApi(): void {
         for (const [i, st] of [["grep", "搜索内容"], ["glob", "查找文件"],
                                ["read_file", "读取文件"], ["read_file", "读取文件"],
                                ["run_command", "执行命令"]].entries()) {
+          if (halted()) return;
           send("step", { type: "step", id: "b" + i, seq: i, phase: "tool", name: st[0],
                          status: "running" });
           await beat(160);
@@ -1491,11 +1544,45 @@ export function installMockApi(): void {
           });
           await beat(2500);
         }
+        // ── 选项卡 + 追加指令 ─────────────────────────────────────────
+        // ?followups=1 时铺这一段。两件事在验证台里都必须**真的发生过**，否则
+        // "跑着的时候能不能说话""拿不准时弹的那张卡长什么样"就只能靠读代码判断。
+        const followups = wantFollowups;
+        if (followups) {
+          await beat(400);
+          send("question_request", {
+            request_id: "q-demo-1", session_id: "s-live",
+            timeout_s: 300, expires_at: Date.now() / 1000 + 300,
+            questions: [{
+              question: "这三组词根按哪种力度处理？",
+              header: "处理力度",
+              options: [
+                { label: "先否词后观察", description: "只加否定精确，7 天后再看竞价", recommended: true },
+                { label: "否词 + 降竞价", description: "同时下调 15% 竞价，见效快但波动大" },
+              ],
+            }],
+          });
+          // 追加指令：等页面把它送进来（POST /chat/inject 会把文本塞进这个数组）。
+          for (let i = 0; i < 40 && !injected.length; i++) await beat(150);
+          for (const item of injected) {
+            send("injected", { session_id: "s-live", id: item.id, text: item.text,
+                               ts: Date.now() / 1000 });
+            await beat(200);
+            send("token", { text: `\n\n（收到追加要求：${item.text}）` });
+          }
+        }
         await beat(600);
         for (const t of ["\n\n## 先说结论\n\n", "这一周花费涨了 34%，", "其中 28% 来自单次点击成本上升。"]) {
-          await beat(500); send("token", { text: t });
+          await beat(500);
+          if (halted()) return;
+          send("token", { text: t });
         }
         send("final", { session_id: "s-live", turn_id: "t-live",
+                        ...(followups ? {
+                          started_ms: Date.now() - 42_000, ended_ms: Date.now(), ms: 42_000,
+                          auto_decisions: [{ question: "报表口径按哪个来？", header: "口径",
+                                             chosen: "按环比", reason: "timeout" }],
+                        } : {}),
                         usage: { prompt_tokens: 9860, completion_tokens: 178,
                                  prompt_cache_hit_tokens: 0, llm_ms: 2500 },
                         context: { used: 11240, window: 128000, percent: 8.8, estimated: true,

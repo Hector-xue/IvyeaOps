@@ -117,7 +117,6 @@ const ICONS: Record<string, LucideIcon> = {
   "tool-grep": Search,
   "tool-files": FolderOpen,
   "tool-memory": Brain,
-  "feed": Activity,
   "chev-up": ChevronUp,
   "chev-down": ChevronDown,
   // ── 回答末尾的动作行 ──

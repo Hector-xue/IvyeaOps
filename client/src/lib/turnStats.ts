@@ -165,3 +165,35 @@ export function aggregateStats(turns: StatsInput[]): TurnStats {
 }
 
 export default aggregateStats;
+
+
+/**
+ * 时长的人话写法。统计条和每轮的收尾行共用这一份 —— 同一段时间在两处显示成
+ * 不同格式（"185.3秒" vs "3分5秒"）会让人以为它们说的是两件事。
+ */
+export function fmtDuration(ms: number): string {
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(1)}秒`;
+  const m = Math.floor(s / 60);
+  const rest = Math.round(s - m * 60);
+  if (m < 60) return `${m}分${rest}秒`;
+  return `${Math.floor(m / 60)}小时${m % 60}分`;
+}
+
+/**
+ * 时刻的人话写法（本地时区）。`withSeconds` 给用户发出的那句话用 —— 连着发两条
+ * 时"09:46 / 09:46"看不出先后，秒才分得开；回答的收尾行只到分钟就够。
+ *
+ * 跨天的轮次补上日期：一条会话跨夜是常事，只显示 09:49 会让人以为是今天早上。
+ */
+export function clockText(ms: number, withSeconds = false): string {
+  const d = new Date(ms);
+  if (Number.isNaN(d.getTime())) return "";
+  const two = (n: number) => String(n).padStart(2, "0");
+  const hm = `${two(d.getHours())}:${two(d.getMinutes())}`
+    + (withSeconds ? `:${two(d.getSeconds())}` : "");
+  const now = new Date();
+  const sameDay = d.getFullYear() === now.getFullYear()
+    && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  return sameDay ? hm : `${two(d.getMonth() + 1)}/${two(d.getDate())} ${hm}`;
+}

@@ -117,6 +117,12 @@
   --warm-glow:rgba(74,222,128,.16);
   --bg-cover:rgba(12,12,12,.80);
 }
+/* 浅底皮肤统一压回官网在用的品牌深绿。基础值 #6DAF3F 是给暗底调的，压在近白底上
+   对比度只有 2.5:1（图形元素的下限是 3:1）—— 而这个颜色现在扛着"正在思考""正在跑"
+   "哪一步在做"这些真信息，不是装饰。换成 #5B9334 之后是 3.5:1（纯白底 3.7:1）。
+   月岩自己那份 --ivy 留在下面的块里（同值），改动前后逐字一致。 */
+[data-theme=quiet-light],[data-theme=mendao-light],[data-theme=lucent-light]{--ivy:#5B9334}
+
 /* ── Moonstone (light) ── */
 [data-theme=light]{
   --ivy:#5B9334;
@@ -3435,11 +3441,13 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 /* 高度写死。里面那株常春藤是个 SVG，挂载/卸载时会把这一行撑高一两像素 ——
    而它是整条叙述的第一行，撑高一次，底下每一行跟着挪一次（实测 4px）。 */
 /* 头部和下面每一行走**同一套列宽**：状态 14px / 图标 16px / 6px 间距。
-   头部没有状态，但那一格照样留着（`.af-head-gap` 是个空占位）—— 这样
-   「执行过程」和「联网搜索」落在同一条竖线上，藤叶和 ✓ 落在另一条。
-   上一版头部是 flex + 34px 图标格、body 另有 12px 缩进和一条 9px 处的竖线，
-   三个左边界互不相干：藤叶、竖线、✓ 三样各在各的位置，谁也不对着谁
-   （用户原话：感觉怪怪的，是不是没有对齐）。 */
+   头部的图标占第一格（对着下面那列 ✓），标题**紧挨着它**落在第二格 ——
+   也就是下面那列工具图标所在的竖线上。整块从上到下两条竖线：
+   ①状态 ✓ / 头部图标 / 旁白引线，②工具图标 / 「执行过程」/ 旁白正文。
+
+   这里曾经有第三条：标题被一个空占位格推到第三列（和「联网搜索」同列）。
+   那是为了修更早一版"三个左边界互不相干"留下的，但推到第三列之后标题离自己的
+   图标太远，看着像浮在半空（用户原话：往左缩进到挨着图标，与下面的符号对齐）。 */
 .af-head{display:flex;align-items:center;gap:6px;width:100%;height:26px;padding:0 6px 0 0;
   border:none;border-radius:var(--r);background:transparent;cursor:pointer;text-align:left;
   overflow:hidden;white-space:nowrap;
@@ -3447,10 +3455,8 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .af-head:hover{background:var(--bg2);color:var(--t2)}
 .af-head-ivy{display:inline-flex;align-items:center;justify-content:center;
   flex-shrink:0;width:14px;height:1.2em;line-height:0;color:var(--ivy)}
-/* 藤叶按 em 定尺寸（1.15em ≈ 15px），会从 14px 的格子里溢出来一点点。
-   在这一格里收成 1em，它和下面那一列 ✓ 才是同一个视觉宽度。 */
-.af-head-ivy .ivy-grow{width:1em;height:1em}
-.af-head-gap{flex-shrink:0;width:16px}
+/* 图标按 em 定尺寸，在这一格里收成 1em —— 它和下面那一列 ✓ 才是同一个视觉宽度。 */
+.af-head-ivy .steps-mark{width:1em;height:1em}
 .af-head-label{color:var(--t2)}
 .af-head-meta{color:var(--t3)}
 .af-head-toggle{margin-left:auto;display:inline-flex;align-items:center;gap:3px;
@@ -3518,8 +3524,11 @@ button.af-line:hover{background:var(--bg2)}
    **自成一类，不复用 .cc-answer**：安静/琉璃两套皮肤对那个类有 !important 的
    去盒子规则，挂上去自己的样式会被整段抹掉（实测 computed 是 0px/transparent）。
    形态上只留一条引线：它是过程里的旁白，不是这一轮的结论。 */
+/* 左缩进不是随手挑的：引线落在第一列（对着 ✓ 和头部图标），正文落在第二列
+   （对着工具图标和「执行过程」）。此前是 2+12=14px，正文卡在两列中间，谁也不挨着。
+   2px 引线 + 18px 内边距 = 20px = 14(状态格) + 6(列间距)。 */
 .cc-narration{font-size:var(--fs-115);line-height:1.75;color:var(--t2);
-  padding:1px 0 2px 12px;margin:2px 0 4px;
+  padding:1px 0 2px 18px;margin:2px 0 4px;
   border-left:2px solid color-mix(in srgb,var(--ivy) 30%,var(--bg1))}
 .cc-narration>*:first-child{margin-top:0}
 .cc-narration>*:last-child{margin-bottom:0}
@@ -3555,47 +3564,33 @@ button.af-line:hover{background:var(--bg2)}
 .cs-live-icon{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
   width:14px;height:14px;color:var(--t3);font-style:normal;line-height:1}
 .cs-live-icon.cs-live-done{color:var(--acc)}
-/* 常春藤生长 —— 思考中的那枚图标（见 components/console/IvyGrow.tsx）。
-   一个 2.8s 的循环：藤先画出来，三片叶子依次冒头，长满后整体轻轻褪一下再从头长。
-   尺寸用 em，跟着所在位置的字号走。 */
-.ivy-grow{width:1.15em;height:1.15em;overflow:visible;color:var(--ivy);
-  /* 整株一起淡入淡出。**淡出必须放在容器上**：让藤和叶各自淡出的话，它们的
-     animation-delay 不同，收尾时会先掉藤、剩三片叶子浮在半空 —— 看起来是散架，
-     不是"长完了重新长"（截图实拍过一次）。 */
-  animation:ivy-cycle 2.8s var(--ease) infinite}
-.ivy-stem{stroke:currentColor;stroke-width:1.7;
-  stroke-dasharray:26;stroke-dashoffset:26;
-  animation:ivy-stem 2.8s var(--ease) infinite}
-/* 三片叶子的先后**写进各自的关键帧百分比**，不用 animation-delay。
-   用 delay 的话每片叶子的时间线都比藤晚一截，循环回到起点时藤已经重画、叶子还停在
-   上一轮长好的样子 —— 那一帧看起来是三片叶子浮在半空（实拍验证过）。同一条时间线
-   才锁得住相位。 */
-.ivy-leaf{fill:currentColor;opacity:0;transform-box:fill-box;transform-origin:center;
-  animation-duration:2.8s;animation-timing-function:var(--ease);
-  animation-iteration-count:infinite}
-.ivy-leaf-1{animation-name:ivy-leaf-1}
-.ivy-leaf-2{animation-name:ivy-leaf-2}
-.ivy-leaf-3{animation-name:ivy-leaf-3}
-@keyframes ivy-cycle{0%{opacity:0}8%{opacity:1}86%{opacity:1}100%{opacity:0}}
-@keyframes ivy-stem{
-  0%{stroke-dashoffset:26}
-  46%,100%{stroke-dashoffset:0}
-}
-@keyframes ivy-leaf-1{
-  0%,14%{opacity:0;transform:scale(.3)}
-  24%,100%{opacity:1;transform:scale(1)}
-}
-@keyframes ivy-leaf-2{
-  0%,25%{opacity:0;transform:scale(.3)}
-  35%,100%{opacity:1;transform:scale(1)}
-}
-@keyframes ivy-leaf-3{
-  0%,36%{opacity:0;transform:scale(.3)}
-  46%,100%{opacity:1;transform:scale(1)}
-}
-/* 有人把系统动效关了 —— 那就只显示长好的样子，别硬闪。 */
+/* ── 「思考中」：三个点依次亮（components/console/ThinkingDots）────────────
+ * 换掉了原来那株生长的常春藤。藤是品牌意象，放这儿好看，但它说不清这一刻发生了
+ * 什么 —— 一株在长的植物既能读成"在想"，也能读成"在跑"、"在等"。
+ * 笔画和节奏与 .steps-mark 一套（点、依次亮）：两枚图标在同一栏里上下相邻，
+ * 得看起来像一家的东西。 */
+.thinking-dots{width:1.1em;height:1.1em;color:var(--ivy);display:block}
+.thinking-dots .td-dot{fill:currentColor}
+@keyframes think-seq{0%,100%{opacity:.25}40%{opacity:1}}
+.thinking-dots .td-dot-1{animation:think-seq 1.4s var(--ease) infinite}
+.thinking-dots .td-dot-2{animation:think-seq 1.4s var(--ease) .18s infinite}
+.thinking-dots .td-dot-3{animation:think-seq 1.4s var(--ease) .36s infinite}
+
+/* ── 「这个正在进行」：呼吸点 + 光环（components/console/RunningMark）──────
+ * 左栏的"这条会话正在跑"和状态坞的"这一步正在做"问的是同一件事，所以是同一枚
+ * 标记、同一段动效 —— 形状只在这里定义一次，位置和尺寸由各自的类去管。 */
+.pulse-mark{position:relative;width:9px;height:9px;flex-shrink:0;
+  display:inline-flex;align-items:center;justify-content:center;color:var(--ivy)}
+.pulse-mark i{position:absolute;inset:0;border-radius:50%;background:currentColor}
+.pulse-mark i:first-child{animation:pulse-ring 1.8s var(--ease) infinite}
+.pulse-mark i:last-child{transform:scale(.52);animation:pulse-core 1.8s var(--ease) infinite}
+@keyframes pulse-ring{0%{transform:scale(.5);opacity:.55}70%,100%{transform:scale(1.5);opacity:0}}
+@keyframes pulse-core{0%,100%{opacity:1}50%{opacity:.45}}
+/* 动效关掉时退成一颗静止的实心点 —— 信息不能只靠动画传达。 */
 @media (prefers-reduced-motion:reduce){
-  .ivy-grow,.ivy-stem,.ivy-leaf{animation:none;stroke-dashoffset:0;opacity:1;transform:none}
+  .thinking-dots .td-dot{animation:none;opacity:.7}
+  .pulse-mark i{animation:none}
+  .pulse-mark i:first-child{opacity:.25;transform:scale(1.3)}
 }
 .cs-live-icon.cs-live-think{color:var(--ivy)}
 .cs-live-icon.spinning{animation:cs-spin 2.4s linear infinite}
@@ -5370,3 +5365,132 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
   .cp-page{padding:10px 12px 20px}
   .cp-list{grid-template-columns:1fr}
 }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * 跑着的时候也能说话 —— 追加指令 / 选项卡 / 时刻 / 正在跑
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 追加指令的队列条 ────────────────────────────────────────────────────────
+ * 说出去的话去哪了必须看得见：已插进这一轮，还是排到下一轮。没有这条，用户在
+ * 跑着的时候补一句就成了往井里扔石头。 */
+.cc-queue{display:flex;flex-wrap:wrap;gap:6px;margin:0 2px 7px}
+.cc-queue-item{display:inline-flex;align-items:center;gap:6px;max-width:100%;
+  padding:4px 9px;border:1px solid var(--b);border-radius:999px;background:var(--bg2);
+  font-size:var(--fs-105);color:var(--t2);line-height:1.5}
+.cc-queue-item em{font-style:normal;color:var(--t3);flex-shrink:0}
+.cc-queue-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:min(46ch,50vw)}
+.cc-queue-item button{border:none;background:none;color:var(--t3);cursor:pointer;padding:0 2px;
+  font-size:var(--fs-105);line-height:1}
+.cc-queue-item button:hover{color:var(--t)}
+.cc-queue-dot{width:6px;height:6px;border-radius:50%;background:var(--t3);flex-shrink:0}
+.cc-queue-item.is-injected{border-color:color-mix(in srgb,var(--acc) 42%,var(--b));
+  background:color-mix(in srgb,var(--acc) 8%,var(--bg2))}
+.cc-queue-item.is-injected .cc-queue-dot{background:var(--acc)}
+.cc-queue-item.is-injected em{color:var(--acc)}
+.cc-queue-item.is-sending .cc-queue-dot{animation:cc-live-pulse 1.1s ease-in-out infinite}
+
+/* 忙碌时的发送键：仍然是发送键（追加给这一轮），只是加一圈提示。 */
+.cc-send.cc-send-followup{box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 18%,transparent)}
+/* 停止降级成次级按钮 —— 它做的事一直只是"断开这条流"，轮次照跑，不配当主键。 */
+.cc-stop-secondary{width:28px;height:28px;border-radius:50%;flex-shrink:0;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
+  border:1px solid var(--b);background:var(--bg2);color:var(--t3);
+  transition:all var(--dur) var(--ease)}
+.cc-stop-secondary:hover{color:var(--red);border-color:color-mix(in srgb,var(--red) 45%,var(--b))}
+
+/* ── 选项卡 ─────────────────────────────────────────────────────────────────
+ * 和审批卡长得像但语义相反：审批卡没人点就拒绝，选项卡没人点会**按推荐项继续**。
+ * 所以推荐项必须一眼看得出来 —— 那是"我不选的话会发生什么"的答案。 */
+.cs-question{display:flex;flex-direction:column;gap:9px;padding:11px 13px;border-radius:12px;
+  border:1px solid color-mix(in srgb,var(--acc) 30%,var(--b));background:var(--bg1);
+  max-width:min(92%,860px)}
+.cs-question-head{display:flex;align-items:center;gap:7px;font-size:var(--fs-12);color:var(--t)}
+.cs-question-head .cs-icon{color:var(--acc);font-weight:700}
+.cs-question-timer{margin-left:auto;font-size:var(--fs-10);color:var(--t3)}
+.cs-question-block{display:flex;flex-direction:column;gap:7px}
+.cs-question-text{font-size:var(--fs-115);color:var(--t2);line-height:1.6}
+.cs-question-tag{display:inline-block;margin-right:6px;padding:1px 7px;border-radius:999px;
+  background:var(--bg2);border:1px solid var(--b);font-size:var(--fs-10);color:var(--t3)}
+.cs-question-multi{margin-left:6px;font-size:var(--fs-10);color:var(--t3)}
+.cs-question-options{display:grid;gap:6px}
+.cs-question-opt{display:flex;flex-direction:column;gap:2px;text-align:left;cursor:pointer;
+  padding:8px 11px;border:1px solid var(--b);border-radius:10px;background:var(--bg2);
+  font-family:var(--font);transition:all var(--dur) var(--ease)}
+.cs-question-opt:hover{border-color:var(--b2);transform:translateY(-1px)}
+.cs-question-opt.is-on{border-color:var(--acc);
+  background:color-mix(in srgb,var(--acc) 10%,var(--bg2))}
+.cs-question-opt-label{display:flex;align-items:center;gap:6px;font-size:var(--fs-115);color:var(--t)}
+.cs-question-opt-label em{font-style:normal;padding:0 6px;border-radius:999px;font-size:var(--fs-10);
+  background:color-mix(in srgb,var(--acc) 16%,transparent);color:var(--acc)}
+.cs-question-opt-desc{font-size:var(--fs-105);color:var(--t3);line-height:1.6}
+.cs-question-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cs-question-hint{font-size:var(--fs-10);color:var(--t3)}
+.cs-question-done{flex-direction:row;align-items:flex-start;gap:8px;font-size:var(--fs-11);color:var(--t3)}
+.cs-question-done b{color:var(--t2);font-weight:600}
+.cs-question-done.is-auto{border-color:color-mix(in srgb,var(--amber) 35%,var(--b))}
+.cs-question-done.is-auto .cs-icon{color:var(--amber)}
+.cs-question-echo{margin-top:2px}
+
+/* ── "这几项是替你定的" ──────────────────────────────────────────────────── */
+.cc-autodec{display:flex;gap:8px;padding:9px 12px;border-radius:10px;
+  border:1px solid color-mix(in srgb,var(--amber) 32%,var(--b));
+  background:color-mix(in srgb,var(--amber) 6%,var(--bg1));
+  font-size:var(--fs-11);color:var(--t2);line-height:1.7;max-width:min(92%,860px)}
+.cc-autodec-mark{color:var(--amber);flex-shrink:0}
+.cc-autodec-row{color:var(--t2)}
+.cc-autodec-tip{color:var(--t3);font-size:var(--fs-105);margin-top:2px}
+
+/* ── 时刻 ───────────────────────────────────────────────────────────────────
+ * 一轮动辄几十分钟："我什么时候让它做的、它什么时候做完的、花了多久"是回看会话
+ * 时最先要找的三个坐标。字要小、要静，别和正文抢注意力。 */
+.cc-user-time{font-size:var(--fs-10);color:var(--t3);padding-right:2px}
+.cc-turn-clock{font-size:var(--fs-10);color:var(--t3);padding-left:2px}
+
+/* ── 左栏：正在跑 ───────────────────────────────────────────────────────────
+ * 一颗呼吸的圆点 + 一圈扩散的环。它回答的是"现在在跑"，不是"最近动过"
+ * （列表里的时间已经在说后者了）。 */
+/* 形状/动效在 .pulse-mark（全站共用），这里只管它在这一行里的位置和大小。 */
+.sb-sess-live{width:8px;height:8px;margin-right:2px;color:var(--acc)}
+@media (prefers-reduced-motion:reduce){
+  .cc-queue-item.is-sending .cc-queue-dot{animation:none}
+}
+
+/* 轮次跑到一半时用户补的那句话。它是"用户说过的话"，所以常驻显示、不折叠 —— 
+   执行过程那一栏只留最近几行，长任务里它几秒钟就被折进"展开更早的 N 行"。 */
+.cc-injected{display:flex;flex-direction:column;gap:4px;max-width:min(92%,860px)}
+/* **必须能换行。** 右边那截「19:59 · 收到追加指令，已插入本轮」是不可压缩的，
+   窄屏下它会把左边的正文挤到一个字宽 —— 实测 390px 时那句话被压成竖着的一列字
+   （一行一个字）。所以：放不下就让时间戳整条掉到下一行，正文永远占满一行宽。 */
+.cc-injected-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 7px;
+  padding:5px 10px;border-radius:8px;
+  background:color-mix(in srgb,var(--acc) 7%,var(--bg1));
+  border:1px solid color-mix(in srgb,var(--acc) 22%,var(--b));
+  font-size:var(--fs-11);color:var(--t2);line-height:1.6}
+.cc-injected-mark{color:var(--acc);flex-shrink:0}
+/* 基准宽度给 14ch：比这窄就换行，而不是继续被压。 */
+.cc-injected-text{flex:1 1 14ch;min-width:0;word-break:break-word}
+.cc-injected-meta{flex:0 1 auto;margin-left:auto;font-size:var(--fs-10);color:var(--t3)}
+
+/* 正在请求停止：转起来并锁住，别让人连点出两次请求。 */
+.cc-stop-secondary.is-stopping{cursor:default;color:var(--t3)}
+.cc-stop-secondary:disabled{cursor:default}
+
+/* ── 「执行过程」的头部图标：三行「点 + 横线」 ───────────────────────────────
+ * 形状见 components/console/StepsMark。静止时三行同色（都在那儿了）；运行时自上
+ * 而下依次亮（它在往下走）。用 opacity 做而不是换颜色：颜色一变，深浅色两套皮肤
+ * 各要调一遍，而透明度在哪套皮肤下都成立。 */
+.steps-mark{display:block}
+.steps-mark .steps-row{opacity:1}
+@keyframes steps-seq{0%,100%{opacity:.28}40%{opacity:1}}
+.steps-mark.is-running .steps-row-1{animation:steps-seq 1.5s var(--ease) infinite}
+.steps-mark.is-running .steps-row-2{animation:steps-seq 1.5s var(--ease) .25s infinite}
+.steps-mark.is-running .steps-row-3{animation:steps-seq 1.5s var(--ease) .5s infinite}
+/* 关掉动效时不能只是"停在某一帧"：停在 .28 那一帧会看着像坏了。
+   退成一个恒定的半亮，仍然和静止态区分得开。 */
+@media (prefers-reduced-motion:reduce){
+  .steps-mark.is-running .steps-row{animation:none;opacity:.65}
+}
+
+/* 状态坞计划列表里的「正在做」。和它上下的 ✓、○ 同宽同心，才排得成一列。 */
+.ld-doing-mark{width:8px;height:8px}

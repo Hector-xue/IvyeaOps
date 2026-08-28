@@ -18,22 +18,13 @@
  * 现在整行由 DockMeta 统一按宽度缩字号（见那个组件），装不下就把字缩小，
  * 绝不换行 —— 换行会把输入框整块往上顶。
  */
-import type { TurnStats } from "../../lib/turnStats";
+import { fmtDuration, type TurnStats } from "../../lib/turnStats";
 
 function fmtTokens(n: number): string {
   if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
   if (n >= 1e4) return `${(n / 1e3).toFixed(1)}K`;
   if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
   return String(n);
-}
-
-function fmtDuration(ms: number): string {
-  const s = ms / 1000;
-  if (s < 60) return `${s.toFixed(1)}秒`;
-  const m = Math.floor(s / 60);
-  const rest = Math.round(s - m * 60);
-  if (m < 60) return `${m}分${rest}秒`;
-  return `${Math.floor(m / 60)}小时${m % 60}分`;
 }
 
 export default function StatsBar({ stats }: { stats: TurnStats }) {

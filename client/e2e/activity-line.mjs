@@ -200,7 +200,7 @@ async function run() {
     await evaluate(send, `window.__finish(), true`);
     await delay(200);
     assert.equal(await visibleCount(send, ".af-run"), 0, "跑完了不许还有状态点在呼吸");
-    assert.equal(await visibleCount(send, ".ivy-grow"), 0, "跑完了常春藤要收掉");
+    assert.equal(await visibleCount(send, ".thinking-dots"), 0, "跑完了思考那三个点要收掉");
 
     assert.deepEqual(errors, [], "页面不能抛异常");
     process.stdout.write("activity feed browser E2E passed\n");

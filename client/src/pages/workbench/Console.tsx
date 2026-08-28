@@ -27,13 +27,14 @@ import {
 } from "../../lib/stepLabels";
 import { useStickToBottom } from "../../lib/useStickToBottom";
 import { createTurnStream } from "../../lib/turnStream";
-import { aggregateStats, mergeStats, type ServerStats, type TurnMetrics } from "../../lib/turnStats";
+import { aggregateStats, clockText, fmtDuration, mergeStats, type ServerStats, type TurnMetrics } from "../../lib/turnStats";
 import { type MatchedSkill, type Thought } from "../../components/console/ActivityFeed";
 import TurnBody from "../../components/console/TurnBody";
 import StatsBar from "../../components/console/StatsBar";
 import ContextMeter from "../../components/console/ContextMeter";
 import DockMeta from "../../components/console/DockMeta";
 import ApprovalCard from "../../components/console/ApprovalCard";
+import QuestionCard from "../../components/console/QuestionCard";
 import Composer, { approvalPayload, type ApprovalMode, type ComposerRef, type ComposerValue } from "../../components/console/Composer";
 import ArtifactRail, { type RailApproval, type RailTodo } from "../../components/console/ArtifactRail";
 import FollowUps from "../../components/console/FollowUps";
@@ -52,7 +53,10 @@ import {
   ivyeaAgentChatStream,
   ivyeaAgentSessionLive,
   ivyeaAwaitSessionAnswer,
+  ivyeaChatCancel,
+  ivyeaChatInject,
   ivyeaChatPermission,
+  ivyeaChatQuestion,
   ivyeaChatSession,
   ivyeaKnowledgeFile,
   ivyeaKnowledgeFiles,
@@ -65,7 +69,9 @@ import {
   type ConsolePreset,
   type IvyeaContextUsage,
   type IvyeaFileChange,
+  type IvyeaAutoDecision,
   type IvyeaPermissionRequest,
+  type IvyeaQuestionRequest,
   type IvyeaSkillInfo,
 } from "../../api/ivyeaAgent";
 import { splitModelId } from "../../components/console/ModelPicker";
@@ -87,6 +93,14 @@ const GATE_NOTE: Record<string, string> = {
 };
 
 const PREFS_KEY = "ivyea-ops.console.prefs";
+/**
+ * 还没发出去的追加指令，按会话存一份。
+ *
+ * 它此前只活在内存里：轮次跑着的时候排了两句话，手一抖关了标签页 —— 那两句就没了，
+ * 而用户以为自己已经说过了。这是"说出去的话必须有着落"这条承诺的最后一段缺口
+ * （agent 侧的收件箱只在活轮期间有效，也不该替浏览器记这个）。
+ */
+const QUEUE_KEY = "ivyea-ops.console.queue";
 
 /** 兜底通道（agent 掉线时）的人设。agent 在时人设由 serve 那边给。 */
 const FALLBACK_SYSTEM =
@@ -168,6 +182,34 @@ type Turn = {
    * 发过图 —— 用户原话："会话记录里面也没有展示我发送的图片"。
    */
   images?: string[];
+  /**
+   * 这一格发生的时刻（毫秒）。user = 说出这句话的时刻，assistant = 这一轮收尾的时刻。
+   * 界面上就是气泡旁的「09:46:12」和回答末尾的「结束于 09:49」。
+   *
+   * 本次页面跑的轮次由前端填；从存档恢复的轮次由 agent 的 turn_times 带回来
+   * （客户端自己掐的表在刷新/换机器之后一个数都没有）。
+   */
+  at?: number;
+  endedAt?: number;
+  /** 本轮弹出的选项卡（模型拿不准，把岔路摆出来让人点）。 */
+  questions?: { req: IvyeaQuestionRequest; answers?: Record<string, string>; auto?: boolean }[];
+  /** 本轮里替用户定的那些选择（没人在超时前选，按推荐项走了）。 */
+  autoDecisions?: IvyeaAutoDecision[];
+  /** 用户在这一轮跑着的时候补的话（已插进当前上下文）。 */
+  injected?: { id: string; text: string; ts?: number }[];
+};
+
+/**
+ * 一条说出去、但还没被这一轮读到的追加指令。
+ *
+ * `agentId` 是 agent 收下时给的编号 —— 一轮结束后靠它认领"哪几条真被读到了"，
+ * 剩下的补发成下一轮。
+ */
+type QueuedFollowUp = {
+  id: string;
+  text: string;
+  state: "sending" | "injected" | "queued";
+  agentId?: string;
 };
 
 /** 思考流只保留尾部这么多字符 —— 活动行只显示最后一句，多存无用。 */
@@ -245,6 +287,18 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
   const [composer, setComposer] = useState<ComposerValue>({ text: "", ...prefs.current });
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
+  // 轮次跑着的时候用户又说的话。空数组 = 没有待处理的追加指令。
+  const [queue, setQueue] = useState<QueuedFollowUp[]>([]);
+  // 队列落地：关标签页 / 刷新之后，还没发出去的那几句要还在。
+  // **只恢复"还没进 agent"的那些**：已经插进某一轮的（injected）属于那一轮，
+  // 恢复出来会让用户以为它还没发。
+  // 正在请求 agent 停这一轮（按钮转成"正在停止…"，防连点）。
+  const [stopping, setStopping] = useState(false);
+  const stoppingRef = useRef(false);
+  /** 这一轮是被停掉的 —— 收尾时据此跳过跟进建议。 */
+  const cancelledRef = useRef(false);
+  /** 已经从盘上恢复过待发队列的那个会话格子。没恢复完不许写盘（见下面两个 effect）。 */
+  const restoredQueueRef = useRef<string>("");
   const [sessionId, setSessionId] = useState("");
   const [model, setModel] = useState("");
   /**
@@ -615,6 +669,7 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
   const makeTurnStream = useCallback((aiId: string, extra?: {
     onSessionId?: (id: string) => void;
     onFinal?: (d: any) => void;
+    onCancelled?: (d: any) => void;
   }) => createTurnStream({
     patch: (patch) => patchTurn(aiId, patch as any),
     notify,
@@ -625,6 +680,7 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
     setReadOnly,
     onSessionId: extra?.onSessionId,
     onFinal: extra?.onFinal,
+    onCancelled: extra?.onCancelled,
   }), [patchTurn, notify]);
 
   /**
@@ -675,8 +731,11 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
     patchTurn(aiId, (t) => ({
       running: false,
       elapsedMs: Date.now() - startedAt,
-      // 这里的「停止」断的是**看**，不是那一轮 —— 轮次跑在 agent 里，与这条连接
-      // 无关。说成"已停止"会让人以为任务被掐了，然后对着还在动的会话发懵。
+      // 同上：本地 abort（停不掉时的兜底、或离开这条会话）不代表那一轮结束了。
+      ...(ctrl.signal.aborted ? {} : { endedAt: Date.now() }),
+      // 走到这里的 abort 是"不看了"，不是"停了" —— 真停止走 /chat/cancel，
+      // 那条路上流会正常收尾。说成"已停止"会让人以为任务被掐了，然后对着还在
+      // 动的会话发懵。
       ...(ctrl.signal.aborted && !t.text
         ? { text: "（已停止查看，这一轮仍在后台继续；回到这条会话可以再接上）" }
         : {}),
@@ -804,7 +863,7 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
     const sentPicked = picked;
     setImages([]);
     setPicked([]);
-    const userTurn: Turn = { id: uid(), role: "user", text, images: sentImages };
+    const userTurn: Turn = { id: uid(), role: "user", text, images: sentImages, at: Date.now() };
     const aiId = uid();
     const aiTurn: Turn = {
       id: aiId, role: "assistant", text: "", steps: [], skills: [], approvals: [], running: true,
@@ -933,6 +992,7 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
         if (d?.session_id) setSessionId(d.session_id);
         if (d?.usage) setUsage(d.usage);
       },
+      onCancelled: () => { cancelledRef.current = true; },
     });
 
     try {
@@ -964,6 +1024,9 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
           // 要模型的思考流：活动行上"它在想什么"比"它在调哪个工具"更贴近现在发生了什么。
           // 老 agent 不认识这个字段会直接忽略，老前端根本不会发它 —— 两个方向都安全。
           stream_reasoning: true,
+          // 这一端有人在看，也画得出选项卡 —— 模型拿不准时才该把岔路弹过来。
+          // 不带这个字段的调用方（服务端自己读流的那几处）不会收到选项卡。
+          interactive: true,
           ops_context: { board: "console", pathname: "/console" },
         },
         stream.handlers,
@@ -1011,6 +1074,10 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
       patchTurn(aiId, (t) => ({
         running: false,
         elapsedMs: Date.now() - startedAt,
+        // 收尾时刻只在这一轮**真的结束**时才记。按停止走的是 /chat/cancel，agent
+        // 确认停住后这条流会正常收尾（照写）；而"停不掉、只好断流"那条兜底路径下
+        // 轮次还在 agent 那边跑，那时候写一行"结束于 09:49"就是在撒谎。
+        ...(ctrl.signal.aborted ? {} : { endedAt: Date.now() }),
         // 断链/取消的轮次也把测到的部分留下 —— 半截数据仍然能说明"卡在哪"，
         // 整轮丢弃反而让统计条在最需要解释的那一轮上变成空白。
         metrics: {
@@ -1026,7 +1093,9 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
 
     notifyConsoleSessionsChanged();     // 新会话进左栏 / 已有会话更新时间
     const answered = recovered || stream.text();
-    if (answered.trim()) void loadFollowUps(text, answered);
+    // 被用户停掉的轮次不跑跟进建议：那是**又一次模型调用**，而他刚说的是"别做了"。
+    if (answered.trim() && !cancelledRef.current) void loadFollowUps(text, answered);
+    cancelledRef.current = false;
     // images / picked 必须在依赖里：send 里读了它们。漏掉的话这个回调会闭包住
     // 旧值 —— 贴完图不打字直接发，图就丢了（之前靠"总会先打字"侥幸没暴露）。
   }, [composer, busy, sessionId, images, picked, agentTakesAttachments,
@@ -1062,9 +1131,171 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
     } catch { /* 存不下就只影响这一次会话，不值得打扰用户 */ }
   };
 
-  const stop = () => {
-    abortRef.current?.abort();
-  };
+  /**
+   * 轮次跑着的时候用户又说的话。
+   *
+   * 两条去处，界面上分得很清（用户必须知道自己那句话什么时候起作用）：
+   *   · 这条会话此刻有活轮 → agent 收下，在两个工具步之间插进**当前这一轮**，
+   *     模型下一步就看得见；
+   *   · 没有活轮（老 agent、或这一轮刚好收尾了）→ 排队，本轮一结束就当下一轮发出去。
+   *
+   * "说出去的话到底进没进去"必须有准信：`accepted` 才算送达，收到 agent 的
+   * `injected` 事件（带同一个 id）才算真被读到。没被读到的，收尾时一律补发 ——
+   * 宁可晚一轮，也不能无声吞掉一句用户说过的话。
+   */
+  const followUp = useCallback(async (raw: string) => {
+    const text = raw.trim();
+    if (!text) return;
+    const id = uid();
+    setQueue((q) => [...q, { id, text, state: "sending" }]);
+    if (!sessionId) {
+      setQueue((q) => q.map((it) => (it.id === id ? { ...it, state: "queued" } : it)));
+      return;
+    }
+    try {
+      const out = await ivyeaChatInject({ session_id: sessionId, text });
+      setQueue((q) => q.map((it) => (it.id === id
+        ? (out?.accepted
+            ? { ...it, state: "injected" as const, agentId: String(out?.item?.id || "") }
+            : { ...it, state: "queued" as const })
+        : it)));
+      if (!out?.accepted && out?.reason && out.reason !== "no_live_turn") {
+        notify("warn", `这句话没能插进当前这一轮（${out.reason}），已排到下一轮。`);
+      }
+    } catch (e: any) {
+      // 送不进去不等于这句话作废 —— 排队，本轮结束后照发。
+      setQueue((q) => q.map((it) => (it.id === id ? { ...it, state: "queued" } : it)));
+      notify("warn", errText(e, "追加指令没送进这一轮，已排到下一轮"));
+    }
+  }, [sessionId, notify]);
+
+  /**
+   * 一轮结束：把**没被这一轮读到的**追加指令当成下一轮发出去。
+   *
+   * 认领靠 agent 回的 id（`injected` 事件里的那个），不靠文本比对 —— 事件里的文本
+   * 经过脱敏，可能和用户打的字不完全一样，比文本会漏认，漏认就是重复发一遍。
+   */
+  useEffect(() => {
+    if (busy || !queue.length) return;
+    const consumed = new Set(
+      turns.flatMap((t) => (t.injected || []).map((i) => i.id).filter(Boolean)),
+    );
+    const leftovers = queue.filter((q) => !q.agentId || !consumed.has(q.agentId));
+    setQueue([]);
+    if (leftovers.length) void send(leftovers.map((q) => q.text).join("\n"));
+  }, [busy, queue, turns, send]);
+
+  // 读盘：打开/切到一条会话时，把上次没发出去的接回来。
+  // 放进队列即可 —— 补发那条 effect 会在不忙的时候把它们发出去。
+  useEffect(() => {
+    const key = QUEUE_KEY + ":" + (sessionId || "new");
+    let saved: QueuedFollowUp[] = [];
+    try { saved = JSON.parse(localStorage.getItem(key) || "[]"); } catch { /* 读不出就当没有 */ }
+    if (Array.isArray(saved) && saved.length) {
+      setQueue((cur) => {
+        const seen = new Set(cur.map((q) => q.text));
+        const back = saved
+          .filter((q) => q && typeof q.text === "string" && q.text.trim() && !seen.has(q.text))
+          .map((q) => ({ id: uid(), text: q.text, state: "queued" as const }));
+        return back.length ? [...cur, ...back] : cur;
+      });
+    }
+    // **恢复完才允许写盘。** 顺序反过来的话，挂载时那次"队列是空的"会先把盘上
+    // 那份删掉，紧接着才去读 —— 读到的自然是空的，于是关页面前排的那几句
+    // 每次都恰好在恢复前一刻被自己抹掉（这条是 E2E 当场抓出来的）。
+    restoredQueueRef.current = key;
+  }, [sessionId]);
+
+  // 写盘：队列一变就存（按会话分格；没有会话 id 时用一个通用格子，
+  // 因为那种情况下这句话本来就是要当成"下一轮"发出去的）。
+  useEffect(() => {
+    const key = QUEUE_KEY + ":" + (sessionId || "new");
+    if (restoredQueueRef.current !== key) return;      // 见上面那段：先恢复，后写盘
+    try {
+      // 已经被这一轮收下的（injected）属于那一轮，不进待发盘 —— 留着的话刷新之后
+      // 会被当成"还没发"再发一遍。
+      const keep = queue.filter((q) => q.state !== "injected");
+      if (keep.length) localStorage.setItem(key, JSON.stringify(keep));
+      else localStorage.removeItem(key);
+    } catch { /* 存不下就退回内存态，不该打扰用户 */ }
+  }, [queue, sessionId]);
+
+  /** 回答一张选项卡。答不上去（超时/已被别的页签答了）就照实说，别装作点成功了。 */
+  const answerQuestion = useCallback(async (
+    turnId: string, req: IvyeaQuestionRequest, answers: Record<string, string>,
+  ) => {
+    try {
+      // session_id 是**归属凭据**，不是可选的补充信息：ops 按"这条会话是不是你的"
+      // 放行（那份归属落在库里，ops 重启还在）。req.session_id 是 agent 发卡时带的，
+      // 优先用它 —— 页面上的 sessionId 在极少数时序下还没落定。
+      await ivyeaChatQuestion({
+        request_id: req.request_id,
+        session_id: req.session_id || sessionId,
+        answers,
+      });
+      patchTurn(turnId, (t) => ({
+        questions: (t.questions || []).map((q) =>
+          q.req.request_id === req.request_id ? { ...q, answers } : q),
+      }));
+    } catch (e: any) {
+      notify("warn", errText(e, "这张选项卡已经失效（多半是超时后按推荐项继续了）"));
+      patchTurn(turnId, (t) => ({
+        questions: (t.questions || []).map((q) =>
+          q.req.request_id === req.request_id ? { ...q, auto: true } : q),
+      }));
+    }
+  }, [sessionId, notify, patchTurn]);
+
+  /**
+   * 真·停止。
+   *
+   * 此前这里只有一行 `abortRef.current?.abort()` —— 那不是停止，是"我不看了"：
+   * 轮次在 agent 那边照跑照烧 token（用户原话："有的任务不想做了却无法终止，
+   * 难道要一直烧 token 吗"）。现在先让 agent 真停下来，再收尾。
+   *
+   * 三条路都必须说实话：
+   *   · 停住了 → 等 agent 的 `cancelled` 事件把这一轮收尾（正文和落盘都在里面）；
+   *   · 这条会话本来就没在跑（刚好收尾了）→ 断流即可，别显示"已停止"；
+   *   · 停不掉（老 agent 没这个端点 / agent 挂了）→ 明说后台可能还在跑，
+   *     绝不能让界面显示"已停止"而它其实还在花钱。
+   */
+  const stop = useCallback(async () => {
+    if (stoppingRef.current) return;             // 连点两下不该发两次
+    const sid = sessionId;
+    if (!sid) {
+      abortRef.current?.abort();                 // 会话还没建起来，只能断流
+      return;
+    }
+    stoppingRef.current = true;
+    setStopping(true);
+    try {
+      const out = await ivyeaChatCancel({ session_id: sid });
+      if (out?.cancelled) {
+        // 排着的追加指令一并作废：任务都不想做了，那几句话更不该自己跑起来。
+        const dropped = queue.length;
+        setQueue([]);
+        notify("info", dropped
+          ? `已停止这一轮，${dropped} 条待发的追加指令也一并取消。已经跑出来的内容都留着。`
+          : "已停止这一轮。已经跑出来的内容都留着。");
+        // 不立刻 abort：`cancelled` 事件里带着这一轮的正文，而且 agent 要在那之前
+        // 把执行过程和时间账落盘。给它 6 秒，超时再断流兜底。
+        //
+        // **只掐这一轮那个 controller**，不是"6 秒后 abort 当时的 abortRef" ——
+        // 用户停完马上又发了一句的话，那个引用早换成新一轮的了，会把刚发的这轮掐掉。
+        const stoppingCtrl = abortRef.current;
+        window.setTimeout(() => stoppingCtrl?.abort(), 6000);
+      } else {
+        abortRef.current?.abort();
+        notify("info", "这一轮刚好已经结束了。");
+      }
+    } catch (e: any) {
+      abortRef.current?.abort();
+      notify("warn", errText(e, "没能停掉这一轮（agent 版本过旧或没连上）：已停止查看，但后台可能还在跑"));
+    } finally {
+      stoppingRef.current = false;
+      setStopping(false);
+    }
+  }, [sessionId, queue.length, notify]);
 
   const attach = useCallback(async (file: File) => {
     setAttaching(true);
@@ -1117,6 +1348,10 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
       value={composer}
       onChange={patch}
       onSubmit={() => void send()}
+      onFollowUp={(text) => void followUp(text)}
+      stopping={stopping}
+      queue={queue}
+      onQueueRemove={(id) => setQueue((q) => q.filter((it) => it.id !== id))}
       onStop={stop}
       onAttach={attach}
       busy={busy}
@@ -1223,6 +1458,9 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
                           </div>
                         )}
                         {!!t.text && <div className="cc-bubble">{t.text}</div>}
+                        {/* 发出这句话的时刻。一轮动辄几十分钟，"我是什么时候让它做
+                            这件事的"是回看会话时最先要找的坐标。 */}
+                        {!!t.at && <div className="cc-user-time">{clockText(t.at, true)}</div>}
                       </div>
                     </div>
                   ) : (
@@ -1305,6 +1543,62 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
                           onDecide={(choice) => void decide(t.id, req, choice)}
                         />
                       ))}
+                      {/*
+                        * 这一轮跑到一半时用户补的话。它**不是**执行步骤，所以不能只
+                        * 躺在执行过程里（那一栏只显示最近几行，长任务里它很快就被折进
+                        * "展开更早的 N 行"）。用户说过的话必须一直看得见。
+                        */}
+                      {!!t.injected?.length && (
+                        <div className="cc-injected">
+                          {t.injected.map((it) => (
+                            <div className="cc-injected-row" key={it.id || it.text}>
+                              <span className="cc-injected-mark">↳</span>
+                              <span className="cc-injected-text">{it.text}</span>
+                              <span className="cc-injected-meta">
+                                {it.ts ? `${clockText(it.ts * 1000, true)} · ` : ""}收到追加指令，已插入本轮
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {/* 选项卡：模型拿不准，把岔路摆出来让人点。没人点也不挂死 ——
+                          到点 agent 自己按推荐项继续。 */}
+                      {(t.questions || []).map(({ req, answers, auto }) => (
+                        <QuestionCard
+                          key={req.request_id}
+                          request={req}
+                          answered={answers}
+                          autoChosen={auto}
+                          onAnswer={(picked) => void answerQuestion(t.id, req, picked)}
+                        />
+                      ))}
+                      {/*
+                        * 这一轮有哪几项是**替用户定的**。界面自己说 —— 模型经常不在
+                        * 总结里提，而"我没选，它替我选了"恰恰是最该被看到的一件事。
+                        */}
+                      {!!t.autoDecisions?.length && (
+                        <div className="cc-autodec">
+                          <span className="cc-autodec-mark">⏱</span>
+                          <div>
+                            <b>这一轮有 {t.autoDecisions.length} 项是按推荐项自动定的</b>
+                            （弹了选项卡但没人在超时前选）：
+                            {t.autoDecisions.map((d) => (
+                              <div key={d.question} className="cc-autodec-row">
+                                {d.header ? `【${d.header}】` : ""}{d.question} → <b>{d.chosen}</b>
+                              </div>
+                            ))}
+                            <div className="cc-autodec-tip">想换一个做法，直接说一句就行。</div>
+                          </div>
+                        </div>
+                      )}
+                      {/* 一轮的收尾时刻与时长。刷新之后也在（数来自 agent 的 turn_times）。 */}
+                      {!t.running && (t.endedAt || t.elapsedMs) && (
+                        <div className="cc-turn-clock">
+                          {t.endedAt ? `结束于 ${clockText(t.endedAt)}` : ""}
+                          {t.endedAt && t.elapsedMs ? " · " : ""}
+                          {t.elapsedMs ? `用时 ${fmtDuration(t.elapsedMs)}` : ""}
+                        </div>
+                      )}
                     </div>
                   ),
                 )}

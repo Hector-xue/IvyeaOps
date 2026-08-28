@@ -500,3 +500,146 @@ def test_service_availability_handles_unreachable(ctx, monkeypatch):
     assert body["ok"] is False
     assert body["available"] is False
     assert "offline" in body["error"]
+
+
+# ── 轮次跑着的时候还能说话：追加指令 / 选项卡 / 活轮清单 ──────────────────────
+
+def _own_session(router, monkeypatch, allowed: set[str]):
+    """把归属校验按 allowed 名单短路 —— 这几条路由的第一道闸就是它。"""
+    monkeypatch.setattr(router.console_sessions, "can_access",
+                        lambda sid, principal, is_admin: sid in allowed)
+
+
+def test_inject_forwards_to_the_running_turn(ctx, monkeypatch):
+    svc, router = ctx
+    seen = {}
+    def fake_inject(payload):
+        seen["p"] = payload
+        return {"ok": True, "accepted": True}
+
+    monkeypatch.setattr(svc, "chat_inject", fake_inject)
+    _own_session(router, monkeypatch, {"s1"})
+
+    out = router.chat_inject(router.ChatInjectBody(session_id="s1", text="顺便把标题也改了"),
+                             info={"user": "u1", "is_admin": False})
+    assert out["accepted"] is True
+    assert seen["p"] == {"session_id": "s1", "text": "顺便把标题也改了"}
+
+
+def test_inject_refuses_someone_elses_session(ctx, monkeypatch):
+    svc, router = ctx
+    monkeypatch.setattr(svc, "chat_inject", lambda payload: {"ok": True, "accepted": True})
+    _own_session(router, monkeypatch, set())
+    with pytest.raises(HTTPException) as exc:
+        router.chat_inject(router.ChatInjectBody(session_id="s1", text="x"),
+                           info={"user": "u1", "is_admin": False})
+    assert exc.value.status_code == 403
+
+
+def test_question_ownership_is_judged_by_the_session_not_by_memory(ctx, monkeypatch):
+    """选项卡的归属看会话（落在库里，ops 重启还在），不看内存里的 request_id 登记表。
+
+    用那张表的代价是：ops 一重启，用户面前那张卡就点不动了，而 agent 那边还老实
+    等着人选 —— 只能干等五分钟超时。会话归属没有这个问题。
+    """
+    svc, router = ctx
+    seen = {}
+
+    def fake_question(payload):
+        seen["p"] = payload
+        return {"ok": True}
+
+    monkeypatch.setattr(svc, "chat_question", fake_question)
+    _own_session(router, monkeypatch, {"s1"})
+    # 注意：没有任何 _remember_approval_owner —— 这正是"ops 刚重启"的状态
+    assert router.chat_question(
+        router.ChatQuestionBody(request_id="r1", session_id="s1", answers={"投递语义": "真注入"}),
+        info={"user": "u1", "is_admin": False})["ok"]
+    assert seen["p"] == {"request_id": "r1", "answers": {"投递语义": "真注入"}}
+
+    _own_session(router, monkeypatch, set())
+    with pytest.raises(HTTPException) as exc:
+        router.chat_question(router.ChatQuestionBody(request_id="r1", session_id="s1",
+                                                     answers={"q": "a"}),
+                             info={"user": "u2", "is_admin": False})
+    assert exc.value.status_code == 403
+
+
+def test_question_double_answer_reads_as_conflict_not_server_error(ctx, monkeypatch):
+    """另一个页签先选了 —— 那是 409，不是"服务器坏了"。"""
+    svc, router = ctx
+
+    def boom(_payload):
+        raise HTTPException(status_code=502, detail="IvyeaAgent HTTP 404")
+
+    monkeypatch.setattr(svc, "chat_question", boom)
+    _own_session(router, monkeypatch, {"s1"})
+    with pytest.raises(HTTPException) as exc:
+        router.chat_question(router.ChatQuestionBody(request_id="r2", session_id="s1",
+                                                     answers={"q": "a"}),
+                             info={"user": "u1", "is_admin": False})
+    assert exc.value.status_code == 409
+
+
+def test_live_sessions_filters_by_ownership(ctx, monkeypatch):
+    svc, router = ctx
+    monkeypatch.setattr(svc, "chat_live_sessions",
+                        lambda: {"ok": True, "sessions": [{"id": "mine"}, {"id": "theirs"}]})
+    _own_session(router, monkeypatch, {"mine"})
+    out = router.chat_live_sessions(info={"user": "u1", "is_admin": False})
+    assert out["available"] is True
+    assert [r["id"] for r in out["sessions"]] == ["mine"]
+
+
+def test_live_sessions_says_unavailable_instead_of_empty(ctx, monkeypatch):
+    """agent 没起时必须说"问不到"——回空列表会让正在跑的会话看着像已经停了。"""
+    svc, router = ctx
+
+    def down():
+        raise HTTPException(status_code=503, detail="down")
+
+    monkeypatch.setattr(svc, "chat_live_sessions", down)
+    out = router.chat_live_sessions(info={"user": "u1", "is_admin": False})
+    assert out == {"ok": True, "available": False, "sessions": []}
+
+
+def test_interactive_flag_only_travels_when_the_caller_asks_for_it(ctx, monkeypatch):
+    """选项卡是 opt-in：不带 interactive 的调用方（服务端自己读流的那几处）
+    收到的 payload 与改动前逐字一致，agent 那边也就不会弹出没人能点的卡片。"""
+    svc, router = ctx
+    seen = {}
+
+    def fake_chat(payload):
+        seen.setdefault("payloads", []).append(payload)
+        return {"ok": True, "text": "hi"}
+
+    monkeypatch.setattr(svc, "chat", fake_chat)
+    router.chat(router.ChatBody(message="你好"), FakeRequest())
+    router.chat(router.ChatBody(message="你好", interactive=True), FakeRequest())
+
+    plain, interactive = seen["payloads"]
+    assert "interactive" not in plain
+    assert interactive["interactive"] is True
+
+
+def test_cancel_forwards_and_checks_ownership(ctx, monkeypatch):
+    """「停止」现在是真停止：把中止请求转给 agent，且只能停自己的会话。"""
+    svc, router = ctx
+    seen = {}
+
+    def fake_cancel(payload):
+        seen["p"] = payload
+        return {"ok": True, "cancelled": True}
+
+    monkeypatch.setattr(svc, "chat_cancel", fake_cancel)
+    _own_session(router, monkeypatch, {"s1"})
+    out = router.chat_cancel(router.ChatCancelBody(session_id="s1"),
+                             info={"user": "u1", "is_admin": False})
+    assert out["cancelled"] is True
+    assert seen["p"] == {"session_id": "s1"}
+
+    _own_session(router, monkeypatch, set())
+    with pytest.raises(HTTPException) as exc:
+        router.chat_cancel(router.ChatCancelBody(session_id="s1"),
+                           info={"user": "u1", "is_admin": False})
+    assert exc.value.status_code == 403

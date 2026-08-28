@@ -704,6 +704,40 @@ def chat_permission(payload: dict[str, Any]) -> dict[str, Any]:
     return request_json("POST", "/v1/chat/permission", payload, timeout=20.0)
 
 
+def chat_inject(payload: dict[str, Any]) -> dict[str, Any]:
+    """把一条追加指令投进**正在跑的那一轮**（agent ≥ v1.16.0）。
+
+    回包里的 `accepted` 才是答案：没有活轮时 agent 明确不收（accepted=false），
+    调用方据此把这句话当成下一轮发出去 —— "这句话到底进没进去"必须有个准信。
+    """
+    return request_json("POST", "/v1/chat/inject", payload, timeout=20.0)
+
+
+def chat_question(payload: dict[str, Any]) -> dict[str, Any]:
+    """回送一次选项卡的选择，解开阻塞在 ask_user_question 上的那一步。"""
+    return request_json("POST", "/v1/chat/question", payload, timeout=20.0)
+
+
+def chat_cancel(payload: dict[str, Any]) -> dict[str, Any]:
+    """真的停掉这条会话正在跑的那一轮（agent ≥ v1.16.0）。
+
+    回包里的 `cancelled` 才是答案：False = 这条会话本来就没有在跑的轮次。
+    老 agent 没有这个端点 —— 调用方拿到 404/502 时要照实说"停不掉"，
+    绝不能显示"已停止"却其实什么都没停。
+    """
+    return request_json("POST", "/v1/chat/cancel", payload, timeout=20.0)
+
+
+def chat_live_sessions() -> dict[str, Any]:
+    """此刻真的有一轮在跑的会话（agent ≥ v1.16.0）。左栏的闪烁标记读它。
+
+    读的是 agent 的内存态，不扫会话文件 —— 这个接口会被几秒问一次。
+    老 agent 没有这个端点：调用方拿到 None 时**不要**当成"一条都没在跑"，
+    那会让正在执行的会话看着像已经停了；应该退回"不显示这个标记"。
+    """
+    return request_json("GET", "/v1/chat/live-sessions", timeout=5.0)
+
+
 def pending_permissions() -> list[str] | None:
     """agent 此刻**真的还卡在等人点**的审批 id（agent ≥ v1.16.1）。
 

@@ -53,9 +53,13 @@ export default function Composer({
   value,
   onChange,
   onSubmit,
+  onFollowUp,
   onStop,
+  stopping,
   onAttach,
   busy,
+  queue = [],
+  onQueueRemove,
   skills,
   workspaces,
   onNewWorkspace,
@@ -81,9 +85,20 @@ export default function Composer({
   value: ComposerValue;
   onChange: (patch: Partial<ComposerValue>) => void;
   onSubmit: () => void;
+  /**
+   * 轮次**跑着的时候**又说了一句话。给了它，忙碌中的发送键就还是发送键 ——
+   * 任务跑起来就闭麦是这个输入框以前最大的毛病：想补一句"顺便把 X 也改了"，
+   * 只能干等几十分钟或者掐掉重说。不给则退回老行为（忙碌时不能发）。
+   */
+  onFollowUp?: (text: string) => void;
   onStop?: () => void;
+  /** 正在请求 agent 停这一轮 —— 按钮转成等待态，防连点。 */
+  stopping?: boolean;
   onAttach?: (file: File) => void;
   busy?: boolean;
+  /** 已经说出去、但还没被这一轮读到的追加指令。 */
+  queue?: { id: string; text: string; state: "sending" | "injected" | "queued" }[];
+  onQueueRemove?: (id: string) => void;
   skills: IvyeaSkillInfo[];
   workspaces: string[];
   /** 点了下拉里的「新建工作区…」。由 Console 弹出创建流程。 */
@@ -253,8 +268,19 @@ export default function Composer({
     el.style.minHeight = keepMin;   // 交还给 CSS：真正的下限还是它说了算
   }, [value.text, compact]);
 
+  const canFollowUp = Boolean(busy && onFollowUp);
+
   const submit = () => {
-    if (busy || !value.text.trim()) return;
+    const text = value.text.trim();
+    if (!text) return;
+    if (busy) {
+      // 跑着的时候按发送 = 追加指令。能真插进这一轮就插（agent 在两个工具步之间
+      // 读走），插不进去就排到本轮结束后发 —— 由 Console 判定并在队列条上说清楚。
+      if (!onFollowUp) return;
+      onFollowUp(text);
+      onChange({ text: "" });
+      return;
+    }
     onSubmit();
   };
 
@@ -401,11 +427,32 @@ export default function Composer({
         </div>
       )}
 
+      {queue.length > 0 && (
+        /*
+         * 说出去的话去哪了，必须看得见。三种状态分得很清：正在送、已经插进这一轮
+         * （模型下一步就看得见）、排到本轮结束后发。没有这条，用户在跑着的时候
+         * 补一句就成了往井里扔石头 —— 不知道进没进去、什么时候起作用。
+         */
+        <div className="cc-queue">
+          {queue.map((q) => (
+            <span key={q.id} className={"cc-queue-item is-" + q.state} title={q.text}>
+              <i className="cc-queue-dot" />
+              <em>{q.state === "injected" ? "已插入本轮"
+                : q.state === "queued" ? "本轮结束后发" : "正在送…"}</em>
+              <span className="cc-queue-text">{q.text}</span>
+              {q.state === "queued" && onQueueRemove && (
+                <button type="button" title="不发了" onClick={() => onQueueRemove(q.id)}>✕</button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+
       <textarea
         ref={taRef}
         className="cc-input scroll-thin"
         value={value.text}
-        placeholder={placeholder}
+        placeholder={canFollowUp ? "正在跑…… 想补一句就直接说，会插进这一轮" : placeholder}
         rows={1}
         onChange={onInput}
         onKeyDown={onKeyDown}
@@ -482,21 +529,27 @@ export default function Composer({
             onSetDefault={onModelDefault}
             openSignal={modelOpen}
           />
-          {busy && onStop ? (
-            <button type="button" className="cc-send cc-stop" onClick={onStop} title="停止本轮">
-              <Icon name="stop" size={14} strokeWidth={3} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="cc-send"
-              onClick={submit}
-              disabled={busy || !value.text.trim()}
-              title="发送（Enter）"
-            >
-              <Icon name="send" size={17} strokeWidth={2.4} />
+          {busy && onStop && (
+            /*
+             * 停止**不再是主键**（跑着的时候主键是"追加发送"），但它现在是**真的
+             * 停止**：agent 会在下一个模型事件/工具步边界收摊，不再烧 token。
+             * 已经跑出来的内容照常留下。
+             */
+            <button type="button" className={"cc-stop-secondary" + (stopping ? " is-stopping" : "")}
+                    onClick={onStop} disabled={stopping}
+                    title={stopping ? "正在停…" : "停止这一轮（真的中止，不再烧 token；已经跑出来的内容会留下）"}>
+              {stopping ? <span className="spin" /> : <Icon name="stop" size={13} strokeWidth={3} />}
             </button>
           )}
+          <button
+            type="button"
+            className={"cc-send" + (canFollowUp ? " cc-send-followup" : "")}
+            onClick={submit}
+            disabled={(busy && !canFollowUp) || !value.text.trim()}
+            title={canFollowUp ? "追加给正在跑的这一轮（Enter）" : "发送（Enter）"}
+          >
+            <Icon name="send" size={17} strokeWidth={2.4} />
+          </button>
         </div>
       </div>
     </div>

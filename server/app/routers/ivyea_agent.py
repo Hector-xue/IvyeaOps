@@ -145,6 +145,11 @@ class ChatBody(BaseModel):
     # 会话来自哪个板块。**ops 自用**，_chat_payload 会把它剔掉再下发 ——
     # agent 不认识这个字段，带过去只会当成未知参数。
     source: str = Field(default="console", pattern="^(console|assistant|brain)$")
+    # 这条流的另一端**有人在看、并且画得出选项卡**（agent ≥ v1.16.0）。
+    # 只有它为 true 时 agent 才会把 ask_user_question 的选项弹过来 —— 服务端自己
+    # 读流的那几处（技能执行、知识库问答）没有人能点，弹了只会白等一个超时。
+    # 默认 False，且为 False 时由 _chat_payload 剔除，老 daemon 收到的 payload 不变。
+    interactive: bool = False
 
 
 class ChatSessionCreateBody(BaseModel):
@@ -384,6 +389,7 @@ _CHAT_OPTIONAL_DEFAULTS: dict[str, Any] = {
     "attachments": [],
     "defer_citation_text": False,
     "stream_reasoning": False,
+    "interactive": False,
     "approval": "none",
     # source 是 ops 自己的记账字段（会话来自任务台/AI问答/知识库），agent 不认识它。
     # 放进 defaults 里只是为了默认值被剔除；非默认值另有 _pop_ops_only 兜底。
@@ -665,6 +671,105 @@ def chat_permission(body: ChatPermissionBody,
     return out
 
 
+class ChatInjectBody(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=120, pattern=_SESSION_ID)
+    text: str = Field(..., min_length=1, max_length=8000)
+
+
+@router.post("/chat/inject")
+def chat_inject(body: ChatInjectBody,
+                info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    """把一条追加指令送进这条会话**正在跑的那一轮**。
+
+    这是"任务跑起来之后还能补一句"的落点：agent 在两个工具步之间把它作为一条
+    真实的用户消息插进当前上下文，模型下一步就看得见。
+
+    没有活轮时回 `accepted: false`（不是错误）—— 前端据此把这句话当成下一轮发出去。
+    """
+    principal, is_admin = _principal_info(info)
+    if not console_sessions.can_access(body.session_id, principal, is_admin):
+        raise HTTPException(status_code=403, detail="这条会话不属于你")
+    return _call(svc.chat_inject, {"session_id": body.session_id, "text": body.text})
+
+
+class ChatQuestionBody(BaseModel):
+    request_id: str = Field(..., min_length=1, max_length=120)
+    # **必填**：归属按会话判（见下），不是可选的补充信息。
+    session_id: str = Field(..., min_length=1, max_length=120, pattern=_SESSION_ID)
+    answers: dict[str, str] = Field(default_factory=dict)
+
+
+@router.post("/chat/question")
+def chat_question(body: ChatQuestionBody,
+                  info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    """回送一次选项卡的选择。
+
+    **归属按会话判，不按内存里的 request_id 登记表判。** 那张表是给写操作审批用的：
+    批准一次真实写入必须认准"按下确认的就是发起这轮的人"，所以它宁可严格到 ops
+    一重启就全部失效。选项卡不是写操作，用同一套的代价是：ops 重启之后，用户面前
+    那张卡片就点不动了（agent 那边还老老实实等着人选），只能干等五分钟超时。
+
+    会话归属是落在库里的，重启还在；而"这张卡还有效吗"本来就该由 agent 说了算
+    （它超时之后自己按推荐项继续，回 404）。两边各管各的那一半。
+    """
+    principal, is_admin = _principal_info(info)
+    if not body.answers:
+        raise HTTPException(status_code=400, detail="answers 不能为空")
+    if not console_sessions.can_access(body.session_id, principal, is_admin):
+        raise HTTPException(status_code=403, detail="无权回答他人会话的选项卡")
+    try:
+        return _call(svc.chat_question, {"request_id": body.request_id,
+                                         "answers": dict(body.answers)})
+    except HTTPException as exc:
+        # daemon 对"未知/已过期"回 404，而 _call 把非 2xx 一律翻成 502 ——
+        # 502 在界面上读作"服务器坏了"，真相通常是另一个页签已经选过了。
+        if exc.status_code == 502 and "HTTP 404" in str(exc.detail):
+            raise HTTPException(
+                status_code=409,
+                detail="这张选项卡已经被处理过了（可能是另一个页签选的），或者已经超时。",
+            ) from exc
+        raise
+
+
+class ChatCancelBody(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=120, pattern=_SESSION_ID)
+
+
+@router.post("/chat/cancel")
+def chat_cancel(body: ChatCancelBody,
+                info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    """真的停掉这条会话正在跑的那一轮。
+
+    此前任务台的「停止」只是前端 abort 掉自己那条事件流 —— 轮次在 agent 那边照跑、
+    照烧 token。用户的原话："有的任务不想做了却无法终止，难道要一直烧 token 吗"。
+
+    这里让它真停：agent 在模型流的下一个事件或下一个工具步边界收摊，已经跑出来的
+    正文和执行过程照常落盘。正在执行中的那一个工具调用不会被打断（写文件、跑命令
+    中途砸断只会留下半个现场）。
+    """
+    principal, is_admin = _principal_info(info)
+    if not console_sessions.can_access(body.session_id, principal, is_admin):
+        raise HTTPException(status_code=403, detail="这条会话不属于你")
+    return _call(svc.chat_cancel, {"session_id": body.session_id})
+
+
+@router.get("/chat/live-sessions")
+def chat_live_sessions(info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    """此刻真的有一轮在跑的会话（只回你自己的）。左栏的闪烁标记读它。
+
+    agent 不在或版本太老时回 `available: false` 而不是空列表：**"问不到"不等于
+    "没有在跑的"**，前端据此不显示标记，而不是把正在执行的会话画成已停。
+    """
+    principal, is_admin = _principal_info(info)
+    try:
+        rows = (_call(svc.chat_live_sessions) or {}).get("sessions") or []
+    except HTTPException:
+        return {"ok": True, "available": False, "sessions": []}
+    mine = [r for r in rows
+            if console_sessions.can_access(str(r.get("id") or ""), principal, is_admin)]
+    return {"ok": True, "available": True, "sessions": mine}
+
+
 @router.get("/chat/sessions")
 def chat_sessions(limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
     return _call(svc.chat_sessions, limit)
@@ -805,6 +910,9 @@ def console_session_list(
             "owner": meta.get("principal") or "",
             "source": meta.get("source") or "",
             "indexed": sid in index,
+            # 这条会话此刻有没有一轮在跑（老 agent 不回这个字段 → 不显示标记，
+            # 而不是画成"已停"）。
+            "running": bool(item.get("running")),
         })
     needle = q.strip().lower()
     if needle:
