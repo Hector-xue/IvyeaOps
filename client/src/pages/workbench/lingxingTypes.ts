@@ -25,10 +25,29 @@ export type Dataset = {
   hint?: string;
 };
 
-/** `/api/lingxing/status` 的形状。 */
+/**
+ * `/api/lingxing/status` 的形状 —— 逐条对着
+ * `server/app/services/lingxing_service.py::status()` 抄的，别凭界面上用到的字段
+ * 反推：写窄了不会报错在写的时候，而是等下一个组件来取某个字段时才炸。
+ */
 export type LingXingStatus = {
-  master_enabled: boolean;
-  operate_active: boolean;
+  key_present: boolean;
+  url: string;
   openapi_configured: boolean;
+  openapi_host: string;
+  master_enabled: boolean;
+  /** 配置里的写开关；`operate_active` 才是"此刻真的可写"（还要看没过期）。 */
+  operate_enabled: boolean;
+  operate_active: boolean;
+  operate_expires_at: string;
+  /** 写开关自动失效的倒计时（秒）。 */
+  operate_remaining_seconds: number;
+  require_human: boolean;
+  /** 熔断原因；空串表示没熔断。 */
+  circuit_reason: string;
+  scope_stores: string;
+  scope_asins: string;
+  max_ops_per_run: number | null;
+  max_change_pct: number | null;
   ticket_counts?: { awaiting_human?: number; reviewing?: number; executing?: number };
 };
