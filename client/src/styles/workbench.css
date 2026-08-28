@@ -3435,11 +3435,13 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 /* 高度写死。里面那株常春藤是个 SVG，挂载/卸载时会把这一行撑高一两像素 ——
    而它是整条叙述的第一行，撑高一次，底下每一行跟着挪一次（实测 4px）。 */
 /* 头部和下面每一行走**同一套列宽**：状态 14px / 图标 16px / 6px 间距。
-   头部没有状态，但那一格照样留着（`.af-head-gap` 是个空占位）—— 这样
-   「执行过程」和「联网搜索」落在同一条竖线上，藤叶和 ✓ 落在另一条。
-   上一版头部是 flex + 34px 图标格、body 另有 12px 缩进和一条 9px 处的竖线，
-   三个左边界互不相干：藤叶、竖线、✓ 三样各在各的位置，谁也不对着谁
-   （用户原话：感觉怪怪的，是不是没有对齐）。 */
+   头部的图标占第一格（对着下面那列 ✓），标题**紧挨着它**落在第二格 ——
+   也就是下面那列工具图标所在的竖线上。整块从上到下两条竖线：
+   ①状态 ✓ / 头部图标 / 旁白引线，②工具图标 / 「执行过程」/ 旁白正文。
+
+   这里曾经有第三条：标题被一个空占位格推到第三列（和「联网搜索」同列）。
+   那是为了修更早一版"三个左边界互不相干"留下的，但推到第三列之后标题离自己的
+   图标太远，看着像浮在半空（用户原话：往左缩进到挨着图标，与下面的符号对齐）。 */
 .af-head{display:flex;align-items:center;gap:6px;width:100%;height:26px;padding:0 6px 0 0;
   border:none;border-radius:var(--r);background:transparent;cursor:pointer;text-align:left;
   overflow:hidden;white-space:nowrap;
@@ -3447,10 +3449,8 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .af-head:hover{background:var(--bg2);color:var(--t2)}
 .af-head-ivy{display:inline-flex;align-items:center;justify-content:center;
   flex-shrink:0;width:14px;height:1.2em;line-height:0;color:var(--ivy)}
-/* 藤叶按 em 定尺寸（1.15em ≈ 15px），会从 14px 的格子里溢出来一点点。
-   在这一格里收成 1em，它和下面那一列 ✓ 才是同一个视觉宽度。 */
-.af-head-ivy .ivy-grow{width:1em;height:1em}
-.af-head-gap{flex-shrink:0;width:16px}
+/* 图标按 em 定尺寸，在这一格里收成 1em —— 它和下面那一列 ✓ 才是同一个视觉宽度。 */
+.af-head-ivy .ivy-grow,.af-head-ivy .steps-mark{width:1em;height:1em}
 .af-head-label{color:var(--t2)}
 .af-head-meta{color:var(--t3)}
 .af-head-toggle{margin-left:auto;display:inline-flex;align-items:center;gap:3px;
@@ -3518,8 +3518,11 @@ button.af-line:hover{background:var(--bg2)}
    **自成一类，不复用 .cc-answer**：安静/琉璃两套皮肤对那个类有 !important 的
    去盒子规则，挂上去自己的样式会被整段抹掉（实测 computed 是 0px/transparent）。
    形态上只留一条引线：它是过程里的旁白，不是这一轮的结论。 */
+/* 左缩进不是随手挑的：引线落在第一列（对着 ✓ 和头部图标），正文落在第二列
+   （对着工具图标和「执行过程」）。此前是 2+12=14px，正文卡在两列中间，谁也不挨着。
+   2px 引线 + 18px 内边距 = 20px = 14(状态格) + 6(列间距)。 */
 .cc-narration{font-size:var(--fs-115);line-height:1.75;color:var(--t2);
-  padding:1px 0 2px 12px;margin:2px 0 4px;
+  padding:1px 0 2px 18px;margin:2px 0 4px;
   border-left:2px solid color-mix(in srgb,var(--ivy) 30%,var(--bg1))}
 .cc-narration>*:first-child{margin-top:0}
 .cc-narration>*:last-child{margin-bottom:0}
@@ -5484,3 +5487,19 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 /* 正在请求停止：转起来并锁住，别让人连点出两次请求。 */
 .cc-stop-secondary.is-stopping{cursor:default;color:var(--t3)}
 .cc-stop-secondary:disabled{cursor:default}
+
+/* ── 「执行过程」的头部图标：三行「点 + 横线」 ───────────────────────────────
+ * 形状见 components/console/StepsMark。静止时三行同色（都在那儿了）；运行时自上
+ * 而下依次亮（它在往下走）。用 opacity 做而不是换颜色：颜色一变，深浅色两套皮肤
+ * 各要调一遍，而透明度在哪套皮肤下都成立。 */
+.steps-mark{display:block}
+.steps-mark .steps-row{opacity:1}
+@keyframes steps-seq{0%,100%{opacity:.28}40%{opacity:1}}
+.steps-mark.is-running .steps-row-1{animation:steps-seq 1.5s var(--ease) infinite}
+.steps-mark.is-running .steps-row-2{animation:steps-seq 1.5s var(--ease) .25s infinite}
+.steps-mark.is-running .steps-row-3{animation:steps-seq 1.5s var(--ease) .5s infinite}
+/* 关掉动效时不能只是"停在某一帧"：停在 .28 那一帧会看着像坏了。
+   退成一个恒定的半亮，仍然和静止态区分得开。 */
+@media (prefers-reduced-motion:reduce){
+  .steps-mark.is-running .steps-row{animation:none;opacity:.65}
+}

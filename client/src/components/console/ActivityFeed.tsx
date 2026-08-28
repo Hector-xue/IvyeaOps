@@ -24,6 +24,7 @@
 import { useMemo, useState } from "react";
 import Icon from "../Icon";
 import IvyGrow from "./IvyGrow";
+import StepsMark from "./StepsMark";
 import { formatMs, type ConsoleStep } from "../../lib/stepLabels";
 
 export type MatchedSkill = { id: string; title: string; domain?: string; score?: number };
@@ -140,13 +141,15 @@ export default function ActivityFeed({
       {/* 折叠开关。常驻、带文字、点得着 —— 上一版是行尾一个 9px 的箭头，没人认得出。 */}
       <button type="button" className="af-head" onClick={() => setCollapsed((v) => !v)}
               aria-expanded={!collapsed}>
+        {/* 一个图标管两个状态（跑完/跑着），形状不变、只是行依次亮 —— 换图标时
+            页面上不会有一次形状跳变。见 components/console/StepsMark。 */}
         <span className="af-head-ivy">
-          {running ? <IvyGrow /> : <Icon name="feed" size={13} strokeWidth={2} />}
+          <StepsMark running={running} />
         </span>
-        {/* 空占位格。头部只有"图标 + 标题"两样东西，而下面每一行是"状态 + 图标 + 类型"
-            三样 —— 不补这一格，「执行过程」就落在「联网搜索」左边一整格的位置上，
-            整块从上到下没有一条对齐的竖线（用户原话：感觉怪怪的、没有对齐）。 */}
-        <span className="af-head-gap" aria-hidden />
+        {/* 标题**挨着自己的图标**，于是它的左边缘落在下面那一列工具图标上：
+            整块从上到下只剩两条竖线（状态/引线一条、图标/标题一条），而不是三条。
+            这里曾经有一个空占位格把标题推到第三列（和「联网搜索」同列），
+            用户看下来还是觉得标题被推得太靠右 —— 现在贴回来。 */}
         <span className="af-head-label">执行过程</span>
         <span className="af-head-meta">
           {/* 用 filter 拼，别用固定的分隔符：0 步的时候原来会拼出孤零零一个

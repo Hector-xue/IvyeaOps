@@ -165,6 +165,30 @@ async function run() {
     assert.ok(rail.beforeTitle, "标记该在标题左边");
     assert.ok(rail.size[0] > 0 && rail.size[1] > 0, "标记有尺寸，不能是个 0×0 的空元素");
 
+    // ── 五点五、执行过程那一栏的左边界只有两条竖线 ────────────────────────
+    // 这块对齐来回改过三次（图标一列、标题一列、旁白又一列，谁也不对着谁）。
+    // 钉成数字：头部图标/✓/旁白引线一条线，工具图标/「执行过程」/旁白正文一条线。
+    const cols = await evaluate(send, `(() => {
+      const L = (sel) => { const el = document.querySelector(sel); if (!el) return null;
+        return Math.round(el.getBoundingClientRect().left); };
+      const narr = document.querySelector(".cc-narration");
+      return {
+        headIcon: L(".af-head-ivy"), headLabel: L(".af-head-label"),
+        rowMark: L(".af-line .af-mark"), rowIcon: L(".af-line .af-icon"),
+        narrBar: L(".cc-narration"),
+        narrText: narr ? Math.round((narr.firstElementChild || narr).getBoundingClientRect().left) : null,
+        // 头部图标就是那三行「点+横线」，不该再是心电图/常春藤
+        mark: !!document.querySelector(".af-head-ivy .steps-mark"),
+        ivy: !!document.querySelector(".af-head-ivy .ivy-grow"),
+      };
+    })()`);
+    assert.ok(cols.mark, "「执行过程」头部该用步骤清单图标");
+    assert.ok(!cols.ivy, "头部不该再出现常春藤");
+    assert.equal(cols.headIcon, cols.rowMark, "头部图标要和下面那列 ✓ 同一条竖线");
+    assert.equal(cols.narrBar, cols.rowMark, "旁白的引线也在这条线上");
+    assert.equal(cols.headLabel, cols.rowIcon, "「执行过程」要挨着自己的图标，落在工具图标那一列");
+    assert.equal(cols.narrText, cols.headLabel, "旁白正文和「执行过程」同一条竖线");
+
     // ── 六、停止是真的停止 ────────────────────────────────────────────────
     // 此前这颗按钮只 abort 掉前端那条流，轮次在 agent 那边照跑照烧 token。
     // 这里钉死两件事：真的发出了中止请求；界面照实说"已停止"，而不是装作跑完了。
