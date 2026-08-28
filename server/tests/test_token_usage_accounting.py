@@ -136,6 +136,41 @@ def test_ivyea_agent_sessions_are_counted(tmp_path, monkeypatch):
     assert recs[0]["model"] == "deepseek-v4-pro"
 
 
+def test_ivyea_agent_serve_path_ledger_is_counted(tmp_path, monkeypatch):
+    """serve/HTTP 那条路只写 stats.usage，顶层 usage 恒为 {} —— 也必须算上。
+
+    真出过事：工作台/agents/ops 自动链路跑出来的会话全走这条路，只认顶层 usage 时
+    它们被整个跳过，页面上"Ivyea Agent"一栏近乎为 0，看着像没在用。
+    """
+    import json
+    (tmp_path / "serve.json").write_text(json.dumps(
+        {"model": "glm-5.3-flash", "updated": 1_700_000_000, "usage": {},
+         "stats": {"turns": 3, "usage": {"prompt_tokens": 100_000,
+                                         "prompt_cache_hit_tokens": 90_000,
+                                         "completion_tokens": 5_000}}}
+    ), encoding="utf-8")
+    monkeypatch.setattr(monitor, "_ivyea_sessions_dir", lambda: tmp_path)
+    recs, cov = monitor._scan_ivyea_agent(0)
+    assert len(recs) == 1
+    r = recs[0]
+    # prompt_tokens 含缓存命中：拆成 input / cache_read，总量不变
+    assert (r["input"], r["cache_read"], r["output"]) == (10_000, 90_000, 5_000)
+    assert cov["total"] == 105_000
+
+
+def test_ivyea_agent_cache_hit_over_prompt_never_goes_negative(tmp_path, monkeypatch):
+    """provider 报了个比 prompt 还大的缓存数时，input 不能变成负数把总量算小。"""
+    import json
+    (tmp_path / "weird.json").write_text(json.dumps(
+        {"model": "x", "updated": 1_700_000_000,
+         "stats": {"usage": {"prompt_tokens": 100, "prompt_cache_hit_tokens": 999,
+                             "completion_tokens": 10}}}
+    ), encoding="utf-8")
+    monkeypatch.setattr(monitor, "_ivyea_sessions_dir", lambda: tmp_path)
+    recs, _ = monitor._scan_ivyea_agent(0)
+    assert (recs[0]["input"], recs[0]["cache_read"]) == (0, 100)
+
+
 def test_missing_source_reports_missing_not_zero(monkeypatch):
     """路径没配就说"没配"，不能装成"用量为 0" —— 后者会被当成真相。"""
     monkeypatch.setattr(monitor, "_ivyea_sessions_dir", lambda: None)

@@ -482,12 +482,19 @@ export default function ServerMonitor() {
         )}
       </div>
 
+      {/* Token Usage */}
+      {tokenUsage && <TokenUsagePanel data={tokenUsage} />}
+
+      {/* 访问日志放在 Token 统计**之后**：它是最少看的一块，却横在页面中间，
+          用户每次找 Token 统计都要先滚过它。 */}
       <div className="sl" style={{ marginTop: 14 }}>nginx 访问日志（最近 {logs.length} 行）</div>
+      {/* 这里**故意不给内层滚动条**。之前是 maxHeight:220 + overflowY:auto，15 行日志
+          刚好比 220px 高一点点——够触发浏览器的滚动锁定（scroll latching）：滚轮一旦
+          落在这个框上，整个手势就被它吃掉，滚到底也不会传给页面，必须松手重新滚。
+          表现就是"滑到访问日志那里就滑不动了"。15 行直接铺开，页面高不了多少。 */}
       <div
         className="card"
         style={{
-          maxHeight: 220,
-          overflowY: "auto",
           fontFamily: "var(--font)",
           fontSize: "var(--fs-10)",
         }}
@@ -512,9 +519,6 @@ export default function ServerMonitor() {
           ))
         )}
       </div>
-
-      {/* Token Usage */}
-      {tokenUsage && <TokenUsagePanel data={tokenUsage} />}
     </div>
   );
 }
