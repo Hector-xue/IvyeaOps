@@ -28,7 +28,11 @@ export type MessageKind =
   | 'permission_cancelled'
   | 'session_created'
   | 'interactive_prompt'
-  | 'task_notification';
+  | 'task_notification'
+  // 轮次跑着的时候插进去的那句追加指令（agent 回执）。
+  | 'injected'
+  // 这一轮被用户停掉了。**独立于 error**：用户改主意不是故障，界面不该画成红的。
+  | 'cancelled';
 
 export interface NormalizedMessage {
   id: string;

@@ -134,6 +134,27 @@ def reconnect_writer(session_id: str, ws) -> bool:
     return True
 
 
+async def inject(session_id: str, text: str) -> dict:
+    """把一条追加指令送进正在跑的那一轮。
+
+    claude 的交互模式下 stdin 一直开着（到 result 才关），多写一条 user 消息就是它
+    原生的排队语义 —— 这也正是 Claude Code 自己在你打断它时做的事。
+    非交互（bypassPermissions）那档 stdin 在开头就关了，明确回不接。
+    """
+    s = _active_sessions.get(session_id)
+    if not s or s.get("status") != "active":
+        return {"ok": True, "accepted": False, "reason": "no_live_turn"}
+    proc = s.get("proc")
+    if proc is None or proc.stdin is None or proc.stdin.is_closing():
+        return {"ok": True, "accepted": False, "reason": "no_input_channel"}
+    try:
+        await _write_stdin(proc, _build_user_message(text, None))
+    except Exception:  # noqa: BLE001
+        logger.debug("claude inject 写 stdin 失败", exc_info=True)
+        return {"ok": True, "accepted": False, "reason": "write_failed"}
+    return {"ok": True, "accepted": True, "item": {"id": _rid(), "text": text}}
+
+
 def resolve_tool_approval(request_id: str, decision: dict) -> None:
     entry = _pending_approvals.get(request_id)
     if entry and not entry["future"].done():

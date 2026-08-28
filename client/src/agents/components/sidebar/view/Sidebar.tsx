@@ -27,6 +27,7 @@ function Sidebar({
   selectedSession,
   onProjectSelect,
   onSessionSelect,
+  processingSessions,
   onNewSession,
   onSessionDelete,
   onLoadMoreSessions,

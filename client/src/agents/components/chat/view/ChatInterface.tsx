@@ -1,10 +1,10 @@
-import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useTasksSettings } from '../../../contexts/TasksSettingsContext';
 import PermissionContext from '../../../contexts/PermissionContext';
 // QuickSettingsPanel 已移除(设置走 ops 系统配置)
-import type { ChatInterfaceProps, Provider  } from '../types/types';
+import type { ChatInterfaceProps, FollowUpItem, Provider  } from '../types/types';
 import type { LLMProvider } from '../../../types/app';
 import { useChatProviderState } from '../hooks/useChatProviderState';
 import { useChatSessionState } from '../hooks/useChatSessionState';
@@ -96,6 +96,14 @@ function ChatInterface({
     selectedProject,
   });
 
+  /**
+   * 轮次跑着的时候用户补的话：还没被这一轮读到的排在这儿。
+   *
+   * 放在 ChatInterface 这一层是因为两边都要碰它：输入框那边往里放，事件流那边
+   * 收到 agent 回执后销账、收到 complete 后把没读到的当成下一轮发出去。
+   */
+  const [followUpQueue, setFollowUpQueue] = useState<FollowUpItem[]>([]);
+
   const {
     chatMessages,
     addMessage,
@@ -173,6 +181,7 @@ function ChatInterface({
     isDragActive,
     openImagePicker,
     handleSubmit,
+    submitText,
     handleInputChange,
     handleKeyDown,
     handlePaste,
@@ -188,6 +197,7 @@ function ChatInterface({
     commandModalPayload,
     closeCommandModal,
   } = useChatComposerState({
+    setFollowUpQueue,
     selectedProject,
     selectedSession,
     currentSessionId,
@@ -237,6 +247,21 @@ function ChatInterface({
     setCanAbortSession(false);
   }, [selectedProject, selectedSession, sessionStore, setIsLoading, setCanAbortSession]);
 
+  /**
+   * 一轮结束：把**没被这一轮读到的**追加指令当成下一轮发出去。
+   *
+   * 判据是 state：`injected` 的已经被 agent 读走（销账时就从队列里摘了），
+   * 留下来的就是没进去的 —— 宁可晚一轮，也不能吞掉一句用户说过的话。
+   */
+  useEffect(() => {
+    if (isLoading || followUpQueue.length === 0) return;
+    const leftovers = followUpQueue.filter((item) => item.state !== 'injected');
+    setFollowUpQueue([]);
+    if (!leftovers.length) return;
+    const text = leftovers.map((item) => item.text).join('\n');
+    submitText(text);
+  }, [isLoading, followUpQueue, submitText]);
+
   useChatRealtimeHandlers({
     latestMessage,
     provider,
@@ -248,6 +273,7 @@ function ChatInterface({
     setClaudeStatus,
     setTokenBudget,
     setPendingPermissionRequests,
+    setFollowUpQueue,
     pendingViewSessionRef,
     streamTimerRef,
     accumulatedStreamRef,
@@ -386,6 +412,7 @@ function ChatInterface({
           handleGrantToolPermission={handleGrantToolPermission}
           claudeStatus={claudeStatus}
           isLoading={isLoading}
+          followUpQueue={followUpQueue}
           onAbortSession={handleAbortSession}
           provider={provider}
           permissionMode={permissionMode}

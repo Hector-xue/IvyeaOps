@@ -127,3 +127,16 @@ export interface ChatInterfaceProps {
   onTaskClick?: (...args: unknown[]) => void;
   onShowAllTasks?: (() => void) | null;
 }
+
+
+/**
+ * 一条说出去、但还没被这一轮读到的追加指令。
+ *
+ * `sending` = 已经递给 agent，还没等到回执；`injected` = agent 说它读到了（销账）；
+ * `queued` = 插不进去（老 agent / 一次性 provider / 会话还没建起来），本轮结束后补发。
+ */
+export type FollowUpItem = {
+  id: string;
+  text: string;
+  state: 'sending' | 'injected' | 'queued';
+};

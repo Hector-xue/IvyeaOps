@@ -63,8 +63,10 @@ def env(tmp_path: Path, monkeypatch):
 def _patch_fake(monkeypatch, iv_mod, fake: Path):
     real = iv_mod._build_argv
 
-    def _argv(command, options):
-        argv = real(command, options)
+    def _argv(command, options, *rest):
+        # *rest 收住 stdin_channel 这类后加的参数：桩不该因为真实签名多一个开关就把
+        # 整条链路弄成 TypeError（那会表现成"测试莫名其妙挂住"，查半天）。
+        argv = real(command, options, *rest)
         return [sys.executable, str(fake)] + argv[1:]
     monkeypatch.setattr(iv_mod, "_build_argv", _argv)
 
@@ -132,3 +134,36 @@ def test_ivyea_missing_binary_reports_error(env, monkeypatch):
         ws.send_json({"type": "ivyea-command", "command": "hi", "options": {}})
         msg = ws.receive_json()
         assert msg.get("kind") == "error" and "not installed" in (msg.get("content") or "")
+
+
+def test_ivyea_argv_opens_the_stdin_channel_only_when_supported():
+    """输入通道是**探到了才给**：老 agent 收到 `--input-format` 会直接报参数错。"""
+    from app.agents import ivyea_driver as iv
+    assert "--input-format" not in iv._build_argv("hi", {})
+    argv = iv._build_argv("hi", {}, True)
+    assert argv[argv.index("--input-format") + 1] == "stream-json"
+
+
+def test_ivyea_inject_says_no_when_nothing_is_running():
+    """没有活轮就明说不收 —— 调用方据此把这句话当成下一轮发出去。"""
+    import asyncio
+    from app.agents import ivyea_driver as iv
+    out = asyncio.get_event_loop().run_until_complete(iv.inject("nobody", "补一句"))
+    assert out == {"ok": True, "accepted": False, "reason": "no_live_turn"}
+
+
+def test_ivyea_inject_refuses_when_the_agent_has_no_input_channel():
+    """老 agent（stdin 关着）也要明说，不能假装送到了。"""
+    import asyncio
+    from app.agents import ivyea_driver as iv
+    iv._active_sessions["s-old"] = {"proc": object(), "status": "active", "stdin_channel": False}
+    try:
+        out = asyncio.get_event_loop().run_until_complete(iv.inject("s-old", "补一句"))
+        assert out["accepted"] is False and out["reason"] == "no_input_channel"
+    finally:
+        iv._active_sessions.pop("s-old", None)
+
+
+def test_ivyea_question_resolution_only_answers_known_cards():
+    from app.agents import ivyea_driver as iv
+    assert iv.resolve_question("no-such-card", {"q": "a"}) is False

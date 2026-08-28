@@ -36,6 +36,8 @@ type SidebarProjectItemProps = {
   onSaveProjectName: (projectName: string) => void;
   onDeleteProject: (project: Project) => void;
   onSessionSelect: (session: SessionWithProvider, projectName: string) => void;
+  /** 此刻真的有一轮在跑的会话 id（左栏据此打闪烁标记）。 */
+  processingSessions?: Set<string>;
   onDeleteSession: (
     projectName: string,
     sessionId: string,
@@ -82,6 +84,7 @@ export default function SidebarProjectItem({
   onSaveProjectName,
   onDeleteProject,
   onSessionSelect,
+  processingSessions,
   onDeleteSession,
   onLoadMoreSessions,
   onNewSession,
@@ -410,6 +413,7 @@ export default function SidebarProjectItem({
         onSaveEditingSession={onSaveEditingSession}
         onProjectSelect={onProjectSelect}
         onSessionSelect={onSessionSelect}
+        processingSessions={processingSessions}
         onDeleteSession={onDeleteSession}
         onLoadMoreSessions={onLoadMoreSessions}
         onNewSession={onNewSession}
