@@ -70,8 +70,8 @@ async function run() {
     assert.equal(whileRunning.inputDisabled, false, "跑着的时候输入框被禁用了");
     assert.equal(whileRunning.sendMissing, false, "跑着的时候发送键消失了");
     assert.ok(whileRunning.stopIsSecondary, "停止应该降级成次级按钮，别再占着主键");
-    assert.ok(/后台继续跑/.test(whileRunning.stopTitle),
-              `停止的说明要照实说（当前：「${whileRunning.stopTitle}」）`);
+    assert.ok(/真的中止/.test(whileRunning.stopTitle) && /不再烧 token/.test(whileRunning.stopTitle),
+              `停止要说清楚它真的会中止（当前：「${whileRunning.stopTitle}」）`);
     assert.ok(/补一句|追加/.test(whileRunning.placeholder),
               `跑着时的提示语该请人补话（当前：「${whileRunning.placeholder}」）`);
 
@@ -110,8 +110,11 @@ async function run() {
               `倒计时要说明到点会按推荐项继续，而不是作废（当前：「${card.timer}」）`);
     assert.ok(card.primaryDisabled, "一个都没选时不该能提交");
 
-    await click(send, ".cs-question-opt");
-    await click(send, ".cs-question .cs-btn-primary");
+    // 用元素自己的 click()，不用坐标点击：这一轮还在流式吐字，卡片会随内容上下漂，
+    // 按坐标点很容易落到隔壁（本机连跑 6 次，坐标点法挂了 3 次）。
+    await evaluate(send, `document.querySelector(".cs-question-opt").click()`);
+    await waitFor(send, `!!document.querySelector(".cs-question-opt.is-on")`, "选项被选中", 10_000);
+    await evaluate(send, `document.querySelector(".cs-question .cs-btn-primary").click()`);
     await waitFor(send, `!!document.querySelector(".cs-question-done")`, "选完转成回执", 15_000);
     const answered = await evaluate(send, `JSON.stringify(window.__lastQuestionAnswer || null)`);
     const payload = JSON.parse(answered || "null");
@@ -162,8 +165,38 @@ async function run() {
     assert.ok(rail.beforeTitle, "标记该在标题左边");
     assert.ok(rail.size[0] > 0 && rail.size[1] > 0, "标记有尺寸，不能是个 0×0 的空元素");
 
+    // ── 六、停止是真的停止 ────────────────────────────────────────────────
+    // 此前这颗按钮只 abort 掉前端那条流，轮次在 agent 那边照跑照烧 token。
+    // 这里钉死两件事：真的发出了中止请求；界面照实说"已停止"，而不是装作跑完了。
+    await send("Page.navigate", { url: `${ORIGIN}/?r=/console&followups=1` });
+    await waitFor(send, `!!document.querySelector(".cc-input")`, "回到任务台", 60_000);
+    await typeAndSend(send, "跑个长任务");
+    await waitFor(send, `!!document.querySelector(".cc-stop-secondary")`, "停止键", 30_000);
+    await evaluate(send, `document.querySelector(".cc-stop-secondary").click()`);
+    // 先等 toast（点了就有），再等 agent 的 cancelled 事件把这一轮收尾（慢一拍）。
+    await waitFor(send, `document.body.innerText.includes("已停止这一轮")`,
+                  "界面明确说这一轮停了", 20_000);
+    await waitFor(send, `document.body.innerText.includes("已停止：你中止了这一轮")`,
+                  "agent 回执到达、这一轮真的收尾", 20_000);
+    const stopped = await evaluate(send, `(() => {
+      const feed = document.body.innerText;
+      return {
+        note: feed.includes("已停止：你中止了这一轮"),
+        toast: feed.includes("已停止这一轮"),
+        // 停完输入框回到常态：主键是发送，不再是"追加"
+        placeholder: document.querySelector(".cc-input")?.getAttribute("placeholder") || "",
+        stillRunning: !!document.querySelector(".cc-stop-secondary"),
+        clock: (document.querySelector(".cc-turn-clock")?.textContent || "").trim(),
+      };
+    })()`);
+    assert.ok(stopped.note, "时间线上要留一行「已停止」——否则界面只是忽然不动了");
+    assert.ok(stopped.toast, "要明确告诉用户这一轮真的停了");
+    assert.equal(stopped.stillRunning, false, "停完之后不该还挂着停止键");
+    assert.ok(!/补一句|追加/.test(stopped.placeholder), "停完输入框该回到常态");
+    assert.ok(/^结束于/.test(stopped.clock), `停掉的轮次也该有收尾时刻（当前：「${stopped.clock}」）`);
+
     assert.deepEqual(errors, [], "浏览器控制台不该有异常");
-    console.log("follow-up / question-card checks passed");
+    console.log("follow-up / question-card / real-stop checks passed");
   } finally {
     chrome.kill("SIGKILL");
     harness.kill("SIGTERM");

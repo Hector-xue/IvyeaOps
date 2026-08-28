@@ -718,6 +718,16 @@ def chat_question(payload: dict[str, Any]) -> dict[str, Any]:
     return request_json("POST", "/v1/chat/question", payload, timeout=20.0)
 
 
+def chat_cancel(payload: dict[str, Any]) -> dict[str, Any]:
+    """真的停掉这条会话正在跑的那一轮（agent ≥ v1.16.3）。
+
+    回包里的 `cancelled` 才是答案：False = 这条会话本来就没有在跑的轮次。
+    老 agent 没有这个端点 —— 调用方拿到 404/502 时要照实说"停不掉"，
+    绝不能显示"已停止"却其实什么都没停。
+    """
+    return request_json("POST", "/v1/chat/cancel", payload, timeout=20.0)
+
+
 def chat_live_sessions() -> dict[str, Any]:
     """此刻真的有一轮在跑的会话（agent ≥ v1.16.3）。左栏的闪烁标记读它。
 

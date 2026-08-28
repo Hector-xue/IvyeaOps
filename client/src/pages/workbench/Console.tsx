@@ -53,6 +53,7 @@ import {
   ivyeaAgentChatStream,
   ivyeaAgentSessionLive,
   ivyeaAwaitSessionAnswer,
+  ivyeaChatCancel,
   ivyeaChatInject,
   ivyeaChatPermission,
   ivyeaChatQuestion,
@@ -280,6 +281,11 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
   const [busy, setBusy] = useState(false);
   // 轮次跑着的时候用户又说的话。空数组 = 没有待处理的追加指令。
   const [queue, setQueue] = useState<QueuedFollowUp[]>([]);
+  // 正在请求 agent 停这一轮（按钮转成"正在停止…"，防连点）。
+  const [stopping, setStopping] = useState(false);
+  const stoppingRef = useRef(false);
+  /** 这一轮是被停掉的 —— 收尾时据此跳过跟进建议。 */
+  const cancelledRef = useRef(false);
   const [sessionId, setSessionId] = useState("");
   const [model, setModel] = useState("");
   /**
@@ -650,6 +656,7 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
   const makeTurnStream = useCallback((aiId: string, extra?: {
     onSessionId?: (id: string) => void;
     onFinal?: (d: any) => void;
+    onCancelled?: (d: any) => void;
   }) => createTurnStream({
     patch: (patch) => patchTurn(aiId, patch as any),
     notify,
@@ -660,6 +667,7 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
     setReadOnly,
     onSessionId: extra?.onSessionId,
     onFinal: extra?.onFinal,
+    onCancelled: extra?.onCancelled,
   }), [patchTurn, notify]);
 
   /**
@@ -710,10 +718,11 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
     patchTurn(aiId, (t) => ({
       running: false,
       elapsedMs: Date.now() - startedAt,
-      // 同上：停止的是"看"，不是那一轮，所以中止时不写收尾时刻。
+      // 同上：本地 abort（停不掉时的兜底、或离开这条会话）不代表那一轮结束了。
       ...(ctrl.signal.aborted ? {} : { endedAt: Date.now() }),
-      // 这里的「停止」断的是**看**，不是那一轮 —— 轮次跑在 agent 里，与这条连接
-      // 无关。说成"已停止"会让人以为任务被掐了，然后对着还在动的会话发懵。
+      // 走到这里的 abort 是"不看了"，不是"停了" —— 真停止走 /chat/cancel，
+      // 那条路上流会正常收尾。说成"已停止"会让人以为任务被掐了，然后对着还在
+      // 动的会话发懵。
       ...(ctrl.signal.aborted && !t.text
         ? { text: "（已停止查看，这一轮仍在后台继续；回到这条会话可以再接上）" }
         : {}),
@@ -970,6 +979,7 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
         if (d?.session_id) setSessionId(d.session_id);
         if (d?.usage) setUsage(d.usage);
       },
+      onCancelled: () => { cancelledRef.current = true; },
     });
 
     try {
@@ -1051,8 +1061,9 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
       patchTurn(aiId, (t) => ({
         running: false,
         elapsedMs: Date.now() - startedAt,
-        // 收尾时刻只在这一轮**真的结束**时才记。用户按了停止时断的只是这条流，
-        // 轮次还在 agent 那边跑 —— 那时候写一行"结束于 09:49"就是在撒谎。
+        // 收尾时刻只在这一轮**真的结束**时才记。按停止走的是 /chat/cancel，agent
+        // 确认停住后这条流会正常收尾（照写）；而"停不掉、只好断流"那条兜底路径下
+        // 轮次还在 agent 那边跑，那时候写一行"结束于 09:49"就是在撒谎。
         ...(ctrl.signal.aborted ? {} : { endedAt: Date.now() }),
         // 断链/取消的轮次也把测到的部分留下 —— 半截数据仍然能说明"卡在哪"，
         // 整轮丢弃反而让统计条在最需要解释的那一轮上变成空白。
@@ -1069,7 +1080,9 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
 
     notifyConsoleSessionsChanged();     // 新会话进左栏 / 已有会话更新时间
     const answered = recovered || stream.text();
-    if (answered.trim()) void loadFollowUps(text, answered);
+    // 被用户停掉的轮次不跑跟进建议：那是**又一次模型调用**，而他刚说的是"别做了"。
+    if (answered.trim() && !cancelledRef.current) void loadFollowUps(text, answered);
+    cancelledRef.current = false;
     // images / picked 必须在依赖里：send 里读了它们。漏掉的话这个回调会闭包住
     // 旧值 —— 贴完图不打字直接发，图就丢了（之前靠"总会先打字"侥幸没暴露）。
   }, [composer, busy, sessionId, images, picked, agentTakesAttachments,
@@ -1178,9 +1191,56 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
     }
   }, [sessionId, notify, patchTurn]);
 
-  const stop = () => {
-    abortRef.current?.abort();
-  };
+  /**
+   * 真·停止。
+   *
+   * 此前这里只有一行 `abortRef.current?.abort()` —— 那不是停止，是"我不看了"：
+   * 轮次在 agent 那边照跑照烧 token（用户原话："有的任务不想做了却无法终止，
+   * 难道要一直烧 token 吗"）。现在先让 agent 真停下来，再收尾。
+   *
+   * 三条路都必须说实话：
+   *   · 停住了 → 等 agent 的 `cancelled` 事件把这一轮收尾（正文和落盘都在里面）；
+   *   · 这条会话本来就没在跑（刚好收尾了）→ 断流即可，别显示"已停止"；
+   *   · 停不掉（老 agent 没这个端点 / agent 挂了）→ 明说后台可能还在跑，
+   *     绝不能让界面显示"已停止"而它其实还在花钱。
+   */
+  const stop = useCallback(async () => {
+    if (stoppingRef.current) return;             // 连点两下不该发两次
+    const sid = sessionId;
+    if (!sid) {
+      abortRef.current?.abort();                 // 会话还没建起来，只能断流
+      return;
+    }
+    stoppingRef.current = true;
+    setStopping(true);
+    try {
+      const out = await ivyeaChatCancel({ session_id: sid });
+      if (out?.cancelled) {
+        // 排着的追加指令一并作废：任务都不想做了，那几句话更不该自己跑起来。
+        const dropped = queue.length;
+        setQueue([]);
+        notify("info", dropped
+          ? `已停止这一轮，${dropped} 条待发的追加指令也一并取消。已经跑出来的内容都留着。`
+          : "已停止这一轮。已经跑出来的内容都留着。");
+        // 不立刻 abort：`cancelled` 事件里带着这一轮的正文，而且 agent 要在那之前
+        // 把执行过程和时间账落盘。给它 6 秒，超时再断流兜底。
+        //
+        // **只掐这一轮那个 controller**，不是"6 秒后 abort 当时的 abortRef" ——
+        // 用户停完马上又发了一句的话，那个引用早换成新一轮的了，会把刚发的这轮掐掉。
+        const stoppingCtrl = abortRef.current;
+        window.setTimeout(() => stoppingCtrl?.abort(), 6000);
+      } else {
+        abortRef.current?.abort();
+        notify("info", "这一轮刚好已经结束了。");
+      }
+    } catch (e: any) {
+      abortRef.current?.abort();
+      notify("warn", errText(e, "没能停掉这一轮（agent 版本过旧或没连上）：已停止查看，但后台可能还在跑"));
+    } finally {
+      stoppingRef.current = false;
+      setStopping(false);
+    }
+  }, [sessionId, queue.length, notify]);
 
   const attach = useCallback(async (file: File) => {
     setAttaching(true);
@@ -1234,6 +1294,7 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
       onChange={patch}
       onSubmit={() => void send()}
       onFollowUp={(text) => void followUp(text)}
+      stopping={stopping}
       queue={queue}
       onQueueRemove={(id) => setQueue((q) => q.filter((it) => it.id !== id))}
       onStop={stop}

@@ -77,6 +77,8 @@ export type TurnStreamDeps = {
   onSessionId?: (id: string) => void;
   /** final 事件的整包（用量、todos、上下文都在里面）。 */
   onFinal?: (data: any) => void;
+  /** 这一轮被用户停掉了（可能是从别的页签停的）。 */
+  onCancelled?: (data: any) => void;
   /** 每一帧落地正文时叫一声 —— 调用方用它做"贴底跟随"。 */
   onTick?: () => void;
 };
@@ -268,6 +270,16 @@ export function createTurnStream(deps: TurnStreamDeps): TurnStream {
         // 字凭空少了，必须说一声 —— 否则用户只会看到回答突然被清空。
         steps: mergeStep(t.steps || [], noteStep(note, noteSeq++)),
       }));
+    },
+    // 用户按了停止：把手里那一帧落地（已经流出来的字是真跑出来的，不能吞掉），
+    // 并在时间线上留一行 —— 否则界面只是"忽然不动了"，看不出是停了还是卡了。
+    onCancelled: (d) => {
+      finishFlush();
+      if (d?.text) { finalText = String(d.text); deps.patch({ text: finalText }); }
+      deps.patch((t) => ({
+        steps: mergeStep(t.steps || [], noteStep("已停止：你中止了这一轮", noteSeq++)),
+      }));
+      deps.onCancelled?.(d);
     },
     onFinal: (d) => {
       // final 到达时手里常常还攥着没落地的一帧：收尾那几个字和 final 多半在同一个

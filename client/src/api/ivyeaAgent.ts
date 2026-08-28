@@ -702,6 +702,12 @@ export type IvyeaStreamHandlers = {
     onQuestion?: (data: IvyeaQuestionRequest) => void;
     /** 选项卡超时，已按推荐项继续。 */
     onQuestionTimeout?: (data: { request_id: string }) => void;
+    /**
+     * 这一轮被用户停掉了（agent ≥ v1.16.3）。**这是正常结局，不是错误** ——
+     * 已经跑出来的正文和执行过程都已落盘，`injected_pending` 里是还没被读到的追加指令。
+     */
+    onCancelled?: (data: { session_id?: string; text?: string;
+                           injected_pending?: { id: string; text: string }[] }) => void;
 };
 
 /** 一张选项卡（ask_user_question）。 */
@@ -823,6 +829,8 @@ async function pumpSse(res: Response, handlers: IvyeaStreamHandlers) {
     // 自由文本叙述，在时间线上凭空多出两行没有正文的注记。
     // 追加指令与选项卡同样必须显式分流：落进 onEvent 兜底会被当成"老 agent 的
     // 自由文本叙述"，于是一串 JSON 直接印在对话里。
+    // 用户按了停止 —— **正常结局**，不是 error（画成红色的失败会让人以为出了问题）。
+    else if (event === "cancelled") handlers.onCancelled?.(typeof data === "string" ? {} : data || {});
     else if (event === "injected") handlers.onInjected?.(typeof data === "string" ? {} : data || {});
     else if (event === "question_request") handlers.onQuestion?.(data);
     else if (event === "question_timeout") handlers.onQuestionTimeout?.(data);
@@ -1164,6 +1172,18 @@ export async function ivyeaChatInject(params: { session_id: string; text: string
     ok: boolean; accepted?: boolean; reason?: string;
     item?: { id: string; text: string; ts: number }; pending?: number;
   }>("/ivyea-agent/chat/inject", params, { timeout: 20000 });
+  return data;
+}
+
+/**
+ * 真的停掉这条会话正在跑的那一轮（agent ≥ v1.16.3）。
+ *
+ * 回包里的 `cancelled` 才是答案：false = 这条会话本来就没有在跑的轮次（多半刚好
+ * 收尾了）。**别把请求成功当成停住了** —— 那会显示"已停止"而它其实还在烧 token。
+ */
+export async function ivyeaChatCancel(params: { session_id: string }) {
+  const { data } = await api.post<{ ok: boolean; cancelled?: boolean; reason?: string }>(
+    "/ivyea-agent/chat/cancel", params, { timeout: 20000 });
   return data;
 }
 

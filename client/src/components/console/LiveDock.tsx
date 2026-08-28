@@ -124,7 +124,8 @@ export default function LiveDock({
         </span>
       </button>
       {onStop && (
-        <button type="button" className="ld-stop" onClick={onStop} title="停止这一轮">
+        <button type="button" className="ld-stop" onClick={onStop}
+                title="停止这一轮（真的中止，不再烧 token；已经跑出来的内容会留下）">
           停止
         </button>
       )}

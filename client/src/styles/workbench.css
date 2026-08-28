@@ -5480,3 +5480,7 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 .cc-injected-mark{color:var(--acc);flex-shrink:0}
 .cc-injected-text{flex:1;min-width:0;word-break:break-word}
 .cc-injected-meta{flex-shrink:0;font-size:var(--fs-10);color:var(--t3)}
+
+/* 正在请求停止：转起来并锁住，别让人连点出两次请求。 */
+.cc-stop-secondary.is-stopping{cursor:default;color:var(--t3)}
+.cc-stop-secondary:disabled{cursor:default}

@@ -620,3 +620,26 @@ def test_interactive_flag_only_travels_when_the_caller_asks_for_it(ctx, monkeypa
     plain, interactive = seen["payloads"]
     assert "interactive" not in plain
     assert interactive["interactive"] is True
+
+
+def test_cancel_forwards_and_checks_ownership(ctx, monkeypatch):
+    """「停止」现在是真停止：把中止请求转给 agent，且只能停自己的会话。"""
+    svc, router = ctx
+    seen = {}
+
+    def fake_cancel(payload):
+        seen["p"] = payload
+        return {"ok": True, "cancelled": True}
+
+    monkeypatch.setattr(svc, "chat_cancel", fake_cancel)
+    _own_session(router, monkeypatch, {"s1"})
+    out = router.chat_cancel(router.ChatCancelBody(session_id="s1"),
+                             info={"user": "u1", "is_admin": False})
+    assert out["cancelled"] is True
+    assert seen["p"] == {"session_id": "s1"}
+
+    _own_session(router, monkeypatch, set())
+    with pytest.raises(HTTPException) as exc:
+        router.chat_cancel(router.ChatCancelBody(session_id="s1"),
+                           info={"user": "u1", "is_admin": False})
+    assert exc.value.status_code == 403

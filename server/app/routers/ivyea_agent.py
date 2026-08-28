@@ -733,6 +733,28 @@ def chat_question(body: ChatQuestionBody,
         raise
 
 
+class ChatCancelBody(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=120, pattern=_SESSION_ID)
+
+
+@router.post("/chat/cancel")
+def chat_cancel(body: ChatCancelBody,
+                info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    """真的停掉这条会话正在跑的那一轮。
+
+    此前任务台的「停止」只是前端 abort 掉自己那条事件流 —— 轮次在 agent 那边照跑、
+    照烧 token。用户的原话："有的任务不想做了却无法终止，难道要一直烧 token 吗"。
+
+    这里让它真停：agent 在模型流的下一个事件或下一个工具步边界收摊，已经跑出来的
+    正文和执行过程照常落盘。正在执行中的那一个工具调用不会被打断（写文件、跑命令
+    中途砸断只会留下半个现场）。
+    """
+    principal, is_admin = _principal_info(info)
+    if not console_sessions.can_access(body.session_id, principal, is_admin):
+        raise HTTPException(status_code=403, detail="这条会话不属于你")
+    return _call(svc.chat_cancel, {"session_id": body.session_id})
+
+
 @router.get("/chat/live-sessions")
 def chat_live_sessions(info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
     """此刻真的有一轮在跑的会话（只回你自己的）。左栏的闪烁标记读它。

@@ -55,6 +55,7 @@ export default function Composer({
   onSubmit,
   onFollowUp,
   onStop,
+  stopping,
   onAttach,
   busy,
   queue = [],
@@ -91,6 +92,8 @@ export default function Composer({
    */
   onFollowUp?: (text: string) => void;
   onStop?: () => void;
+  /** 正在请求 agent 停这一轮 —— 按钮转成等待态，防连点。 */
+  stopping?: boolean;
   onAttach?: (file: File) => void;
   busy?: boolean;
   /** 已经说出去、但还没被这一轮读到的追加指令。 */
@@ -528,13 +531,14 @@ export default function Composer({
           />
           {busy && onStop && (
             /*
-             * 停止**不是**主键了。它做的事也一直不是"掐掉任务"：它只断开这条
-             * 事件流，轮次在 agent 那边照跑（所以文案不能说"停止本轮"，用户看到
-             * 那四个字会以为任务被掐了，然后对着还在动的会话发懵）。
+             * 停止**不再是主键**（跑着的时候主键是"追加发送"），但它现在是**真的
+             * 停止**：agent 会在下一个模型事件/工具步边界收摊，不再烧 token。
+             * 已经跑出来的内容照常留下。
              */
-            <button type="button" className="cc-stop-secondary" onClick={onStop}
-                    title="停止查看这一轮（后台继续跑，回到这条会话可以再接上）">
-              <Icon name="stop" size={13} strokeWidth={3} />
+            <button type="button" className={"cc-stop-secondary" + (stopping ? " is-stopping" : "")}
+                    onClick={onStop} disabled={stopping}
+                    title={stopping ? "正在停…" : "停止这一轮（真的中止，不再烧 token；已经跑出来的内容会留下）"}>
+              {stopping ? <span className="spin" /> : <Icon name="stop" size={13} strokeWidth={3} />}
             </button>
           )}
           <button

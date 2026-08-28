@@ -1359,6 +1359,12 @@ const delayFor = (url: string): number => {
  */
 const injected: { id: string; text: string }[] = [];
 
+/**
+ * 「停止」按下之后置位。假流在每一拍读它 —— 验证台里必须能复现"真的停下来"，
+ * 否则验的只是按钮变没变样，而这个功能的全部意义在于**它真的不再往下跑**。
+ */
+const stopped = { at: 0 };
+
 /** 装上假适配器。必须在 render 之前调用。 */
 export function installMockApi(): void {
   const reply = (config: { url?: string; baseURL?: string; data?: unknown }) => {
@@ -1376,7 +1382,9 @@ export function installMockApi(): void {
             injected.push(item);
             return { ok: true, accepted: true, item, pending: injected.length };
           })()
-        : full.startsWith("/ivyea-agent/chat/question")
+        : full.startsWith("/ivyea-agent/chat/cancel")
+        ? (((stopped.at = Date.now())), { ok: true, cancelled: true })
+      : full.startsWith("/ivyea-agent/chat/question")
           ? (((window as any).__lastQuestionAnswer = body), { ok: true })
           : match(full || config.url || ""),
       status: 200,
@@ -1432,11 +1440,21 @@ export function installMockApi(): void {
    */
   const agentStream = () => {
     const enc = new TextEncoder();
+    stopped.at = 0;
+    // 每一拍都看一眼有没有人按停止 —— 真 agent 是在模型流的每个事件和每个工具步
+    // 边界读中止标志的，这里照同一个粒度模拟。
     const beat = (ms: number) => new Promise((r) => setTimeout(r, ms));
     return new Response(new ReadableStream({
       async start(ctrl) {
         const send = (event: string, data: unknown) =>
           ctrl.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        const halted = () => {
+          if (!stopped.at) return false;
+          send("cancelled", { session_id: "s-live", text: "（这一轮被你停掉了）",
+                              injected_pending: [] });
+          ctrl.close();
+          return true;
+        };
         send("start", { session_id: "s-live", turn_id: "t-live", model: "deepseek-v4-pro",
                         approval: "none", read_only: true });
         // 上下文用量：真 agent 在第一个 token 之前就发一份，收尾再发一份（见
@@ -1462,7 +1480,11 @@ export function installMockApi(): void {
           "再看是点击涨了还是单次点击成本涨了。",
           "手里没有报表，得先查数据源。",
         ];
-        for (const t of think) { await beat(1200); send("reasoning", { text: t }); }
+        for (const t of think) {
+          await beat(1200);
+          if (halted()) return;
+          send("reasoning", { text: t });
+        }
         await beat(700);
         // **工具之前先说一段话** —— 真 agent 就是这么干的（模型先写"我先去查一下"，
         // 再调工具，回来接着说）。假流里此前一个字都不在工具之前，于是"分段汇报"
@@ -1476,6 +1498,7 @@ export function installMockApi(): void {
         for (const [i, st] of [["grep", "搜索内容"], ["glob", "查找文件"],
                                ["read_file", "读取文件"], ["read_file", "读取文件"],
                                ["run_command", "执行命令"]].entries()) {
+          if (halted()) return;
           send("step", { type: "step", id: "b" + i, seq: i, phase: "tool", name: st[0],
                          status: "running" });
           await beat(160);
@@ -1550,7 +1573,9 @@ export function installMockApi(): void {
         }
         await beat(600);
         for (const t of ["\n\n## 先说结论\n\n", "这一周花费涨了 34%，", "其中 28% 来自单次点击成本上升。"]) {
-          await beat(500); send("token", { text: t });
+          await beat(500);
+          if (halted()) return;
+          send("token", { text: t });
         }
         send("final", { session_id: "s-live", turn_id: "t-live",
                         ...(followups ? {
