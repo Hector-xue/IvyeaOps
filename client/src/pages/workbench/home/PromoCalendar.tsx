@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchPromotions, type PromoBoard, type PromoItem, type PromoKind } from "../../../api/cockpit";
 import { errText } from "../../../lib/errText";
+import LingXingGate from "./LingXingGate";
 
 /**
  * 促销日历 —— 已报活动与优惠券的结束倒计时。
@@ -210,7 +211,7 @@ export default function PromoCalendar() {
         ))}
       </div>
 
-      {error && <div className="cp-error">{error}</div>}
+      <LingXingGate error={error} />
 
       {!loading && items.length === 0 && !error && (
         <div className="cp-empty">

@@ -6,6 +6,7 @@ import {
 } from "../../../api/cockpit";
 import AdjustDrawer from "./AdjustDrawer";
 import { errText } from "../../../lib/errText";
+import LingXingGate from "./LingXingGate";
 
 /**
  * 广告看板。
@@ -266,7 +267,7 @@ export default function AdsBoard() {
         </div>
       )}
 
-      {error && <div className="cp-error">{error}</div>}
+      <LingXingGate error={error} />
       {loading && !board && <div className="cp-loading">正在汇总广告数据…</div>}
 
       {!loading && campaigns.length === 0 && !error && (
