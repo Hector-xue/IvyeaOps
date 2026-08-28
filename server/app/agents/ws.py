@@ -113,6 +113,28 @@ async def _handle_chat_message(data: dict, writer: ChatWriter, ws: WebSocket,
             task.add_done_callback(tasks.discard)
             return
 
+        if msg_type == "agent-inject":
+            # 轮次跑着的时候用户又说了一句。**能真插就真插**（claude 的 stdin 本来就开着；
+            # ivyea 走 --input-format stream-json 那条控制通道），插不进去就明说 —— 前端据此
+            # 把这句话排到下一轮，而不是让它无声消失。
+            provider = data.get("provider") or "claude"
+            session_id = data.get("sessionId") if isinstance(data.get("sessionId"), str) else ""
+            text = str(data.get("text") or "").strip()
+            if not session_id or not text:
+                await writer.send({"type": "inject-result", "accepted": False,
+                                   "reason": "bad_request", "sessionId": session_id})
+                return
+            if provider == "ivyea":
+                out = await ivyea_driver.inject(session_id, text)
+            elif provider == "claude":
+                out = await claude_driver.inject(session_id, text)
+            else:
+                # codex/hermes 是一次性进程，stdin 从开头就关着 —— 没有中途插话这回事。
+                out = {"ok": True, "accepted": False, "reason": "provider_unsupported"}
+            await writer.send({"type": "inject-result", "sessionId": session_id,
+                               "provider": provider, "text": text, **out})
+            return
+
         if msg_type == "abort-session":
             provider = data.get("provider") or "claude"
             session_id = data.get("sessionId") if isinstance(data.get("sessionId"), str) else ""
@@ -134,6 +156,13 @@ async def _handle_chat_message(data: dict, writer: ChatWriter, ws: WebSocket,
         if msg_type == "claude-permission-response":
             request_id = data.get("requestId")
             if isinstance(request_id, str) and request_id:
+                # 选项卡（ask_user_question）和写操作审批走同一条回传消息 —— 前端那张
+                # 面板是同一个。谁认领这个 request_id 谁处理：ivyea 的问答表先认一遍，
+                # 不是它的再交给 claude 的审批表。
+                updated = data.get("updatedInput")
+                answers = (updated or {}).get("answers") if isinstance(updated, dict) else None
+                if ivyea_driver.resolve_question(request_id, answers if isinstance(answers, dict) else {}):
+                    return
                 claude_driver.resolve_tool_approval(request_id, {
                     "allow": bool(data.get("allow")),
                     "updatedInput": data.get("updatedInput"),
@@ -163,9 +192,18 @@ async def _handle_chat_message(data: dict, writer: ChatWriter, ws: WebSocket,
 
         if msg_type == "get-pending-permissions":
             session_id = data.get("sessionId") if isinstance(data.get("sessionId"), str) else ""
-            if session_id and claude_driver.is_active(session_id):
-                await writer.send({"type": "pending-permissions-response", "sessionId": session_id,
-                                   "data": claude_driver.get_pending_for_session(session_id)})
+            if not session_id:
+                return
+            pending: list = []
+            if claude_driver.is_active(session_id):
+                pending += claude_driver.get_pending_for_session(session_id)
+            if ivyea_driver.is_active(session_id):
+                # 切走再切回来时，那张还没点的选项卡要能回到界面上 —— 否则轮次在那边
+                # 干等五分钟，用户这边什么都看不到。
+                pending += ivyea_driver.get_pending_questions(session_id)
+            if pending:
+                await writer.send({"type": "pending-permissions-response",
+                                   "sessionId": session_id, "data": pending})
             return
 
         if msg_type == "get-active-sessions":

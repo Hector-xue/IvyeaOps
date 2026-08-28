@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 
 import { usePaletteOps } from '../../../contexts/PaletteOpsContext';
-import type { PendingPermissionRequest, SessionNavigationOptions } from '../types/types';
+import type { FollowUpItem, PendingPermissionRequest, SessionNavigationOptions } from '../types/types';
 import type { ProjectSession, LLMProvider } from '../../../types/app';
 import type { SessionStore, NormalizedMessage } from '../../../stores/useSessionStore';
 
@@ -58,6 +58,8 @@ interface UseChatRealtimeHandlersArgs {
   setClaudeStatus: (status: { text: string; tokens: number; can_interrupt: boolean } | null) => void;
   setTokenBudget: (budget: Record<string, unknown> | null) => void;
   setPendingPermissionRequests: Dispatch<SetStateAction<PendingPermissionRequest[]>>;
+  /** 还没被这一轮读到的追加指令 —— 收到回执销账、被停掉时清空。 */
+  setFollowUpQueue: Dispatch<SetStateAction<FollowUpItem[]>>;
   pendingViewSessionRef: MutableRefObject<PendingViewSession | null>;
   streamTimerRef: MutableRefObject<number | null>;
   accumulatedStreamRef: MutableRefObject<string>;
@@ -85,6 +87,7 @@ export function useChatRealtimeHandlers({
   setClaudeStatus,
   setTokenBudget,
   setPendingPermissionRequests,
+  setFollowUpQueue,
   pendingViewSessionRef,
   streamTimerRef,
   accumulatedStreamRef,
@@ -127,6 +130,18 @@ export function useChatRealtimeHandlers({
             permSessionId === currentSessionId || (selectedSession && permSessionId === selectedSession.id);
           if (permSessionId && !isCurrentPermSession) return;
           setPendingPermissionRequests(msg.data || []);
+          return;
+        }
+
+        case 'inject-result': {
+          // 那句话到底进没进去。**必须有准信**：accepted=false 时它得留在队列里，
+          // 本轮结束后当成下一轮发出去，而不是无声消失。
+          const text = String(msg.text || '');
+          setFollowUpQueue((prev) => prev.map((item) => (
+            item.text === text && item.state === 'sending'
+              ? { ...item, state: msg.accepted ? 'injected' : 'queued' }
+              : item
+          )));
           return;
         }
 
@@ -261,6 +276,27 @@ export function useChatRealtimeHandlers({
       }
 
       case 'complete': {
+        // 这一轮的收尾行：「结束于 21:47 · 用时 3 分 12 秒」。
+        // 和刷新之后从存档里读出来的那条是同一句话（服务端按 turn_times 生成），
+        // 所以刷新前后看到的是同一个东西，不会"现在有、刷完就没了"。
+        if (sid && !msg.aborted && typeof msg.durationMs === 'number' && msg.durationMs > 0) {
+          const ended = new Date(msg.endedAt || Date.now());
+          const two = (n: number) => String(n).padStart(2, '0');
+          const secs = msg.durationMs / 1000;
+          const dur = secs < 60
+            ? `${secs.toFixed(1)} 秒`
+            : `${Math.floor(secs / 60)} 分 ${Math.round(secs % 60)} 秒`;
+          sessionStore.appendRealtime(sid, {
+            id: `clock_${Date.now()}`,
+            sessionId: sid,
+            provider: provider as any,
+            timestamp: ended.toISOString(),
+            kind: 'task_notification',
+            summary: `结束于 ${two(ended.getHours())}:${two(ended.getMinutes())} · 用时 ${dur}`,
+            status: 'completed',
+          } as NormalizedMessage);
+        }
+
         // Flush any remaining streaming state
         if (streamTimerRef.current) {
           clearTimeout(streamTimerRef.current);
@@ -352,6 +388,23 @@ export function useChatRealtimeHandlers({
         setIsLoading(true);
         setCanAbortSession(true);
         setClaudeStatus({ text: 'Waiting for permission', tokens: 0, can_interrupt: true });
+        break;
+      }
+
+      case 'injected': {
+        // agent 说它读到了 —— 这条从队列里销账（不再补发）。
+        const text = String(msg.content || '');
+        setFollowUpQueue((prev) => prev.filter((item) => item.text !== text));
+        break;
+      }
+
+      case 'cancelled': {
+        // 用户停掉了这一轮：排着的追加指令一并取消 —— 任务都不做了，
+        // 那几句更不该自己跑起来。
+        setFollowUpQueue([]);
+        setIsLoading(false);
+        setCanAbortSession(false);
+        setClaudeStatus(null);
         break;
       }
 

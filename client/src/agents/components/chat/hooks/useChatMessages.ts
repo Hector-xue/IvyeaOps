@@ -156,6 +156,32 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
         });
         break;
 
+      // 轮次跑着的时候用户补的那句话，agent 说它读到了。画成一条紧凑的提示行
+      // （和后台任务通知同一个形态）——**它必须看得见**：用户说出去的话去哪了，
+      // 不能只由一个转瞬即逝的 toast 交代。
+      case 'injected':
+        converted.push({
+          type: 'assistant',
+          content: `已插入本轮：${msg.content || ''}`,
+          timestamp: msg.timestamp,
+          isTaskNotification: true,
+          taskStatus: 'completed',
+          ...sharedMetadata,
+        });
+        break;
+
+      // 这一轮被用户停掉了。**正常结局，不是 error** —— 画成红色会让人以为出了故障。
+      case 'cancelled':
+        converted.push({
+          type: 'assistant',
+          content: '已停止：你中止了这一轮。已经跑出来的内容都留着了。',
+          timestamp: msg.timestamp,
+          isTaskNotification: true,
+          taskStatus: 'completed',
+          ...sharedMetadata,
+        });
+        break;
+
       case 'task_notification':
         converted.push({
           type: 'assistant',

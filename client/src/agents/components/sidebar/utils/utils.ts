@@ -89,7 +89,10 @@ export const createSessionViewModel = (
     isHermesSession: session.__provider === 'hermes',
     isAgySession: session.__provider === 'agy',
     isIvyeaSession: session.__provider === 'ivyea',
-    isActive: diffInMinutes < 10,
+    // **"最近动过"不是"正在跑"。** 这个字段以前叫 isActive、判据是"10 分钟内更新过"，
+    // 于是一条十分钟前跑完的会话和一条正在跑的会话长得一模一样 —— 而用户看这枚标记
+    // 想知道的恰恰是后者（能不能关页面、要不要等它）。真正在跑的看 processingSessions。
+    isRecent: diffInMinutes < 10,
     sessionName: getSessionName(session, t),
     sessionTime: getSessionTime(session),
     messageCount: Number(session.messageCount || 0),

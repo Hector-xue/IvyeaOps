@@ -24,6 +24,8 @@ type SidebarProjectSessionsProps = {
   onSaveEditingSession: (projectName: string, sessionId: string, summary: string, provider: LLMProvider) => void;
   onProjectSelect: (project: Project) => void;
   onSessionSelect: (session: SessionWithProvider, projectName: string) => void;
+  /** 此刻真的有一轮在跑的会话 id（左栏据此打闪烁标记）。 */
+  processingSessions?: Set<string>;
   onDeleteSession: (
     projectName: string,
     sessionId: string,
@@ -70,6 +72,7 @@ export default function SidebarProjectSessions({
   onSaveEditingSession,
   onProjectSelect,
   onSessionSelect,
+  processingSessions,
   onDeleteSession,
   onLoadMoreSessions,
   onNewSession,
@@ -129,6 +132,7 @@ export default function SidebarProjectSessions({
               onSaveEditingSession={onSaveEditingSession}
               onProjectSelect={onProjectSelect}
               onSessionSelect={onSessionSelect}
+              processingSessions={processingSessions}
               onDeleteSession={onDeleteSession}
               t={t}
             />

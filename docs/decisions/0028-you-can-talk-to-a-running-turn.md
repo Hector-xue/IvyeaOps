@@ -81,6 +81,24 @@
 之后那一轮确实结束了，照写；而"停不掉、只好断流"那条兜底路径下轮次还在 agent 那边
 跑，那时候写一行结束时刻就是在撒谎，所以不写。判据是本地有没有 abort 掉这条流。
 
+### 六、`/agents` 那套也照做（v1.12.19）
+
+工作台和 `/agents` 是两条不共用代码的链路（SSE + serve HTTP vs WebSocket + CLI 子进程），
+所以这四件事要各做一遍。差别只在通道：
+
+| | 工作台控制台 | `/agents` |
+|---|---|---|
+| 追加指令 | `POST /v1/chat/inject` | WS `agent-inject` → claude 的 stdin / ivyea 的 `--input-format` 控制通道 |
+| 选项卡 | SSE `question_request` + `POST /chat/question` | 进程 `control_request` → 复用已有的 AskUserQuestion 面板 → 原路写回 stdin |
+| 停止 | `POST /v1/chat/cancel` | WS `abort-session` → **先 interrupt 再 terminate** |
+| 正在跑 | `GET /chat/live-sessions` 轮询 | 本地 `processingSessions`（谁发起的那一轮就在谁的浏览器里记着） |
+
+`/agents` 的停止此前是 SIGTERM：进程当场死，落盘来不及跑 —— 这一轮的产出全丢。
+现在先递 interrupt，8 秒不走才动手。
+
+codex/hermes 没有输入通道（一次性进程，stdin 从开头就关着），那两档明确回
+`provider_unsupported`，前端据此排到下一轮 —— 不假装插进去了。
+
 ## 后果
 
 - 新增 `POST /chat/inject`、`POST /chat/question`、`POST /chat/cancel`、

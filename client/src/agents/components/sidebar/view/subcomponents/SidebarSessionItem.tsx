@@ -28,6 +28,8 @@ type SidebarSessionItemProps = {
     sessionTitle: string,
     provider: LLMProvider,
   ) => void;
+  /** 此刻真的有一轮在跑的会话 id。 */
+  processingSessions?: Set<string>;
   t: TFunction;
 };
 
@@ -73,9 +75,13 @@ export default function SidebarSessionItem({
   onProjectSelect,
   onSessionSelect,
   onDeleteSession,
+  processingSessions,
   t,
 }: SidebarSessionItemProps) {
   const sessionView = createSessionViewModel(session, currentTime, t);
+  // 这条会话此刻有没有一轮在跑（useSessionProtection 的 processingSessions），
+  // 不是从"最近更新时间"推出来的。
+  const isRunning = Boolean(processingSessions?.has(session.id));
   const isSelected = selectedSession?.id === session.id;
   const isEditing = editingSession === session.id;
   const compactSessionAge = formatCompactSessionAge(sessionView.sessionTime, currentTime);
@@ -117,14 +123,19 @@ export default function SidebarSessionItem({
 
   return (
     <div className="group relative">
-      {sessionView.isActive && (
+      {isRunning && (
+        /*
+         * **正在跑**的标记：一颗呼吸的点 + 一圈泛开的光环，和工作台左栏同一种说法。
+         * 这里以前挂的判据是"10 分钟内更新过" —— 那说的是"最近"，不是"现在还在动"，
+         * 而用户盯着它想知道的正是后者（能不能关页面、要不要等它）。
+         */
         <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 transform">
-          <Tooltip content={t('tooltips.activeSessionIndicator')} position="right">
-            <div
-              role="status"
-              aria-label={t('tooltips.activeSessionIndicator')}
-              className="h-2 w-2 animate-pulse rounded-full bg-green-500"
-            />
+          <Tooltip content={t('tooltips.activeSessionIndicator', { defaultValue: '正在执行' })} position="right">
+            <span role="status" aria-label="正在执行"
+                  className="relative inline-flex h-2 w-2 items-center justify-center">
+              <span className="absolute inset-0 animate-ping rounded-full bg-emerald-500/70" />
+              <span className="absolute inset-0 scale-50 animate-pulse rounded-full bg-emerald-500" />
+            </span>
           </Tooltip>
         </div>
       )}
@@ -134,7 +145,7 @@ export default function SidebarSessionItem({
           className={cn(
             'p-2 mx-3 my-0.5 rounded-md bg-card border active:scale-[0.98] transition-all duration-150 relative',
             isSelected ? 'bg-primary/5 border-primary/20' : '',
-            !isSelected && sessionView.isActive
+            !isSelected && isRunning
               ? 'border-green-500/30 bg-green-50/5 dark:bg-green-900/5'
               : 'border-border/30',
           )}
