@@ -34,7 +34,7 @@ const ImageTranslate = lazy(() => import("./pages/workbench/ImageTranslate"));
 const IdeaSkill = lazy(() => import("./pages/workbench/IdeaSkill"));
 const SkillTools = lazy(() => import("./pages/workbench/SkillTools"));
 const DeepAnalysis = lazy(() => import("./pages/workbench/DeepAnalysis"));
-const LingXing = lazy(() => import("./pages/workbench/LingXing"));
+const LingXingRedirect = lazy(() => import("./pages/workbench/LingXingRedirect"));
 const Console = lazy(() => import("./pages/workbench/Console"));
 const Capabilities = lazy(() => import("./pages/workbench/Capabilities"));
 const Approvals = lazy(() => import("./pages/workbench/Approvals"));
@@ -191,7 +191,10 @@ export default function App() {
                 老书签和老深链都不能 404 —— ?tab=create 要平移成 ?tab=skills&seg=create。 */}
             <Route path="skill-hub" element={<SkillHubRedirect />} />
             <Route path="deep-analysis" element={<DeepAnalysis />} />
-            <Route path="lingxing" element={<LingXing />} />
+            {/* 领星 ERP 已并入运营驾驶舱（市场侧 5 个 tab + 自家店铺 4 个 tab，
+                数据浏览/审计/配置进了齿轮对话框）。老书签带着 ?tab= 进来，要按
+                映射表落到对应的位置 —— 直接 Navigate 会把 query 丢掉。 */}
+            <Route path="lingxing" element={<LingXingRedirect />} />
             <Route path="hub-settings" element={<HubSettings />} />
             <Route path="*" element={<NotFound />} />
           </Route>

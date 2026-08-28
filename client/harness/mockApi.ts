@@ -354,6 +354,22 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
     master_enabled: true, operate_active: false, openapi_configured: true,
     ticket_counts: { awaiting_human: 2, reviewing: 1, executing: 0 },
   }],
+  ["/lingxing/read/sellers", { rows: [
+    { sid: 101, name: "Ivyea-US", marketplace: "US", currency: "USD", has_ads_setting: 1 },
+    { sid: 102, name: "Ivyea-UK", marketplace: "UK", currency: "GBP", has_ads_setting: 1 },
+    { sid: 103, name: "Ivyea-DE", marketplace: "DE", currency: "EUR", has_ads_setting: 0 },
+  ], count: 3, cached: false, synced_at: new Date(now).toISOString() }],
+  ["/lingxing/datasets", { datasets: [
+    { key: "sellers", label: "店铺列表", group: "基础", params: [], columns: [
+      { key: "sid", label: "SID" }, { key: "name", label: "店铺" },
+      { key: "marketplace", label: "站点" }, { key: "currency", label: "币种" }] },
+    { key: "sp_campaigns", label: "SP 广告活动", group: "广告", params: [
+      { name: "sid", type: "int", required: true, label: "店铺SID" },
+      { name: "length", type: "int", default: 200, label: "条数" },
+      { name: "offset", type: "int", default: 0, label: "偏移" }], columns: [
+      { key: "campaign_id", label: "活动ID" }, { key: "name", label: "活动名" },
+      { key: "daily_budget", label: "日预算" }, { key: "state", label: "状态" }] },
+  ] }],
   ["/lingxing/review/providers", {
     available: [
       { id: "ivyea-agent", label: "IvyeaAgent（内置）", ok: true },
