@@ -179,11 +179,11 @@ async function run() {
         narrText: narr ? Math.round((narr.firstElementChild || narr).getBoundingClientRect().left) : null,
         // 头部图标就是那三行「点+横线」，不该再是心电图/常春藤
         mark: !!document.querySelector(".af-head-ivy .steps-mark"),
-        ivy: !!document.querySelector(".af-head-ivy .ivy-grow"),
+        ivy: !!document.querySelector(".ivy-grow"),   // 常春藤已全站下线，一株都不该有
       };
     })()`);
     assert.ok(cols.mark, "「执行过程」头部该用步骤清单图标");
-    assert.ok(!cols.ivy, "头部不该再出现常春藤");
+    assert.ok(!cols.ivy, "常春藤已经全站换掉，页面上不该再有");
     assert.equal(cols.headIcon, cols.rowMark, "头部图标要和下面那列 ✓ 同一条竖线");
     assert.equal(cols.narrBar, cols.rowMark, "旁白的引线也在这条线上");
     assert.equal(cols.headLabel, cols.rowIcon, "「执行过程」要挨着自己的图标，落在工具图标那一列");

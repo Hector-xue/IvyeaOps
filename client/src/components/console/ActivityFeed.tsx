@@ -23,8 +23,8 @@
  */
 import { useMemo, useState } from "react";
 import Icon from "../Icon";
-import IvyGrow from "./IvyGrow";
 import StepsMark from "./StepsMark";
+import ThinkingDots from "./ThinkingDots";
 import { formatMs, type ConsoleStep } from "../../lib/stepLabels";
 
 export type MatchedSkill = { id: string; title: string; domain?: string; score?: number };
@@ -217,7 +217,7 @@ export default function ActivityFeed({
             <div className="af-item" key="live">
               <div className="af-line af-think af-live">
                 <span className="af-mark" />
-                <i className="af-icon af-icon-live"><IvyGrow /></i>
+                <i className="af-icon af-icon-live"><ThinkingDots /></i>
                 <span className="af-kind">思考</span>
                 <span className="af-text">· {live}</span>
               </div>

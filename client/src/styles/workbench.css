@@ -3450,7 +3450,7 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .af-head-ivy{display:inline-flex;align-items:center;justify-content:center;
   flex-shrink:0;width:14px;height:1.2em;line-height:0;color:var(--ivy)}
 /* 图标按 em 定尺寸，在这一格里收成 1em —— 它和下面那一列 ✓ 才是同一个视觉宽度。 */
-.af-head-ivy .ivy-grow,.af-head-ivy .steps-mark{width:1em;height:1em}
+.af-head-ivy .steps-mark{width:1em;height:1em}
 .af-head-label{color:var(--t2)}
 .af-head-meta{color:var(--t3)}
 .af-head-toggle{margin-left:auto;display:inline-flex;align-items:center;gap:3px;
@@ -3558,47 +3558,33 @@ button.af-line:hover{background:var(--bg2)}
 .cs-live-icon{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
   width:14px;height:14px;color:var(--t3);font-style:normal;line-height:1}
 .cs-live-icon.cs-live-done{color:var(--acc)}
-/* 常春藤生长 —— 思考中的那枚图标（见 components/console/IvyGrow.tsx）。
-   一个 2.8s 的循环：藤先画出来，三片叶子依次冒头，长满后整体轻轻褪一下再从头长。
-   尺寸用 em，跟着所在位置的字号走。 */
-.ivy-grow{width:1.15em;height:1.15em;overflow:visible;color:var(--ivy);
-  /* 整株一起淡入淡出。**淡出必须放在容器上**：让藤和叶各自淡出的话，它们的
-     animation-delay 不同，收尾时会先掉藤、剩三片叶子浮在半空 —— 看起来是散架，
-     不是"长完了重新长"（截图实拍过一次）。 */
-  animation:ivy-cycle 2.8s var(--ease) infinite}
-.ivy-stem{stroke:currentColor;stroke-width:1.7;
-  stroke-dasharray:26;stroke-dashoffset:26;
-  animation:ivy-stem 2.8s var(--ease) infinite}
-/* 三片叶子的先后**写进各自的关键帧百分比**，不用 animation-delay。
-   用 delay 的话每片叶子的时间线都比藤晚一截，循环回到起点时藤已经重画、叶子还停在
-   上一轮长好的样子 —— 那一帧看起来是三片叶子浮在半空（实拍验证过）。同一条时间线
-   才锁得住相位。 */
-.ivy-leaf{fill:currentColor;opacity:0;transform-box:fill-box;transform-origin:center;
-  animation-duration:2.8s;animation-timing-function:var(--ease);
-  animation-iteration-count:infinite}
-.ivy-leaf-1{animation-name:ivy-leaf-1}
-.ivy-leaf-2{animation-name:ivy-leaf-2}
-.ivy-leaf-3{animation-name:ivy-leaf-3}
-@keyframes ivy-cycle{0%{opacity:0}8%{opacity:1}86%{opacity:1}100%{opacity:0}}
-@keyframes ivy-stem{
-  0%{stroke-dashoffset:26}
-  46%,100%{stroke-dashoffset:0}
-}
-@keyframes ivy-leaf-1{
-  0%,14%{opacity:0;transform:scale(.3)}
-  24%,100%{opacity:1;transform:scale(1)}
-}
-@keyframes ivy-leaf-2{
-  0%,25%{opacity:0;transform:scale(.3)}
-  35%,100%{opacity:1;transform:scale(1)}
-}
-@keyframes ivy-leaf-3{
-  0%,36%{opacity:0;transform:scale(.3)}
-  46%,100%{opacity:1;transform:scale(1)}
-}
-/* 有人把系统动效关了 —— 那就只显示长好的样子，别硬闪。 */
+/* ── 「思考中」：三个点依次亮（components/console/ThinkingDots）────────────
+ * 换掉了原来那株生长的常春藤。藤是品牌意象，放这儿好看，但它说不清这一刻发生了
+ * 什么 —— 一株在长的植物既能读成"在想"，也能读成"在跑"、"在等"。
+ * 笔画和节奏与 .steps-mark 一套（点、依次亮）：两枚图标在同一栏里上下相邻，
+ * 得看起来像一家的东西。 */
+.thinking-dots{width:1.1em;height:1.1em;color:var(--ivy);display:block}
+.thinking-dots .td-dot{fill:currentColor}
+@keyframes think-seq{0%,100%{opacity:.25}40%{opacity:1}}
+.thinking-dots .td-dot-1{animation:think-seq 1.4s var(--ease) infinite}
+.thinking-dots .td-dot-2{animation:think-seq 1.4s var(--ease) .18s infinite}
+.thinking-dots .td-dot-3{animation:think-seq 1.4s var(--ease) .36s infinite}
+
+/* ── 「这个正在进行」：呼吸点 + 光环（components/console/RunningMark）──────
+ * 左栏的"这条会话正在跑"和状态坞的"这一步正在做"问的是同一件事，所以是同一枚
+ * 标记、同一段动效 —— 形状只在这里定义一次，位置和尺寸由各自的类去管。 */
+.pulse-mark{position:relative;width:9px;height:9px;flex-shrink:0;
+  display:inline-flex;align-items:center;justify-content:center;color:var(--ivy)}
+.pulse-mark i{position:absolute;inset:0;border-radius:50%;background:currentColor}
+.pulse-mark i:first-child{animation:pulse-ring 1.8s var(--ease) infinite}
+.pulse-mark i:last-child{transform:scale(.52);animation:pulse-core 1.8s var(--ease) infinite}
+@keyframes pulse-ring{0%{transform:scale(.5);opacity:.55}70%,100%{transform:scale(1.5);opacity:0}}
+@keyframes pulse-core{0%,100%{opacity:1}50%{opacity:.45}}
+/* 动效关掉时退成一颗静止的实心点 —— 信息不能只靠动画传达。 */
 @media (prefers-reduced-motion:reduce){
-  .ivy-grow,.ivy-stem,.ivy-leaf{animation:none;stroke-dashoffset:0;opacity:1;transform:none}
+  .thinking-dots .td-dot{animation:none;opacity:.7}
+  .pulse-mark i{animation:none}
+  .pulse-mark i:first-child{opacity:.25;transform:scale(1.3)}
 }
 .cs-live-icon.cs-live-think{color:var(--ivy)}
 .cs-live-icon.spinning{animation:cs-spin 2.4s linear infinite}
@@ -5458,18 +5444,9 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 /* ── 左栏：正在跑 ───────────────────────────────────────────────────────────
  * 一颗呼吸的圆点 + 一圈扩散的环。它回答的是"现在在跑"，不是"最近动过"
  * （列表里的时间已经在说后者了）。 */
-.sb-sess-live{position:relative;width:8px;height:8px;flex-shrink:0;margin-right:2px;
-  display:inline-flex;align-items:center;justify-content:center}
-.sb-sess-live i{position:absolute;inset:0;border-radius:50%;background:var(--acc)}
-.sb-sess-live i:first-child{animation:cc-live-ring 1.8s ease-out infinite}
-.sb-sess-live i:last-child{transform:scale(.5);animation:cc-live-pulse 1.8s ease-in-out infinite}
-@keyframes cc-live-ring{0%{transform:scale(.5);opacity:.55}70%{transform:scale(1.5);opacity:0}
-  100%{transform:scale(1.5);opacity:0}}
-@keyframes cc-live-pulse{0%,100%{opacity:1}50%{opacity:.45}}
-/* 动效关掉时退成一颗静止的实心点 —— 信息不能只靠动画传达。 */
+/* 形状/动效在 .pulse-mark（全站共用），这里只管它在这一行里的位置和大小。 */
+.sb-sess-live{width:8px;height:8px;margin-right:2px;color:var(--acc)}
 @media (prefers-reduced-motion:reduce){
-  .sb-sess-live i{animation:none}
-  .sb-sess-live i:first-child{opacity:.25;transform:scale(1.3)}
   .cc-queue-item.is-sending .cc-queue-dot{animation:none}
 }
 
@@ -5503,3 +5480,6 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 @media (prefers-reduced-motion:reduce){
   .steps-mark.is-running .steps-row{animation:none;opacity:.65}
 }
+
+/* 状态坞计划列表里的「正在做」。和它上下的 ✓、○ 同宽同心，才排得成一列。 */
+.ld-doing-mark{width:8px;height:8px}

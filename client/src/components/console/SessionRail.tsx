@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { Folder, FolderOpen, FolderPlus, Search, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "../../App";
 import FolderPicker, { shortPath } from "./FolderPicker";
+import RunningMark from "./RunningMark";
 import {
   CONSOLE_SESSIONS_CHANGED,
   consoleSessionDelete,
@@ -459,10 +460,10 @@ export default function SessionRail({
                     {(live.has(r.id) || r.running) && (
                       /* 正在跑 —— 标题左边一枚会动的标记。列表里的时间只能说"最近
                          动过"，而"现在正在跑"是完全不同的一件事（能不能关页面、要不要
-                         等它、该不该再发一句，全看这个）。 */
-                      <span className="sb-sess-live" role="status" aria-label="正在执行">
-                        <i /><i />
-                      </span>
+                         等它、该不该再发一句，全看这个）。
+                         形状和状态坞里"这一步正在做"共用一个组件：同一件事只能有
+                         一种说法。 */
+                      <RunningMark className="sb-sess-live" title="正在执行" />
                     )}
                     <span className="sb-sess-title">{r.title}</span>
                     {r.source && r.source !== "console" && (

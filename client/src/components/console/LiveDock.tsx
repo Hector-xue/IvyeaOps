@@ -19,7 +19,8 @@
  */
 import { useState } from "react";
 import Icon from "../Icon";
-import IvyGrow from "./IvyGrow";
+import RunningMark from "./RunningMark";
+import ThinkingDots from "./ThinkingDots";
 import { formatMs, type ConsoleStep } from "../../lib/stepLabels";
 import type { RailTodo } from "./ArtifactRail";
 
@@ -93,7 +94,7 @@ export default function LiveDock({
           {/* `step.icon` 存的是**图标名**（"tool-read"），不是字形。直接塞进 JSX
               会把这几个字母画在卡片上、压着标题 —— 用户截图里那句"文字有些错乱"
               就是它。活动行那边一直是 <Icon name={step.icon}/>，这里对齐。 */}
-          {now.thinking ? <IvyGrow /> : <Icon name={now.icon || "step-tool"} size={14} />}
+          {now.thinking ? <ThinkingDots /> : <Icon name={now.icon || "step-tool"} size={14} />}
         </span>
         <span className="ld-now">
           <span className="ld-label">{now.label}</span>
@@ -137,7 +138,7 @@ export default function LiveDock({
             {todos.map((t, i) => (
               <li key={i} className={isDone(t) ? "ld-t-done" : isDoing(t) ? "ld-t-doing" : "ld-t-todo"}>
                 <i>{isDone(t) ? <Icon name="step-ok" size={12} strokeWidth={2.6} />
-                              : isDoing(t) ? <IvyGrow />
+                              : isDoing(t) ? <RunningMark className="ld-doing-mark" />
                               : <span className="ld-dot" />}</i>
                 <span>{t.content || "（这条计划没写内容）"}</span>
               </li>

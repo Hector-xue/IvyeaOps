@@ -76,8 +76,8 @@ async function run() {
 
     // ── 1. 人在底部：叙述看得见，状态坞不出现（不说两遍同一句话）────────────
     await waitFor(send, `!!document.querySelector(".af")`, "执行叙述", 15_000);
-    await waitFor(send, `!!document.querySelector(".af .ivy-grow")`,
-                  "思考态是常春藤在长", 15_000);
+    await waitFor(send, `!!document.querySelector(".af .thinking-dots")`,
+                  "思考态是三个点依次亮", 15_000);
     const feedVisible = await inViewport(send, ".af");
     assert.ok(feedVisible && feedVisible.h > 0, "叙述要真的渲染出来");
     assert.equal(await evaluate(send, `!!document.querySelector(".ld")`), false,
