@@ -4,14 +4,14 @@ import SheetSelect from "../../components/SheetSelect";
 import LingXingHelp from "./LingXingHelp";
 import { errText } from "../../lib/errText";
 import { fetchCockpitStatus, syncNow, type CockpitStatus } from "../../api/cockpit";
+// 按钮用板块共享的那一个 —— 这里本来另抄了一份实心亮绿的 primary，并进驾驶舱之后
+// 它和旁边的 .cp-btn 并排出现，看着就是两个界面拼在一起。
+import { Btn } from "./lingxingUi";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--bg1)", border: "1px solid var(--b)", borderRadius: 3,
   padding: "6px 8px", fontSize: "var(--fs-11)", color: "var(--t)", outline: "none", fontFamily: "inherit", boxSizing: "border-box",
 };
-function Btn({ onClick, children, primary, disabled }: any) {
-  return <button onClick={onClick} disabled={disabled} style={{ background: primary ? "var(--acc)" : "var(--bg2)", color: primary ? "#000" : "var(--t)", border: primary ? "none" : "1px solid var(--b)", borderRadius: 4, padding: "5px 12px", fontSize: "var(--fs-11)", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.55 : 1 }}>{children}</button>;
-}
 function Card({ title, children }: any) {
   return <div className="card" style={{ padding: 12, marginBottom: 10 }}><div style={{ fontSize: "var(--fs-12)", fontWeight: 600, marginBottom: 8 }}>{title}</div>{children}</div>;
 }
@@ -91,7 +91,7 @@ export default function LingXingConfig() {
   return (
     <div>
       <div className="card" style={{ padding: "8px 12px", marginBottom: 10, fontSize: "var(--fs-11)", color: "var(--t3)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <span>开箱即用：① 填 OpenAPI 凭证 → ② 测试连接 → ③ 打开总开关。之后即可在「大盘/数据浏览/优化建议」浏览分析；写操作另有独立「操作开关」+ 三重复核。</span>
+        <span>开箱即用：① 填 OpenAPI 凭证 → ② 测试连接 → ③ 打开总开关。之后即可在「广告看板 / 优化建议 / 数据浏览」浏览分析；写操作另有独立「操作开关」+ 三重复核。</span>
         <span style={{ marginLeft: "auto" }}><Btn onClick={() => setShowHelp((v) => !v)}>{showHelp ? "收起帮助文档" : "📖 帮助文档"}</Btn></span>
       </div>
 

@@ -5197,6 +5197,10 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 .cp-btn:disabled{opacity:.5;cursor:default}
 .cp-btn.primary{background:color-mix(in srgb,var(--acc) 16%,transparent);border-color:var(--acc);color:var(--t)}
 .cp-btn.tiny{padding:2px 8px;font-size:var(--fs-10)}
+/* danger 只给"开启可写态"这类真会改线上数据的动作用 —— 它必须比 primary 更扎眼，
+   否则和普通确认按钮长得一样，点下去的心理成本就没了。 */
+.cp-btn.danger{background:color-mix(in srgb,var(--red) 18%,transparent);border-color:var(--red);color:var(--t)}
+.cp-btn.danger:hover:not(:disabled){background:color-mix(in srgb,var(--red) 26%,transparent);border-color:var(--red)}
 .cp-select{padding:5px 8px;border:1px solid var(--b2);border-radius:5px;background:var(--bg2);
   color:var(--t2);font-family:var(--font);font-size:var(--fs-11)}
 .cp-seg{display:inline-flex;border:1px solid var(--b2);border-radius:5px;overflow:hidden}
