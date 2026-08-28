@@ -28,6 +28,7 @@ import {
   type MemoryEntry,
   type MemoryStats,
 } from "../../api/ivyeaAgent";
+import { errText } from "../../lib/errText";
 import "../../styles/memory-panel.css";
 
 type View = "pending" | "core" | "entries" | "stats";
@@ -93,7 +94,7 @@ export default function MemoryPanel() {
       setCore(c.blocks || []);
       setCoreDraft(Object.fromEntries((c.blocks || []).map((b) => [b.block, b.text])));
     } catch (e: any) {
-      setMsg(e?.response?.data?.detail || e?.message || "读取失败");
+      setMsg(errText(e, "读取失败"));
     } finally {
       setBusy(false);
     }
@@ -114,7 +115,7 @@ export default function MemoryPanel() {
       setMsg(r.message || (action === "confirm" ? "已确认" : "已驳回"));
       await load();
     } catch (e: any) {
-      setMsg(e?.response?.data?.detail || "操作失败");
+      setMsg(errText(e, "操作失败"));
     } finally { setBusy(false); }
   };
 
@@ -132,7 +133,7 @@ export default function MemoryPanel() {
       setDetail(null);
       await load();
     } catch (err: any) {
-      setMsg(err?.response?.data?.detail || "删除失败");
+      setMsg(errText(err, "删除失败"));
     } finally { setBusy(false); }
   };
 
@@ -148,7 +149,7 @@ export default function MemoryPanel() {
       setMsg(r.message || (r.ok ? "已保存" : "保存失败"));
       await load();
     } catch (e: any) {
-      setMsg(e?.response?.data?.detail || "保存失败");
+      setMsg(errText(e, "保存失败"));
     } finally { setBusy(false); }
   };
 
@@ -158,7 +159,7 @@ export default function MemoryPanel() {
       const r = await ivyeaMemoryReflect();
       setMsg(r.message || "已开始整理");
     } catch (e: any) {
-      setMsg(e?.response?.data?.detail || "整理失败");
+      setMsg(errText(e, "整理失败"));
     } finally { setBusy(false); }
   };
 
