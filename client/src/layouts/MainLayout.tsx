@@ -33,6 +33,7 @@ function BoardFallback() {
 import ManualModal from "../components/ManualModal";
 import SettingsDialog, { OPEN_SETTINGS_EVENT } from "../components/SettingsDialog";
 import UpdateModal from "../components/UpdateModal";
+import WhatsNew, { pendingRelease, type Release } from "../components/WhatsNew";
 import Tour from "../components/Tour";
 import IvyeaAgentDock from "../components/IvyeaAgentDock";
 import AccountMenu from "../components/AccountMenu";
@@ -141,6 +142,9 @@ export default function MainLayout() {
   }, []);
 
   const [appVersion, setAppVersion] = useState("dev");
+  /* 升级后的一次性更新说明。在 state 初值里判定（只读 localStorage，不发请求），
+     这样它和第一帧一起出现，不会先让人看半秒界面再糊上来一个弹窗。 */
+  const [release, setRelease] = useState<Release | null>(() => pendingRelease(role === "admin"));
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updating, setUpdating] = useState(false);
   // 主题清单、图标、中文名、圆点色全部来自 lib/themes —— 这里曾经是五张手抄表，
@@ -687,6 +691,7 @@ export default function MainLayout() {
         <SettingsDialog section={settingsSection || undefined} onClose={() => setSettingsSection(null)} />
       )}
       {updating && <UpdateModal currentVersion={appVersion} onClose={() => setUpdating(false)} />}
+      {release && <WhatsNew release={release} onClose={() => setRelease(null)} />}
       {tourOn && hasTour(location.pathname) && (
         <Tour steps={TOURS[location.pathname]} onClose={() => setTourOn(false)} />
       )}

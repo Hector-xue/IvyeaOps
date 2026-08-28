@@ -61,3 +61,35 @@ export function fmtBudget(v: any, cur?: Cur): string {
   const s = Number.isFinite(n) ? n.toLocaleString("en-US", { maximumFractionDigits: 2 }) : String(v);
   return cur ? `${cur.sym}${s}` : s;
 }
+
+/**
+ * 币种代码 → 符号。
+ *
+ * 和上面那张 `BY_COUNTRY_CN` 的区别是**数据来源**：领星大盘只能从 seller 的
+ * country/name 去**推**币种（行里没有币种字段），而 `/api/cockpit/ads` 的
+ * by_store / by_campaign 里后端直接给了 `currency`（ISO 代码）。有确切值的时候
+ * 就别再推 —— 推错一次，界面上就是一个标着 $ 的欧元数字。
+ *
+ * 认不出来的代码返回 undefined，`fmtMoney` 会退化成不带符号的纯数字：
+ * **宁可没有符号，也不能有一个错的符号。**
+ */
+const SYMBOL_BY_CODE: Record<string, string> = {
+  USD: "$", CAD: "C$", MXN: "MX$", BRL: "R$", GBP: "£", EUR: "€",
+  SEK: "kr", PLN: "zł", TRY: "₺", JPY: "¥", AUD: "A$", SGD: "S$",
+  INR: "₹", AED: "AED ", SAR: "SAR ", EGP: "EGP ",
+};
+
+export function symbolOf(code?: string | null): string | undefined {
+  if (!code) return undefined;
+  return SYMBOL_BY_CODE[String(code).toUpperCase()];
+}
+
+/** 按币种代码格式化金额；代码认不出来就只给数字，不给符号。 */
+export function fmtMoney(v: any, code?: string | null, digits = 2): string {
+  if (v === null || v === undefined || v === "") return "—";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return String(v);
+  const s = n.toLocaleString("en-US", { maximumFractionDigits: digits });
+  const sym = symbolOf(code);
+  return sym ? `${sym}${s}` : s;
+}

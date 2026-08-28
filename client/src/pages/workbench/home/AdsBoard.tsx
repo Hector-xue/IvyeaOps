@@ -6,6 +6,8 @@ import {
 } from "../../../api/cockpit";
 import AdjustDrawer from "./AdjustDrawer";
 import { errText } from "../../../lib/errText";
+import { fmtMoney } from "../lingxingCurrency";
+import LingXingGate from "./LingXingGate";
 
 /**
  * 广告看板。
@@ -109,8 +111,8 @@ function CampaignRow({ c, onAdjust, onHourly }: {
             </span>
           )}
         </td>
-        <td>{num(c.spend, 2)}<Delta value={c.spend_change_pct} /></td>
-        <td>{num(c.sales, 2)}</td>
+        <td>{fmtMoney(c.spend, c.currency)}<Delta value={c.spend_change_pct} /></td>
+        <td>{fmtMoney(c.sales, c.currency)}</td>
         <td>{c.orders}</td>
         <td className={`cp-acos cp-health-${c.health}`}>
           {pct(c.acos)}
@@ -118,12 +120,12 @@ function CampaignRow({ c, onAdjust, onHourly }: {
             /目标 {c.target_acos != null ? pct(c.target_acos, 0) : "—"}
           </span>
         </td>
-        <td>{num(c.cpc, 2)}</td>
+        <td>{fmtMoney(c.cpc, c.currency)}</td>
         <td>
           {used != null ? (
             // 百分比放在条子**旁边**而不是压在条子上：填充过半时数字会骑在
             // 填充色的边界上，两种底色各盖一半，怎么调都不够清楚。
-            <div className="cp-pace" title={`今日已花 ${num(c.today_spend, 2)} / 预算 ${num(c.daily_budget, 2)}`}>
+            <div className="cp-pace" title={`今日已花 ${fmtMoney(c.today_spend, c.currency)} / 预算 ${fmtMoney(c.daily_budget, c.currency)}`}>
               <div className="cp-mini-bar">
                 <div className={"cp-mini-fill" + (used >= 90 ? " hot" : "")}
                      style={{ width: `${Math.min(100, used)}%` }} />
@@ -213,6 +215,20 @@ export default function AdsBoard() {
   const t = board?.totals as Metrics | undefined;
   const target = board?.by_store?.[0]?.target;
 
+  /**
+   * 全部店铺是不是同一种币。
+   *
+   * **后端的 totals 是各店直接相加的** —— 店铺币种不同时那个数字是把美元和欧元
+   * 加在一起，本身没有意义。所以：只有全场同币时才给它标符号；一旦跨币种，
+   * 顶部合计不标符号并明说不能当钱看，准确的口径去看下面的分店表（各店本币）。
+   * 领星大盘当年写的"各店本币，不跨币种汇总"就是这个意思，合并过来不能丢。
+   */
+  const currencies = useMemo(
+    () => Array.from(new Set((board?.by_store ?? []).map(s => s.currency).filter(Boolean))),
+    [board]);
+  const oneCur = currencies.length === 1 ? currencies[0] : undefined;
+  const mixed = currencies.length > 1;
+
   return (
     <div className="cp-page">
       <div className="cp-toolbar">
@@ -237,15 +253,25 @@ export default function AdsBoard() {
       </div>
 
       <div className="cp-kpis">
-        <Kpi label="广告花费" value={num(t?.spend, 2)} delta={board?.delta.spend_pct} invert />
-        <Kpi label="广告销售额" value={num(t?.sales, 2)} delta={board?.delta.sales_pct} />
+        <Kpi label="广告花费" value={fmtMoney(t?.spend, oneCur)} delta={board?.delta.spend_pct} invert
+             hint={mixed ? "跨币种合计，仅看趋势" : undefined} />
+        <Kpi label="广告销售额" value={fmtMoney(t?.sales, oneCur)} delta={board?.delta.sales_pct}
+             hint={mixed ? "跨币种合计，仅看趋势" : undefined} />
         <Kpi label="订单" value={num(t?.orders)} delta={board?.delta.orders_pct} />
         <Kpi label="ACOS" value={pct(t?.acos)}
              hint={target?.note || ""}
              delta={board?.delta.acos_delta != null ? board.delta.acos_delta * 100 : null} invert />
-        <Kpi label="CPC" value={num(t?.cpc, 2)} />
+        <Kpi label="CPC" value={fmtMoney(t?.cpc, oneCur)} />
         <Kpi label="点击" value={num(t?.clicks)} />
       </div>
+
+      {mixed && (
+        <div className="cp-target-note">
+          ◈ 所选店铺横跨 {currencies.join(" / ")} {currencies.length} 种货币 ——
+          上面的花费 / 销售额 / CPC 是<b>直接相加</b>的，只能看涨跌趋势，不能当金额读。
+          按店的准确数字见下方「分店对比」。
+        </div>
+      )}
 
       {target?.note && <div className="cp-target-note">◈ {target.note}</div>}
 
@@ -266,7 +292,7 @@ export default function AdsBoard() {
         </div>
       )}
 
-      {error && <div className="cp-error">{error}</div>}
+      <LingXingGate error={error} />
       {loading && !board && <div className="cp-loading">正在汇总广告数据…</div>}
 
       {!loading && campaigns.length === 0 && !error && (
@@ -276,6 +302,35 @@ export default function AdsBoard() {
             活动全部处于归档/暂停，或者所选窗口内没有投放。
             未开通广告的店铺已自动跳过。
           </div>
+        </div>
+      )}
+
+      {(board?.by_store?.length ?? 0) > 1 && (
+        <div className="cp-table-wrap">
+          <div className="cp-subhead">分店对比（各店本币，不跨币种汇总）</div>
+          <table className="cp-table">
+            <thead>
+              <tr><th>店铺</th><th>花费</th><th>销售额</th><th>订单</th><th>ACOS</th><th>目标</th><th>CPC</th></tr>
+            </thead>
+            <tbody>
+              {board!.by_store.map(st => (
+                <tr key={st.sid} className="cp-row">
+                  <td className="cp-col-name">
+                    {st.store}<span className="cp-mkt">{st.marketplace}</span>
+                  </td>
+                  <td>{fmtMoney(st.spend, st.currency)}</td>
+                  <td>{fmtMoney(st.sales, st.currency)}</td>
+                  <td>{st.orders}</td>
+                  <td className={st.target?.target_acos != null && st.acos != null
+                    && st.acos > st.target.target_acos ? "cp-acos cp-health-watch" : "cp-acos"}>
+                    {pct(st.acos)}
+                  </td>
+                  <td>{st.target?.target_acos != null ? pct(st.target.target_acos, 0) : "—"}</td>
+                  <td>{fmtMoney(st.cpc, st.currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

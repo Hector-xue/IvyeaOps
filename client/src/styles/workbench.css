@@ -2661,13 +2661,34 @@ body::after{
 .home-alert-text{color:var(--t3)}
 
 /* Tabs */
-.home-tabs{display:flex;gap:2px;flex-shrink:0;padding:0 16px;border-bottom:1px solid var(--b)}
-.home-tab{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--t3);font-family:var(--font);font-size:var(--fs-12);cursor:pointer;transition:all .12s;margin-bottom:-1px}
+.home-tabs{display:flex;gap:2px;flex-shrink:0;padding:0 16px;border-bottom:1px solid var(--b);
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.home-tabs::-webkit-scrollbar{display:none}
+/* flex-shrink:0 + nowrap **在桌面端也必须有**。合并后这一行是 9 个 tab + 2 个分组标签，
+   1440px 宽、侧栏展开时就已经放不下 —— 没有这两条，flex 会把每个标签压到最小内容宽度，
+   "大盘流量"被折成竖排两行。这以前只写在 760px 的媒体查询里，因为那时只有 7 个 tab。 */
+.home-tab{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--t3);font-family:var(--font);font-size:var(--fs-12);cursor:pointer;transition:all .12s;margin-bottom:-1px;flex:0 0 auto;white-space:nowrap}
 .home-tab:hover{color:var(--t2)}
 .home-tab.active{color:var(--acc);border-bottom-color:var(--acc)}
 .home-tab-icon{font-size:var(--fs-13)}
 .home-tab-body{flex:1;min-height:0;display:flex;flex-direction:column}
 .home-tab-body .pulse-page{flex:1}
+
+/* 两组 tab 之间的分组标签。**不是装饰** ——「大盘流量」看别人、「广告看板」看自己，
+   混排在一行里会让人选错板块。给经营组那条加左边框把两组切开。 */
+.home-tab-group{display:inline-flex;align-items:center;flex-shrink:0;padding:0 10px 0 4px;
+  color:var(--t3);font-size:var(--fs-10);letter-spacing:.05em;white-space:nowrap;align-self:center}
+.home-tab-group-sep{margin-left:6px;padding-left:14px;border-left:1px solid var(--b)}
+
+/* 经营组的上下文条（接没接上 / 写开关 / 店铺 / 齿轮）。它替换掉市场组那套
+   数据源+站点选择器 —— 两边取数的维度不同，并排堆着只会让人猜哪个管哪边。 */
+.home-ops-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-left:auto}
+
+/* 领星那几块（优化建议 / 工单）是普通文档流，塞进 .home-cockpit
+   （height:100%;overflow:hidden）会被裁掉下半截 —— 促销/广告自带 .cp-page 会自己滚，
+   它们没有，所以在这里补一个滚动容器。 */
+.home-ops-scroll{flex:1;min-height:0;overflow-y:auto;padding:12px 20px 24px}
+@media (max-width:760px){.home-ops-scroll{padding:10px 12px 20px}}
 
 /* ─── ASIN watch cards ───────────────────────────────────────────────────────── */
 .asin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
@@ -5176,6 +5197,10 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 .cp-btn:disabled{opacity:.5;cursor:default}
 .cp-btn.primary{background:color-mix(in srgb,var(--acc) 16%,transparent);border-color:var(--acc);color:var(--t)}
 .cp-btn.tiny{padding:2px 8px;font-size:var(--fs-10)}
+/* danger 只给"开启可写态"这类真会改线上数据的动作用 —— 它必须比 primary 更扎眼，
+   否则和普通确认按钮长得一样，点下去的心理成本就没了。 */
+.cp-btn.danger{background:color-mix(in srgb,var(--red) 18%,transparent);border-color:var(--red);color:var(--t)}
+.cp-btn.danger:hover:not(:disabled){background:color-mix(in srgb,var(--red) 26%,transparent);border-color:var(--red)}
 .cp-select{padding:5px 8px;border:1px solid var(--b2);border-radius:5px;background:var(--bg2);
   color:var(--t2);font-family:var(--font);font-size:var(--fs-11)}
 .cp-seg{display:inline-flex;border:1px solid var(--b2);border-radius:5px;overflow:hidden}
@@ -5186,6 +5211,7 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 .cp-error{font-size:var(--fs-11);color:var(--red);padding:8px 10px;border-radius:5px;
   border:1px solid color-mix(in srgb,var(--red) 35%,transparent);
   background:color-mix(in srgb,var(--red) 7%,transparent)}
+.cp-subhead{padding:8px 2px 6px;font-size:var(--fs-11);color:var(--t3)}
 .cp-empty{padding:40px 20px;text-align:center}
 .cp-empty-title{font-size:var(--fs-13);color:var(--t2);margin-bottom:6px}
 .cp-empty-desc{font-size:var(--fs-11);color:var(--t3);line-height:1.7;max-width:620px;margin:0 auto}
@@ -5494,3 +5520,28 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 
 /* 状态坞计划列表里的「正在做」。和它上下的 ✓、○ 同宽同心，才排得成一列。 */
 .ld-doing-mark{width:8px;height:8px}
+
+
+/* ─── 版本更新说明（WhatsNew） ──────────────────────────────────────────────
+   一次性、不可随手关闭的弹窗，讲清这一版改了什么。排版按"读得完"来做：
+   行距放宽、小标题分段、要点走列表 —— 一大坨连续文字没人看，等于白弹。 */
+/* .app-dialog-body 是 overflow:hidden 的 flex 容器 —— 正文必须自己开一个滚动区，
+   否则内容一长就被切掉且滚不动，而这个弹窗唯一的出口（「知道了」）就在末尾。
+   按钮放在滚动区外面固定住，任何长度的正文都关得掉。 */
+.wn{font-size:var(--fs-12);color:var(--t2);line-height:1.75;
+  display:flex;flex-direction:column;min-height:0;height:100%;padding:18px 22px 16px}
+.wn-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;max-width:62ch;padding-right:6px}
+.wn-date{font-size:var(--fs-10);color:var(--t3);margin-bottom:14px}
+.wn-lead{color:var(--t);font-size:var(--fs-13);line-height:1.7;margin:0 0 18px;
+  padding-left:12px;border-left:2px solid var(--acc)}
+.wn h4{margin:20px 0 8px;font-size:var(--fs-12);font-weight:600;color:var(--t)}
+.wn p{margin:0 0 12px}
+.wn ul{margin:0 0 12px;padding-left:18px}
+.wn li{margin-bottom:8px}
+.wn b{color:var(--t);font-weight:600}
+.wn-foot{margin-top:18px;padding-top:12px;border-top:1px solid var(--b);
+  font-size:var(--fs-11);color:var(--t3)}
+.wn-actions{flex:0 0 auto;margin-top:14px;padding-top:14px;border-top:1px solid var(--b);
+  display:flex;justify-content:flex-end}
+.wn-actions .cp-btn{padding:7px 20px}
+@media (max-width:760px){.wn{font-size:var(--fs-11)}.wn-lead{font-size:var(--fs-12)}}

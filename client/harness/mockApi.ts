@@ -348,6 +348,41 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
             age_minutes: 18, last_result: { ok: true, seconds: 41.2 }, running: false },
     op_types: [{ key: "campaign_budget", label: "广告活动·预算/启停", category: "modify" }],
   }],
+  // 领星配置页。**必须给 openapi_configured / master_enabled 都填 true** ——
+  // 两者任一为假，LingXing 会直接落到"未启用"的空态，④ 驾驶舱预热那张卡就渲染不到。
+  ["/lingxing/status", {
+    master_enabled: true, operate_active: false, openapi_configured: true,
+    ticket_counts: { awaiting_human: 2, reviewing: 1, executing: 0 },
+  }],
+  ["/lingxing/read/sellers", { rows: [
+    { sid: 101, name: "Ivyea-US", marketplace: "US", currency: "USD", has_ads_setting: 1 },
+    { sid: 102, name: "Ivyea-UK", marketplace: "UK", currency: "GBP", has_ads_setting: 1 },
+    { sid: 103, name: "Ivyea-DE", marketplace: "DE", currency: "EUR", has_ads_setting: 0 },
+  ], count: 3, cached: false, synced_at: new Date(now).toISOString() }],
+  ["/lingxing/datasets", { datasets: [
+    { key: "sellers", label: "店铺列表", group: "基础", params: [], columns: [
+      { key: "sid", label: "SID" }, { key: "name", label: "店铺" },
+      { key: "marketplace", label: "站点" }, { key: "currency", label: "币种" }] },
+    { key: "sp_campaigns", label: "SP 广告活动", group: "广告", params: [
+      { name: "sid", type: "int", required: true, label: "店铺SID" },
+      { name: "length", type: "int", default: 200, label: "条数" },
+      { name: "offset", type: "int", default: 0, label: "偏移" }], columns: [
+      { key: "campaign_id", label: "活动ID" }, { key: "name", label: "活动名" },
+      { key: "daily_budget", label: "日预算" }, { key: "state", label: "状态" }] },
+  ] }],
+  ["/lingxing/review/providers", {
+    available: [
+      { id: "ivyea-agent", label: "IvyeaAgent（内置）", ok: true },
+      { id: "deepseek", label: "DeepSeek", ok: true },
+      { id: "assistant", label: "全局兜底大模型", ok: true },
+      { id: "hermes", label: "Hermes CLI", ok: false },
+    ],
+    personas: ["保守派", "增长派", "魔鬼代言人"],
+    review_providers: "ivyea-agent,deepseek,assistant",
+    analysis_provider: "ivyea-agent",
+    rules_doc: "# 广告优化方法论\n\n- 数据不够不动手\n- 否词：≥15 次点击且 0 单\n",
+    rules_doc_default: "# 广告优化方法论（默认）\n",
+  }],
   ["/home/category-result", null],
   ["/home/category", []],
   ["/home/pulse", []],
@@ -676,6 +711,18 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
         : { alert_app_id: "cli_demo0336427e785d", alert_app_secret: "demo-secret" }),
       alert_chat_id: "oc_demo7a0933a4af7e82980367a", alert_feishu_domain: "feishu",
       alert_webhook: "", alert_threshold: 80, alert_sustain: 5, alert_cooldown: 30,
+      // 领星：凭证已配（secret 非空 = 界面显示"已配置，留空不改"）
+      lingxing_openapi_host: "https://openapi.lingxing.com",
+      lingxing_openapi_appid: "ak_demo_12345", lingxing_openapi_secret: "••••",
+      lingxing_mcp_key: "", lingxing_enabled: true,
+      lingxing_operate_require_human: true,
+      lingxing_fast_lane_enabled: true, lingxing_fast_lane_max_pct: 15,
+      lingxing_target_acos_factor: 0.7, lingxing_max_change_pct: 20,
+      lingxing_bid_step_pct: 15, lingxing_neg_min_clicks: 15,
+      lingxing_cooldown_days: 7, lingxing_opt_window_days: 30,
+      lingxing_scope_stores: "", lingxing_custom_models: "[]",
+      // 驾驶舱预热：开着，且 /cockpit/status 的 sync 段与这里一致
+      cockpit_sync_enabled: true, cockpit_sync_minutes: 30, cockpit_sync_days: 7,
     },
     secret_keys: ["apimart_key", "ivyea_agent_api_key", "vision_api_key", "alert_app_secret",
                   "alert_webhook"],
@@ -1394,9 +1441,32 @@ export function installMockApi(): void {
     } as never;
   };
 
+  // ?lxoff=1 —— 装成"领星还没配"：经营侧两块面板的接口 400，且 /cockpit/status
+  // 里 lingxing_enabled=false。**必须两件事一起装**：LingXingGate 是靠回头问
+  // status 来区分"没配置"和"真故障"的，只让面板报错验到的是另一条分支。
+  const lxOff = new URLSearchParams(location.search).get("lxoff") === "1";
+  // ?lxerr=1 —— 领星配好了，但面板接口真的挂了。验的是反面：这时候**必须**把原始
+  // 错误照实显示，绝不能被 Gate 当成"没配置"藏掉。
+  const lxErr = new URLSearchParams(location.search).get("lxerr") === "1";
+
   const slowReply = async (config: { url?: string; baseURL?: string }) => {
     const ms = delayFor((config.baseURL || "") + (config.url || ""));
     if (ms) await new Promise((r) => setTimeout(r, ms));
+    const full = (config.baseURL || "/api").replace(/^\/api/, "") + (config.url || "");
+    if (lxOff || lxErr) {
+      if (lxOff && full.startsWith("/cockpit/status")) {
+        const r: any = reply(config);
+        r.data = { ...r.data, lingxing_enabled: false };
+        return r;
+      }
+      if (full.startsWith("/cockpit/ads") || full.startsWith("/cockpit/promotions")) {
+        throw Object.assign(new Error("Request failed with status code 400"), {
+          isAxiosError: true,
+          response: { status: 400, data: {
+            detail: lxOff ? "领星集成未启用（总开关关闭）" : "领星接口超时（504 upstream）" } },
+        });
+      }
+    }
     return reply(config);
   };
 

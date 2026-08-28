@@ -3,14 +3,15 @@ import { api } from "../../api/client";
 import SheetSelect from "../../components/SheetSelect";
 import LingXingHelp from "./LingXingHelp";
 import { errText } from "../../lib/errText";
+import { fetchCockpitStatus, syncNow, type CockpitStatus } from "../../api/cockpit";
+// 按钮用板块共享的那一个 —— 这里本来另抄了一份实心亮绿的 primary，并进驾驶舱之后
+// 它和旁边的 .cp-btn 并排出现，看着就是两个界面拼在一起。
+import { Btn } from "./lingxingUi";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--bg1)", border: "1px solid var(--b)", borderRadius: 3,
   padding: "6px 8px", fontSize: "var(--fs-11)", color: "var(--t)", outline: "none", fontFamily: "inherit", boxSizing: "border-box",
 };
-function Btn({ onClick, children, primary, disabled }: any) {
-  return <button onClick={onClick} disabled={disabled} style={{ background: primary ? "var(--acc)" : "var(--bg2)", color: primary ? "#000" : "var(--t)", border: primary ? "none" : "1px solid var(--b)", borderRadius: 4, padding: "5px 12px", fontSize: "var(--fs-11)", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.55 : 1 }}>{children}</button>;
-}
 function Card({ title, children }: any) {
   return <div className="card" style={{ padding: 12, marginBottom: 10 }}><div style={{ fontSize: "var(--fs-12)", fontWeight: 600, marginBottom: 8 }}>{title}</div>{children}</div>;
 }
@@ -32,6 +33,10 @@ export default function LingXingConfig() {
   const [models, setModels] = useState<any[]>([]); const [cm, setCm] = useState<any>({});
   const [rules, setRules] = useState(""); const [rulesDefault, setRulesDefault] = useState("");
   const [showHelp, setShowHelp] = useState(false);
+  // 驾驶舱预热的运行状态（上次什么时候跑的、拿到多少、错在哪）。取不到不算错：
+  // 它只影响这张卡片的说明文字，不该把整个配置页拖红。
+  const [cockpit, setCockpit] = useState<CockpitStatus | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => { void load(); }, []);
   async function load() {
@@ -46,6 +51,19 @@ export default function LingXingConfig() {
       try { setModels(JSON.parse(cfg.lingxing_custom_models || "[]")); } catch { setModels([]); }
       setRules(rp.data.rules_doc || ""); setRulesDefault(rp.data.rules_doc_default || "");
     } catch (e: any) { setMsg(humanErr(e)); }
+    // 旁路：不进上面的 Promise.all，预热状态取不到不该把整个配置页判成加载失败。
+    void loadCockpit();
+  }
+  async function loadCockpit() {
+    try { setCockpit(await fetchCockpitStatus()); } catch { setCockpit(null); }
+  }
+  async function runSync() {
+    setSyncing(true); setMsg("");
+    try {
+      const r = await syncNow();
+      setMsg(r.ok ? `预热完成，用时 ${r.seconds}s` : `预热失败：${r.error || "未知错误"}`);
+    } catch (e: any) { setMsg(humanErr(e)); }
+    finally { setSyncing(false); await loadCockpit(); }
   }
   async function saveProvs(next: string[]) { setProvs(next); await patch({ lingxing_review_providers: next.join(",") }, "复核模型已保存"); }
   async function saveModels(next: any[]) { setModels(next); await patch({ lingxing_custom_models: JSON.stringify(next) }, "自定义模型已保存"); }
@@ -73,7 +91,7 @@ export default function LingXingConfig() {
   return (
     <div>
       <div className="card" style={{ padding: "8px 12px", marginBottom: 10, fontSize: "var(--fs-11)", color: "var(--t3)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <span>开箱即用：① 填 OpenAPI 凭证 → ② 测试连接 → ③ 打开总开关。之后即可在「大盘/数据浏览/优化建议」浏览分析；写操作另有独立「操作开关」+ 三重复核。</span>
+        <span>开箱即用：① 填 OpenAPI 凭证 → ② 测试连接 → ③ 打开总开关。之后即可在「广告看板 / 优化建议 / 数据浏览」浏览分析；写操作另有独立「操作开关」+ 三重复核。</span>
         <span style={{ marginLeft: "auto" }}><Btn onClick={() => setShowHelp((v) => !v)}>{showHelp ? "收起帮助文档" : "📖 帮助文档"}</Btn></span>
       </div>
 
@@ -111,7 +129,7 @@ export default function LingXingConfig() {
           {st?.master_enabled
             ? <Btn onClick={() => patch({ lingxing_enabled: false }, "已关闭")} disabled={busy}>关闭</Btn>
             : <Btn primary onClick={() => patch({ lingxing_enabled: true }, "已启用")} disabled={busy}>启用数据（只读）</Btn>}
-          <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>写操作的「操作开关」在「操作执行」tab，默认关、带自动失效。</span>
+          <span style={{ fontSize: "var(--fs-10)", color: "var(--t3)" }}>写操作的「操作开关」在「工单」tab，默认关、带自动失效。</span>
         </div>
 
         {/* 执行档位。**它决定 Agent 能不能自己动手**，所以放在总开关旁边而不是埋进高级项。
@@ -139,10 +157,85 @@ export default function LingXingConfig() {
               : "当前：在任务台让它改广告，它会建一张工单等你确认。"}
           </span>
         </div>
+
+        {/* 快车道。**必须紧挨执行档位**：它的三条硬约束之一就是"只在逐项确认档生效"，
+            分到别的卡片去讲，用户读到这句话还得跨卡片找档位在哪。
+            后端（lingxing_operate.fast_lane_decision）一直在读这两个键，以前只是
+            没有任何界面能打开它 —— 而 USAGE.md 还写着入口在"系统配置"。 */}
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--b)" }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "var(--fs-11)", color: "var(--t2)", paddingBottom: 6 }}>小幅止血快车道</span>
+            <SheetSelect
+              value={s.lingxing_fast_lane_enabled ? "on" : "off"}
+              onChange={(v) => patch({ lingxing_fast_lane_enabled: v === "on" },
+                v === "on" ? "快车道已开启" : "快车道已关闭")}
+              title="小幅止血快车道"
+              style={{ ...inputStyle, width: 200 }}
+              options={[
+                { value: "off", label: "关闭（默认）", sub: "所有调整都等三重复核" },
+                { value: "on", label: "开启", sub: "小幅止血跳过 AI 复核，直接等你确认" },
+              ]}
+            />
+            <Field label="幅度上限%">
+              <input value={s.lingxing_fast_lane_max_pct ?? ""} onChange={(e) => setN("lingxing_fast_lane_max_pct", e.target.value)}
+                style={{ ...inputStyle, width: 80 }} />
+            </Field>
+            <Btn onClick={() => patch({ lingxing_fast_lane_max_pct: Number(s.lingxing_fast_lane_max_pct) || 15 }, "幅度上限已保存")} disabled={busy}>保存上限</Btn>
+          </div>
+          <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginTop: 6, lineHeight: 1.6 }}>
+            开启后，<b>只有同时满足三条</b>的调整才免 AI 复核：① 方向是止血（数值只能调小、状态只能转暂停）；
+            ② 幅度 ≤ 上限；③ 当前是「逐项确认」档。提预算 / 加 bid / 启用 / 大幅调整<b>永远</b>走全复核。
+            省掉的只有那十几秒的复核 —— 确定性护栏、人工确认、回滚快照一道没少。
+          </div>
+        </div>
+      </Card>
+
+      {/* ④ 驾驶舱预热 */}
+      <Card title="④ 驾驶舱预热（广告看板 / 促销日历打开就有数）">
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <SheetSelect
+            value={s.cockpit_sync_enabled ? "on" : "off"}
+            onChange={(v) => patch({ cockpit_sync_enabled: v === "on" },
+              v === "on" ? "预热已开启" : "预热已关闭")}
+            title="后台预热"
+            style={{ ...inputStyle, width: 180 }}
+            options={[
+              { value: "off", label: "关闭（默认）", sub: "页面每次现拉，较慢" },
+              { value: "on", label: "开启", sub: "后台周期取数，页面读缓存" },
+            ]}
+          />
+          <Field label="间隔(分钟)">
+            <input value={s.cockpit_sync_minutes ?? ""} onChange={(e) => setN("cockpit_sync_minutes", e.target.value)} style={{ ...inputStyle, width: 90 }} /></Field>
+          <Field label="预热天数">
+            <input value={s.cockpit_sync_days ?? ""} onChange={(e) => setN("cockpit_sync_days", e.target.value)} style={{ ...inputStyle, width: 90 }} /></Field>
+          <Btn primary onClick={() => patch({
+            cockpit_sync_minutes: Math.max(5, Number(s.cockpit_sync_minutes) || 30),
+            cockpit_sync_days: Number(s.cockpit_sync_days) || 7,
+          }, "预热参数已保存")} disabled={busy}>保存</Btn>
+          <Btn onClick={runSync} disabled={syncing || !st?.master_enabled}>
+            {syncing ? "预热中…（首次可能几分钟）" : "立即预热一次"}</Btn>
+        </div>
+        <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginTop: 6, lineHeight: 1.6 }}>
+          广告报表要向领星逐店逐天取，且接口限流（约 340ms/次）—— 实测 9 个店 × 1 天冷启动约 25 秒，
+          7 天窗口是分钟级。开启预热后由后台提前取好，页面永远读缓存。
+          <b>默认关</b>：预热会持续消耗领星接口配额，装上不动它就什么都不会发生。
+          {cockpit && (
+            <>
+              <br />
+              上次预热：{cockpit.sync.last_finished_at
+                ? `${new Date(cockpit.sync.last_finished_at).toLocaleString("zh-CN")}（${cockpit.sync.age_minutes ?? "?"} 分钟前）`
+                : "从未跑过"}
+              {cockpit.sync.running && " · 正在跑"}
+              {cockpit.sync.last_result && !cockpit.sync.last_result.ok && (
+                <span style={{ color: "var(--amber)" }}> · 上次失败：{cockpit.sync.last_result.error}</span>
+              )}
+            </>
+          )}
+        </div>
       </Card>
 
       {/* ④ optimization params */}
-      <Card title="④ 优化参数（保守默认；目标 ACOS 自动按毛利推）">
+      <Card title="⑤ 优化参数（保守默认；目标 ACOS 自动按毛利推）">
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
           {([
             ["lingxing_target_acos_factor", "目标ACOS系数(×毛利)", 90],
@@ -166,7 +259,7 @@ export default function LingXingConfig() {
       </Card>
 
       {/* ⑤ review models */}
-      <Card title="⑤ 复核模型（三重复核每位可用不同模型/智能体）">
+      <Card title="⑥ 复核模型（三重复核每位可用不同模型/智能体）">
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {personas.map((pn, i) => (
             <Field key={i} label={`复核${i + 1}：${pn}`}>
@@ -204,7 +297,7 @@ export default function LingXingConfig() {
       </Card>
 
       {/* ⑥ rules doc */}
-      <Card title="⑥ 优化规则文档（展示 + 可编辑；作为 LLM 复核/分析的方法论依据注入）">
+      <Card title="⑦ 优化规则文档（展示 + 可编辑；作为 LLM 复核/分析的方法论依据注入）">
         <textarea value={rules} onChange={(e) => setRules(e.target.value)} rows={14}
           style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.5, fontFamily: "inherit" }} />
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -212,7 +305,7 @@ export default function LingXingConfig() {
           <Btn onClick={() => setRules(rulesDefault)} disabled={busy}>恢复默认</Btn>
         </div>
         <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginTop: 6 }}>
-          确定性阈值（否词点击数/步长/冷却等）在「④ 优化参数」里调；这里改的是 LLM 复核与分析所遵循的方法论叙述。
+          确定性阈值（否词点击数/步长/冷却等）在「⑤ 优化参数」里调；这里改的是 LLM 复核与分析所遵循的方法论叙述。
         </div>
       </Card>
 

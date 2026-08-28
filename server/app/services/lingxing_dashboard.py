@@ -1,8 +1,18 @@
-"""领星 广告数据大盘 — cross-store/campaign aggregation for the dashboard.
+"""领星 广告数据大盘 — cross-store/campaign aggregation.
 
 Reuses the gateway read layer (cache-friendly: past-day reports are immutable)
 to aggregate SP campaign reports over a window into: headline totals, per-store
 rollup, top campaigns, and a per-day trend. Pure read; no writes.
+
+**界面上已经没有调用方了**（2026-08-29）。领星板块并进运营驾驶舱时，它的「大盘」
+标签撤掉了，由驾驶舱的广告看板承接 —— ``ads_board_service`` 是这个模块的严格超集
+（同一批 SP 日报表、同样的 ``1..days`` 窗口，另外多出目标 ACOS、今日预算进度、
+异常标注和小时曲线）。
+
+**那为什么不删**：``ivyea_ops_tools`` 的 ``lingxing_dashboard`` 工具直接 import
+路由函数 ``routers.lingxing.dashboard``，agent 拿到的是这里的返回形状。改成
+``ads_board`` 的瘦封装等于悄悄换掉一个工具的输出 schema —— 那是 agent 侧的契约，
+不该被一次前端重构顺手改掉。所以原样留着，只在这里写清楚它现在服务谁。
 """
 from __future__ import annotations
 

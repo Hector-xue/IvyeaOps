@@ -154,7 +154,12 @@ async def optimizer_run_deliverable(run_id: str, fmt: str = "xlsx"):
 
 @router.get("/dashboard")
 async def dashboard(sids: str = "", days: int = 7) -> Dict[str, Any]:
-    """广告数据大盘聚合（按店铺/活动/天）。sids 逗号分隔，空=全部店铺。"""
+    """广告数据大盘聚合（按店铺/活动/天）。sids 逗号分隔，空=全部店铺。
+
+    **UI 已不再使用**：驾驶舱的广告看板（/api/cockpit/ads）承接了这块，且是
+    它的超集。保留这条路由是因为 agent 工具 ``lingxing_dashboard`` 直接调它 ——
+    详见 services/lingxing_dashboard.py 的模块说明。
+    """
     from app.services import lingxing_dashboard as lxdash
     sid_list = [int(x) for x in sids.replace("，", ",").split(",") if x.strip().isdigit()] or None
     try:

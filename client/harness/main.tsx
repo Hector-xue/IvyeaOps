@@ -36,11 +36,28 @@ if (theme === "none") {
 localStorage.setItem("ivyea-ops.sidebar.collapsed",
   q.get("sb") === "collapsed" ? "1" : "0");
 
+// ?wn=1 —— 装成"刚升级上来的老用户"：清掉版本更新说明的已读记录，让它再弹一次。
+// ?wn=fresh —— 装成"全新安装第一次打开"：连同这个站写下的全部使用痕迹一起清掉，
+//   并且**不再补写** tour 标记（补了就又变成老用户了）。这一档专门验"新装不该弹"。
+const wn = q.get("wn");
+const fresh = wn === "fresh";
+if (wn) {
+  localStorage.removeItem("ivyea-ops.whatsnew");
+}
+if (fresh) {
+  for (const k of ["lingxing.ui.v1", "ivyea-ops-home-tab", "ivyea-ops.theme",
+                   "ivyea-ops.shell", "ivyea-tour:/dashboard", "ivyea-tour:/console"]) {
+    localStorage.removeItem(k);
+  }
+}
+
 // 各板块的首次引导弹层会盖住半个屏幕 —— 它是要验的界面之外的东西，
 // 直接标记成"看过了"。（真实使用中它只出现一次，不是常态。）
-for (const p of ["/console", "/dashboard", "/market", "/tools", "/agents",
-                 "/terminal", "/listing", "/skill-hub", "/hub-settings"]) {
-  localStorage.setItem("ivyea-tour:" + p, "1");
+if (!fresh) {
+  for (const p of ["/console", "/dashboard", "/market", "/tools", "/agents",
+                   "/terminal", "/listing", "/skill-hub", "/hub-settings"]) {
+    localStorage.setItem("ivyea-tour:" + p, "1");
+  }
 }
 // 换主题提示条同理：一次性的，不该出现在每张截图里。
 if (theme !== "none") localStorage.setItem("ivyea-ops.theme.v", "3");

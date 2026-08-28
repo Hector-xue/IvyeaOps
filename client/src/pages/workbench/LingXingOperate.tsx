@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { sidCurrencyMap, fmtBudget, type Cur } from "./lingxingCurrency";
 import { useConfirm } from "../../components/ConfirmDialog";
+import { useLingXing } from "./home/lingxingContext";
 import SheetSelect from "../../components/SheetSelect";
 import { useToast } from "../../components/toast";
 import {
@@ -16,14 +17,16 @@ const STATUS_FILTERS: [string, string][] = [
 export default function LingXingOperate({ focusTicket, onFocusConsumed }: {
   focusTicket?: string; onFocusConsumed?: () => void;
 }) {
-  const [status, setStatus] = useState<any>(null);
+  // status / sellers 走板块级 provider —— 这个组件以前自己每 5 秒轮一次
+  // /lingxing/status，而外面的 tab 徽标也在轮同一条。合并后两份会叠在一起打
+  // 领星的限流接口（约 340ms/次），挤掉真正要用配额的读操作。
+  const { status, sellers, reload: reloadLx } = useLingXing();
   const [tickets, setTickets] = useState<any[]>([]);
   const [sel, setSel] = useState<any | null>(null);
   const [filter, setFilter] = useState<string>("");
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [runs, setRuns] = useState<any[]>([]);
   const [runId, setRunId] = useState("");
-  const [sellers, setSellers] = useState<any[]>([]);
   const [opTypes, setOpTypes] = useState<any[]>([]);
   const [mForm, setMForm] = useState<any>({ op_type: "keyword_bid" });
   const [showManual, setShowManual] = useState(false);
@@ -35,23 +38,26 @@ export default function LingXingOperate({ focusTicket, onFocusConsumed }: {
 
   useEffect(() => {
     void load();
-    const t = setInterval(() => { void refreshStatus(); void refreshTickets(); }, 5000);
+    // 只轮工单：status 由 provider 统一刷新。
+    const t = setInterval(() => { void refreshTickets(); }, 5000);
     return () => clearInterval(t);
   }, []);
   async function load() {
     try {
-      const [s, t, r, sl, ot] = await Promise.all([
-        api.get("/lingxing/status"), api.get("/lingxing/operate/tickets"), api.get("/lingxing/auto/runs"),
-        api.post("/lingxing/read/sellers", { params: {} }).catch(() => ({ data: { rows: [] } })),
+      const [t, r, ot] = await Promise.all([
+        api.get("/lingxing/operate/tickets"), api.get("/lingxing/auto/runs"),
         api.get("/lingxing/operate/op-types").catch(() => ({ data: { op_types: [] } })),
       ]);
-      setStatus(s.data); setTickets(t.data.tickets || []); setRuns(r.data.runs || []);
-      setSellers(sl.data.rows || []); setOpTypes(ot.data.op_types || []);
-      if (!mForm.sid && sl.data.rows?.[0]) setMForm((f: any) => ({ ...f, sid: sl.data.rows[0].sid }));
+      setTickets(t.data.tickets || []); setRuns(r.data.runs || []);
+      setOpTypes(ot.data.op_types || []);
       if (!runId && r.data.runs?.[0]) setRunId(r.data.runs[0].id);
     } catch (e: any) { toast("error", humanErr(e)); }
   }
-  async function refreshStatus() { try { setStatus((await api.get("/lingxing/status")).data); } catch { /* */ } }
+  // 手工建单的默认店铺跟着 provider 的店铺列表走（它可能比本组件先到）。
+  useEffect(() => {
+    if (!mForm.sid && sellers[0]) setMForm((f: any) => ({ ...f, sid: sellers[0].sid }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sellers]);
   async function refreshTickets() {
     try {
       const t = (await api.get("/lingxing/operate/tickets")).data.tickets || [];
@@ -73,8 +79,8 @@ export default function LingXingOperate({ focusTicket, onFocusConsumed }: {
   async function toggleOperate(on: boolean) {
     setBusy(true);
     try {
-      const r = await api.post(`/lingxing/operate/${on ? "enable" : "disable"}`);
-      setStatus(r.data.status);
+      await api.post(`/lingxing/operate/${on ? "enable" : "disable"}`);
+      await reloadLx();   // 写开关变了，顶栏那三个芯片也得跟着变
       toast(on ? "warn" : "success", on ? "操作开关已开启（可写态）" : "操作开关已关闭（恢复只读）");
     } catch (e: any) { toast("error", humanErr(e)); } finally { setBusy(false); }
   }
@@ -111,7 +117,7 @@ export default function LingXingOperate({ focusTicket, onFocusConsumed }: {
     setBusy(true);
     try {
       const r = await api.post(`/lingxing/operate/tickets/${id}/${action}`, body);
-      setSel(r.data); await refreshTickets(); await refreshStatus();
+      setSel(r.data); await refreshTickets(); await reloadLx();
       if (okMsg) toast("success", okMsg);
     } catch (e: any) { toast("error", humanErr(e)); } finally { setBusy(false); }
   }
@@ -147,7 +153,7 @@ export default function LingXingOperate({ focusTicket, onFocusConsumed }: {
       const fails = (r.data.results || []).filter((x: any) => !x.ok);
       toast(fails.length ? "warn" : "success", `批量${action === "confirm" ? "执行" : "驳回"}：成功 ${r.data.done}/${r.data.total}`);
       for (const f of fails) toast("error", `${f.id}：${f.error}`);
-      setChecked({}); await refreshTickets(); await refreshStatus();
+      setChecked({}); await refreshTickets(); await reloadLx();
       if (sel) void openTicket(sel.id, true);
     } catch (e: any) { toast("error", humanErr(e)); } finally { setBusy(false); }
   }

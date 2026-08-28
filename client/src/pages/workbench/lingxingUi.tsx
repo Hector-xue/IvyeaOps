@@ -10,15 +10,26 @@ export const inputStyle: React.CSSProperties = {
   fontFamily: "inherit", boxSizing: "border-box",
 };
 
+/**
+ * 领星那几块的按钮。
+ *
+ * 并进运营驾驶舱之后，同一个板块里同时存在两套按钮：这一套（原领星）和驾驶舱的
+ * `.cp-btn`。两套并排出现在一屏上，看起来就是两个界面硬拼在一起 —— 尤其
+ * primary：这边是实心亮绿配黑字，那边是半透明底配正常字色。
+ *
+ * 所以这里**改成直接复用 `.cp-btn` 那套类**，而不是把五个组件上千行逐个换掉：
+ * 一次结构合并不该膨胀成大范围视觉改动，而收益（观感一致）几乎全在这一处。
+ * `danger` 保留自己的强调色 —— 它标的是"开启可写态"这类真会改线上数据的动作，
+ * 必须比 primary 更扎眼。
+ */
 export function Btn({ onClick, children, primary, danger, disabled, title }: any) {
   return (
-    <button onClick={onClick} disabled={disabled} title={title} style={{
-      background: danger ? "var(--red)" : primary ? "var(--acc)" : "var(--bg2)",
-      color: danger || primary ? "#000" : "var(--t)",
-      border: danger || primary ? "none" : "1px solid var(--b)",
-      borderRadius: 4, padding: "5px 12px", fontSize: "var(--fs-11)",
-      cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.55 : 1,
-    }}>{children}</button>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={"cp-btn" + (danger ? " danger" : primary ? " primary" : "")}
+    >{children}</button>
   );
 }
 
