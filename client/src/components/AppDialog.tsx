@@ -19,6 +19,7 @@ export default function AppDialog({
   children,
   onClose,
   width = 1040,
+  dismissible = true,
 }: {
   title: string;
   icon?: ReactNode;
@@ -27,13 +28,20 @@ export default function AppDialog({
   children: ReactNode;
   onClose: () => void;
   width?: number;
+  /**
+   * false = 点背景和按 Esc 都不关，右上角也不给 ✕ —— 必须点内容里的按钮才走。
+   *
+   * 只给"看过才算数"的东西用（例如版本更新说明：错过了就再也不会自己弹）。
+   * 普通面板一律保持可随手关闭，把人困在对话框里是最讨厌的一类交互。
+   */
+  dismissible?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && dismissible) {
         e.stopPropagation();
         onClose();
       }
@@ -51,10 +59,11 @@ export default function AppDialog({
       document.body.style.overflow = prev;
       opener?.focus?.();
     };
-  }, [onClose]);
+  }, [onClose, dismissible]);
 
   return (
-    <div className="app-dialog-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="app-dialog-backdrop"
+         onMouseDown={(e) => { if (dismissible && e.target === e.currentTarget) onClose(); }}>
       <div
         className={"app-dialog" + (nav ? "" : " app-dialog-plain")}
         style={{ maxWidth: width }}
@@ -66,7 +75,9 @@ export default function AppDialog({
       >
         {nav && (
           <div className="app-dialog-nav">
-            <button className="app-dialog-close" onClick={onClose} title="关闭（Esc）" aria-label="关闭">✕</button>
+            {dismissible && (
+              <button className="app-dialog-close" onClick={onClose} title="关闭（Esc）" aria-label="关闭">✕</button>
+            )}
             {nav}
           </div>
         )}
@@ -74,7 +85,7 @@ export default function AppDialog({
           <div className="app-dialog-head">
             {icon && <span className="app-dialog-icon">{icon}</span>}
             <span className="app-dialog-title">{title}</span>
-            {!nav && (
+            {!nav && dismissible && (
               <button className="app-dialog-close app-dialog-close-inline" onClick={onClose}
                       title="关闭（Esc）" aria-label="关闭">✕</button>
             )}

@@ -5520,3 +5520,28 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 
 /* 状态坞计划列表里的「正在做」。和它上下的 ✓、○ 同宽同心，才排得成一列。 */
 .ld-doing-mark{width:8px;height:8px}
+
+
+/* ─── 版本更新说明（WhatsNew） ──────────────────────────────────────────────
+   一次性、不可随手关闭的弹窗，讲清这一版改了什么。排版按"读得完"来做：
+   行距放宽、小标题分段、要点走列表 —— 一大坨连续文字没人看，等于白弹。 */
+/* .app-dialog-body 是 overflow:hidden 的 flex 容器 —— 正文必须自己开一个滚动区，
+   否则内容一长就被切掉且滚不动，而这个弹窗唯一的出口（「知道了」）就在末尾。
+   按钮放在滚动区外面固定住，任何长度的正文都关得掉。 */
+.wn{font-size:var(--fs-12);color:var(--t2);line-height:1.75;
+  display:flex;flex-direction:column;min-height:0;height:100%;padding:18px 22px 16px}
+.wn-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;max-width:62ch;padding-right:6px}
+.wn-date{font-size:var(--fs-10);color:var(--t3);margin-bottom:14px}
+.wn-lead{color:var(--t);font-size:var(--fs-13);line-height:1.7;margin:0 0 18px;
+  padding-left:12px;border-left:2px solid var(--acc)}
+.wn h4{margin:20px 0 8px;font-size:var(--fs-12);font-weight:600;color:var(--t)}
+.wn p{margin:0 0 12px}
+.wn ul{margin:0 0 12px;padding-left:18px}
+.wn li{margin-bottom:8px}
+.wn b{color:var(--t);font-weight:600}
+.wn-foot{margin-top:18px;padding-top:12px;border-top:1px solid var(--b);
+  font-size:var(--fs-11);color:var(--t3)}
+.wn-actions{flex:0 0 auto;margin-top:14px;padding-top:14px;border-top:1px solid var(--b);
+  display:flex;justify-content:flex-end}
+.wn-actions .cp-btn{padding:7px 20px}
+@media (max-width:760px){.wn{font-size:var(--fs-11)}.wn-lead{font-size:var(--fs-12)}}
