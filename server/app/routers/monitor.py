@@ -969,12 +969,21 @@ def _scan_claude(since: float):
 def _scan_ivyea_agent(since: float):
     """Scan ivyea-agent 的会话账本 ~/.ivyea/sessions/<id>.json。
 
-    每个会话存 {id, created, updated, model, messages, usage}，usage 是
-    ivyea_agent.sessions._merge_stats 累出来的 {prompt, completion, cost, turns}。
-    ``prompt`` 走的是 OpenAI 兼容语义 —— **已经含缓存命中的那部分**，所以整体计入
-    input（和 Codex 口径一致），这里没有可单独拆出的 cache 列。
+    **两套账，都要读**：
+      · 顶层 ``usage`` = {prompt, completion, cost, turns}，只有 CLI 那条路
+        （ivyea chat 的 meter）会写；
+      · ``stats.usage`` = {prompt_tokens, completion_tokens, prompt_cache_hit_tokens}，
+        由 ivyea_agent.sessions._merge_stats 逐轮累加，**serve/HTTP 那条路（工作台、
+        /agents、ops 的自动链路）只写这一份，顶层 usage 恒为 {}**。
 
-    这个目录里还混着 MCP 的结果转储（{doc,data} 那种），靠"有没有 usage"筛掉。
+    只认顶层 usage 的话，如今绝大多数会话都会被当成"没有用量"整个跳过 —— 实测
+    212 份会话里 16 份、共 3540 万 token 就是这么丢的。所以顶层为空时回落到
+    stats.usage。
+
+    ``prompt_tokens`` 走 OpenAI 兼容语义，**已经含缓存命中那部分**，所以拆成
+    input = prompt - cache_hit、cache_read = cache_hit：总量不变，缓存列才有内容。
+
+    这个目录里还混着 MCP 的结果转储（{doc,data} 那种），靠"两套账都没有数"筛掉。
     """
     import json as _json
     p = _ivyea_sessions_dir()
@@ -992,11 +1001,21 @@ def _scan_ivyea_agent(since: float):
             if not isinstance(d, dict):
                 continue
             usage = d.get("usage")
-            if not isinstance(usage, dict) or not usage:
-                continue
-            inp = int(usage.get("prompt") or usage.get("prompt_tokens") or 0)
-            out = int(usage.get("completion") or usage.get("completion_tokens") or 0)
+            inp = out = cache_read = 0
+            if isinstance(usage, dict) and usage:
+                inp = int(usage.get("prompt") or usage.get("prompt_tokens") or 0)
+                out = int(usage.get("completion") or usage.get("completion_tokens") or 0)
             if inp <= 0 and out <= 0:
+                stats = d.get("stats")
+                su = stats.get("usage") if isinstance(stats, dict) else None
+                if isinstance(su, dict) and su:
+                    prompt = int(su.get("prompt_tokens") or 0)
+                    # 缓存命中是 prompt 的子集；min() 兜住 provider 报反的情况，
+                    # 免得 input 变成负数把总量算小。
+                    cache_read = max(0, min(prompt, int(su.get("prompt_cache_hit_tokens") or 0)))
+                    inp = prompt - cache_read
+                    out = int(su.get("completion_tokens") or 0)
+            if inp <= 0 and out <= 0 and cache_read <= 0:
                 continue
             ts = d.get("updated") or d.get("created") or f.stat().st_mtime
             try:
@@ -1004,8 +1023,8 @@ def _scan_ivyea_agent(since: float):
             except Exception:
                 ts = f.stat().st_mtime
             recs.append(_rec(ts, d.get("model") or "ivyea-agent", inp, out,
-                             "Ivyea Agent", "Ivyea Agent"))
-            total += inp + out
+                             "Ivyea Agent", "Ivyea Agent", cache_read=cache_read))
+            total += inp + out + cache_read
         return recs, {"source": "Ivyea Agent", "path": p, "status": "included",
                       "sessions": len(recs), "total": total}
     except Exception as e:
