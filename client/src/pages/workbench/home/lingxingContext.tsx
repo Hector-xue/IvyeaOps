@@ -2,6 +2,7 @@ import {
   createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode,
 } from "react";
 import { api } from "../../../api/client";
+import { errText } from "../../../lib/errText";
 import type { Dataset, LingXingStatus } from "../lingxingTypes";
 
 /**
@@ -103,7 +104,10 @@ export function LingXingProvider({ children }: { children: ReactNode }) {
       setError("");
       if (st.data.master_enabled) void loadSellers();
     } catch (e: any) {
-      if (alive.current) setError(e?.response?.data?.detail || e?.message || "加载失败");
+      // 走 errText 而不是直接读 detail：FastAPI 的 422 里 detail 是**对象数组**，
+      // 直接塞进 JSX 会让整页崩成"渲染失败"，而真正的原因一个字都不会露出来。
+      // （client/scripts/check-errtext.mjs 会挡住这种写法。）
+      if (alive.current) setError(errText(e, "加载失败"));
     } finally {
       if (alive.current) setLoading(false);
     }
