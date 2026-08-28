@@ -54,7 +54,7 @@ export type IvyeaChatSessionDetail = {
   /** 按轮分页的游标。老 agent 不回这个字段 —— 那就当成"只有这一页"。 */
   turns?: { total: number; from: number; to: number; has_more: boolean };
   /**
-   * 本页每轮的时刻表（agent ≥ v1.16.3）：`turn` 与上面的分页同源（都数"第几条真实
+   * 本页每轮的时刻表（agent ≥ v1.16.0）：`turn` 与上面的分页同源（都数"第几条真实
    * 用户消息"），`started_at`/`ended_at` 是秒、`ms` 是挂钟毫秒。
    *
    * 刷新之后"发送于 09:46 / 结束于 09:49 · 用时 3 分"靠它 —— 客户端自己掐的表在
@@ -537,7 +537,7 @@ export type IvyeaChatPayload = {
   /** false = 纯文本轮次，不给模型任何工具。 */
   use_tools?: boolean;
   /**
-   * 这条流的另一端**有人在看、并且画得出选项卡**（agent ≥ v1.16.3）。
+   * 这条流的另一端**有人在看、并且画得出选项卡**（agent ≥ v1.16.0）。
    *
    * 只有它为 true 时，模型拿不准才会把选项弹过来（`question_request`）。默认不带 ——
    * 服务端自己读流的那几处没有人能点，弹了只会让那一轮白等一个超时。
@@ -689,13 +689,13 @@ export type IvyeaStreamHandlers = {
     /** 活轮日志播完了（这一轮已经收尾）。 */
     onLiveEnd?: (data: { ended_ms?: number }) => void;
     /**
-     * 一条**追加指令**已经插进当前这一轮（agent ≥ v1.16.3）。
+     * 一条**追加指令**已经插进当前这一轮（agent ≥ v1.16.0）。
      * 用户在轮次跑着的时候补的那句话，模型从下一步起就看得见了。
      * 老 agent 不发这条 —— 前端据此把那条指令留在待发队列里，本轮结束后当下一轮发出去。
      */
     onInjected?: (data: { id?: string; text?: string; ts?: number }) => void;
     /**
-     * 模型拿不准，把选项弹给用户选（agent ≥ v1.16.3）。
+     * 模型拿不准，把选项弹给用户选（agent ≥ v1.16.0）。
      * 没人在 timeout_s 内选就按标了 recommended 的那项继续（agent 侧自己收敛），
      * 所以这张卡片永远不会把一轮任务挂死。
      */
@@ -703,7 +703,7 @@ export type IvyeaStreamHandlers = {
     /** 选项卡超时，已按推荐项继续。 */
     onQuestionTimeout?: (data: { request_id: string }) => void;
     /**
-     * 这一轮被用户停掉了（agent ≥ v1.16.3）。**这是正常结局，不是错误** ——
+     * 这一轮被用户停掉了（agent ≥ v1.16.0）。**这是正常结局，不是错误** ——
      * 已经跑出来的正文和执行过程都已落盘，`injected_pending` 里是还没被读到的追加指令。
      */
     onCancelled?: (data: { session_id?: string; text?: string;
@@ -976,7 +976,7 @@ export type ConsoleSessionRow = {
   source?: ConsoleSource | "";
   /** false = agent 那边有正文但 ops 没登记归属（悬浮球/CLI 开的，仅管理员可见）。 */
   indexed: boolean;
-  /** 这条会话此刻有没有一轮在跑（agent ≥ v1.16.3）。左栏据此打闪烁标记。 */
+  /** 这条会话此刻有没有一轮在跑（agent ≥ v1.16.0）。左栏据此打闪烁标记。 */
   running?: boolean;
 };
 
@@ -1161,7 +1161,7 @@ export async function ivyeaChatPermission(params: {
 }
 
 /**
- * 把一条**追加指令**送进正在跑的那一轮（agent ≥ v1.16.3）。
+ * 把一条**追加指令**送进正在跑的那一轮（agent ≥ v1.16.0）。
  *
  * 回包里的 `accepted` 才是答案：false = 这条会话此刻没有活轮（或 agent 太老），
  * 调用方要把这句话当成下一轮发出去。**别把 accepted 当成"发送成功"** ——
@@ -1176,7 +1176,7 @@ export async function ivyeaChatInject(params: { session_id: string; text: string
 }
 
 /**
- * 真的停掉这条会话正在跑的那一轮（agent ≥ v1.16.3）。
+ * 真的停掉这条会话正在跑的那一轮（agent ≥ v1.16.0）。
  *
  * 回包里的 `cancelled` 才是答案：false = 这条会话本来就没有在跑的轮次（多半刚好
  * 收尾了）。**别把请求成功当成停住了** —— 那会显示"已停止"而它其实还在烧 token。
@@ -1187,10 +1187,15 @@ export async function ivyeaChatCancel(params: { session_id: string }) {
   return data;
 }
 
-/** 回送一次选项卡的选择。 */
+/**
+ * 回送一次选项卡的选择。
+ *
+ * `session_id` **必填**：ops 按会话归属放行（那份归属落在库里，ops 重启还在），
+ * 而不是靠内存里的 request_id 登记表 —— 后者一重启，用户面前那张卡就点不动了。
+ */
 export async function ivyeaChatQuestion(params: {
   request_id: string;
-  session_id?: string;
+  session_id: string;
   answers: Record<string, string>;
 }) {
   const { data } = await api.post<{ ok: boolean; error?: string }>(

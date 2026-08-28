@@ -145,7 +145,7 @@ class ChatBody(BaseModel):
     # 会话来自哪个板块。**ops 自用**，_chat_payload 会把它剔掉再下发 ——
     # agent 不认识这个字段，带过去只会当成未知参数。
     source: str = Field(default="console", pattern="^(console|assistant|brain)$")
-    # 这条流的另一端**有人在看、并且画得出选项卡**（agent ≥ v1.16.3）。
+    # 这条流的另一端**有人在看、并且画得出选项卡**（agent ≥ v1.16.0）。
     # 只有它为 true 时 agent 才会把 ask_user_question 的选项弹过来 —— 服务端自己
     # 读流的那几处（技能执行、知识库问答）没有人能点，弹了只会白等一个超时。
     # 默认 False，且为 False 时由 _chat_payload 剔除，老 daemon 收到的 payload 不变。
@@ -544,10 +544,7 @@ def _tee_session_events(chunks: Any, principal: str, workspace: str = "",
                     is_start = b"event: start" in frame
                     is_req = b"permission_request" in frame
                     is_timeout = b"permission_timeout" in frame
-                    # 选项卡（ask_user_question）和审批卡走同一套归属登记：回答
-                    # 它等于替这一轮拿主意，不能让别人替你选。
-                    is_question = b"event: question_request" in frame
-                    if not (is_start or is_req or is_timeout or is_question):
+                    if not (is_start or is_req or is_timeout):
                         continue
                     for line in frame.split(b"\n"):
                         if not line.startswith(b"data:"):
@@ -565,11 +562,6 @@ def _tee_session_events(chunks: Any, principal: str, workspace: str = "",
                             continue
                         rid = str(data.get("request_id") or "")
                         if not rid:
-                            continue
-                        if is_question:
-                            # 只登记归属：选项卡不是写操作，不进审批流水账，
-                            # 也不推送到手机（它 5 分钟后会自己按推荐项继续）。
-                            _remember_approval_owner(rid, principal)
                             continue
                         if is_timeout:
                             # 超时被自动拒 —— 这也是一条要留下的决定，而且是最容易
@@ -702,22 +694,28 @@ def chat_inject(body: ChatInjectBody,
 
 class ChatQuestionBody(BaseModel):
     request_id: str = Field(..., min_length=1, max_length=120)
-    session_id: str = Field(default="", max_length=120, pattern=_SESSION_ID)
+    # **必填**：归属按会话判（见下），不是可选的补充信息。
+    session_id: str = Field(..., min_length=1, max_length=120, pattern=_SESSION_ID)
     answers: dict[str, str] = Field(default_factory=dict)
 
 
 @router.post("/chat/question")
 def chat_question(body: ChatQuestionBody,
-                  user: str = Depends(require_user)) -> dict[str, Any]:
-    """回送一次选项卡的选择。归属校验与审批卡同规格：别人的会话不许替他选。"""
+                  info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    """回送一次选项卡的选择。
+
+    **归属按会话判，不按内存里的 request_id 登记表判。** 那张表是给写操作审批用的：
+    批准一次真实写入必须认准"按下确认的就是发起这轮的人"，所以它宁可严格到 ops
+    一重启就全部失效。选项卡不是写操作，用同一套的代价是：ops 重启之后，用户面前
+    那张卡片就点不动了（agent 那边还老老实实等着人选），只能干等五分钟超时。
+
+    会话归属是落在库里的，重启还在；而"这张卡还有效吗"本来就该由 agent 说了算
+    （它超时之后自己按推荐项继续，回 404）。两边各管各的那一半。
+    """
+    principal, is_admin = _principal_info(info)
     if not body.answers:
         raise HTTPException(status_code=400, detail="answers 不能为空")
-    owner = _approval_owner(body.request_id)
-    if owner is None:
-        # 没登记过 = 已超时按推荐项走了、轮次已收尾，或 ops 重启丢了记录。
-        # 一律当失效 —— agent 侧那一步早就自己往下走了，失败方向是安全的。
-        raise HTTPException(status_code=404, detail="这张选项卡已经失效（多半是已超时按推荐项继续了）")
-    if owner != user:
+    if not console_sessions.can_access(body.session_id, principal, is_admin):
         raise HTTPException(status_code=403, detail="无权回答他人会话的选项卡")
     try:
         return _call(svc.chat_question, {"request_id": body.request_id,

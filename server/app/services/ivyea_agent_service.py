@@ -705,7 +705,7 @@ def chat_permission(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def chat_inject(payload: dict[str, Any]) -> dict[str, Any]:
-    """把一条追加指令投进**正在跑的那一轮**（agent ≥ v1.16.3）。
+    """把一条追加指令投进**正在跑的那一轮**（agent ≥ v1.16.0）。
 
     回包里的 `accepted` 才是答案：没有活轮时 agent 明确不收（accepted=false），
     调用方据此把这句话当成下一轮发出去 —— "这句话到底进没进去"必须有个准信。
@@ -719,7 +719,7 @@ def chat_question(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def chat_cancel(payload: dict[str, Any]) -> dict[str, Any]:
-    """真的停掉这条会话正在跑的那一轮（agent ≥ v1.16.3）。
+    """真的停掉这条会话正在跑的那一轮（agent ≥ v1.16.0）。
 
     回包里的 `cancelled` 才是答案：False = 这条会话本来就没有在跑的轮次。
     老 agent 没有这个端点 —— 调用方拿到 404/502 时要照实说"停不掉"，
@@ -729,7 +729,7 @@ def chat_cancel(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def chat_live_sessions() -> dict[str, Any]:
-    """此刻真的有一轮在跑的会话（agent ≥ v1.16.3）。左栏的闪烁标记读它。
+    """此刻真的有一轮在跑的会话（agent ≥ v1.16.0）。左栏的闪烁标记读它。
 
     读的是 agent 的内存态，不扫会话文件 —— 这个接口会被几秒问一次。
     老 agent 没有这个端点：调用方拿到 None 时**不要**当成"一条都没在跑"，

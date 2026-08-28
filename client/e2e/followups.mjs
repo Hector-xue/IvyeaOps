@@ -90,6 +90,25 @@ async function run() {
     await waitFor(send, `document.body.innerText.includes("收到追加指令")`,
                   "时间线上留下「收到追加指令」", 20_000);
 
+    // 窄屏：这一行必须换行，不能把正文挤成一列字。
+    // （实测栽过：右边"20:34 · 收到追加指令，已插入本轮"是不可压缩的，390px 下
+    //  左边那句话被压到一个字宽，竖着排下来一整列。）
+    await send("Emulation.setDeviceMetricsOverride",
+               { width: 390, height: 800, deviceScaleFactor: 1, mobile: true });
+    await delay(300);
+    const narrow = await evaluate(send, `(() => {
+      const t = document.querySelector(".cc-injected-text");
+      return { w: t ? Math.round(t.getBoundingClientRect().width) : null,
+               scrollW: document.documentElement.scrollWidth,
+               clientW: document.documentElement.clientWidth };
+    })()`);
+    assert.ok(narrow.w !== null && narrow.w > 120,
+              `窄屏下追加指令的正文被挤没了（宽 ${narrow.w}px）`);
+    assert.ok(narrow.scrollW <= narrow.clientW, "窄屏下不该出现横向滚动");
+    await send("Emulation.setDeviceMetricsOverride",
+               { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+    await delay(300);
+
     // ── 三、选项卡 ────────────────────────────────────────────────────────
     await waitFor(send, `!!document.querySelector(".cs-question")`, "选项卡弹出来", 20_000);
     const card = await evaluate(send, `(() => {
@@ -120,6 +139,7 @@ async function run() {
     const payload = JSON.parse(answered || "null");
     assert.ok(payload, "选项卡的答案没有送回去");
     assert.equal(payload.request_id, "q-demo-1", "答案要带上是哪一张卡");
+    assert.equal(payload.session_id, "s-live", "答案要带上会话 id —— ops 按会话归属放行");
     assert.deepEqual(Object.values(payload.answers), ["先否词后观察"], "送回去的选择不对");
 
     // ── 四、收尾：自动决策说明 + 时刻 ─────────────────────────────────────
@@ -164,6 +184,18 @@ async function run() {
     assert.ok(rail.animated, "这枚标记要会动 —— 静止的点和「最近更新过」分不开");
     assert.ok(rail.beforeTitle, "标记该在标题左边");
     assert.ok(rail.size[0] > 0 && rail.size[1] > 0, "标记有尺寸，不能是个 0×0 的空元素");
+
+    // ── 五点二、没发出去的追加指令，关掉页面也不该丢 ──────────────────────
+    // 它此前只活在内存里：排了两句话、手一抖关了标签页，那两句就没了，而用户
+    // 以为自己已经说过了。这是"说出去的话必须有着落"的最后一段缺口。
+    const stash = await evaluate(send, `(() => {
+      const keys = Object.keys(localStorage).filter((k) => k.startsWith("ivyea-ops.console.queue"));
+      return JSON.stringify(keys.map((k) => [k, localStorage.getItem(k)]));
+    })()`);
+    // 这一轮里那条已经被 agent 收下了（injected），所以**不该**留在待发盘里 ——
+    // 留着的话刷新之后会被当成"还没发"再发一遍。
+    assert.ok(!JSON.parse(stash).some(([, v]) => String(v).includes("顺便把预算也看一下")),
+              "已经插进这一轮的指令不该留在待发队列里");
 
     // ── 五点五、执行过程那一栏的左边界只有两条竖线 ────────────────────────
     // 这块对齐来回改过三次（图标一列、标题一列、旁白又一列，谁也不对着谁）。
@@ -218,6 +250,17 @@ async function run() {
     assert.equal(stopped.stillRunning, false, "停完之后不该还挂着停止键");
     assert.ok(!/补一句|追加/.test(stopped.placeholder), "停完输入框该回到常态");
     assert.ok(/^结束于/.test(stopped.clock), `停掉的轮次也该有收尾时刻（当前：「${stopped.clock}」）`);
+
+    // ── 七、盘里留着的那句，重新打开这条会话时会被补发 ────────────────────
+    // 放在最后：它会把页面导航走，前面那几段的判据依赖当时的页面状态。
+    // 反过来：盘里留着的那句，重新打开这条会话时必须被发出去（不是静静躺着）。
+    await evaluate(send, `localStorage.setItem("ivyea-ops.console.queue:s-live",
+      JSON.stringify([{ id: "x", text: "刷新前没发出去的那句", state: "queued" }]))`);
+    await send("Page.navigate", { url: `${ORIGIN}/?r=/console&session=s-live` });
+    await waitFor(send, `!!document.querySelector(".cc-input")`, "重新打开这条会话", 60_000);
+    await waitFor(send, `[...document.querySelectorAll(".cc-bubble")]
+                          .some((b) => b.textContent.includes("刷新前没发出去的那句"))`,
+                  "上次没发出去的那句被补发了", 30_000);
 
     assert.deepEqual(errors, [], "浏览器控制台不该有异常");
     console.log("follow-up / question-card / real-stop checks passed");

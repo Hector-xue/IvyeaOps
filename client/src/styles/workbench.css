@@ -117,6 +117,12 @@
   --warm-glow:rgba(74,222,128,.16);
   --bg-cover:rgba(12,12,12,.80);
 }
+/* 浅底皮肤统一压回官网在用的品牌深绿。基础值 #6DAF3F 是给暗底调的，压在近白底上
+   对比度只有 2.5:1（图形元素的下限是 3:1）—— 而这个颜色现在扛着"正在思考""正在跑"
+   "哪一步在做"这些真信息，不是装饰。换成 #5B9334 之后是 3.5:1（纯白底 3.7:1）。
+   月岩自己那份 --ivy 留在下面的块里（同值），改动前后逐字一致。 */
+[data-theme=quiet-light],[data-theme=mendao-light],[data-theme=lucent-light]{--ivy:#5B9334}
+
 /* ── Moonstone (light) ── */
 [data-theme=light]{
   --ivy:#5B9334;
@@ -5453,13 +5459,18 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 /* 轮次跑到一半时用户补的那句话。它是"用户说过的话"，所以常驻显示、不折叠 —— 
    执行过程那一栏只留最近几行，长任务里它几秒钟就被折进"展开更早的 N 行"。 */
 .cc-injected{display:flex;flex-direction:column;gap:4px;max-width:min(92%,860px)}
-.cc-injected-row{display:flex;align-items:baseline;gap:7px;padding:5px 10px;border-radius:8px;
+/* **必须能换行。** 右边那截「19:59 · 收到追加指令，已插入本轮」是不可压缩的，
+   窄屏下它会把左边的正文挤到一个字宽 —— 实测 390px 时那句话被压成竖着的一列字
+   （一行一个字）。所以：放不下就让时间戳整条掉到下一行，正文永远占满一行宽。 */
+.cc-injected-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 7px;
+  padding:5px 10px;border-radius:8px;
   background:color-mix(in srgb,var(--acc) 7%,var(--bg1));
   border:1px solid color-mix(in srgb,var(--acc) 22%,var(--b));
   font-size:var(--fs-11);color:var(--t2);line-height:1.6}
 .cc-injected-mark{color:var(--acc);flex-shrink:0}
-.cc-injected-text{flex:1;min-width:0;word-break:break-word}
-.cc-injected-meta{flex-shrink:0;font-size:var(--fs-10);color:var(--t3)}
+/* 基准宽度给 14ch：比这窄就换行，而不是继续被压。 */
+.cc-injected-text{flex:1 1 14ch;min-width:0;word-break:break-word}
+.cc-injected-meta{flex:0 1 auto;margin-left:auto;font-size:var(--fs-10);color:var(--t3)}
 
 /* 正在请求停止：转起来并锁住，别让人连点出两次请求。 */
 .cc-stop-secondary.is-stopping{cursor:default;color:var(--t3)}

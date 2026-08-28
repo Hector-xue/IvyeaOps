@@ -93,6 +93,14 @@ const GATE_NOTE: Record<string, string> = {
 };
 
 const PREFS_KEY = "ivyea-ops.console.prefs";
+/**
+ * 还没发出去的追加指令，按会话存一份。
+ *
+ * 它此前只活在内存里：轮次跑着的时候排了两句话，手一抖关了标签页 —— 那两句就没了，
+ * 而用户以为自己已经说过了。这是"说出去的话必须有着落"这条承诺的最后一段缺口
+ * （agent 侧的收件箱只在活轮期间有效，也不该替浏览器记这个）。
+ */
+const QUEUE_KEY = "ivyea-ops.console.queue";
 
 /** 兜底通道（agent 掉线时）的人设。agent 在时人设由 serve 那边给。 */
 const FALLBACK_SYSTEM =
@@ -281,11 +289,16 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
   const [busy, setBusy] = useState(false);
   // 轮次跑着的时候用户又说的话。空数组 = 没有待处理的追加指令。
   const [queue, setQueue] = useState<QueuedFollowUp[]>([]);
+  // 队列落地：关标签页 / 刷新之后，还没发出去的那几句要还在。
+  // **只恢复"还没进 agent"的那些**：已经插进某一轮的（injected）属于那一轮，
+  // 恢复出来会让用户以为它还没发。
   // 正在请求 agent 停这一轮（按钮转成"正在停止…"，防连点）。
   const [stopping, setStopping] = useState(false);
   const stoppingRef = useRef(false);
   /** 这一轮是被停掉的 —— 收尾时据此跳过跟进建议。 */
   const cancelledRef = useRef(false);
+  /** 已经从盘上恢复过待发队列的那个会话格子。没恢复完不许写盘（见下面两个 effect）。 */
+  const restoredQueueRef = useRef<string>("");
   const [sessionId, setSessionId] = useState("");
   const [model, setModel] = useState("");
   /**
@@ -1172,12 +1185,54 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
     if (leftovers.length) void send(leftovers.map((q) => q.text).join("\n"));
   }, [busy, queue, turns, send]);
 
+  // 读盘：打开/切到一条会话时，把上次没发出去的接回来。
+  // 放进队列即可 —— 补发那条 effect 会在不忙的时候把它们发出去。
+  useEffect(() => {
+    const key = QUEUE_KEY + ":" + (sessionId || "new");
+    let saved: QueuedFollowUp[] = [];
+    try { saved = JSON.parse(localStorage.getItem(key) || "[]"); } catch { /* 读不出就当没有 */ }
+    if (Array.isArray(saved) && saved.length) {
+      setQueue((cur) => {
+        const seen = new Set(cur.map((q) => q.text));
+        const back = saved
+          .filter((q) => q && typeof q.text === "string" && q.text.trim() && !seen.has(q.text))
+          .map((q) => ({ id: uid(), text: q.text, state: "queued" as const }));
+        return back.length ? [...cur, ...back] : cur;
+      });
+    }
+    // **恢复完才允许写盘。** 顺序反过来的话，挂载时那次"队列是空的"会先把盘上
+    // 那份删掉，紧接着才去读 —— 读到的自然是空的，于是关页面前排的那几句
+    // 每次都恰好在恢复前一刻被自己抹掉（这条是 E2E 当场抓出来的）。
+    restoredQueueRef.current = key;
+  }, [sessionId]);
+
+  // 写盘：队列一变就存（按会话分格；没有会话 id 时用一个通用格子，
+  // 因为那种情况下这句话本来就是要当成"下一轮"发出去的）。
+  useEffect(() => {
+    const key = QUEUE_KEY + ":" + (sessionId || "new");
+    if (restoredQueueRef.current !== key) return;      // 见上面那段：先恢复，后写盘
+    try {
+      // 已经被这一轮收下的（injected）属于那一轮，不进待发盘 —— 留着的话刷新之后
+      // 会被当成"还没发"再发一遍。
+      const keep = queue.filter((q) => q.state !== "injected");
+      if (keep.length) localStorage.setItem(key, JSON.stringify(keep));
+      else localStorage.removeItem(key);
+    } catch { /* 存不下就退回内存态，不该打扰用户 */ }
+  }, [queue, sessionId]);
+
   /** 回答一张选项卡。答不上去（超时/已被别的页签答了）就照实说，别装作点成功了。 */
   const answerQuestion = useCallback(async (
     turnId: string, req: IvyeaQuestionRequest, answers: Record<string, string>,
   ) => {
     try {
-      await ivyeaChatQuestion({ request_id: req.request_id, session_id: sessionId || undefined, answers });
+      // session_id 是**归属凭据**，不是可选的补充信息：ops 按"这条会话是不是你的"
+      // 放行（那份归属落在库里，ops 重启还在）。req.session_id 是 agent 发卡时带的，
+      // 优先用它 —— 页面上的 sessionId 在极少数时序下还没落定。
+      await ivyeaChatQuestion({
+        request_id: req.request_id,
+        session_id: req.session_id || sessionId,
+        answers,
+      });
       patchTurn(turnId, (t) => ({
         questions: (t.questions || []).map((q) =>
           q.req.request_id === req.request_id ? { ...q, answers } : q),

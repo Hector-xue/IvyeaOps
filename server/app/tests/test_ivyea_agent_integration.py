@@ -536,33 +536,32 @@ def test_inject_refuses_someone_elses_session(ctx, monkeypatch):
     assert exc.value.status_code == 403
 
 
-def test_question_requires_a_registered_owner(ctx, monkeypatch):
-    """没登记过的选项卡一律当失效：多半是已超时按推荐项继续了。"""
-    svc, router = ctx
-    monkeypatch.setattr(svc, "chat_question", lambda payload: {"ok": True})
-    with pytest.raises(HTTPException) as exc:
-        router.chat_question(router.ChatQuestionBody(request_id="r1", answers={"q": "a"}),
-                             user="u1")
-    assert exc.value.status_code == 404
+def test_question_ownership_is_judged_by_the_session_not_by_memory(ctx, monkeypatch):
+    """选项卡的归属看会话（落在库里，ops 重启还在），不看内存里的 request_id 登记表。
 
-
-def test_question_forwards_for_the_owner_and_blocks_others(ctx, monkeypatch):
+    用那张表的代价是：ops 一重启，用户面前那张卡就点不动了，而 agent 那边还老实
+    等着人选 —— 只能干等五分钟超时。会话归属没有这个问题。
+    """
     svc, router = ctx
     seen = {}
+
     def fake_question(payload):
         seen["p"] = payload
         return {"ok": True}
 
     monkeypatch.setattr(svc, "chat_question", fake_question)
-    router._remember_approval_owner("r1", "u1")
-
+    _own_session(router, monkeypatch, {"s1"})
+    # 注意：没有任何 _remember_approval_owner —— 这正是"ops 刚重启"的状态
     assert router.chat_question(
-        router.ChatQuestionBody(request_id="r1", answers={"投递语义": "真注入"}), user="u1")["ok"]
+        router.ChatQuestionBody(request_id="r1", session_id="s1", answers={"投递语义": "真注入"}),
+        info={"user": "u1", "is_admin": False})["ok"]
     assert seen["p"] == {"request_id": "r1", "answers": {"投递语义": "真注入"}}
 
+    _own_session(router, monkeypatch, set())
     with pytest.raises(HTTPException) as exc:
-        router.chat_question(router.ChatQuestionBody(request_id="r1", answers={"q": "a"}),
-                             user="u2")
+        router.chat_question(router.ChatQuestionBody(request_id="r1", session_id="s1",
+                                                     answers={"q": "a"}),
+                             info={"user": "u2", "is_admin": False})
     assert exc.value.status_code == 403
 
 
@@ -574,10 +573,11 @@ def test_question_double_answer_reads_as_conflict_not_server_error(ctx, monkeypa
         raise HTTPException(status_code=502, detail="IvyeaAgent HTTP 404")
 
     monkeypatch.setattr(svc, "chat_question", boom)
-    router._remember_approval_owner("r2", "u1")
+    _own_session(router, monkeypatch, {"s1"})
     with pytest.raises(HTTPException) as exc:
-        router.chat_question(router.ChatQuestionBody(request_id="r2", answers={"q": "a"}),
-                             user="u1")
+        router.chat_question(router.ChatQuestionBody(request_id="r2", session_id="s1",
+                                                     answers={"q": "a"}),
+                             info={"user": "u1", "is_admin": False})
     assert exc.value.status_code == 409
 
 
