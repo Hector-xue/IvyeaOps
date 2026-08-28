@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation } from "react-router-dom";
 import SheetSelect from "../../components/SheetSelect";
 import {
@@ -262,7 +263,9 @@ function ModelNameInput({
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const [onlyHinted, setOnlyHinted] = useState(!!hintKind);
+  const [popStyle, setPopStyle] = useState<CSSProperties>({});
   const boxRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async (refresh: boolean) => {
     setLoading(true); setErr("");
@@ -283,13 +286,60 @@ function ModelNameInput({
   // 清单里挑一个模型填进 B 家的槽位。
   useEffect(() => { setModels(null); setOpen(false); }, [provider, baseUrl, apiKey]);
 
+  /*
+   * 清单 **portal 到 body**，而不是留在这张卡片里。
+   * 外层 `.hs-section` 是 `overflow:hidden`（它靠这个把圆角内的内容裁齐），
+   * 留在里面的绝对定位浮层会被整块切掉 —— 实测这里的清单被拦腰截断，只剩标题栏
+   * 和半行模型名，看着像"下拉坏了"。和 ContextMeter / SheetSelect 同一条路数：
+   * 量触发行的位置，用 fixed 摆上去，滚动和缩放时重量一次。
+   */
+  const place = useCallback(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    // 清单最高 = 列表 220 + 标题栏/边框余量。空间不够就翻到上面开 ——
+    // 这一项常常正好在卡片底部，永远朝下开等于永远只露出个头。
+    const maxH = 268;
+    const below = window.innerHeight - r.bottom - 12;
+    const above = r.top - 12;
+    const flipUp = below < Math.min(maxH, 160) && above > below;
+    const width = Math.round(r.width);
+    const left = Math.max(8, Math.min(Math.round(r.left), window.innerWidth - width - 8));
+    setPopStyle(flipUp
+      ? { position: "fixed", left, width, bottom: Math.round(window.innerHeight - r.top + 4),
+          maxHeight: Math.max(120, Math.round(above)) }
+      : { position: "fixed", left, width, top: Math.round(r.bottom + 4),
+          maxHeight: Math.max(120, Math.round(below)) });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    place();
+    const onMove = () => place();
+    // capture=true：页面在 `.content` 里滚，滚动事件不冒泡到 window。
+    window.addEventListener("scroll", onMove, true);
+    window.addEventListener("resize", onMove);
+    return () => {
+      window.removeEventListener("scroll", onMove, true);
+      window.removeEventListener("resize", onMove);
+    };
+  }, [open, place, models, loading, err]);   // 清单到货后高度会变，重量一次
+
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      // 浮层已经不在 boxRef 里了：少了 popRef 这一半，mousedown 会先把它收起来，
+      // 选项的 onClick 根本轮不到触发 —— 点了等于没点。
+      if (!boxRef.current?.contains(t) && !popRef.current?.contains(t)) setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   const toggle = () => {
@@ -312,8 +362,8 @@ function ModelNameInput({
         <button type="button" className="hs-model-btn" onClick={toggle}
           title="列出这套账号支持的模型">{loading ? "…" : open ? "▴" : "▾"}</button>
       </div>
-      {open && (
-        <div className="hs-model-dd">
+      {open && createPortal((
+        <div className="hs-model-dd" ref={popRef} style={popStyle}>
           <div className="hs-model-dd-hd">
             <span>
               {loading ? "正在取清单…"
@@ -350,7 +400,7 @@ function ModelNameInput({
             ))}
           </div>
         </div>
-      )}
+      ), document.body)}
     </div>
   );
 }
