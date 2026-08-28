@@ -24,6 +24,16 @@ export type RestoredTurn = {
   skills?: { id: string; title: string; domain?: string; score?: number }[];
   /** 这一轮用户发的图（能直接放进 `<img src>` 的地址）。 */
   images?: string[];
+  /**
+   * 这一格发生的时刻（毫秒）与本轮时长 —— 来自 agent 落盘的 `turn_times`。
+   *
+   * 为什么必须从服务端拿：跑的时候前端自己掐了表，但刷新、换标签页、换台机器打开
+   * 同一条会话之后那些数一个都不剩；而这一轮跑完前端还会重新拉一次存档，纯前端记
+   * 的数会被那次拉取冲掉。老 agent 没有这个字段 → 不显示，而不是编一个。
+   */
+  at?: number;
+  endedAt?: number;
+  elapsedMs?: number;
 };
 
 /**
@@ -66,6 +76,15 @@ export function restoreSession(detail: IvyeaChatSessionDetail | null | undefined
     if (m?.anchor) skillByAnchor.set(String(m.anchor), m.skills || []);
   }
 
+  // 逐轮时刻表。轮号与详情分页同源（都数"第几条真实用户消息"），本页从 turns.from 起。
+  const timeByTurn = new Map<number, { started_at: number; ended_at: number; ms: number }>();
+  for (const row of detail?.turn_times || []) {
+    if (row && typeof row.turn === "number") timeByTurn.set(row.turn, row);
+  }
+  let turnNo = detail?.turns?.from ?? 0;
+  // 每一格属于第几轮 —— 收尾时刻要挂到**这一轮最后一条**回答上，不是每条都挂。
+  const turnNoOf = new Map<RestoredTurn, number>();
+
   const turns: RestoredTurn[] = [];
   // 当前这一轮攒下的步骤。遇到下一条用户消息就清空 —— 步骤属于它所在的那一轮。
   let pending: ConsoleStep[] = [];
@@ -92,7 +111,18 @@ export function restoreSession(detail: IvyeaChatSessionDetail | null | undefined
         else { pending = []; pendingSkills = undefined; }
       }
       // 只发图不打字也是一轮 —— 有图就得留下这一格，否则那一轮整个消失。
-      if (text || images.length) turns.push({ role: "user", text, ...(images.length ? { images } : {}) });
+      if (text || images.length) {
+        const at = timeByTurn.get(turnNo)?.started_at;
+        const turn: RestoredTurn = {
+          role: "user", text, ...(images.length ? { images } : {}),
+          ...(at ? { at: at * 1000 } : {}),
+        };
+        turnNoOf.set(turn, turnNo);
+        turns.push(turn);
+      }
+      // 轮号跟着**每一条**用户消息走，哪怕这一格没画出来 —— 跳一格就会让后面所有
+      // 轮次的时间戳整体错位，而错位的时间戳比没有更糟：它看着是真的。
+      turnNo += 1;
       continue;
     }
     if (role !== "assistant") continue;      // tool 行只用来对齐，不进气泡
@@ -111,6 +141,7 @@ export function restoreSession(detail: IvyeaChatSessionDetail | null | undefined
     if (!text) continue;                     // 只带 tool_calls 的中间消息不是一条回答
     const turn: RestoredTurn = { role: "assistant", text };
     flushInto(turn);
+    turnNoOf.set(turn, Math.max(0, turnNo - 1));
     turns.push(turn);
   }
 
@@ -119,6 +150,21 @@ export function restoreSession(detail: IvyeaChatSessionDetail | null | undefined
     const last = [...turns].reverse().find((t) => t.role === "assistant");
     if (last) flushInto(last);
     else turns.push({ role: "assistant", text: "", steps: pending });
+  }
+
+  // 收尾时刻与时长挂在**每一轮最后一条**回答上：一轮里 agent 边做边说会产生好几条
+  // assistant 消息，每条都挂一遍"结束于 09:49"就成了满屏重复的同一个时刻。
+  const lastOfTurn = new Map<number, RestoredTurn>();
+  for (const turn of turns) {
+    if (turn.role !== "assistant") continue;
+    const no = turnNoOf.get(turn);
+    if (no !== undefined) lastOfTurn.set(no, turn);
+  }
+  for (const [no, turn] of lastOfTurn) {
+    const row = timeByTurn.get(no);
+    if (!row?.ended_at) continue;
+    turn.endedAt = row.ended_at * 1000;
+    if (row.ms > 0) turn.elapsedMs = row.ms;
   }
 
   const t = detail?.turns;

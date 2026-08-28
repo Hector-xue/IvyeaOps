@@ -16,6 +16,7 @@ import {
   consoleSessions,
   consoleWorkspaceCreate,
   consoleWorkspaceDelete,
+  ivyeaLiveSessions,
   notifyConsoleSessionsChanged,
   SOURCE_LABEL,
   SOURCE_PATH,
@@ -100,6 +101,9 @@ export default function SessionRail({
   const [searchOpen, setSearchOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [picking, setPicking] = useState(false);
+  // 此刻正在跑的会话 id。**独立于列表**：列表几十条、要读会话文件，不能每几秒拉一次；
+  // 这一份读的是 agent 内存里的活轮登记，便宜到可以按秒问。
+  const [live, setLive] = useState<Set<string>>(new Set());
   const { role } = useAuth();
   const isAdmin = role === "admin";
 
@@ -133,6 +137,35 @@ export default function SessionRail({
   useEffect(() => { setLimit(PAGE); }, [src, debouncedQ]);
 
   useEffect(() => { void load(); }, [load]);
+
+  /**
+   * 谁在跑 —— 每 5 秒问一次，页面切到后台就停。
+   *
+   * 这是左栏那枚闪烁标记的数据源。它必须是"真的有一轮在跑"，不能拿"最近更新过"
+   * 凑数：一条十分钟前跑完的会话和一条正在跑的会话，用户要做的事完全不同。
+   *
+   * `available: false`（agent 没起 / 版本太老）时**保持上一次的显示**，不清空 ——
+   * "问不到"不等于"没有在跑的"，清空会让正在执行的会话看着像已经停了。
+   */
+  useEffect(() => {
+    let alive = true;
+    let timer = 0;
+    const tick = async () => {
+      if (document.visibilityState === "visible") {
+        try {
+          const d = await ivyeaLiveSessions();
+          if (alive && d?.available !== false) {
+            setLive(new Set((d.sessions || []).map((x) => String(x.id))));
+          }
+        } catch {
+          // 问不到就保持原样，下一次再问
+        }
+      }
+      if (alive) timer = window.setTimeout(tick, 5000);
+    };
+    void tick();
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, []);
   useEffect(() => {
     let retry = 0;
     const h = (e: Event) => {
@@ -423,6 +456,14 @@ export default function SessionRail({
                   />
                 ) : (
                   <>
+                    {(live.has(r.id) || r.running) && (
+                      /* 正在跑 —— 标题左边一枚会动的标记。列表里的时间只能说"最近
+                         动过"，而"现在正在跑"是完全不同的一件事（能不能关页面、要不要
+                         等它、该不该再发一句，全看这个）。 */
+                      <span className="sb-sess-live" role="status" aria-label="正在执行">
+                        <i /><i />
+                      </span>
+                    )}
                     <span className="sb-sess-title">{r.title}</span>
                     {r.source && r.source !== "console" && (
                       <span className={"sb-sess-src src-" + r.source}>

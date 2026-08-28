@@ -5370,3 +5370,113 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
   .cp-page{padding:10px 12px 20px}
   .cp-list{grid-template-columns:1fr}
 }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * 跑着的时候也能说话 —— 追加指令 / 选项卡 / 时刻 / 正在跑
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 追加指令的队列条 ────────────────────────────────────────────────────────
+ * 说出去的话去哪了必须看得见：已插进这一轮，还是排到下一轮。没有这条，用户在
+ * 跑着的时候补一句就成了往井里扔石头。 */
+.cc-queue{display:flex;flex-wrap:wrap;gap:6px;margin:0 2px 7px}
+.cc-queue-item{display:inline-flex;align-items:center;gap:6px;max-width:100%;
+  padding:4px 9px;border:1px solid var(--b);border-radius:999px;background:var(--bg2);
+  font-size:var(--fs-105);color:var(--t2);line-height:1.5}
+.cc-queue-item em{font-style:normal;color:var(--t3);flex-shrink:0}
+.cc-queue-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:min(46ch,50vw)}
+.cc-queue-item button{border:none;background:none;color:var(--t3);cursor:pointer;padding:0 2px;
+  font-size:var(--fs-105);line-height:1}
+.cc-queue-item button:hover{color:var(--t)}
+.cc-queue-dot{width:6px;height:6px;border-radius:50%;background:var(--t3);flex-shrink:0}
+.cc-queue-item.is-injected{border-color:color-mix(in srgb,var(--acc) 42%,var(--b));
+  background:color-mix(in srgb,var(--acc) 8%,var(--bg2))}
+.cc-queue-item.is-injected .cc-queue-dot{background:var(--acc)}
+.cc-queue-item.is-injected em{color:var(--acc)}
+.cc-queue-item.is-sending .cc-queue-dot{animation:cc-live-pulse 1.1s ease-in-out infinite}
+
+/* 忙碌时的发送键：仍然是发送键（追加给这一轮），只是加一圈提示。 */
+.cc-send.cc-send-followup{box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 18%,transparent)}
+/* 停止降级成次级按钮 —— 它做的事一直只是"断开这条流"，轮次照跑，不配当主键。 */
+.cc-stop-secondary{width:28px;height:28px;border-radius:50%;flex-shrink:0;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
+  border:1px solid var(--b);background:var(--bg2);color:var(--t3);
+  transition:all var(--dur) var(--ease)}
+.cc-stop-secondary:hover{color:var(--red);border-color:color-mix(in srgb,var(--red) 45%,var(--b))}
+
+/* ── 选项卡 ─────────────────────────────────────────────────────────────────
+ * 和审批卡长得像但语义相反：审批卡没人点就拒绝，选项卡没人点会**按推荐项继续**。
+ * 所以推荐项必须一眼看得出来 —— 那是"我不选的话会发生什么"的答案。 */
+.cs-question{display:flex;flex-direction:column;gap:9px;padding:11px 13px;border-radius:12px;
+  border:1px solid color-mix(in srgb,var(--acc) 30%,var(--b));background:var(--bg1);
+  max-width:min(92%,860px)}
+.cs-question-head{display:flex;align-items:center;gap:7px;font-size:var(--fs-12);color:var(--t)}
+.cs-question-head .cs-icon{color:var(--acc);font-weight:700}
+.cs-question-timer{margin-left:auto;font-size:var(--fs-10);color:var(--t3)}
+.cs-question-block{display:flex;flex-direction:column;gap:7px}
+.cs-question-text{font-size:var(--fs-115);color:var(--t2);line-height:1.6}
+.cs-question-tag{display:inline-block;margin-right:6px;padding:1px 7px;border-radius:999px;
+  background:var(--bg2);border:1px solid var(--b);font-size:var(--fs-10);color:var(--t3)}
+.cs-question-multi{margin-left:6px;font-size:var(--fs-10);color:var(--t3)}
+.cs-question-options{display:grid;gap:6px}
+.cs-question-opt{display:flex;flex-direction:column;gap:2px;text-align:left;cursor:pointer;
+  padding:8px 11px;border:1px solid var(--b);border-radius:10px;background:var(--bg2);
+  font-family:var(--font);transition:all var(--dur) var(--ease)}
+.cs-question-opt:hover{border-color:var(--b2);transform:translateY(-1px)}
+.cs-question-opt.is-on{border-color:var(--acc);
+  background:color-mix(in srgb,var(--acc) 10%,var(--bg2))}
+.cs-question-opt-label{display:flex;align-items:center;gap:6px;font-size:var(--fs-115);color:var(--t)}
+.cs-question-opt-label em{font-style:normal;padding:0 6px;border-radius:999px;font-size:var(--fs-10);
+  background:color-mix(in srgb,var(--acc) 16%,transparent);color:var(--acc)}
+.cs-question-opt-desc{font-size:var(--fs-105);color:var(--t3);line-height:1.6}
+.cs-question-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cs-question-hint{font-size:var(--fs-10);color:var(--t3)}
+.cs-question-done{flex-direction:row;align-items:flex-start;gap:8px;font-size:var(--fs-11);color:var(--t3)}
+.cs-question-done b{color:var(--t2);font-weight:600}
+.cs-question-done.is-auto{border-color:color-mix(in srgb,var(--amber) 35%,var(--b))}
+.cs-question-done.is-auto .cs-icon{color:var(--amber)}
+.cs-question-echo{margin-top:2px}
+
+/* ── "这几项是替你定的" ──────────────────────────────────────────────────── */
+.cc-autodec{display:flex;gap:8px;padding:9px 12px;border-radius:10px;
+  border:1px solid color-mix(in srgb,var(--amber) 32%,var(--b));
+  background:color-mix(in srgb,var(--amber) 6%,var(--bg1));
+  font-size:var(--fs-11);color:var(--t2);line-height:1.7;max-width:min(92%,860px)}
+.cc-autodec-mark{color:var(--amber);flex-shrink:0}
+.cc-autodec-row{color:var(--t2)}
+.cc-autodec-tip{color:var(--t3);font-size:var(--fs-105);margin-top:2px}
+
+/* ── 时刻 ───────────────────────────────────────────────────────────────────
+ * 一轮动辄几十分钟："我什么时候让它做的、它什么时候做完的、花了多久"是回看会话
+ * 时最先要找的三个坐标。字要小、要静，别和正文抢注意力。 */
+.cc-user-time{font-size:var(--fs-10);color:var(--t3);padding-right:2px}
+.cc-turn-clock{font-size:var(--fs-10);color:var(--t3);padding-left:2px}
+
+/* ── 左栏：正在跑 ───────────────────────────────────────────────────────────
+ * 一颗呼吸的圆点 + 一圈扩散的环。它回答的是"现在在跑"，不是"最近动过"
+ * （列表里的时间已经在说后者了）。 */
+.sb-sess-live{position:relative;width:8px;height:8px;flex-shrink:0;margin-right:2px;
+  display:inline-flex;align-items:center;justify-content:center}
+.sb-sess-live i{position:absolute;inset:0;border-radius:50%;background:var(--acc)}
+.sb-sess-live i:first-child{animation:cc-live-ring 1.8s ease-out infinite}
+.sb-sess-live i:last-child{transform:scale(.5);animation:cc-live-pulse 1.8s ease-in-out infinite}
+@keyframes cc-live-ring{0%{transform:scale(.5);opacity:.55}70%{transform:scale(1.5);opacity:0}
+  100%{transform:scale(1.5);opacity:0}}
+@keyframes cc-live-pulse{0%,100%{opacity:1}50%{opacity:.45}}
+/* 动效关掉时退成一颗静止的实心点 —— 信息不能只靠动画传达。 */
+@media (prefers-reduced-motion:reduce){
+  .sb-sess-live i{animation:none}
+  .sb-sess-live i:first-child{opacity:.25;transform:scale(1.3)}
+  .cc-queue-item.is-sending .cc-queue-dot{animation:none}
+}
+
+/* 轮次跑到一半时用户补的那句话。它是"用户说过的话"，所以常驻显示、不折叠 —— 
+   执行过程那一栏只留最近几行，长任务里它几秒钟就被折进"展开更早的 N 行"。 */
+.cc-injected{display:flex;flex-direction:column;gap:4px;max-width:min(92%,860px)}
+.cc-injected-row{display:flex;align-items:baseline;gap:7px;padding:5px 10px;border-radius:8px;
+  background:color-mix(in srgb,var(--acc) 7%,var(--bg1));
+  border:1px solid color-mix(in srgb,var(--acc) 22%,var(--b));
+  font-size:var(--fs-11);color:var(--t2);line-height:1.6}
+.cc-injected-mark{color:var(--acc);flex-shrink:0}
+.cc-injected-text{flex:1;min-width:0;word-break:break-word}
+.cc-injected-meta{flex-shrink:0;font-size:var(--fs-10);color:var(--t3)}

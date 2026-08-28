@@ -16,9 +16,11 @@
  */
 import {
   answerResetDiscards,
+  type IvyeaAutoDecision,
   type IvyeaContextUsage,
   type IvyeaFileChange,
   type IvyeaPermissionRequest,
+  type IvyeaQuestionRequest,
   type IvyeaStreamHandlers,
 } from "../api/ivyeaAgent";
 import type { MatchedSkill } from "../components/console/ActivityFeed";
@@ -51,6 +53,12 @@ export type TurnPatchable = {
   /** 本轮自动召回的记忆条目名。运行时给的确定性信号，不依赖模型在回答里提。 */
   memoryRecall?: string[];
   approvals?: { req: IvyeaPermissionRequest; decision?: string }[];
+  /** 本轮弹出的选项卡。answers = 人选的；auto = 超时按推荐项走了。 */
+  questions?: { req: IvyeaQuestionRequest; answers?: Record<string, string>; auto?: boolean }[];
+  /** 本轮里**替用户定的**那些选择（final 带回来的确定性记账）。 */
+  autoDecisions?: IvyeaAutoDecision[];
+  /** 用户在这一轮跑着的时候补的话，agent 已经把它插进了当前上下文。 */
+  injected?: { id: string; text: string; ts?: number }[];
   reasoning?: string;
   readonlyBlocked?: number;
   /** 正文的分段边界：每段是"两次工具调用之间说的那段话"。见 segments 的注释。 */
@@ -188,6 +196,26 @@ export function createTurnStream(deps: TurnStreamDeps): TurnStream {
     // 跑完才看得到 —— 而那正是最不需要它的时刻。
     onTodos: (d) => { if (Array.isArray(d?.todos)) deps.setTodos(d.todos); },
     onPermission: (req) => deps.patch((t) => ({ approvals: [...(t.approvals || []), { req }] })),
+    // 选项卡：模型拿不准，把岔路摆出来让人点。没人点也不会挂死 —— agent 侧
+    // 到点自己按推荐项继续，届时发 question_timeout。
+    onQuestion: (req) => deps.patch((t) => ({ questions: [...(t.questions || []), { req }] })),
+    onQuestionTimeout: (d) => {
+      const rid = String(d?.request_id || "");
+      deps.patch((t) => ({
+        questions: (t.questions || []).map((q) =>
+          q.req.request_id === rid ? { ...q, auto: true } : q),
+      }));
+    },
+    // 追加指令真的插进了这一轮 —— 在时间线上留一行。用户说出去的那句话去哪了
+    // 必须看得见，否则跟往井里扔石头一样。
+    onInjected: (d) => {
+      const text = String(d?.text || "").trim();
+      if (!text) return;
+      deps.patch((t) => ({
+        injected: [...(t.injected || []), { id: String(d?.id || ""), text, ts: d?.ts }],
+        steps: mergeStep(t.steps || [], noteStep(`收到追加指令：${text}`, noteSeq++)),
+      }));
+    },
     onPermissionTimeout: (d) => {
       deps.patch((t) => ({
         approvals: (t.approvals || []).map((a) =>
@@ -251,6 +279,11 @@ export function createTurnStream(deps: TurnStreamDeps): TurnStream {
         deps.patch({ readonlyBlocked: d.readonly_blocked });
       }
       if (Array.isArray(d?.todos)) deps.setTodos(d.todos);
+      // 这一轮有哪几项是替用户定的。**界面自己说**，不指望模型在总结里提一句 ——
+      // 同 memory_recall 的道理：确定性的信号才敢让用户依赖。
+      if (Array.isArray(d?.auto_decisions) && d.auto_decisions.length) {
+        deps.patch({ autoDecisions: d.auto_decisions as IvyeaAutoDecision[] });
+      }
       if (d?.usage) turnUsage = d.usage;
       if (d?.context) deps.setCtxUsage(d.context as IvyeaContextUsage);
       if (d?.text) { finalText = String(d.text); deps.patch({ text: finalText }); }

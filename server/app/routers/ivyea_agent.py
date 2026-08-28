@@ -145,6 +145,11 @@ class ChatBody(BaseModel):
     # 会话来自哪个板块。**ops 自用**，_chat_payload 会把它剔掉再下发 ——
     # agent 不认识这个字段，带过去只会当成未知参数。
     source: str = Field(default="console", pattern="^(console|assistant|brain)$")
+    # 这条流的另一端**有人在看、并且画得出选项卡**（agent ≥ v1.16.3）。
+    # 只有它为 true 时 agent 才会把 ask_user_question 的选项弹过来 —— 服务端自己
+    # 读流的那几处（技能执行、知识库问答）没有人能点，弹了只会白等一个超时。
+    # 默认 False，且为 False 时由 _chat_payload 剔除，老 daemon 收到的 payload 不变。
+    interactive: bool = False
 
 
 class ChatSessionCreateBody(BaseModel):
@@ -384,6 +389,7 @@ _CHAT_OPTIONAL_DEFAULTS: dict[str, Any] = {
     "attachments": [],
     "defer_citation_text": False,
     "stream_reasoning": False,
+    "interactive": False,
     "approval": "none",
     # source 是 ops 自己的记账字段（会话来自任务台/AI问答/知识库），agent 不认识它。
     # 放进 defaults 里只是为了默认值被剔除；非默认值另有 _pop_ops_only 兜底。
@@ -538,7 +544,10 @@ def _tee_session_events(chunks: Any, principal: str, workspace: str = "",
                     is_start = b"event: start" in frame
                     is_req = b"permission_request" in frame
                     is_timeout = b"permission_timeout" in frame
-                    if not (is_start or is_req or is_timeout):
+                    # 选项卡（ask_user_question）和审批卡走同一套归属登记：回答
+                    # 它等于替这一轮拿主意，不能让别人替你选。
+                    is_question = b"event: question_request" in frame
+                    if not (is_start or is_req or is_timeout or is_question):
                         continue
                     for line in frame.split(b"\n"):
                         if not line.startswith(b"data:"):
@@ -556,6 +565,11 @@ def _tee_session_events(chunks: Any, principal: str, workspace: str = "",
                             continue
                         rid = str(data.get("request_id") or "")
                         if not rid:
+                            continue
+                        if is_question:
+                            # 只登记归属：选项卡不是写操作，不进审批流水账，
+                            # 也不推送到手机（它 5 分钟后会自己按推荐项继续）。
+                            _remember_approval_owner(rid, principal)
                             continue
                         if is_timeout:
                             # 超时被自动拒 —— 这也是一条要留下的决定，而且是最容易
@@ -663,6 +677,77 @@ def chat_permission(body: ChatPermissionBody,
     if out.get("ok"):
         console_sessions.record_approval_decision(body.request_id, body.choice)
     return out
+
+
+class ChatInjectBody(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=120, pattern=_SESSION_ID)
+    text: str = Field(..., min_length=1, max_length=8000)
+
+
+@router.post("/chat/inject")
+def chat_inject(body: ChatInjectBody,
+                info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    """把一条追加指令送进这条会话**正在跑的那一轮**。
+
+    这是"任务跑起来之后还能补一句"的落点：agent 在两个工具步之间把它作为一条
+    真实的用户消息插进当前上下文，模型下一步就看得见。
+
+    没有活轮时回 `accepted: false`（不是错误）—— 前端据此把这句话当成下一轮发出去。
+    """
+    principal, is_admin = _principal_info(info)
+    if not console_sessions.can_access(body.session_id, principal, is_admin):
+        raise HTTPException(status_code=403, detail="这条会话不属于你")
+    return _call(svc.chat_inject, {"session_id": body.session_id, "text": body.text})
+
+
+class ChatQuestionBody(BaseModel):
+    request_id: str = Field(..., min_length=1, max_length=120)
+    session_id: str = Field(default="", max_length=120, pattern=_SESSION_ID)
+    answers: dict[str, str] = Field(default_factory=dict)
+
+
+@router.post("/chat/question")
+def chat_question(body: ChatQuestionBody,
+                  user: str = Depends(require_user)) -> dict[str, Any]:
+    """回送一次选项卡的选择。归属校验与审批卡同规格：别人的会话不许替他选。"""
+    if not body.answers:
+        raise HTTPException(status_code=400, detail="answers 不能为空")
+    owner = _approval_owner(body.request_id)
+    if owner is None:
+        # 没登记过 = 已超时按推荐项走了、轮次已收尾，或 ops 重启丢了记录。
+        # 一律当失效 —— agent 侧那一步早就自己往下走了，失败方向是安全的。
+        raise HTTPException(status_code=404, detail="这张选项卡已经失效（多半是已超时按推荐项继续了）")
+    if owner != user:
+        raise HTTPException(status_code=403, detail="无权回答他人会话的选项卡")
+    try:
+        return _call(svc.chat_question, {"request_id": body.request_id,
+                                         "answers": dict(body.answers)})
+    except HTTPException as exc:
+        # daemon 对"未知/已过期"回 404，而 _call 把非 2xx 一律翻成 502 ——
+        # 502 在界面上读作"服务器坏了"，真相通常是另一个页签已经选过了。
+        if exc.status_code == 502 and "HTTP 404" in str(exc.detail):
+            raise HTTPException(
+                status_code=409,
+                detail="这张选项卡已经被处理过了（可能是另一个页签选的），或者已经超时。",
+            ) from exc
+        raise
+
+
+@router.get("/chat/live-sessions")
+def chat_live_sessions(info: dict[str, Any] = Depends(require_user_info)) -> dict[str, Any]:
+    """此刻真的有一轮在跑的会话（只回你自己的）。左栏的闪烁标记读它。
+
+    agent 不在或版本太老时回 `available: false` 而不是空列表：**"问不到"不等于
+    "没有在跑的"**，前端据此不显示标记，而不是把正在执行的会话画成已停。
+    """
+    principal, is_admin = _principal_info(info)
+    try:
+        rows = (_call(svc.chat_live_sessions) or {}).get("sessions") or []
+    except HTTPException:
+        return {"ok": True, "available": False, "sessions": []}
+    mine = [r for r in rows
+            if console_sessions.can_access(str(r.get("id") or ""), principal, is_admin)]
+    return {"ok": True, "available": True, "sessions": mine}
 
 
 @router.get("/chat/sessions")
@@ -805,6 +890,9 @@ def console_session_list(
             "owner": meta.get("principal") or "",
             "source": meta.get("source") or "",
             "indexed": sid in index,
+            # 这条会话此刻有没有一轮在跑（老 agent 不回这个字段 → 不显示标记，
+            # 而不是画成"已停"）。
+            "running": bool(item.get("running")),
         })
     needle = q.strip().lower()
     if needle:
