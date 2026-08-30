@@ -17,6 +17,9 @@ import { stripInjected } from "./stripInjected";
 import { mergeStep, stepFromEvent, type ConsoleStep } from "./stepLabels";
 import type { ServerStats } from "./turnStats";
 
+/** 一份会话附件在记录里的样子：文件名 +（可能有的）原件下载地址。 */
+export type RestoredDoc = { name: string; url: string };
+
 export type RestoredTurn = {
   role: "user" | "assistant";
   text: string;
@@ -24,6 +27,15 @@ export type RestoredTurn = {
   skills?: { id: string; title: string; domain?: string; score?: number }[];
   /** 这一轮用户发的图（能直接放进 `<img src>` 的地址）。 */
   images?: string[];
+  /**
+   * 这一轮用户随消息带的**会话附件**文件名（只这轮用、没进知识库的那种）。
+   *
+   * 存的只有名字，没有正文：正文是 agent 注入给模型的那几万字，气泡里显示它
+   * 等于把整份 PDF 糊在用户脸上（stripInjected 会把那段剥掉）。但"我上传过
+   * 一份报价.pdf"这件事必须留下来 —— 附图当初就是漏了这一步，用户的原话是
+   * "会话记录里面也没有展示我发送的图片"。
+   */
+  docs?: RestoredDoc[];
   /**
    * 这一格发生的时刻（毫秒）与本轮时长 —— 来自 agent 落盘的 `turn_times`。
    *
@@ -48,6 +60,42 @@ function attachedImages(content: string): string[] {
   if (at < 0) return [];
   const refs = content.slice(at).match(/ivyea-ref:\/\/[0-9a-f]+/g) || [];
   return [...new Set(refs)].map(imageRefUrl).slice(0, 4);
+}
+
+/**
+ * 把存档里那条 user 消息里的**会话附件文件名**取出来。
+ *
+ * agent 注入的那段长这样（见 service._attachments_note）：
+ *   [用户附件 —— 文档正文]
+ *   本轮用户随消息带了 2 份文档…
+ *   第 1 份（报价.pdf）：
+ *   …正文…
+ *
+ * 只取名字。正文由 stripInjected 剥掉 —— 那是给模型看的几万字，不是给人看的。
+ */
+function attachedDocs(content: string): RestoredDoc[] {
+  const at = content.indexOf("\n\n[用户附件");
+  if (at < 0) return [];
+  const out: RestoredDoc[] = [];
+  // 形如「第 1 份（报价.pdf｜原件 /api/assistant/session-file/ab.pdf）：」。
+  // 分隔符是**全角**竖线：半角的 | 在文件名里并不罕见，用它切会把名字切断。
+  // 老会话没有「｜原件 …」那一段，第二个捕获组就是 undefined —— 那时只有名字，
+  // 小标退回成纯文字（不可点），而不是给一个点了 404 的链接。
+  const re = /第 \d+ 份（([^｜）]*)(?:｜原件 ([^）]*))?）：/g;
+  const seen = new Set<string>();
+  let m: RegExpExecArray | null;
+  const body = content.slice(at);
+  while ((m = re.exec(body)) !== null) {
+    const name = (m[1] || "").trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    // 只认站内相对地址。存档里的这串是 agent 原样抄过来的，理论上只可能是我们
+    // 自己发的，但它毕竟穿过了模型那一侧的存档 —— 不校验就等于允许把任意
+    // http(s) 地址渲染成一个用户会点的链接。
+    const url = (m[2] || "").trim();
+    out.push({ name, url: url.startsWith("/api/assistant/session-file/") ? url : "" });
+  }
+  return out.slice(0, 4);
 }
 
 export type RestoredSession = {
@@ -104,17 +152,19 @@ export function restoreSession(detail: IvyeaChatSessionDetail | null | undefined
       const raw = String(row.content || "");
       const text = stripInjected(raw);
       const images = attachedImages(raw);
+      const docs = attachedDocs(raw);
       // 上一轮没来得及归位的步骤（比如最后一步之后模型没再说话）挂到上一个 assistant 上
       if (pending.length) {
         const last = [...turns].reverse().find((t) => t.role === "assistant");
         if (last) flushInto(last);
         else { pending = []; pendingSkills = undefined; }
       }
-      // 只发图不打字也是一轮 —— 有图就得留下这一格，否则那一轮整个消失。
-      if (text || images.length) {
+      // 只发图/只带附件、一个字没打，也是一轮 —— 不留下这一格，那一轮整个消失。
+      if (text || images.length || docs.length) {
         const at = timeByTurn.get(turnNo)?.started_at;
         const turn: RestoredTurn = {
           role: "user", text, ...(images.length ? { images } : {}),
+          ...(docs.length ? { docs } : {}),
           ...(at ? { at: at * 1000 } : {}),
         };
         turnNoOf.set(turn, turnNo);

@@ -893,12 +893,24 @@ def console_session_list(
     for item in listing:
         sid = str(item.get("id") or "")
         meta = index.get(sid)
+        # agent 落盘时记下的"这条会话是在哪儿开的"。终端里敲 `ivyea chat` 开的会话
+        # 带 origin="cli"；网页开的和装这个字段之前的老会话都是空串。
+        origin = str(item.get("origin") or "")
         if meta is None:
             # 未登记：管理员能看到（机器上的历史会话），普通用户不给。
-            # 按来源筛选时也一并排除：未登记的会话没有来源可判，混进结果里就是噪音。
-            if not is_admin or workspace or source:
+            if not is_admin or workspace:
                 continue
-            meta = {"workspace": "", "title": "", "principal": "", "source": ""}
+            # 终端会话在这里**推得出来源**：agent 标了 origin，不再是"没有来源可判"
+            # 的裸会话，所以按来源筛「终端」时要留下它。其余未登记的会话仍然无源可判，
+            # 一按来源筛就照旧排除 —— 混进结果里就是噪音。
+            #
+            # 注意这里**只读不写**：不顺手把它登记进索引表。register_session 的归属
+            # 是"不覆盖"的，后台顺手登记等于替用户做了一个之后只能手改库才能撤销的
+            # 决定。真要落行，等他自己动手改名时再落（见 console_session_patch）。
+            guessed = "cli" if origin == "cli" else ""
+            if source and source != guessed:
+                continue
+            meta = {"workspace": "", "title": "", "principal": "", "source": guessed}
         preview = console_sessions.clean_preview(item.get("preview") or "")
         rows.append({
             "id": sid,
@@ -910,6 +922,11 @@ def console_session_list(
             "owner": meta.get("principal") or "",
             "source": meta.get("source") or "",
             "indexed": sid in index,
+            # 终端会话开在哪个目录 —— **只作为展示标签**，不是工作区。
+            # 绝不能拿它去建 console_workspaces 行：给工作区绑目录是一次授权
+            # （agent 的文件类工具会落在那儿，本来仅限管理员手动绑），从 cwd
+            # 自动建等于静默把一片文件系统访问面开出去。
+            "cwd": str(item.get("cwd") or ""),
             # 这条会话此刻有没有一轮在跑（老 agent 不回这个字段 → 不显示标记，
             # 而不是画成"已停"）。
             "running": bool(item.get("running")),
@@ -947,6 +964,17 @@ def console_session_patch(session_id: str, body: ConsoleSessionPatch,
     principal, is_admin = _principal_info(info)
     if not console_sessions.can_access(session_id, principal, is_admin):
         raise HTTPException(status_code=403, detail="无权修改他人的会话")
+    # 索引里没这一行的会话（终端里开的、装这套之前就有的）先补一行再改：
+    # update_session 是纯 UPDATE，没有行就**一声不响地什么也不做** —— 用户改完名
+    # 看着像成功了，刷新一下又变回去。这是登记这类会话的唯一时机：他自己动手改名，
+    # 而不是列表接口后台顺手替他决定归属（register_session 的归属不覆盖，
+    # 判错了只能手改库）。
+    if console_sessions.session_row(session_id) is None:
+        detail = _call(svc.chat_sessions, _SESSION_SCAN) or {}
+        origin = next((str(s.get("origin") or "") for s in (detail.get("sessions") or [])
+                       if str(s.get("id") or "") == session_id), "")
+        console_sessions.register_session(session_id, principal,
+                                          source="cli" if origin == "cli" else "console")
     console_sessions.update_session(session_id, title=body.title, workspace=body.workspace)
     return {"ok": True, "session_id": session_id}
 
@@ -1652,6 +1680,80 @@ async def knowledge_upload(
             "rebuild": rebuild,
         },
     )
+
+
+#: 会话附件的大小上限。比知识库那条（25MB）小：知识库是长期资产，值得为它多等；
+#: 而这个是"随这一轮带下去"的，抽出来的正文还要占本轮上下文，大得没有意义。
+_SESSION_FILE_MAX_BYTES = 10 * 1024 * 1024
+
+
+@router.post("/session-files")
+async def session_file_extract(
+    file: UploadFile = File(...),
+    _user: str = Depends(require_user),
+) -> dict[str, Any]:
+    """把一份文档抽成正文，**只给这一轮对话用，不进知识库**。
+
+    此前任务台上传任何文件都直接走 knowledge/upload 进了知识库并重建索引 ——
+    用户的原话是"有些文件只是会话的时候用，并不需要纳入知识库"。这条路就是那个
+    "只用一次"的出口：不落盘、不建索引、不留档，抽完正文就把字交给前端，随下一条
+    消息作为 attachment 带给 agent。
+
+    想长期留着的，仍然走 knowledge/upload（界面上是一个显式的勾选）。
+    """
+    data = await file.read(_SESSION_FILE_MAX_BYTES + 1)
+    if len(data) > _SESSION_FILE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="文件过大，会话附件最大 10MB")
+    if not data:
+        raise HTTPException(status_code=400, detail="文件是空的")
+    try:
+        out = _call(svc.files_extract, {
+            "filename": file.filename or "upload",
+            "content_base64": base64.b64encode(data).decode("ascii"),
+        })
+    except HTTPException as exc:
+        # 老 agent 没有这个端点 → 它回 404 `not_found`，经 _call 变成一条 502 加一串
+        # 原始报文。**必须翻成人话，而且绝不能静默退回"那就入库吧"** —— 那恰恰是
+        # 被抱怨的那个行为，用户会以为自己只是传了个附件，结果知识库被悄悄写脏。
+        if "not_found" in str(exc.detail or "") or "/v1/files/extract" in str(exc.detail or ""):
+            raise HTTPException(
+                status_code=501,
+                detail="当前 IvyeaAgent 版本还不支持会话附件（需要升级）。"
+                       "升级前，文件只能走「收进知识库」那条路。") from exc
+        raise
+    text = str(out.get("text") or "").strip()
+    if not text:
+        # 抽不出字就明说，别塞一条空壳附件下去 —— 那会让模型以为自己拿到了材料。
+        # 报错是给用户看的，所以把 agent 的 warning 码翻成人话，别把
+        # `unknown_binary_or_empty_text` 这种东西直接甩到界面上。
+        # **按具体度排序，不是按 warnings 的顺序**：agent 会同时给出
+        # `unknown_binary_or_empty_text` 和 `looks_binary`，而前者排在前面 ——
+        # 照 warnings 的顺序取第一条，用户看到的永远是那句最含糊的。
+        why = (
+            ("looks_binary", "它看起来是二进制文件（压缩包、可执行文件之类），里面没有可读的文字"),
+            ("pdf_text_extraction_unavailable", "这个 PDF 里没有文字层，多半是扫描件，需要先 OCR"),
+            ("docx_text_extraction_failed", "这个 docx 没能解开"),
+            ("xlsx_text_extraction_unavailable", "这个表格没能解开"),
+            ("unknown_binary_or_empty_text", "没认出这个格式，也没读到文字"),
+        )
+        got = set(out.get("warnings") or [])
+        hints = [msg for code, msg in why if code in got]
+        raise HTTPException(
+            status_code=422,
+            detail=f"没能从「{file.filename}」里读出文字：{hints[0] if hints else '没认出这个格式'}。"
+                   "可以先转成 PDF/Word/Markdown/txt 里带文字的那种再传。")
+    # 原件也留一份。抽出来的正文是给模型看的，但用户回头翻记录时要能把当初传的
+    # 那份 PDF **下回来** —— 只留文字的话，"我上传过一份报价单"就剩一个点不开的
+    # 文件名。存不下不算失败：正文已经拿到了，这一轮照样能用。
+    from app.routers import assistant as _assistant
+    try:
+        url = _assistant.store_session_file(data, file.filename or "upload")
+    except Exception:  # noqa: BLE001
+        logger.warning("会话附件原件没存下（不影响这一轮）", exc_info=True)
+        url = ""
+    return {"ok": True, "name": file.filename or "upload", "text": text, "url": url,
+            "chars": out.get("chars") or len(text), "truncated": bool(out.get("truncated")),
+            "warnings": out.get("warnings") or []}
 
 
 @router.post("/knowledge/uploads/apply")

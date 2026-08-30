@@ -47,6 +47,8 @@ git log 记得住「改了什么」，记不住「为什么不选另一条路」
 | [0027](./0027-a-turn-reads-as-it-happened.md) | 一轮任务按发生顺序读（正文与工具交错），直播和刷新后是同一个东西 | 2026-08-27 |
 | [0028](./0028-you-can-talk-to-a-running-turn.md) | 任务跑着的时候不该闭麦：追加指令、真停止、选项卡、正在跑的标记、时刻 | 2026-08-28 |
 | [0029](./0029-merge-lingxing-into-cockpit.md) | 领星 ERP 并入运营驾驶舱：同一个工单系统不该跨两个板块 | 2026-08-29 |
+| [0030](./0030-show-image-reuses-workspace-binding.md) | Agent 给用户看图，权限复用「工作区绑目录」 | 2026-08-30 |
+| [0031](./0031-uploads-default-to-this-conversation.md) | 上传的文件默认只属于这次对话 | 2026-08-30 |
 
 ## 模板
 

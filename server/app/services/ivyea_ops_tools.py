@@ -12,6 +12,7 @@ import inspect
 import json
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Union
 
 from fastapi import HTTPException
@@ -259,6 +260,75 @@ async def _image_status(args: dict[str, Any]) -> Any:
     if not task_id:
         raise ValueError("task_id is required")
     return await assistant.image_status(task_id)
+
+
+def _show_image_roots() -> list[Path]:
+    """`show_image` 允许读取的目录。
+
+    **就是"工作区绑的目录"，不另发明一套授权。** 给工作区绑目录本来就是这套系统里
+    管 Agent 文件访问面的那个授权动作（仅限管理员，见 console_sessions.create_workspace
+    的注释：和 MCP 的 stdio command 是同一类）。这里复用它，等于"Agent 能读写的地方
+    就是它能给你看图的地方" —— 没有新增任何访问面。
+
+    没绑目录的工作区（比如默认工作区）不在这里面：那种情况下 Agent 用的是自己的
+    进程 cwd，而那是个 ops 无从知道、也从没被授权过的目录。宁可让工具报一句
+    "去给工作区绑个目录"，也不能自己猜一个路径就放行。
+    """
+    from app.services import console_sessions
+    principal = _principal()
+    email = str(principal.get("email") or principal.get("id") or "")
+    roots: list[Path] = []
+    for ws in console_sessions.list_workspaces(email, principal.get("role") == "admin"):
+        raw = str(ws.get("path") or "").strip()
+        if not raw:
+            continue
+        try:
+            roots.append(Path(raw).expanduser().resolve())
+        except OSError:
+            continue
+    return roots
+
+
+def _show_image(args: dict[str, Any]) -> Any:
+    """把工作区里的一张图放进回答，让用户在网页上直接看见。
+
+    图片本体**不进模型**（和用户贴图那条路一样）：ops 把文件复制进会话图库、换一个
+    站内地址回给模型，模型只要把 `![](地址)` 写进正文，前端就渲染成图。
+    """
+    from app.routers import assistant
+
+    raw_path = str(args.get("path") or "").strip()
+    if not raw_path:
+        raise ValueError("path is required")
+    roots = _show_image_roots()
+    if not roots:
+        raise ValueError(
+            "还没有任何工作区绑定了目录，所以没有可以读图的地方。"
+            "请在「任务台 → 工作区」给工作区绑一个目录（需要管理员），再试。")
+    try:
+        target = Path(raw_path).expanduser().resolve()
+    except OSError as exc:
+        raise ValueError(f"路径解不开：{exc}") from exc
+    # resolve() 已经把符号链接展开了，所以这个包含判断连"软链接指到工作区外面"
+    # 一起堵住 —— 只比字符串前缀的话，工作区里放一条指向 /etc 的软链就穿过去了。
+    if not any(target == r or r in target.parents for r in roots):
+        raise ValueError(
+            f"{target} 不在任何已绑定的工作区目录里，不能展示。"
+            f"当前允许：{'、'.join(str(r) for r in roots)}")
+    if not target.is_file():
+        raise ValueError(f"{target} 不是一个文件（或不存在）")
+    try:
+        data = target.read_bytes()
+    except OSError as exc:
+        raise ValueError(f"读不了这个文件：{exc}") from exc
+    url, size = assistant.store_session_image(data)     # 大小/魔数校验都在里面
+    return {
+        "url": url,
+        "bytes": size,
+        "caption": str(args.get("caption") or "").strip(),
+        "note": f"图片已就绪。**把 `![{args.get('caption') or '图片'}]({url})` 原样写进你的回答正文**，"
+                "用户才看得到它；只说「图在这里」是看不见的。地址会跟着会话存档留下来。",
+    }
 
 
 async def _playbook_generate_report(args: dict[str, Any]) -> Any:
@@ -581,6 +651,15 @@ TOOLS: tuple[OpsTool, ...] = (
             "查询 image_generate 提交的任务，完成后返回图片地址。", _obj(
                 task_id=_str("image_generate 返回的任务 ID")),
             _image_status),
+    OpsTool("show_image", "tools", "给用户看图",
+            "把工作区里的一张图片**展示给用户**。你自己截的图、跑出来的图表、"
+            "读到的产品图，想让用户亲眼看看就用它 —— 光用文字描述用户是看不见的。"
+            "返回一个站内地址，你必须把 `![说明](地址)` 写进回答正文，网页上才会渲染成图。"
+            "只能读已绑定目录的工作区里的文件。（作图请用 image_generate，这个工具只负责展示已有文件。）",
+            _obj(
+                path=_str("图片文件路径，要在某个已绑定目录的工作区里"),
+                caption=_str("一句话说明，会变成图的 alt 文字")),
+            _show_image),
     OpsTool("playbook_generate_report", "playbook", "生成打法推荐",
             "对关键词或 ASIN 跑完整打法/Launch 推荐：按 data_source 采集 Sorftime 或卖家精灵数据 + AI 合成,"
             "并保存到「打法推荐」板块历史。用户要打法/Launch 方案时用它。", _obj(

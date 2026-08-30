@@ -20,6 +20,16 @@ import type { ConsolePreset, IvyeaSkillInfo } from "../../api/ivyeaAgent";
 import ModelPicker from "./ModelPicker";
 
 /** `@` 引用的一条：把知识库里的东西真的带进本轮，而不只是在文字里提一嘴。 */
+/**
+ * 一份会话附件：只给这一轮对话用的文档，**不进知识库**。
+ *
+ * `text` 是 agent 抽出来的正文（发送时作为 attachment 带下去），`file` 留着是为了
+ * 用户临时改主意点「收进知识库」时还能把原件传上去 —— 抽完正文就丢掉原件的话，
+ * 那个按钮就只能让他重新选一次文件。
+ */
+export type ComposerDoc = { name: string; text: string; chars: number;
+                            truncated: boolean; url: string; file: File };
+
 export type ComposerRef = { id: string; title: string; path: string };
 
 /**
@@ -71,6 +81,9 @@ export default function Composer({
   onNewTask,
   images = [],
   onImagesChange,
+  docs = [],
+  onDocsChange,
+  onDocToKnowledge,
   modelLabel,
   modelValue = "",
   onModelChange,
@@ -116,6 +129,17 @@ export default function Composer({
   /** 待发送的图片（data URI）。粘贴/拖入即入列，发送时由任务台读成文字带下去。 */
   images?: string[];
   onImagesChange?: (next: string[]) => void;
+  /**
+   * 这一轮要带下去的**会话附件**（文档）。只属于这次对话，**没有进知识库**。
+   *
+   * 和 `references`/`picked`（@ 引用知识库条目）是两回事：那些是库里已有的东西，
+   * 这些是刚传上来、用完就没的。用户的原话是「有些文件只是会话的时候用，
+   * 并不需要纳入知识库」。
+   */
+  docs?: ComposerDoc[];
+  onDocsChange?: (next: ComposerDoc[]) => void;
+  /** 点了某个附件上的「收进知识库」—— 那是显式动作，不是默认行为。 */
+  onDocToKnowledge?: (index: number) => void;
   /**
    * 当前**实际生效**的主脑模型显示名（来自 /health 或本轮 start 事件）。
    *
@@ -416,6 +440,31 @@ export default function Composer({
         </div>
       )}
 
+      {/*
+        * 会话附件。**这一栏存在的全部意义是让"没进知识库"这件事看得见** ——
+        * 此前上传任何文档都直接入库并重建索引，界面上只有一句"已加进知识库"，
+        * 用户想"就这次问问"根本没有出口。所以这里既说清它的临时性，也把
+        * 「收进知识库」留成一个**显式按钮**，而不是默认行为。
+        */}
+      {docs.length > 0 && (
+        <div className="cc-docs">
+          {docs.map((d, i) => (
+            <span className="cc-doc" key={i} title={`${d.name} · ${d.chars} 字${d.truncated ? "（已截断）" : ""}`}>
+              <Icon name="file" size={13} />
+              <em className="cc-doc-name">{d.name}</em>
+              <span className="cc-doc-size">{d.chars} 字{d.truncated ? "·截断" : ""}</span>
+              {onDocToKnowledge && (
+                <button type="button" className="cc-doc-keep" title="这份要长期留着，收进知识库"
+                        onClick={() => onDocToKnowledge(i)}>收进知识库</button>
+              )}
+              <button type="button" title="不带这份了"
+                      onClick={() => onDocsChange?.(docs.filter((_, j) => j !== i))}>✕</button>
+            </span>
+          ))}
+          <span className="cc-img-note">只用于这次对话，没有进知识库；下次对话不会自动还在</span>
+        </div>
+      )}
+
       {picked.length > 0 && (
         <div className="cc-refs">
           {picked.map((r) => (
@@ -472,7 +521,7 @@ export default function Composer({
           <button
             type="button"
             className="cc-chip cc-chip-icon"
-            title="选图片就直接给我看（和粘贴一样），选文档就加进知识库，之后可以问它的内容"
+            title="选图片就直接给我看（和粘贴一样），选文档就带进这轮对话；想长期留着再点附件上的「收进知识库」"
             onClick={() => fileRef.current?.click()}
             disabled={!onAttach || attaching}
           >

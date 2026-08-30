@@ -499,12 +499,22 @@ export type IvyeaContextUsage = {
 
 /** 一张附图在这一轮里的样子：读出来的文字 + 原图句柄，图片本体留在 ops 服务器上。 */
 export type IvyeaChatAttachment = {
-  kind: "image";
+  /**
+   * `image` = 用户贴的图（正文是视觉模型代读出来的字）；
+   * `document` = 会话附件，只这轮用、**没进知识库**的文档（正文是抽出来的原文）。
+   *
+   * agent 按这个字段分流成两段注入，各有各的份数和字数上限 —— 文档几万字，图片
+   * 描述几百字，共用一个池子的话贴几张图就能把文档挤没。**不带 kind 的一律当图**
+   * （老前端只发图且不带这个字段）。
+   */
+  kind: "image" | "document";
   /** ops 侧的 `ivyea-ref://` 原图句柄，也是会话记录里那张缩略图的来源。 */
   ref?: string;
   /** 代读这张图的视觉模型。 */
   by?: string;
-  /** 视觉模型读出的正文。 */
+  /** 文件名。document 必给 —— 会话记录里那枚附件小标就是它。 */
+  name?: string;
+  /** image：视觉模型读出的正文；document：从文件里抽出来的正文。 */
   text: string;
 };
 
@@ -972,21 +982,30 @@ export type ConsoleSessionRow = {
   updated: number;
   workspace: string;
   owner: string;
-  /** 会话开在哪个板块：任务台 / AI 问答 / 知识库。空 = 未登记的历史会话。 */
+  /** 会话开在哪个板块：任务台 / AI 问答 / 知识库 / 终端。空 = 未登记的历史会话。 */
   source?: ConsoleSource | "";
-  /** false = agent 那边有正文但 ops 没登记归属（悬浮球/CLI 开的，仅管理员可见）。 */
+  /** false = agent 那边有正文但 ops 没登记归属（悬浮球/终端开的，仅管理员可见）。 */
   indexed: boolean;
   /** 这条会话此刻有没有一轮在跑（agent ≥ v1.16.0）。左栏据此打闪烁标记。 */
   running?: boolean;
+  /** 终端会话开在哪个目录（agent 落盘的 cwd）。**只是展示标签，不是工作区**。 */
+  cwd?: string;
 };
 
-/** 三个板块共用 agent 的会话库，靠这个字段区分来源。 */
-export type ConsoleSource = "console" | "assistant" | "brain";
+/**
+ * 共用 agent 会话库的各个入口，靠这个字段区分来源。
+ *
+ * 前三个是 ops 自己的网页板块，会话开出来时就登记了归属；`cli` 不一样 ——
+ * 那是有人在终端里敲 `ivyea chat` 开的，ops 只是从 agent 的共享会话库里读到，
+ * 索引表里多半没有行，来源是服务端按 agent 给的 origin 现推的。
+ */
+export type ConsoleSource = "console" | "assistant" | "brain" | "cli";
 
 export const SOURCE_LABEL: Record<ConsoleSource, string> = {
   console: "任务台",
   assistant: "AI 问答",
   brain: "知识库",
+  cli: "终端",
 };
 
 /**
@@ -1000,6 +1019,8 @@ export const SOURCE_PATH: Record<ConsoleSource, string> = {
   console: "/console",
   assistant: "/console",
   brain: "/brain",
+  // 终端会话就是带工具的 agent 会话，和任务台的完全同构，所以在任务台里打开。
+  cli: "/console",
 };
 
 export type ConsoleWorkspace = {
@@ -1464,6 +1485,30 @@ export async function ivyeaKnowledgeApplyText(params: {
     { timeout: 120000 },
   );
   return data;
+}
+
+/** 这一轮带下去的会话附件（只这次对话用，**不进知识库**）。 */
+export type SessionFile = { name: string; text: string; chars: number;
+                            truncated: boolean;
+                            /** 原件的站内下载地址；存不下时是空串（不影响这一轮能用）。 */
+                            url: string };
+
+/**
+ * 上传一份文档，只抽正文、不进知识库。
+ *
+ * 和 `ivyeaKnowledgeUpload` 是两条完全不同的路，别混：那条会把文件存进知识库、
+ * 建索引、永久留着；这条什么都不留，抽完正文就把字交回来，随下一条消息作为
+ * attachment 带给 agent，下次对话就没有了。用户的原话是「有些文件只是会话的时候
+ * 用，并不需要纳入知识库」。
+ */
+export async function ivyeaSessionFile(file: File): Promise<SessionFile> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await api.post<{ ok: boolean } & SessionFile>(
+    "/ivyea-agent/session-files", form,
+    { headers: { "Content-Type": "multipart/form-data" } });
+  return { name: data.name, text: data.text, chars: data.chars,
+           truncated: !!data.truncated, url: data.url || "" };
 }
 
 export async function ivyeaKnowledgeUpload(params: {

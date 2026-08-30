@@ -39,6 +39,24 @@ const SESSIONS = TITLES.map((title, i) => ({
   indexed: true,
 }));
 
+/**
+ * 终端里敲 `ivyea chat` 开的会话。形态和网页开的**不一样**，所以单列而不是
+ * 改上面那批的 source：它们在 ops 的索引表里没有行（`indexed:false`、
+ * `owner`/`workspace` 都是空），来源是服务端按 agent 给的 origin 现推的，
+ * 另外多一个 `cwd`。少验任何一条，左栏就可能在"没有归属"这条路上出空白。
+ */
+// 注意 `title` **不能留空**：服务端是 `title = meta.title or preview or sid`，
+// 未登记的会话拿首句摘要顶上，永远送不出空标题。留空验出来的是一条现实里不存在
+// 的空白行（第一版 fixture 就是这么错的，截图里那条终端会话没有标题）。
+const CLI_SESSIONS = [
+  { id: "c1", title: "把这个仓库的测试跑一遍", preview: "把这个仓库的测试跑一遍", turns: 6,
+    updated: Math.floor((now - 5 * 3600_000) / 1000),
+    workspace: "", owner: "", source: "cli", indexed: false, cwd: "/root/ivyea-agent" },
+  { id: "c2", title: "改名过的终端会话", preview: "看下 nginx 配置", turns: 3,
+    updated: Math.floor((now - 27 * 3600_000) / 1000),
+    workspace: "", owner: "admin", source: "cli", indexed: true, cwd: "/etc/nginx" },
+];
+
 /** 一轮真实形态的问答：有执行过程、有 markdown 正文、有表格和代码块。 */
 const TURNS = [
   // 带附图的一轮：存档里留下的是 agent 注入的 `[用户附图 …]` 段落 + 原图句柄。
@@ -47,6 +65,29 @@ const TURNS = [
       + "本轮用户上传了 1 张图。图片本体不在你的上下文里，下面是视觉模型逐张读出的内容。\n"
       + "第 1 张（代读模型 qwen-vl、原图句柄 ivyea-ref://0000000000000abcd）：\n一张露营椅的主图。" },
   { role: "assistant", content: "是一张露营椅的主图（图由视觉模型代读成文字后交给我）。" },
+  // Agent 用 show_image 夹进回答里的图。地址是**站内相对路径且带扩展名** ——
+  // 两件事都要验：safeUrl 只放行 http(s)/data:/「/」开头，而裸链接要不要当成图
+  // 是按扩展名判的（looksLikeImage）。所以显式 `![]()` 和裸链接两种写法都摆上，
+  // 模型不会每次都规规矩矩写成图片语法。
+  { role: "user", content: "把你截的那张图给我看看" },
+  { role: "assistant", content:
+      "截好了：\n\n![设置面板](/api/assistant/session-image/1a05105adda00002a949.png)\n\n"
+      // 模型不总会写成 `![]()`，很常见的是把地址单甩一行。那条路走的是
+      // soleImage/looksLikeImage，**按扩展名**判要不要当成图 —— 所以出口的 URL
+      // 必须带 `.png` 这种后缀。（内联在句子中间的地址不会变成图，那是纯文本，
+      // 验过了；工具的 note 因此明确要求模型写成图片语法。）
+      + "再来一张：\n\n/api/assistant/session-image/1a05105adda00002a949.png" },
+  // 带会话附件的一轮：存档里留下的是 agent 注入的 `[用户附件 …]` 段落。
+  // 气泡里要**只显示那句问话 + 文件名小标**，抽出来的正文一个字都不该露出来
+  // （几万字的 PDF 糊进气泡是这个功能最容易翻的车）。
+  { role: "user", content: "这份报价单里最贵的三项是什么？\n\n[用户附件 —— 文档正文]\n"
+      + "本轮用户随消息带了 2 份文档，正文抄在下面。**这些文档只属于这次对话，没有进知识库**。\n"
+      // 第 1 份带原件句柄（新会话）→ 小标是可下载链接；
+      // 第 2 份没有（改动之前存下的老会话）→ 小标退回纯文字，**不能**给一个点了 404 的链接。
+      + "第 1 份（2026Q1 报价单.pdf｜原件 /api/assistant/session-file/1a05105adda00002a949.pdf）："
+      + "\n单价表：A 项 12 美元，B 项 340 美元……\n"
+      + "第 2 份（供应商清单.xlsx）：\n深圳 XX 电子、东莞 YY 五金……" },
+  { role: "assistant", content: "最贵的三项是 B 项（340 美元）、……（依据你这次带的报价单，它没有进知识库）。" },
   { role: "user", content: "帮我跑一下广告巡检" },
   {
     role: "assistant",
@@ -431,8 +472,18 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   }],
   // 两个工作区 + count，才验得到"折叠了不该冒加载更多"和"计数不是本页条数"这两条。
   // count 是**真实**条数（服务端分页前数的），故意和 SESSIONS 的长度不一致。
+  // 会话附件：抽正文、**不进知识库**。字段照抄 routers/ivyea_agent.session_file_extract。
+  ["/ivyea-agent/session-files", {
+    ok: true, name: "2026Q1 报价单.pdf", text: "单价表：A 项 12 美元……",
+    chars: 8421, truncated: false, warnings: [],
+    url: "/api/assistant/session-file/1a05105adda00002a949.pdf",
+  }],
   ["/ivyea-agent/console/sessions", {
-    ok: true, sessions: SESSIONS, agent_available: true,
+    // 服务端是按 updated 倒序端出来的，这里也排一遍 —— 让终端会话夹在网页会话
+    // 中间，而不是整齐地垫在最后。"夹在中间"才验得到来源小标在混排下的对齐。
+    ok: true,
+    sessions: [...SESSIONS, ...CLI_SESSIONS].sort((a, b) => b.updated - a.updated),
+    agent_available: true,
     workspaces: [
       { name: "默认工作区", path: "/root", builtin: true, count: 189 },
       { name: "Amazon", path: "/root/amazon-image-workflow", builtin: false, count: 0 },

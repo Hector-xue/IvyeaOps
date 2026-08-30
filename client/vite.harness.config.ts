@@ -18,7 +18,12 @@ const imageRefStub = {
   name: "harness-image-ref",
   configureServer(server: any) {
     server.middlewares.use((req: any, res: any, next: any) => {
-      if (!String(req.url || "").startsWith("/api/assistant/image/ref/")) return next();
+      const url = String(req.url || "");
+      // 两条图片出口同理：`/image/ref/` 是用户贴的原图，`/session-image/` 是
+      // Agent 用 show_image 夹进回答里的图。都得回得出一张真图，否则截图里
+      // 是碎图，看不出"图到底渲染出来没有"。
+      if (!url.startsWith("/api/assistant/image/ref/")
+          && !url.startsWith("/api/assistant/session-image/")) return next();
       const file = new URL("./public/art/bg.png", import.meta.url);
       res.setHeader("content-type", "image/png");
       readFile(file).then((buf) => res.end(buf)).catch(() => { res.statusCode = 404; res.end(); });

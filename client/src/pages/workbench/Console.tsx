@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../App";
 import { imageRef, streamChat, type ChatMsg } from "../../api/assistant";
-import { restoreSession } from "../../lib/sessionRestore";
+import { restoreSession, type RestoredDoc } from "../../lib/sessionRestore";
 import { ToastProvider, useToast } from "../../components/toast";
 import { CONSOLE_NEW_EVENT, sceneChips } from "../../lib/navRegistry";
 import Icon from "../../components/Icon";
@@ -35,7 +35,7 @@ import ContextMeter from "../../components/console/ContextMeter";
 import DockMeta from "../../components/console/DockMeta";
 import ApprovalCard from "../../components/console/ApprovalCard";
 import QuestionCard from "../../components/console/QuestionCard";
-import Composer, { approvalPayload, type ApprovalMode, type ComposerRef, type ComposerValue } from "../../components/console/Composer";
+import Composer, { approvalPayload, type ApprovalMode, type ComposerDoc, type ComposerRef, type ComposerValue } from "../../components/console/Composer";
 import ArtifactRail, { type RailApproval, type RailTodo } from "../../components/console/ArtifactRail";
 import FollowUps from "../../components/console/FollowUps";
 import AnswerActions from "../../components/console/AnswerActions";
@@ -61,6 +61,7 @@ import {
   ivyeaKnowledgeFile,
   ivyeaKnowledgeFiles,
   ivyeaKnowledgeUpload,
+  ivyeaSessionFile,
   notifyConsoleSessionsChanged,
   ivyeaOpsTools,
   ivyeaSkills,
@@ -182,6 +183,8 @@ type Turn = {
    * 发过图 —— 用户原话："会话记录里面也没有展示我发送的图片"。
    */
   images?: string[];
+  /** 这一轮带的会话附件（只这轮用、没进知识库）。只存名字和原件地址，不存正文。 */
+  docs?: RestoredDoc[];
   /**
    * 这一格发生的时刻（毫秒）。user = 说出这句话的时刻，assistant = 这一轮收尾的时刻。
    * 界面上就是气泡旁的「09:46:12」和回答末尾的「结束于 09:49」。
@@ -337,6 +340,8 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
   const [references, setReferences] = useState<ComposerRef[]>([]);
   const [picked, setPicked] = useState<ComposerRef[]>([]);
   const [images, setImages] = useState<string[]>([]);
+  /** 这一轮要带下去的会话附件（文档）。**不入知识库**，发完就随轮次留在存档里。 */
+  const [docs, setDocs] = useState<ComposerDoc[]>([]);
   /**
    * 这台机器上的 agent 认不认识 `attachments`（≥ v1.15.3）。
    *
@@ -860,10 +865,18 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
     // 分支中途 return，压根走不到那行清理，图就一直粘在下一轮上。
     // 后面用的是这两个局部快照，清 state 不影响这一轮要发的内容。
     const sentImages = images;
+    const sentDocs = docs;
     const sentPicked = picked;
     setImages([]);
+    setDocs([]);          // 同理：附件也别粘在下一轮上
     setPicked([]);
-    const userTurn: Turn = { id: uid(), role: "user", text, images: sentImages, at: Date.now() };
+    const userTurn: Turn = {
+      id: uid(), role: "user", text, images: sentImages,
+      // 本轮发出去的附件名留在这一格里。刷新之后是从存档里按注入段落还原的
+      // （sessionRestore.attachedDocs），两条路要显示成同一个样子。
+      ...(sentDocs.length ? { docs: sentDocs.map((d) => ({ name: d.name, url: d.url })) } : {}),
+      at: Date.now(),
+    };
     const aiId = uid();
     const aiTurn: Turn = {
       id: aiId, role: "assistant", text: "", steps: [], skills: [], approvals: [], running: true,
@@ -950,6 +963,12 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
           handles.map((h, idx) => `第 ${idx + 1} 张：${h}`).join("\n") +
           "\n要以这些图为原图作图/改图时，把对应句柄原样填进 image_generate 的 image_urls。";
       }
+    }
+
+    // 会话附件（文档）。**放在图片那个 if 之外** —— 只传文档不传图也要带下去。
+    // agent 按 kind 分流成独立的一段，有自己的份数和字数上限，不跟图片挤同一个池子。
+    for (const d of sentDocs) {
+      if (d.text) attachments.push({ kind: "document", name: d.name, ref: d.url, text: d.text });
     }
 
     const startedAt = Date.now();
@@ -1098,7 +1117,7 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
     cancelledRef.current = false;
     // images / picked 必须在依赖里：send 里读了它们。漏掉的话这个回调会闭包住
     // 旧值 —— 贴完图不打字直接发，图就丢了（之前靠"总会先打字"侥幸没暴露）。
-  }, [composer, busy, sessionId, images, picked, agentTakesAttachments,
+  }, [composer, busy, sessionId, images, docs, picked, agentTakesAttachments,
       patchTurn, notify, loadFollowUps]);
 
   /**
@@ -1297,21 +1316,42 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
     }
   }, [sessionId, queue.length, notify]);
 
+  /**
+   * 选了一份文档（非图片）。**默认只带进这一轮对话，不进知识库。**
+   *
+   * 此前这里无条件调 ivyeaKnowledgeUpload(confirm, rebuild)：任何文件一上传就进库
+   * 并重建索引，还往输入框里塞一句"已加进知识库"。用户的原话是「有些文件只是会话的
+   * 时候用，并不需要纳入知识库」—— 那条路根本没有出口。
+   *
+   * 现在默认是"用完就没"，想长期留着是附件胶囊上的一个**显式按钮**（docToKnowledge）。
+   * 也不再往输入框里代写文字了：那是用户的输入框，附件的状态该由附件栏自己表达。
+   */
   const attach = useCallback(async (file: File) => {
     setAttaching(true);
     try {
-      await ivyeaKnowledgeUpload({ file, title: file.name, sourceType: "user", tags: "", confirm: true, rebuild: true });
-      setComposer((c) => ({
-        ...c,
-        text: (c.text ? c.text + "\n" : "") + `（已把「${file.name}」加进知识库，可以直接问它的内容）`,
-      }));
-      notify("success", `已添加「${file.name}」`);
+      const got = await ivyeaSessionFile(file);
+      setDocs((prev) => (prev.length >= 4
+        ? (notify("warn", "一轮最多带 4 份附件，先去掉一份再加。"), prev)
+        : [...prev, { ...got, file }]));
     } catch (e: any) {
-      notify("error", errText(e, "添加文件失败"));
+      notify("error", errText(e, "读取文件失败"));
     } finally {
       setAttaching(false);
     }
   }, [notify]);
+
+  /** 附件胶囊上的「收进知识库」—— 显式动作才入库、才重建索引。 */
+  const docToKnowledge = useCallback(async (index: number) => {
+    const d = docs[index];
+    if (!d) return;
+    try {
+      await ivyeaKnowledgeUpload({ file: d.file, title: d.name, sourceType: "user",
+                                   tags: "", confirm: true, rebuild: true });
+      notify("success", `已把「${d.name}」收进知识库（这一轮照样带着它）`);
+    } catch (e: any) {
+      notify("error", errText(e, "收进知识库失败"));
+    }
+  }, [docs, notify]);
 
   /**
    * 把选中的模型写成**全局默认**（写 ops 的系统配置，再由后端下推给 agent）。
@@ -1366,6 +1406,9 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
       presets={presets}
       onNewTask={resetSession}
       images={images}
+      docs={docs}
+      onDocsChange={setDocs}
+      onDocToKnowledge={docToKnowledge}
       onImagesChange={setImages}
       modelLabel={model}
       modelValue={modelPick}
@@ -1455,6 +1498,26 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
                               <img key={i} src={src} alt="附图" loading="lazy"
                                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                             ))}
+                          </div>
+                        )}
+                        {/* 我带的附件。和图一样放在气泡上面 —— 先看到带了什么，
+                            再看到问了什么。只显示文件名：正文是注入给模型的几万字，
+                            摆进气泡就是把整份 PDF 糊在自己脸上。 */}
+                        {!!t.docs?.length && (
+                          <div className="cc-user-docs">
+                            {t.docs.map((d, i) => (d.url ? (
+                              /* 有原件就能下回来。`download` 让浏览器存盘而不是打开 ——
+                                 出口那边也钉了 attachment，这里只是把文件名带上。 */
+                              <a key={i} className="cc-user-doc" href={`${d.url}?filename=${encodeURIComponent(d.name)}`}
+                                 download={d.name} title={`会话附件（未入知识库），点击下载：${d.name}`}>
+                                <Icon name="file" size={12} />{d.name}
+                              </a>
+                            ) : (
+                              /* 老会话没有原件句柄 —— 显示成纯文字，而不是一个点了 404 的链接。 */
+                              <span key={i} className="cc-user-doc" title={`会话附件（未入知识库）：${d.name}`}>
+                                <Icon name="file" size={12} />{d.name}
+                              </span>
+                            )))}
                           </div>
                         )}
                         {!!t.text && <div className="cc-bubble">{t.text}</div>}
