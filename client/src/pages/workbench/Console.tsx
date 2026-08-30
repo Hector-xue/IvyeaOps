@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../App";
 import { imageRef, streamChat, type ChatMsg } from "../../api/assistant";
-import { restoreSession } from "../../lib/sessionRestore";
+import { restoreSession, type RestoredDoc } from "../../lib/sessionRestore";
 import { ToastProvider, useToast } from "../../components/toast";
 import { CONSOLE_NEW_EVENT, sceneChips } from "../../lib/navRegistry";
 import Icon from "../../components/Icon";
@@ -183,8 +183,8 @@ type Turn = {
    * 发过图 —— 用户原话："会话记录里面也没有展示我发送的图片"。
    */
   images?: string[];
-  /** 这一轮带的会话附件文件名（只这轮用、没进知识库）。只存名字，不存正文。 */
-  docs?: string[];
+  /** 这一轮带的会话附件（只这轮用、没进知识库）。只存名字和原件地址，不存正文。 */
+  docs?: RestoredDoc[];
   /**
    * 这一格发生的时刻（毫秒）。user = 说出这句话的时刻，assistant = 这一轮收尾的时刻。
    * 界面上就是气泡旁的「09:46:12」和回答末尾的「结束于 09:49」。
@@ -874,7 +874,7 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
       id: uid(), role: "user", text, images: sentImages,
       // 本轮发出去的附件名留在这一格里。刷新之后是从存档里按注入段落还原的
       // （sessionRestore.attachedDocs），两条路要显示成同一个样子。
-      ...(sentDocs.length ? { docs: sentDocs.map((d) => d.name) } : {}),
+      ...(sentDocs.length ? { docs: sentDocs.map((d) => ({ name: d.name, url: d.url })) } : {}),
       at: Date.now(),
     };
     const aiId = uid();
@@ -968,7 +968,7 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
     // 会话附件（文档）。**放在图片那个 if 之外** —— 只传文档不传图也要带下去。
     // agent 按 kind 分流成独立的一段，有自己的份数和字数上限，不跟图片挤同一个池子。
     for (const d of sentDocs) {
-      if (d.text) attachments.push({ kind: "document", name: d.name, text: d.text });
+      if (d.text) attachments.push({ kind: "document", name: d.name, ref: d.url, text: d.text });
     }
 
     const startedAt = Date.now();
@@ -1505,11 +1505,19 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
                             摆进气泡就是把整份 PDF 糊在自己脸上。 */}
                         {!!t.docs?.length && (
                           <div className="cc-user-docs">
-                            {t.docs.map((n, i) => (
-                              <span key={i} className="cc-user-doc" title={`会话附件（未入知识库）：${n}`}>
-                                <Icon name="file" size={12} />{n}
+                            {t.docs.map((d, i) => (d.url ? (
+                              /* 有原件就能下回来。`download` 让浏览器存盘而不是打开 ——
+                                 出口那边也钉了 attachment，这里只是把文件名带上。 */
+                              <a key={i} className="cc-user-doc" href={`${d.url}?filename=${encodeURIComponent(d.name)}`}
+                                 download={d.name} title={`会话附件（未入知识库），点击下载：${d.name}`}>
+                                <Icon name="file" size={12} />{d.name}
+                              </a>
+                            ) : (
+                              /* 老会话没有原件句柄 —— 显示成纯文字，而不是一个点了 404 的链接。 */
+                              <span key={i} className="cc-user-doc" title={`会话附件（未入知识库）：${d.name}`}>
+                                <Icon name="file" size={12} />{d.name}
                               </span>
-                            ))}
+                            )))}
                           </div>
                         )}
                         {!!t.text && <div className="cc-bubble">{t.text}</div>}

@@ -82,7 +82,10 @@ const TURNS = [
   // （几万字的 PDF 糊进气泡是这个功能最容易翻的车）。
   { role: "user", content: "这份报价单里最贵的三项是什么？\n\n[用户附件 —— 文档正文]\n"
       + "本轮用户随消息带了 2 份文档，正文抄在下面。**这些文档只属于这次对话，没有进知识库**。\n"
-      + "第 1 份（2026Q1 报价单.pdf）：\n单价表：A 项 12 美元，B 项 340 美元……\n"
+      // 第 1 份带原件句柄（新会话）→ 小标是可下载链接；
+      // 第 2 份没有（改动之前存下的老会话）→ 小标退回纯文字，**不能**给一个点了 404 的链接。
+      + "第 1 份（2026Q1 报价单.pdf｜原件 /api/assistant/session-file/1a05105adda00002a949.pdf）："
+      + "\n单价表：A 项 12 美元，B 项 340 美元……\n"
       + "第 2 份（供应商清单.xlsx）：\n深圳 XX 电子、东莞 YY 五金……" },
   { role: "assistant", content: "最贵的三项是 B 项（340 美元）、……（依据你这次带的报价单，它没有进知识库）。" },
   { role: "user", content: "帮我跑一下广告巡检" },
@@ -473,6 +476,7 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   ["/ivyea-agent/session-files", {
     ok: true, name: "2026Q1 报价单.pdf", text: "单价表：A 项 12 美元……",
     chars: 8421, truncated: false, warnings: [],
+    url: "/api/assistant/session-file/1a05105adda00002a949.pdf",
   }],
   ["/ivyea-agent/console/sessions", {
     // 服务端是按 updated 倒序端出来的，这里也排一遍 —— 让终端会话夹在网页会话

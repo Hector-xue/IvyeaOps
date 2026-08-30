@@ -1488,7 +1488,10 @@ export async function ivyeaKnowledgeApplyText(params: {
 }
 
 /** 这一轮带下去的会话附件（只这次对话用，**不进知识库**）。 */
-export type SessionFile = { name: string; text: string; chars: number; truncated: boolean };
+export type SessionFile = { name: string; text: string; chars: number;
+                            truncated: boolean;
+                            /** 原件的站内下载地址；存不下时是空串（不影响这一轮能用）。 */
+                            url: string };
 
 /**
  * 上传一份文档，只抽正文、不进知识库。
@@ -1504,7 +1507,8 @@ export async function ivyeaSessionFile(file: File): Promise<SessionFile> {
   const { data } = await api.post<{ ok: boolean } & SessionFile>(
     "/ivyea-agent/session-files", form,
     { headers: { "Content-Type": "multipart/form-data" } });
-  return { name: data.name, text: data.text, chars: data.chars, truncated: !!data.truncated };
+  return { name: data.name, text: data.text, chars: data.chars,
+           truncated: !!data.truncated, url: data.url || "" };
 }
 
 export async function ivyeaKnowledgeUpload(params: {

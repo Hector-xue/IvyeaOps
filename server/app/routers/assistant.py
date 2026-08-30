@@ -671,6 +671,63 @@ def store_session_image(raw: bytes) -> tuple[str, int]:
     return f"/api/assistant/session-image/{name}", len(raw)
 
 
+# ── 会话附件的原件 ──────────────────────────────────────────────────────────
+#
+# 抽出来的正文进了会话存档（模型看的是那个），但**原件也得留一份**：用户回头翻
+# 记录时要能把当初传的那份 PDF 下回来。存档里只有文字的话，"我上传过一份报价单"
+# 就只剩一个文件名，点不开。
+_FILES_DIR: Path = STUDIO_ROOT.parent / "session-files"
+_MAX_SESSION_FILE_BYTES = 10 * 1024 * 1024
+_KEEP_SESSION_FILES = 4000
+
+
+def _session_file(name: str) -> Path | None:
+    """`<hex-id>.<ext>` → 盘上的文件。**只认自己发的名字**，杜绝路径穿越。"""
+    stem, _, ext = (name or "").strip().partition(".")
+    if not stem or len(stem) > 40 or not all(c in "0123456789abcdef" for c in stem):
+        return None
+    if ext and (not ext.isalnum() or len(ext) > 8):
+        return None
+    p = _FILES_DIR / (f"{stem}.{ext.lower()}" if ext else stem)
+    return p if p.exists() else None
+
+
+def store_session_file(raw: bytes, filename: str) -> str:
+    """存一份会话附件原件，返回站内下载地址。"""
+    if len(raw) > _MAX_SESSION_FILE_BYTES:
+        raise ValueError("文件过大")
+    ext = "".join(ch for ch in Path(filename or "").suffix.lstrip(".").lower() if ch.isalnum())[:8]
+    name = f"{_new_ref_id()}{('.' + ext) if ext else ''}"
+    _FILES_DIR.mkdir(parents=True, exist_ok=True)
+    (_FILES_DIR / name).write_bytes(raw)
+    try:
+        files = sorted(_FILES_DIR.glob("*"), key=lambda p: p.name)
+        for old in files[:-_KEEP_SESSION_FILES]:
+            old.unlink(missing_ok=True)
+    except Exception:
+        logger.debug("会话附件清理失败（旁路，已忽略）", exc_info=True)
+    return f"/api/assistant/session-file/{name}"
+
+
+@router.get("/session-file/{name}")
+def session_file_download(name: str, filename: str = "",
+                          _user: str = Depends(require_user)) -> FileResponse:
+    """把当初传的那份原件下回来。
+
+    **一律强制下载，绝不 inline 渲染。** 这里存的是用户上传的任意文件，其中可能有
+    .html/.svg 这类同源就能执行脚本的东西；让浏览器直接打开它等于在自己的域上执行
+    别人的内容。`application/octet-stream` + Content-Disposition: attachment 两道
+    一起上，浏览器就只会存盘。
+    """
+    path = _session_file(name)
+    if path is None:
+        raise HTTPException(404, "附件不存在或已过期")
+    # 下载时用回原来的文件名（前端传过来），但**只取基名**：带路径的名字会被
+    # 某些客户端当成目录写下去。
+    shown = Path(filename or path.name).name[:120] or path.name
+    return FileResponse(path, media_type="application/octet-stream", filename=shown)
+
+
 @router.get("/session-image/{name}")
 def session_image_file(name: str, _user: str = Depends(require_user)) -> FileResponse:
     """取回 agent 夹在回答里的那张图。

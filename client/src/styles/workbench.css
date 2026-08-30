@@ -3452,6 +3452,10 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .cc-user-doc{display:inline-flex;align-items:center;gap:5px;max-width:min(260px,60vw);
   padding:3px 8px;border:1px solid var(--b);border-radius:10px;background:var(--bg2);
   color:var(--t2);font-size:var(--fs-95);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 有原件的那些是 <a>。**不加下划线**：一排小标里只有能下载的带下划线，看着像
+   出了渲染 bug；靠悬停变色表达"这个能点"，和正文里的图是同一种交互暗示。 */
+a.cc-user-doc{text-decoration:none;cursor:pointer}
+a.cc-user-doc:hover{border-color:var(--acc);color:var(--t)}
 .cc-bubble{max-width:min(78%,640px);padding:8px 12px;border-radius:10px 10px 2px 10px;
   background:color-mix(in srgb,var(--acc) 12%,var(--bg2));border:1px solid var(--b);
   color:var(--t);font-size:var(--fs-12);line-height:1.7;white-space:pre-wrap;word-break:break-word}

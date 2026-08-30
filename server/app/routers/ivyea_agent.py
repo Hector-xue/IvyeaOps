@@ -1742,7 +1742,16 @@ async def session_file_extract(
             status_code=422,
             detail=f"没能从「{file.filename}」里读出文字：{hints[0] if hints else '没认出这个格式'}。"
                    "可以先转成 PDF/Word/Markdown/txt 里带文字的那种再传。")
-    return {"ok": True, "name": file.filename or "upload", "text": text,
+    # 原件也留一份。抽出来的正文是给模型看的，但用户回头翻记录时要能把当初传的
+    # 那份 PDF **下回来** —— 只留文字的话，"我上传过一份报价单"就剩一个点不开的
+    # 文件名。存不下不算失败：正文已经拿到了，这一轮照样能用。
+    from app.routers import assistant as _assistant
+    try:
+        url = _assistant.store_session_file(data, file.filename or "upload")
+    except Exception:  # noqa: BLE001
+        logger.warning("会话附件原件没存下（不影响这一轮）", exc_info=True)
+        url = ""
+    return {"ok": True, "name": file.filename or "upload", "text": text, "url": url,
             "chars": out.get("chars") or len(text), "truncated": bool(out.get("truncated")),
             "warnings": out.get("warnings") or []}
 

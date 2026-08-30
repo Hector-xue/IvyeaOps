@@ -27,7 +27,8 @@ import ModelPicker from "./ModelPicker";
  * 用户临时改主意点「收进知识库」时还能把原件传上去 —— 抽完正文就丢掉原件的话，
  * 那个按钮就只能让他重新选一次文件。
  */
-export type ComposerDoc = { name: string; text: string; chars: number; truncated: boolean; file: File };
+export type ComposerDoc = { name: string; text: string; chars: number;
+                            truncated: boolean; url: string; file: File };
 
 export type ComposerRef = { id: string; title: string; path: string };
 

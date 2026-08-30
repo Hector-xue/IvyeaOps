@@ -17,6 +17,9 @@ import { stripInjected } from "./stripInjected";
 import { mergeStep, stepFromEvent, type ConsoleStep } from "./stepLabels";
 import type { ServerStats } from "./turnStats";
 
+/** 一份会话附件在记录里的样子：文件名 +（可能有的）原件下载地址。 */
+export type RestoredDoc = { name: string; url: string };
+
 export type RestoredTurn = {
   role: "user" | "assistant";
   text: string;
@@ -32,7 +35,7 @@ export type RestoredTurn = {
    * 一份报价.pdf"这件事必须留下来 —— 附图当初就是漏了这一步，用户的原话是
    * "会话记录里面也没有展示我发送的图片"。
    */
-  docs?: string[];
+  docs?: RestoredDoc[];
   /**
    * 这一格发生的时刻（毫秒）与本轮时长 —— 来自 agent 落盘的 `turn_times`。
    *
@@ -70,16 +73,29 @@ function attachedImages(content: string): string[] {
  *
  * 只取名字。正文由 stripInjected 剥掉 —— 那是给模型看的几万字，不是给人看的。
  */
-function attachedDocs(content: string): string[] {
+function attachedDocs(content: string): RestoredDoc[] {
   const at = content.indexOf("\n\n[用户附件");
   if (at < 0) return [];
-  const names: string[] = [];
-  // 名字里可能有中文括号以外的任何字符，所以按"第 N 份（…）：" 整体匹配，
-  // 且只吃到最近的一个「）：」为止。
-  const re = /第 \d+ 份（(.*?)）：/g;
+  const out: RestoredDoc[] = [];
+  // 形如「第 1 份（报价.pdf｜原件 /api/assistant/session-file/ab.pdf）：」。
+  // 分隔符是**全角**竖线：半角的 | 在文件名里并不罕见，用它切会把名字切断。
+  // 老会话没有「｜原件 …」那一段，第二个捕获组就是 undefined —— 那时只有名字，
+  // 小标退回成纯文字（不可点），而不是给一个点了 404 的链接。
+  const re = /第 \d+ 份（([^｜）]*)(?:｜原件 ([^）]*))?）：/g;
+  const seen = new Set<string>();
   let m: RegExpExecArray | null;
-  while ((m = re.exec(content.slice(at))) !== null) names.push(m[1]);
-  return [...new Set(names)].slice(0, 4);
+  const body = content.slice(at);
+  while ((m = re.exec(body)) !== null) {
+    const name = (m[1] || "").trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    // 只认站内相对地址。存档里的这串是 agent 原样抄过来的，理论上只可能是我们
+    // 自己发的，但它毕竟穿过了模型那一侧的存档 —— 不校验就等于允许把任意
+    // http(s) 地址渲染成一个用户会点的链接。
+    const url = (m[2] || "").trim();
+    out.push({ name, url: url.startsWith("/api/assistant/session-file/") ? url : "" });
+  }
+  return out.slice(0, 4);
 }
 
 export type RestoredSession = {
