@@ -1682,6 +1682,60 @@ async def knowledge_upload(
     )
 
 
+#: 会话附件的大小上限。比知识库那条（25MB）小：知识库是长期资产，值得为它多等；
+#: 而这个是"随这一轮带下去"的，抽出来的正文还要占本轮上下文，大得没有意义。
+_SESSION_FILE_MAX_BYTES = 10 * 1024 * 1024
+
+
+@router.post("/session-files")
+async def session_file_extract(
+    file: UploadFile = File(...),
+    _user: str = Depends(require_user),
+) -> dict[str, Any]:
+    """把一份文档抽成正文，**只给这一轮对话用，不进知识库**。
+
+    此前任务台上传任何文件都直接走 knowledge/upload 进了知识库并重建索引 ——
+    用户的原话是"有些文件只是会话的时候用，并不需要纳入知识库"。这条路就是那个
+    "只用一次"的出口：不落盘、不建索引、不留档，抽完正文就把字交给前端，随下一条
+    消息作为 attachment 带给 agent。
+
+    想长期留着的，仍然走 knowledge/upload（界面上是一个显式的勾选）。
+    """
+    data = await file.read(_SESSION_FILE_MAX_BYTES + 1)
+    if len(data) > _SESSION_FILE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="文件过大，会话附件最大 10MB")
+    if not data:
+        raise HTTPException(status_code=400, detail="文件是空的")
+    out = _call(svc.files_extract, {
+        "filename": file.filename or "upload",
+        "content_base64": base64.b64encode(data).decode("ascii"),
+    })
+    text = str(out.get("text") or "").strip()
+    if not text:
+        # 抽不出字就明说，别塞一条空壳附件下去 —— 那会让模型以为自己拿到了材料。
+        # 报错是给用户看的，所以把 agent 的 warning 码翻成人话，别把
+        # `unknown_binary_or_empty_text` 这种东西直接甩到界面上。
+        # **按具体度排序，不是按 warnings 的顺序**：agent 会同时给出
+        # `unknown_binary_or_empty_text` 和 `looks_binary`，而前者排在前面 ——
+        # 照 warnings 的顺序取第一条，用户看到的永远是那句最含糊的。
+        why = (
+            ("looks_binary", "它看起来是二进制文件（压缩包、可执行文件之类），里面没有可读的文字"),
+            ("pdf_text_extraction_unavailable", "这个 PDF 里没有文字层，多半是扫描件，需要先 OCR"),
+            ("docx_text_extraction_failed", "这个 docx 没能解开"),
+            ("xlsx_text_extraction_unavailable", "这个表格没能解开"),
+            ("unknown_binary_or_empty_text", "没认出这个格式，也没读到文字"),
+        )
+        got = set(out.get("warnings") or [])
+        hints = [msg for code, msg in why if code in got]
+        raise HTTPException(
+            status_code=422,
+            detail=f"没能从「{file.filename}」里读出文字：{hints[0] if hints else '没认出这个格式'}。"
+                   "可以先转成 PDF/Word/Markdown/txt 里带文字的那种再传。")
+    return {"ok": True, "name": file.filename or "upload", "text": text,
+            "chars": out.get("chars") or len(text), "truncated": bool(out.get("truncated")),
+            "warnings": out.get("warnings") or []}
+
+
 @router.post("/knowledge/uploads/apply")
 def knowledge_upload_apply(body: KnowledgeUploadApplyBody) -> dict[str, Any]:
     return _call(svc.knowledge_upload_apply, _payload(body))

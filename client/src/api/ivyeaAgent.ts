@@ -499,12 +499,22 @@ export type IvyeaContextUsage = {
 
 /** 一张附图在这一轮里的样子：读出来的文字 + 原图句柄，图片本体留在 ops 服务器上。 */
 export type IvyeaChatAttachment = {
-  kind: "image";
+  /**
+   * `image` = 用户贴的图（正文是视觉模型代读出来的字）；
+   * `document` = 会话附件，只这轮用、**没进知识库**的文档（正文是抽出来的原文）。
+   *
+   * agent 按这个字段分流成两段注入，各有各的份数和字数上限 —— 文档几万字，图片
+   * 描述几百字，共用一个池子的话贴几张图就能把文档挤没。**不带 kind 的一律当图**
+   * （老前端只发图且不带这个字段）。
+   */
+  kind: "image" | "document";
   /** ops 侧的 `ivyea-ref://` 原图句柄，也是会话记录里那张缩略图的来源。 */
   ref?: string;
   /** 代读这张图的视觉模型。 */
   by?: string;
-  /** 视觉模型读出的正文。 */
+  /** 文件名。document 必给 —— 会话记录里那枚附件小标就是它。 */
+  name?: string;
+  /** image：视觉模型读出的正文；document：从文件里抽出来的正文。 */
   text: string;
 };
 
@@ -1475,6 +1485,26 @@ export async function ivyeaKnowledgeApplyText(params: {
     { timeout: 120000 },
   );
   return data;
+}
+
+/** 这一轮带下去的会话附件（只这次对话用，**不进知识库**）。 */
+export type SessionFile = { name: string; text: string; chars: number; truncated: boolean };
+
+/**
+ * 上传一份文档，只抽正文、不进知识库。
+ *
+ * 和 `ivyeaKnowledgeUpload` 是两条完全不同的路，别混：那条会把文件存进知识库、
+ * 建索引、永久留着；这条什么都不留，抽完正文就把字交回来，随下一条消息作为
+ * attachment 带给 agent，下次对话就没有了。用户的原话是「有些文件只是会话的时候
+ * 用，并不需要纳入知识库」。
+ */
+export async function ivyeaSessionFile(file: File): Promise<SessionFile> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await api.post<{ ok: boolean } & SessionFile>(
+    "/ivyea-agent/session-files", form,
+    { headers: { "Content-Type": "multipart/form-data" } });
+  return { name: data.name, text: data.text, chars: data.chars, truncated: !!data.truncated };
 }
 
 export async function ivyeaKnowledgeUpload(params: {

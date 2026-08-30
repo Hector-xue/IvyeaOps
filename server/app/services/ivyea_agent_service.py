@@ -1132,6 +1132,15 @@ def knowledge_upload(payload: dict[str, Any]) -> dict[str, Any]:
     return request_json("POST", "/v1/knowledge/upload", payload, timeout=max(_timeout(), 60.0))
 
 
+def files_extract(payload: dict[str, Any]) -> dict[str, Any]:
+    """只抽正文，**不进知识库**（agent ≥ v1.16.2）。
+
+    ops 自己不抽是有原因的：它只装了 pypdf/openpyxl，没有 python-docx，自己抽会
+    漏 docx；而且两边各写一套抽取逻辑，同一份文件读出来的字迟早会不一样。
+    """
+    return request_json("POST", "/v1/files/extract", payload, timeout=max(_timeout(), 60.0))
+
+
 def knowledge_upload_apply(payload: dict[str, Any]) -> dict[str, Any]:
     return request_json("POST", "/v1/knowledge/uploads/apply", payload, timeout=max(_timeout(), 60.0))
 

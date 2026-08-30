@@ -3446,6 +3446,12 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .cc-user-imgs{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
 .cc-user-imgs img{max-width:min(180px,42vw);max-height:180px;border-radius:10px;
   border:1px solid var(--b);background:var(--bg2)}
+/* 我带的会话附件。靠右和图片对齐（都是"我发出去的东西"），中性底不抢气泡的色 ——
+   它是这一轮的附注，不是这一轮的正文。 */
+.cc-user-docs{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+.cc-user-doc{display:inline-flex;align-items:center;gap:5px;max-width:min(260px,60vw);
+  padding:3px 8px;border:1px solid var(--b);border-radius:10px;background:var(--bg2);
+  color:var(--t2);font-size:var(--fs-95);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cc-bubble{max-width:min(78%,640px);padding:8px 12px;border-radius:10px 10px 2px 10px;
   background:color-mix(in srgb,var(--acc) 12%,var(--bg2));border:1px solid var(--b);
   color:var(--t);font-size:var(--fs-12);line-height:1.7;white-space:pre-wrap;word-break:break-word}
@@ -4416,6 +4422,20 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 .cc-img>button{position:absolute;top:0;right:0;width:16px;height:16px;border:none;
   background:rgba(0,0,0,.6);color:var(--on-acc);font-size:var(--fs-9);cursor:pointer;line-height:16px;padding:0}
 .cc-img-note{font-size:var(--fs-95);color:var(--t3)}
+
+/* 会话附件（只这轮用、没进知识库的文档）。做成一行胶囊而不是图片那样的方块缩略图 ——
+   文档没有可看的画面，能认出来的只有文件名，所以版面全留给名字。 */
+.cc-docs{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px}
+.cc-doc{display:inline-flex;align-items:center;gap:6px;max-width:100%;
+  padding:3px 6px 3px 7px;border:1px solid var(--b2);border-radius:var(--r);
+  background:var(--bg2);font-size:var(--fs-95);color:var(--t2)}
+/* 名字长了截断，别把「收进知识库」和 ✕ 挤出胶囊外面 */
+.cc-doc-name{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-style:normal}
+.cc-doc-size{color:var(--t3);font-size:var(--fs-9);flex-shrink:0}
+.cc-doc-keep{border:none;background:none;padding:0 2px;cursor:pointer;flex-shrink:0;
+  color:var(--acc);font-size:var(--fs-9);text-decoration:underline}
+.cc-doc>button:last-child{border:none;background:none;padding:0 1px;cursor:pointer;
+  color:var(--t3);font-size:var(--fs-9);flex-shrink:0}
 
 /* ── 智能体预设（pages/workbench/Capabilities.tsx · PresetsSection）────────── */
 .cap-dim{color:var(--t3)}

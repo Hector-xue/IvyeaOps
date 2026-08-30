@@ -16,6 +16,10 @@ const INJECTION_MARKERS = [
   "\n\n[工程上下文]",
   // 附图的文字版（视觉模型代读的内容）。气泡里给的是原图缩略图，不是这段文字。
   "\n\n[用户附图",
+  // 会话附件（只给这一轮用、没进知识库的文档）的正文。气泡里给的是文件名小标，
+  // 不是这几万字。**后端 console_sessions._INJECTION_MARKERS 里有同一份表**，
+  // 两边都得加 —— 漏了哪边，那一边就会把整份 PDF 糊进用户自己的气泡。
+  "\n\n[用户附件",
 ];
 
 export function stripInjected(text: string): string {

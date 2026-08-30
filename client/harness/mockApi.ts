@@ -77,6 +77,14 @@ const TURNS = [
       // 必须带 `.png` 这种后缀。（内联在句子中间的地址不会变成图，那是纯文本，
       // 验过了；工具的 note 因此明确要求模型写成图片语法。）
       + "再来一张：\n\n/api/assistant/session-image/1a05105adda00002a949.png" },
+  // 带会话附件的一轮：存档里留下的是 agent 注入的 `[用户附件 …]` 段落。
+  // 气泡里要**只显示那句问话 + 文件名小标**，抽出来的正文一个字都不该露出来
+  // （几万字的 PDF 糊进气泡是这个功能最容易翻的车）。
+  { role: "user", content: "这份报价单里最贵的三项是什么？\n\n[用户附件 —— 文档正文]\n"
+      + "本轮用户随消息带了 2 份文档，正文抄在下面。**这些文档只属于这次对话，没有进知识库**。\n"
+      + "第 1 份（2026Q1 报价单.pdf）：\n单价表：A 项 12 美元，B 项 340 美元……\n"
+      + "第 2 份（供应商清单.xlsx）：\n深圳 XX 电子、东莞 YY 五金……" },
+  { role: "assistant", content: "最贵的三项是 B 项（340 美元）、……（依据你这次带的报价单，它没有进知识库）。" },
   { role: "user", content: "帮我跑一下广告巡检" },
   {
     role: "assistant",
@@ -461,6 +469,11 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   }],
   // 两个工作区 + count，才验得到"折叠了不该冒加载更多"和"计数不是本页条数"这两条。
   // count 是**真实**条数（服务端分页前数的），故意和 SESSIONS 的长度不一致。
+  // 会话附件：抽正文、**不进知识库**。字段照抄 routers/ivyea_agent.session_file_extract。
+  ["/ivyea-agent/session-files", {
+    ok: true, name: "2026Q1 报价单.pdf", text: "单价表：A 项 12 美元……",
+    chars: 8421, truncated: false, warnings: [],
+  }],
   ["/ivyea-agent/console/sessions", {
     // 服务端是按 updated 倒序端出来的，这里也排一遍 —— 让终端会话夹在网页会话
     // 中间，而不是整齐地垫在最后。"夹在中间"才验得到来源小标在混排下的对齐。
