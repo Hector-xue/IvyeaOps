@@ -590,6 +590,105 @@ def image_ref_file(ref_id: str, _user: str = Depends(require_user)) -> FileRespo
     return FileResponse(path, media_type=mime)
 
 
+# ── Agent 回答里夹的图（show_image 工具）─────────────────────────────────────
+#
+# 和上面那个 imagegen-refs **故意分开存**。那个库是"用户刚贴的原图"的中转站，
+# 只留最近 _KEEP_REFS(200) 张、转得飞快 —— 而这里存的是**已经写进会话存档的图**：
+# 模型把 `![](…)` 写进了回答正文，那段文字会一直躺在会话记录里。混进那个库的话，
+# 200 张一冲，几天前的会话打开就是一排碎图，而正文还言之凿凿地在描述它们。
+_SHOTS_DIR: Path = STUDIO_ROOT.parent / "session-images"
+_MAX_SHOT_BYTES = 12 * 1024 * 1024
+_KEEP_SHOTS = 4000
+
+#: 认得出的图片魔数。**按文件头判，不按扩展名** —— show_image 收的是模型给的
+#: 路径，扩展名是它说了算的，只看后缀等于让模型决定"这个文件算不算图片"，
+#: 那这个出口就成了任意文件外泄通道。
+_IMAGE_MAGIC: tuple[tuple[bytes, str, str], ...] = (
+    (b"\x89PNG\r\n\x1a\n", "png", "image/png"),
+    (b"\xff\xd8\xff", "jpg", "image/jpeg"),
+    (b"GIF87a", "gif", "image/gif"),
+    (b"GIF89a", "gif", "image/gif"),
+    (b"BM", "bmp", "image/bmp"),
+)
+# SVG **故意不收**：它是文本，能带 <script>，而这个出口是同源的 —— 收下它等于
+# 让模型往用户的会话里塞一段同源可执行脚本。要展示矢量图就先转成 png。
+
+
+def _sniff_image(raw: bytes) -> tuple[str, str] | None:
+    """(扩展名, mime)，认不出来就是 None。webp/avif 是 RIFF/ftyp 容器，单独判。"""
+    for magic, ext, mime in _IMAGE_MAGIC:
+        if raw.startswith(magic):
+            return ext, mime
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return "webp", "image/webp"
+    if raw[4:8] == b"ftyp" and raw[8:12] in (b"avif", b"avis"):
+        return "avif", "image/avif"
+    return None
+
+
+def _shot_file(name: str) -> Path | None:
+    """`<hex-id>.<ext>` → 盘上的文件。**只认自己发的名字**，杜绝路径穿越。
+
+    URL 里带扩展名是有意的：前端判"这条链接是不是图"要靠后缀（reportFormat 的
+    looksLikeImage），不带后缀的裸链接会被渲染成一条普通链接。显式 `![]()` 语法
+    不受影响，但不能指望模型每次都规规矩矩写成图片语法。
+    """
+    stem, _, ext = (name or "").strip().partition(".")
+    if not stem or len(stem) > 40 or not all(c in "0123456789abcdef" for c in stem):
+        return None
+    if not ext.isalnum() or len(ext) > 5:
+        return None
+    p = _SHOTS_DIR / f"{stem}.{ext.lower()}"
+    return p if p.exists() else None
+
+
+def _prune_shots() -> None:
+    try:
+        files = sorted(_SHOTS_DIR.glob("*.*"), key=lambda p: p.name)
+        for p in files[:-_KEEP_SHOTS]:
+            p.unlink(missing_ok=True)
+    except Exception:
+        logger.debug("_prune_shots 失败（旁路，已忽略）", exc_info=True)
+
+
+def store_session_image(raw: bytes) -> tuple[str, int]:
+    """把一张图存进会话图库，返回 (可直接写进 markdown 的站内地址, 字节数)。
+
+    校验放在这里而不是调用方：这是**唯一**的入口，堵在入口才堵得住。
+    """
+    if not raw:
+        raise ValueError("文件是空的")
+    if len(raw) > _MAX_SHOT_BYTES:
+        raise ValueError(f"图片过大（{len(raw) // 1024 // 1024}MB > 12MB）")
+    sniffed = _sniff_image(raw)
+    if sniffed is None:
+        raise ValueError("这个文件不是图片（按文件头判定；支持 png/jpg/gif/webp/bmp/avif，不收 svg）")
+    ext, _mime = sniffed
+    name = f"{_new_ref_id()}.{ext}"
+    _SHOTS_DIR.mkdir(parents=True, exist_ok=True)
+    (_SHOTS_DIR / name).write_bytes(raw)
+    _prune_shots()
+    return f"/api/assistant/session-image/{name}", len(raw)
+
+
+@router.get("/session-image/{name}")
+def session_image_file(name: str, _user: str = Depends(require_user)) -> FileResponse:
+    """取回 agent 夹在回答里的那张图。
+
+    鉴权是 cookie（见 core/security.require_user），所以正文里的 `<img src>`
+    同源请求会自动带上 —— 不需要前端做任何事。
+    """
+    path = _shot_file(name)
+    if path is None:
+        raise HTTPException(404, "图片不存在或已过期")
+    raw = path.read_bytes()[:16]
+    sniffed = _sniff_image(raw)
+    # 落盘时已经验过一次，这里再验一次是防"盘上的文件被换掉了"：这个出口是同源的，
+    # 端出一个不是图片的东西代价太大，多读 16 字节换这个确定性很划算。
+    mime = sniffed[1] if sniffed else "application/octet-stream"
+    return FileResponse(path, media_type=mime)
+
+
 @router.get("/image/status")
 async def image_status(task_id: str, _user: str = Depends(require_user)) -> dict:
     # Local image jobs (image-to-image edit + synchronous text-to-image) are

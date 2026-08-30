@@ -65,6 +65,18 @@ const TURNS = [
       + "本轮用户上传了 1 张图。图片本体不在你的上下文里，下面是视觉模型逐张读出的内容。\n"
       + "第 1 张（代读模型 qwen-vl、原图句柄 ivyea-ref://0000000000000abcd）：\n一张露营椅的主图。" },
   { role: "assistant", content: "是一张露营椅的主图（图由视觉模型代读成文字后交给我）。" },
+  // Agent 用 show_image 夹进回答里的图。地址是**站内相对路径且带扩展名** ——
+  // 两件事都要验：safeUrl 只放行 http(s)/data:/「/」开头，而裸链接要不要当成图
+  // 是按扩展名判的（looksLikeImage）。所以显式 `![]()` 和裸链接两种写法都摆上，
+  // 模型不会每次都规规矩矩写成图片语法。
+  { role: "user", content: "把你截的那张图给我看看" },
+  { role: "assistant", content:
+      "截好了：\n\n![设置面板](/api/assistant/session-image/1a05105adda00002a949.png)\n\n"
+      // 模型不总会写成 `![]()`，很常见的是把地址单甩一行。那条路走的是
+      // soleImage/looksLikeImage，**按扩展名**判要不要当成图 —— 所以出口的 URL
+      // 必须带 `.png` 这种后缀。（内联在句子中间的地址不会变成图，那是纯文本，
+      // 验过了；工具的 note 因此明确要求模型写成图片语法。）
+      + "再来一张：\n\n/api/assistant/session-image/1a05105adda00002a949.png" },
   { role: "user", content: "帮我跑一下广告巡检" },
   {
     role: "assistant",
