@@ -972,21 +972,30 @@ export type ConsoleSessionRow = {
   updated: number;
   workspace: string;
   owner: string;
-  /** 会话开在哪个板块：任务台 / AI 问答 / 知识库。空 = 未登记的历史会话。 */
+  /** 会话开在哪个板块：任务台 / AI 问答 / 知识库 / 终端。空 = 未登记的历史会话。 */
   source?: ConsoleSource | "";
-  /** false = agent 那边有正文但 ops 没登记归属（悬浮球/CLI 开的，仅管理员可见）。 */
+  /** false = agent 那边有正文但 ops 没登记归属（悬浮球/终端开的，仅管理员可见）。 */
   indexed: boolean;
   /** 这条会话此刻有没有一轮在跑（agent ≥ v1.16.0）。左栏据此打闪烁标记。 */
   running?: boolean;
+  /** 终端会话开在哪个目录（agent 落盘的 cwd）。**只是展示标签，不是工作区**。 */
+  cwd?: string;
 };
 
-/** 三个板块共用 agent 的会话库，靠这个字段区分来源。 */
-export type ConsoleSource = "console" | "assistant" | "brain";
+/**
+ * 共用 agent 会话库的各个入口，靠这个字段区分来源。
+ *
+ * 前三个是 ops 自己的网页板块，会话开出来时就登记了归属；`cli` 不一样 ——
+ * 那是有人在终端里敲 `ivyea chat` 开的，ops 只是从 agent 的共享会话库里读到，
+ * 索引表里多半没有行，来源是服务端按 agent 给的 origin 现推的。
+ */
+export type ConsoleSource = "console" | "assistant" | "brain" | "cli";
 
 export const SOURCE_LABEL: Record<ConsoleSource, string> = {
   console: "任务台",
   assistant: "AI 问答",
   brain: "知识库",
+  cli: "终端",
 };
 
 /**
@@ -1000,6 +1009,8 @@ export const SOURCE_PATH: Record<ConsoleSource, string> = {
   console: "/console",
   assistant: "/console",
   brain: "/brain",
+  // 终端会话就是带工具的 agent 会话，和任务台的完全同构，所以在任务台里打开。
+  cli: "/console",
 };
 
 export type ConsoleWorkspace = {

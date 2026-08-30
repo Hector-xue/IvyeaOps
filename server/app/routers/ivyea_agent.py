@@ -893,12 +893,24 @@ def console_session_list(
     for item in listing:
         sid = str(item.get("id") or "")
         meta = index.get(sid)
+        # agent 落盘时记下的"这条会话是在哪儿开的"。终端里敲 `ivyea chat` 开的会话
+        # 带 origin="cli"；网页开的和装这个字段之前的老会话都是空串。
+        origin = str(item.get("origin") or "")
         if meta is None:
             # 未登记：管理员能看到（机器上的历史会话），普通用户不给。
-            # 按来源筛选时也一并排除：未登记的会话没有来源可判，混进结果里就是噪音。
-            if not is_admin or workspace or source:
+            if not is_admin or workspace:
                 continue
-            meta = {"workspace": "", "title": "", "principal": "", "source": ""}
+            # 终端会话在这里**推得出来源**：agent 标了 origin，不再是"没有来源可判"
+            # 的裸会话，所以按来源筛「终端」时要留下它。其余未登记的会话仍然无源可判，
+            # 一按来源筛就照旧排除 —— 混进结果里就是噪音。
+            #
+            # 注意这里**只读不写**：不顺手把它登记进索引表。register_session 的归属
+            # 是"不覆盖"的，后台顺手登记等于替用户做了一个之后只能手改库才能撤销的
+            # 决定。真要落行，等他自己动手改名时再落（见 console_session_patch）。
+            guessed = "cli" if origin == "cli" else ""
+            if source and source != guessed:
+                continue
+            meta = {"workspace": "", "title": "", "principal": "", "source": guessed}
         preview = console_sessions.clean_preview(item.get("preview") or "")
         rows.append({
             "id": sid,
@@ -910,6 +922,11 @@ def console_session_list(
             "owner": meta.get("principal") or "",
             "source": meta.get("source") or "",
             "indexed": sid in index,
+            # 终端会话开在哪个目录 —— **只作为展示标签**，不是工作区。
+            # 绝不能拿它去建 console_workspaces 行：给工作区绑目录是一次授权
+            # （agent 的文件类工具会落在那儿，本来仅限管理员手动绑），从 cwd
+            # 自动建等于静默把一片文件系统访问面开出去。
+            "cwd": str(item.get("cwd") or ""),
             # 这条会话此刻有没有一轮在跑（老 agent 不回这个字段 → 不显示标记，
             # 而不是画成"已停"）。
             "running": bool(item.get("running")),
@@ -947,6 +964,17 @@ def console_session_patch(session_id: str, body: ConsoleSessionPatch,
     principal, is_admin = _principal_info(info)
     if not console_sessions.can_access(session_id, principal, is_admin):
         raise HTTPException(status_code=403, detail="无权修改他人的会话")
+    # 索引里没这一行的会话（终端里开的、装这套之前就有的）先补一行再改：
+    # update_session 是纯 UPDATE，没有行就**一声不响地什么也不做** —— 用户改完名
+    # 看着像成功了，刷新一下又变回去。这是登记这类会话的唯一时机：他自己动手改名，
+    # 而不是列表接口后台顺手替他决定归属（register_session 的归属不覆盖，
+    # 判错了只能手改库）。
+    if console_sessions.session_row(session_id) is None:
+        detail = _call(svc.chat_sessions, _SESSION_SCAN) or {}
+        origin = next((str(s.get("origin") or "") for s in (detail.get("sessions") or [])
+                       if str(s.get("id") or "") == session_id), "")
+        console_sessions.register_session(session_id, principal,
+                                          source="cli" if origin == "cli" else "console")
     console_sessions.update_session(session_id, title=body.title, workspace=body.workspace)
     return {"ok": True, "session_id": session_id}
 

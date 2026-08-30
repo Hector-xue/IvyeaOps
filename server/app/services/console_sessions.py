@@ -134,10 +134,17 @@ def _m002_add_preset_system(conn: sqlite3.Connection) -> None:
 # 追加即可，永远不要重排或删除已应用过的迁移。
 _MIGRATIONS: tuple = (_m001_add_source, _m002_add_preset_system)
 
-# 会话来源：任务台 / AI 问答 / 知识库对话。三处收编到同一个会话库之后，
-# 左栏靠它区分并筛选。
-SOURCES = ("console", "assistant", "brain")
-SOURCE_LABELS = {"console": "任务台", "assistant": "AI 问答", "brain": "知识库"}
+# 会话来源：任务台 / AI 问答 / 知识库对话 / 终端。前三处是收编进这个会话库的
+# 网页入口，左栏靠它区分并筛选。
+#
+# "cli" 和另外三个不一样：它的会话**不是 ops 开的**，而是有人在终端里敲
+# `ivyea chat` 开的，ops 只是从 agent 的共享会话库里读到它。所以它多半在这张
+# 索引表里**没有行**，来源是从 agent 给的 `origin` 字段现推出来的（见
+# console_session_list）。这里列出它，是为了让"按来源筛选"和登记时的白名单
+# 认得这个值。
+SOURCES = ("console", "assistant", "brain", "cli")
+SOURCE_LABELS = {"console": "任务台", "assistant": "AI 问答",
+                 "brain": "知识库", "cli": "终端"}
 
 
 def _db_path() -> Path:

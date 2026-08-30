@@ -39,6 +39,24 @@ const SESSIONS = TITLES.map((title, i) => ({
   indexed: true,
 }));
 
+/**
+ * 终端里敲 `ivyea chat` 开的会话。形态和网页开的**不一样**，所以单列而不是
+ * 改上面那批的 source：它们在 ops 的索引表里没有行（`indexed:false`、
+ * `owner`/`workspace` 都是空），来源是服务端按 agent 给的 origin 现推的，
+ * 另外多一个 `cwd`。少验任何一条，左栏就可能在"没有归属"这条路上出空白。
+ */
+// 注意 `title` **不能留空**：服务端是 `title = meta.title or preview or sid`，
+// 未登记的会话拿首句摘要顶上，永远送不出空标题。留空验出来的是一条现实里不存在
+// 的空白行（第一版 fixture 就是这么错的，截图里那条终端会话没有标题）。
+const CLI_SESSIONS = [
+  { id: "c1", title: "把这个仓库的测试跑一遍", preview: "把这个仓库的测试跑一遍", turns: 6,
+    updated: Math.floor((now - 5 * 3600_000) / 1000),
+    workspace: "", owner: "", source: "cli", indexed: false, cwd: "/root/ivyea-agent" },
+  { id: "c2", title: "改名过的终端会话", preview: "看下 nginx 配置", turns: 3,
+    updated: Math.floor((now - 27 * 3600_000) / 1000),
+    workspace: "", owner: "admin", source: "cli", indexed: true, cwd: "/etc/nginx" },
+];
+
 /** 一轮真实形态的问答：有执行过程、有 markdown 正文、有表格和代码块。 */
 const TURNS = [
   // 带附图的一轮：存档里留下的是 agent 注入的 `[用户附图 …]` 段落 + 原图句柄。
@@ -432,7 +450,11 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   // 两个工作区 + count，才验得到"折叠了不该冒加载更多"和"计数不是本页条数"这两条。
   // count 是**真实**条数（服务端分页前数的），故意和 SESSIONS 的长度不一致。
   ["/ivyea-agent/console/sessions", {
-    ok: true, sessions: SESSIONS, agent_available: true,
+    // 服务端是按 updated 倒序端出来的，这里也排一遍 —— 让终端会话夹在网页会话
+    // 中间，而不是整齐地垫在最后。"夹在中间"才验得到来源小标在混排下的对齐。
+    ok: true,
+    sessions: [...SESSIONS, ...CLI_SESSIONS].sort((a, b) => b.updated - a.updated),
+    agent_available: true,
     workspaces: [
       { name: "默认工作区", path: "/root", builtin: true, count: 189 },
       { name: "Amazon", path: "/root/amazon-image-workflow", builtin: false, count: 0 },

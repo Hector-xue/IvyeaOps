@@ -39,6 +39,7 @@ const SOURCE_FILTERS: { key: "" | ConsoleSource; label: string }[] = [
   { key: "console", label: SOURCE_LABEL.console },
   { key: "assistant", label: SOURCE_LABEL.assistant },
   { key: "brain", label: SOURCE_LABEL.brain },
+  { key: "cli", label: SOURCE_LABEL.cli },
 ];
 
 /**
@@ -440,7 +441,10 @@ export default function SessionRail({
                 className={"sb-sess" + (r.id === activeSessionId ? " active" : "")}
                 onClick={() => renaming !== r.id && openSession(r)}
                 onDoubleClick={() => { setRenaming(r.id); setDraft(r.title); }}
-                title={r.preview || r.title}
+                /* 终端会话额外把它开在哪个目录挂进 tooltip —— 那是终端会话唯一能
+                   区分彼此的上下文（都叫同一个首句摘要的会话，看目录才知道是哪个
+                   项目里跑的）。不占版面，所以只进 title。 */
+                title={r.cwd ? `${r.preview || r.title}\n目录：${r.cwd}` : (r.preview || r.title)}
               >
                 {renaming === r.id ? (
                   <input

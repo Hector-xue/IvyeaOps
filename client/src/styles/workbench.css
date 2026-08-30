@@ -4323,6 +4323,15 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
   background:color-mix(in srgb,var(--t3) 16%,transparent);color:var(--t3)}
 .sb-sess-src.src-assistant{background:color-mix(in srgb,var(--acc) 14%,transparent);color:var(--acc)}
 .sb-sess-src.src-brain{background:color-mix(in srgb,var(--purple) 14%,transparent)}
+/* 终端会话（终端里敲 `ivyea chat` 开的）。**故意不配色**：--acc 和 --purple 已经
+   被 AI 问答和知识库占了，再引第三个色变量就得逐套主题去核它有没有定义（这里有
+   十九套）。中性底 + 等宽字形足够把"这是终端"读出来，而且一套主题都不会翻车。
+
+   字体栈**写全**，不能只写 var(--font-mono,…)：`--font-mono` 在这个仓库里
+   从头到尾没有被定义过，只写它等于回退到 --font，也就是照样是 sans —— 规则
+   看着在、实际什么也没做（验证台读 computed 抓到的就是这个）。留着这个变量在
+   最前面，是为了以后真定义了它能直接生效。Consolas 是 Windows 上的兜底。 */
+.sb-sess-src.src-cli{font-family:var(--font-mono,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace)}
 
 /* ── 定时任务（pages/workbench/Schedules.tsx）───────────────────────────── */
 .sch-notice{display:flex;gap:8px;align-items:flex-start;margin:10px 0 12px;padding:9px 12px;
