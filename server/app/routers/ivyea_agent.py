@@ -1706,10 +1706,21 @@ async def session_file_extract(
         raise HTTPException(status_code=413, detail="文件过大，会话附件最大 10MB")
     if not data:
         raise HTTPException(status_code=400, detail="文件是空的")
-    out = _call(svc.files_extract, {
-        "filename": file.filename or "upload",
-        "content_base64": base64.b64encode(data).decode("ascii"),
-    })
+    try:
+        out = _call(svc.files_extract, {
+            "filename": file.filename or "upload",
+            "content_base64": base64.b64encode(data).decode("ascii"),
+        })
+    except HTTPException as exc:
+        # 老 agent 没有这个端点 → 它回 404 `not_found`，经 _call 变成一条 502 加一串
+        # 原始报文。**必须翻成人话，而且绝不能静默退回"那就入库吧"** —— 那恰恰是
+        # 被抱怨的那个行为，用户会以为自己只是传了个附件，结果知识库被悄悄写脏。
+        if "not_found" in str(exc.detail or "") or "/v1/files/extract" in str(exc.detail or ""):
+            raise HTTPException(
+                status_code=501,
+                detail="当前 IvyeaAgent 版本还不支持会话附件（需要升级）。"
+                       "升级前，文件只能走「收进知识库」那条路。") from exc
+        raise
     text = str(out.get("text") or "").strip()
     if not text:
         # 抽不出字就明说，别塞一条空壳附件下去 —— 那会让模型以为自己拿到了材料。
