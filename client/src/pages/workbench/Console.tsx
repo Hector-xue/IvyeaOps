@@ -203,6 +203,19 @@ type Turn = {
 };
 
 /**
+ * 一轮的收尾行：「结束于 09:31 · 用时 9.0秒」。两半各自可能缺（跑到一半被打断
+ * 就没有 endedAt），缺哪半就少哪半，都没有就返回空串。
+ *
+ * 它跟着「复制 / 重新生成」那一排走，不再单占一行 —— 只有那排按钮不出现的时候
+ * （回答失败、或只有执行过程没有正文）才退回独立的一行。
+ */
+function turnClockText(t: Turn): string {
+  const ended = t.endedAt ? `结束于 ${clockText(t.endedAt)}` : "";
+  const took = t.elapsedMs ? `用时 ${fmtDuration(t.elapsedMs)}` : "";
+  return ended && took ? `${ended} · ${took}` : ended || took;
+}
+
+/**
  * 一条说出去、但还没被这一轮读到的追加指令。
  *
  * `agentId` 是 agent 收下时给的编号 —— 一轮结束后靠它认领"哪几条真被读到了"，
@@ -1551,6 +1564,7 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
                       {t.text && !t.running && !t.failed && (
                         <AnswerActions
                           text={t.text}
+                          meta={turnClockText(t)}
                           onRegenerate={
                             // 往回找**最近的**那条提问，不能只看前面一格：一次提问
                             // 常常对应好几个 assistant 轮次（agent 边做边说，中间
@@ -1654,13 +1668,13 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
                           </div>
                         </div>
                       )}
-                      {/* 一轮的收尾时刻与时长。刷新之后也在（数来自 agent 的 turn_times）。 */}
-                      {!t.running && (t.endedAt || t.elapsedMs) && (
-                        <div className="cc-turn-clock">
-                          {t.endedAt ? `结束于 ${clockText(t.endedAt)}` : ""}
-                          {t.endedAt && t.elapsedMs ? " · " : ""}
-                          {t.elapsedMs ? `用时 ${fmtDuration(t.elapsedMs)}` : ""}
-                        </div>
+                      {/*
+                        * 一轮的收尾时刻与时长。刷新之后也在（数来自 agent 的 turn_times）。
+                        * **正常情况下它在上面那排「复制 / 重新生成」里**，这里只兜没有
+                        * 那排按钮的两种轮次：回答失败的，和只有执行过程没有正文的。
+                        */}
+                      {!t.running && !(t.text && !t.failed) && (t.endedAt || t.elapsedMs) && (
+                        <div className="cc-turn-clock">{turnClockText(t)}</div>
                       )}
                     </div>
                   ),

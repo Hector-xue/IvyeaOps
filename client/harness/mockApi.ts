@@ -647,6 +647,17 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
                    usage: { prompt_tokens: 24_600, completion_tokens: 1_180,
                             prompt_cache_hit_tokens: 12_300, llm_ms: 31_500 } },
         }),
+        // 逐轮时刻表。**不铺这条，回答末尾那行「结束于 09:31 · 用时 9.0秒」在
+        // 验证台里就一次都出不来** —— 恢复出来的轮次身上没有前端自己掐的表，
+        // 时刻全靠 agent 落盘的 turn_times 带回来（见 lib/sessionRestore）。
+        // 四轮各给一个不同的时长：1 秒以内 / 几秒 / 一分多 / 二十多分钟，
+        // 四种量级的文案长度都不一样，排版只在最长的那种上才看得出问题。
+        turn_times: [
+          { turn: 0, started_at: now - 96 * 60_000, ended_at: now - 96 * 60_000 + 800, ms: 800 },
+          { turn: 1, started_at: now - 94 * 60_000, ended_at: now - 94 * 60_000 + 9_000, ms: 9_000 },
+          { turn: 2, started_at: now - 90 * 60_000, ended_at: now - 90 * 60_000 + 78_000, ms: 78_000 },
+          { turn: 3, started_at: now - 60 * 60_000, ended_at: now - 60 * 60_000 + 1_412_000, ms: 1_412_000 },
+        ],
         context: {
           used: 1520 + 6910 + messages, window: 128000,
           percent: Number((((1520 + 6910 + messages) * 100) / 128000).toFixed(2)),
