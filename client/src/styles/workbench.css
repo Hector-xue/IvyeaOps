@@ -2458,7 +2458,12 @@ body::after{
 .hs-test-btn{flex-shrink:0;padding:3px 9px;font-size:var(--fs-105);font-family:var(--font);border:1px solid var(--b2);background:var(--bg2);color:var(--t2);border-radius:4px;cursor:pointer;transition:all .12s;white-space:nowrap}
 .hs-test-btn:hover:not(:disabled){color:var(--blue);border-color:var(--blue)}
 .hs-test-btn:disabled{opacity:.55;cursor:not-allowed}
-.hs-test-result{font-size:var(--fs-105);line-height:1.5;padding:2px 8px;border-radius:3px;flex:1;min-width:0;word-break:break-word}
+/* 结果条的 flex-basis 必须是**一个真实宽度**，不能是 0。写 flex:1 时它的假想宽度是 0，
+   于是永远不触发换行，只能吃按钮剩下的那点空隙 —— 在窄卡片（.hs-agent-grid 的 1fr 列）
+   里那点空隙只有 50 来 px，长文案（"内置 IvyeaAgent 随 IvyeaOps 一起更新——…"）被压成
+   一行一个字，把卡撑到 700px 高，还顺带把同排的卡一起拉高（align-items:stretch）。
+   给 200px 基准之后，挤不下就整条换到按钮下一行、占满整列宽。 */
+.hs-test-result{font-size:var(--fs-105);line-height:1.5;padding:2px 8px;border-radius:3px;flex:1 1 200px;min-width:0;word-break:break-word}
 .hs-test-result.ok{color:var(--acc);background:color-mix(in srgb, var(--acc) 8%, transparent);border:1px solid color-mix(in srgb, var(--acc) 25%, transparent)}
 .hs-test-result.err{color:var(--red);background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.25)}
 

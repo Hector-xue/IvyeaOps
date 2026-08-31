@@ -8,6 +8,7 @@ import {
   startAgentUpgrade, getAgentUpgradeProgress, slotModelCatalog,
   getFeishuStatus, feishuAction, getAmazonStatus, saveAmazonConfig, amazonAction,
   type HubSettings, type HealthResp, type TestResult, type SelfCheckResp,
+  type AgentVersionResp,
   type FeishuStatus, type FeishuPatrolJob,
   type AmazonStatus, type AmazonMarketplace, type AmazonVerifyResp,
 } from "../../api/settings";
@@ -948,14 +949,33 @@ function AgentUpdateRow() {
   const [percent, setPercent] = useState(0);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const timer = useRef<number | null>(null);
-  const load = () => {
+  const apply = (r: AgentVersionResp) => {
+    setVer(r.installed || r.version || "");
+    setLatest(r.latest || "");
+    setHasUpd(!!r.update_available);
+    setFrozen(!!r.frozen);
+    setLatestKnown(r.latest_known !== false);
+  };
+  const load = () => { getAgentVersion().then(apply).catch(() => setVer("")); };
+
+  /**
+   * 内置（frozen）构建下的「重新检查」。
+   *
+   * 这一档**没有"独立升级"这回事**：点原来的「检查并更新」，后端只会立刻回一段
+   * "内置 IvyeaAgent 随 IvyeaOps 一起更新——请用左下角的「更新」…"，和卡片说明里
+   * 那句一字不差。在一张 180px 宽的卡里把同一句话再说一遍，卡片被撑到 700px 高，
+   * 同排两张还跟着一起拉高（align-items:stretch）。所以这一档只保留"检查"这半件
+   * 事：重新拉一次版本号，结果一行话说完。
+   */
+  const recheck = () => {
+    setBusy(true); setMsg(null);
     getAgentVersion().then(r => {
-      setVer(r.installed || r.version || "");
-      setLatest(r.latest || "");
-      setHasUpd(!!r.update_available);
-      setFrozen(!!r.frozen);
-      setLatestKnown(r.latest_known !== false);
-    }).catch(() => setVer(""));
+      apply(r);
+      setMsg({ ok: true, text: r.update_available
+        ? `有新版 ${r.latest || "?"}`
+        : `已是最新（${r.installed || r.version || "未知"}）` });
+    }).catch(e => setMsg({ ok: false, text: errText(e, "检查失败") }))
+      .finally(() => setBusy(false));
   };
   useEffect(load, []);
   useEffect(() => () => { if (timer.current) window.clearInterval(timer.current); }, []);
@@ -1003,10 +1023,12 @@ function AgentUpdateRow() {
           ? "（暂时无法连 GitHub 检查最新版，可能网络问题，稍后再试）。"
           : hasUpd
             ? (frozen
-                ? "，有新版：内置 IvyeaAgent 随 IvyeaOps 一起更新——请用左下角「更新」升级 IvyeaOps 即可获得。"
+                ? "，有新版：内置版本随 IvyeaOps 一起更新，请点左下角「更新」升级。"
                 : "，点「检查并更新」升级。")
             : "（已是最新）。"}
-        {frozen && <>{" "}<span style={{ color: "var(--t3)" }}>（内置版本，随 IvyeaOps 更新）</span></>}
+        {/* 上面那句已经把"随 IvyeaOps 更新"说清楚了，就别再缀一遍 —— 这张卡只有
+            180px 宽，重复一句就是多占三四行。只有没提到它的时候才补这个尾巴。 */}
+        {frozen && !hasUpd && <>{" "}<span style={{ color: "var(--t3)" }}>（内置版本，随 IvyeaOps 更新）</span></>}
       </div>
       {busy && (
         <div style={{ margin: "8px 0" }}>
@@ -1017,8 +1039,8 @@ function AgentUpdateRow() {
         </div>
       )}
       <div className="hs-test-row" style={{ marginTop: 6 }}>
-        <button className="hs-test-btn" onClick={run} disabled={busy} type="button">
-          {busy ? "更新中…" : "检查并更新"}
+        <button className="hs-test-btn" onClick={frozen ? recheck : run} disabled={busy} type="button">
+          {busy ? (frozen ? "检查中…" : "更新中…") : (frozen ? "重新检查" : "检查并更新")}
         </button>
         {msg && <span className={"hs-test-result " + (msg.ok ? "ok" : "err")}>{msg.ok ? "✓" : "✗"} {msg.text}</span>}
       </div>

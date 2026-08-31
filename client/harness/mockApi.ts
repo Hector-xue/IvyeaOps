@@ -673,6 +673,24 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
     health: { version: new URLSearchParams(location.search).get("oldagent") === "1" ? "1.15.1" : "1.15.4",
               model: { model: "deepseek-v4-pro" } },
   })],
+  // 版本卡片 + 一键更新。**默认装成 Windows 内置（frozen）且有新版** —— 这一档的
+  // 结果文案最长（"内置 IvyeaAgent 随 IvyeaOps 一起更新——请用左下角的「更新」…"），
+  // 版式一旦收不住，就是它把「版本与更新」这张卡撑得老高、连带拉高同排两张。
+  // ?agentfrozen=0 换成可独立升级的源码装（结果文案很短，验的是另一端）。
+  ["/ivyea-agent/version", () => {
+    const frozen = new URLSearchParams(location.search).get("agentfrozen") !== "0";
+    return { version: "1.16.3", installed: "1.16.3", latest: "1.16.4", latest_known: true,
+             frozen, update_available: true, available: true };
+  }],
+  ["/ivyea-agent/upgrade", { started: true }],
+  // 进度直接给终局（done）：要验的是"结果文案怎么排版"，不是进度条动画。
+  ["/ivyea-agent/upgrade/progress", () => {
+    const frozen = new URLSearchParams(location.search).get("agentfrozen") !== "0";
+    return frozen
+      ? { phase: "done", percent: 100, before: "1.16.3", after: "1.16.3", ok: true,
+          note: "内置 IvyeaAgent 随 IvyeaOps 一起更新——请用左下角的「更新」升级 IvyeaOps 即可。" }
+      : { phase: "done", percent: 100, before: "1.16.3", after: "1.16.4", ok: true, note: "" };
+  }],
   // 模型选择器的数据源。**必须有没配 key 的那几家**：面板把它们收进「未配置密钥」
   // 分组，那一段的样式只在这种数据下才渲染得出来。
   // 订阅登录：**三种流程各留一个**（device / paste / token），还要留"已登录"和
@@ -780,6 +798,10 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   }],
   // 亚马逊官方 API。**故意给"凭据配好了、站点只配了一半"**：
   // 全绿的话，未配置态和逐步自检那两条分支根本渲染不到。
+  // 每个字段旁边的「测试」。detail **必须够长**：短句在哪种排版下都好看，只有长句
+  // 才逼得出结果条的换行 —— .hs-key-inline 那一档（密钥输入框和按钮挤在同一排）
+  // 只剩几十像素给结果条，验的就是它到底会换行还是把这一排顶出去。
+  ["/settings/test", { ok: true, detail: "连通正常：api.apimart.ai，模型 gpt-image-2 可用（耗时 1.2s）" }],
   ["/settings/amazon", () => ({
     ok: true, configured: true, ads_configured: false, ads_uses_own_app: false,
     region: "eu", spapi_host: "https://sellingpartnerapi-eu.amazon.com",
