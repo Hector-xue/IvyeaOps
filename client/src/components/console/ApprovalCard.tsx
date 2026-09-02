@@ -29,15 +29,74 @@ function parsePreview(preview: string): { intro: string[]; items: string[] } {
 
 const PRIMARY_KEYS = new Set(["approve", "session"]);
 
+/** 没带选项的请求按"确认/取消"两档兜底 —— 卡片和回执要认同一份，不能各写一份。 */
+const FALLBACK_OPTIONS = [{ key: "approve", label: "确认继续" }, { key: "deny", label: "取消" }];
+
+const optionsOf = (req: IvyeaPermissionRequest) =>
+  req.options?.length ? req.options : FALLBACK_OPTIONS;
+
+const isDeny = (choice: string) => choice === "deny" || choice === "abort";
+
+export type ApprovalEntry = { req: IvyeaPermissionRequest; decision?: string };
+
+export type ApprovalGroup =
+  | { kind: "pending"; key: string; req: IvyeaPermissionRequest }
+  | { kind: "done"; key: string; decision: string; label: string; count: number };
+
+/**
+ * 把**连着的、同一种决定**的回执并成一条。
+ *
+ * 「本会话同类都批准」这一档下，一轮里 agent 会连着批十几次，每次落一条回执；
+ * 一条一张卡的话屏幕就全是它了（用户原话："授权十来次，那整个屏幕都被这个给
+ * 占满了"）。回执本身只有"批过了"这一点信息量，连着的同一种决定合并成
+ * 「已确认 3 次：本会话同类都批准」不丢任何东西。
+ *
+ * **只并连着的**：中间夹一张还没决定的卡就断开。这一列是时间线，把它前后的东西
+ * 并到一起就等于在撒谎。
+ */
+export function groupApprovals(rows: ApprovalEntry[]): ApprovalGroup[] {
+  const out: ApprovalGroup[] = [];
+  rows.forEach((row, i) => {
+    if (!row.decision) {
+      out.push({ kind: "pending", key: row.req.request_id || `p${i}`, req: row.req });
+      return;
+    }
+    const last = out[out.length - 1];
+    if (last?.kind === "done" && last.decision === row.decision) { last.count += 1; return; }
+    const label = optionsOf(row.req).find((o) => o.key === row.decision)?.label || row.decision;
+    out.push({ kind: "done", key: row.req.request_id || `d${i}`,
+               decision: row.decision, label, count: 1 });
+  });
+  return out;
+}
+
+/**
+ * 已决策的回执 —— **一行，不是一张卡**。
+ *
+ * 它原来直接套 .cs-approval：column 布局 + 边框 + 11px 内边距，于是 ✓ 和文字各
+ * 占一行，一条回执就是一张 ~90px 高的框。回执要传达的只有"批过了"，一行足够。
+ */
+export function ApprovalReceipt({ decision, label, count = 1 }: {
+  decision: string;
+  label: string;
+  /** 合并了几条（见 groupApprovals）。1 时不显示次数。 */
+  count?: number;
+}) {
+  const denied = isDeny(decision);
+  return (
+    <div className={"cs-approval-done" + (denied ? " is-deny" : "")}>
+      <span className="cs-icon">{denied ? "✕" : "✓"}</span>
+      <span>已{denied ? "取消" : "确认"}{count > 1 ? ` ${count} 次` : ""}：{label}</span>
+    </div>
+  );
+}
+
 export default function ApprovalCard({
   request,
   onDecide,
-  decided,
 }: {
   request: IvyeaPermissionRequest;
   onDecide: (choice: string) => void;
-  /** 已经做过决定：卡片转为只读回执，不再可点。 */
-  decided?: string;
 }) {
   const { intro, items } = useMemo(() => parsePreview(request.preview), [request.preview]);
   // 勾选状态目前只影响「用户读没读」的确认感：agent 侧的这一步是整体批准 /
@@ -60,19 +119,7 @@ export default function ApprovalCard({
   }, [request.expires_at]);
 
   const allChecked = items.length === 0 || items.every((_, i) => checked[i]);
-  const options = request.options?.length
-    ? request.options
-    : [{ key: "approve", label: "确认继续" }, { key: "deny", label: "取消" }];
-
-  if (decided) {
-    const label = options.find((o) => o.key === decided)?.label || decided;
-    return (
-      <div className="cs-approval cs-approval-done">
-        <span className="cs-icon">{decided === "deny" || decided === "abort" ? "✕" : "✓"}</span>
-        <span>已{decided === "deny" || decided === "abort" ? "取消" : "确认"}：{label}</span>
-      </div>
-    );
-  }
+  const options = optionsOf(request);
 
   return (
     <div className={"cs-approval" + (request.destructive ? " cs-destructive" : "")}>

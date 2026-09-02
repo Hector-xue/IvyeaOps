@@ -1571,6 +1571,16 @@ export function installMockApi(): void {
    * 永远不会执行，而症状是"验证台里什么都没发生"，根本看不出是开关掉了。
    */
   const wantFollowups = new URLSearchParams(location.search).get("followups") === "1";
+  /**
+   * 审批与"整段重抄"两档同理，**必须在装配时读**。
+   *
+   * 原来的 `?approval=1` 是在流里现读 location.search 的 —— 而任务台拿到
+   * session_id 之后就 `navigate("/console?session=…", {replace:true})` 把地址栏整个
+   * 换掉了，等流跑到审批那一段，参数早就不在地址里。症状是"加了参数什么都没发生"，
+   * 看不出是开关掉了。（这条坑上面那段注释已经写过一次，这里是第二次踩。）
+   */
+  const wantApprovals = Number(new URLSearchParams(location.search).get("approval") || 0);
+  const wantRestate = new URLSearchParams(location.search).get("restate") === "1";
 
   /** 一段真的 SSE —— 兜底通道读的是流，喂 JSON 它一个字也解不出来。 */
   const sse = (chunks: string[]) => new Response(
@@ -1685,18 +1695,47 @@ export function installMockApi(): void {
         // ?approval=1 时插一张确认卡。**它此前在验证台里根本渲染不出来** ——
         // 假流从不发 permission_request，于是"审批档位选了放行、卡片长什么样、
         // 点了确认之后流怎么继续"这一整条最要紧的链路，一次都没被验过。
-        if (new URLSearchParams(location.search).get("approval") === "1") {
+        // ?approval=1 一张；**?approval=3 连发三张** —— 「本会话都允许」那一档下
+        // 一轮里连批十几次是常态，而"十几条回执堆在一起长什么样"只有连发才验得到。
+        for (let n = 1; n <= wantApprovals; n++) {
           await beat(500);
           send("permission_request", {
-            request_id: "req-demo-1", session_id: "s-live", op_type: "lingxing_write",
-            title: "把 3 个搜索词加为否定关键词", destructive: true,
+            request_id: `req-demo-${n}`, session_id: "s-live", op_type: "lingxing_write",
+            title: `把 3 个搜索词加为否定关键词（第 ${n} 批）`, destructive: true,
             preview: "广告活动：Trail Camera - Auto\n否词：cheap camera / free camera / camera app",
             options: [{ key: "approve", label: "批准这一次" },
-                      { key: "session", label: "本会话都允许" },
+                      { key: "session", label: "本会话同类都批准" },
                       { key: "deny", label: "拒绝" }],
             expires_at: Math.floor(Date.now() / 1000) + 600,
           });
           await beat(2500);
+        }
+        // ── 模型把同一段结论整段重抄 ──────────────────────────────────
+        // ?restate=1 装成 z-ai/glm-5.3-flash 那种毛病：每次工具调用之后把已经说过
+        // 的那张表从头再写一遍，只在末尾添一行。**不铺这一段，"同一张表连出三遍"
+        // 在验证台里根本复现不出来**，去重规则也就无从验证。
+        // 三稿：4 行 → 5 行（前缀扩写）→ 5 行（一字不差的完全重复），两种都要覆盖。
+        if (wantRestate) {
+          const head = "\n\n| 事项 | 结论 |\n| --- | --- |\n"
+            + "| AI 生图链路 | 你额度用完，暂不可用 |\n"
+            + "| 程序化作图 | 可行：宿主机 Python + Pillow |\n"
+            + "| matplotlib | 未安装（需要的话 `pip install matplotlib` 可解锁更快的图表绘制） |\n"
+            + "| run_python | 是隔离沙箱，文件不落盘，出图不能用 |\n";
+          const more = "| 图表内嵌聊天渲染 | 需要管理员在「任务台 → 工作区」绑定目录，当前未绑定 |\n";
+          const drafts = [head, head + more, head + more];
+          for (let n = 0; n < drafts.length; n++) {
+            if (n > 0) {
+              send("step", { type: "step", id: `rs${n}`, seq: 10 + n, phase: "tool",
+                             name: "执行命令", tool: "run_shell", status: "running" });
+              await beat(400);
+              send("step", { type: "step", id: `rs${n}`, seq: 10 + n, phase: "tool",
+                             name: "执行命令", tool: "run_shell", status: "ok", ms: 400 });
+              send("answer_reset", { reason: "tool_call" });
+            }
+            await beat(300);
+            send("token", { text: drafts[n] });
+            await beat(500);
+          }
         }
         // ── 选项卡 + 追加指令 ─────────────────────────────────────────
         // ?followups=1 时铺这一段。两件事在验证台里都必须**真的发生过**，否则

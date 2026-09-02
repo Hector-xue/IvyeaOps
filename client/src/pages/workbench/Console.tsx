@@ -33,7 +33,7 @@ import TurnBody from "../../components/console/TurnBody";
 import StatsBar from "../../components/console/StatsBar";
 import ContextMeter from "../../components/console/ContextMeter";
 import DockMeta from "../../components/console/DockMeta";
-import ApprovalCard from "../../components/console/ApprovalCard";
+import ApprovalCard, { ApprovalReceipt, groupApprovals } from "../../components/console/ApprovalCard";
 import QuestionCard from "../../components/console/QuestionCard";
 import Composer, { approvalPayload, type ApprovalMode, type ComposerDoc, type ComposerRef, type ComposerValue } from "../../components/console/Composer";
 import ArtifactRail, { type RailApproval, type RailTodo } from "../../components/console/ArtifactRail";
@@ -1612,13 +1612,17 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
                           </button>
                         </div>
                       )}
-                      {(t.approvals || []).map(({ req, decision }) => (
-                        <ApprovalCard
-                          key={req.request_id}
-                          request={req}
-                          decided={decision}
-                          onDecide={(choice) => void decide(t.id, req, choice)}
-                        />
+                      {/* 已决策的回执合并成一行（见 groupApprovals）：一轮里连批
+                          十几次的话，一次一张卡会把整屏占满。 */}
+                      {groupApprovals(t.approvals || []).map((g) => (
+                        g.kind === "done"
+                          ? <ApprovalReceipt key={g.key} decision={g.decision}
+                                             label={g.label} count={g.count} />
+                          : <ApprovalCard
+                              key={g.key}
+                              request={g.req}
+                              onDecide={(choice) => void decide(t.id, g.req, choice)}
+                            />
                       ))}
                       {/*
                         * 这一轮跑到一半时用户补的话。它**不是**执行步骤，所以不能只

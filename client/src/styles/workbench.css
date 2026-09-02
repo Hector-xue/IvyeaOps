@@ -3745,6 +3745,14 @@ button.af-line:hover{background:var(--bg2)}
   display:flex;flex-direction:column;gap:8px}
 .cs-approval.cs-destructive{border-color:rgba(245,158,11,.45);
   box-shadow:0 0 0 1px rgba(245,158,11,.08)}
+/* 已决策的回执：**一行**。它原来直接套 .cs-approval —— column 布局 + 边框 +
+   11px 内边距 —— 于是 ✓ 和文字各占一行，一条回执就是一张 ~90px 高的卡。而
+   「本会话同类都批准」那一档一轮里能连批十几次，屏幕就全被它占满了。
+   （连着的同一种决定还会先被 groupApprovals 并成一条。） */
+.cs-approval-done{display:flex;align-items:center;gap:6px;padding:1px 0;
+  font-size:var(--fs-9);color:var(--t3);line-height:1.6}
+.cs-approval-done .cs-icon{color:var(--acc);flex-shrink:0}
+.cs-approval-done.is-deny .cs-icon{color:var(--red)}
 .cs-approval-head{display:flex;align-items:center;gap:7px;font-size:var(--fs-12);color:var(--t)}
 .cs-approval-head .cs-icon{color:var(--amber)}
 .cs-approval-timer{margin-left:auto;font-size:var(--fs-10);color:var(--t3)}
