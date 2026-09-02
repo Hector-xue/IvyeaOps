@@ -1515,6 +1515,9 @@ export function installMockApi(): void {
           })()
         : full.startsWith("/ivyea-agent/chat/cancel")
         ? (((stopped.at = Date.now())), { ok: true, cancelled: true })
+      : full.startsWith("/ivyea-agent/memory/irrelevant")
+      ? (() => { (window as any).__irrelevant = [...((window as any).__irrelevant || []),
+                                                 (body as any)?.key]; return { ok: true }; })()
       : full.startsWith("/ivyea-agent/chat/question")
           ? (((window as any).__lastQuestionAnswer = body), { ok: true })
           : match(full || config.url || ""),
@@ -1623,6 +1626,11 @@ export function installMockApi(): void {
                         approval: "none", read_only: true });
         // 上下文用量：真 agent 在第一个 token 之前就发一份，收尾再发一份（见
         // service.chat_stream）。验证台不铺这条，上下文进度条就永远验不到。
+        // 开口前的自动召回。活动行里画成一行"回忆了 N 条"，每条后面挂一个"×" ——
+        // 验证台必须真发这个事件，否则"点一下说这条没关系"那条路没法在真实组件树上验。
+        send("memory_recall", { session_id: "s-live", count: 2,
+                                names: ["reference/DeepSeek harness 凭据配置位置",
+                                        "project/ivyea-ops console 双卡合并口径"] });
         send("context", { used: 9860, window: 128000, percent: 7.7, estimated: true,
                           model: "deepseek-v4-pro",
                           breakdown: { system: 1520, tools: 6910, messages: 1430 } });
