@@ -6,9 +6,9 @@
  * "只有这条用例莫名其妙挂了"的形式出现。
  *
  * 不用 --remote-debugging-pipe：Chrome 147 起那条路会以
- * "Crashing due to FD ownership violation" 直接崩掉（本机实测，那条老 E2E
- * knowledge-governance.mjs 现在就是这么跑不起来的）。调试端口 + WebSocket
- * 走的是同一套协议。
+ * "Crashing due to FD ownership violation" 直接崩掉（本机实测）。调试端口 +
+ * WebSocket 走的是同一套协议。knowledge-governance.mjs 曾经因为自带一份 pipe 版
+ * 实现而整条跑不起来，现在也用这里的 WsCDP —— **新用例不要再自己写一套**。
  */
 import { spawn } from "node:child_process";
 
@@ -103,7 +103,13 @@ export async function evaluate(send, expression) {
   const { result, exceptionDetails } = await send("Runtime.evaluate", {
     expression, returnByValue: true, awaitPromise: true,
   });
-  if (exceptionDetails) throw new Error(exceptionDetails.text || "evaluate failed");
+  // 报错要带上**堆栈和这段表达式**。exceptionDetails.text 多数时候就是干巴巴一个
+  // "Uncaught"，拿着它没法知道是哪一句、错在哪 —— 实测为了定位一次 null.click()
+  // 只能靠反复注释代码试。description 里有真正的错误和堆栈。
+  if (exceptionDetails) {
+    const detail = exceptionDetails.exception?.description || exceptionDetails.text || "evaluate failed";
+    throw new Error(`${detail}\n  ↳ 表达式：${expression.replace(/\s+/g, " ").slice(0, 200)}`);
+  }
   return result.value;
 }
 

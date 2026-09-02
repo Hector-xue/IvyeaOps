@@ -1,95 +1,26 @@
+/**
+ * 知识治理中心的浏览器 E2E。
+ *
+ * 页面不走验证台的 vite，而是直接加载 `dist/index.html`（file:// + Fetch 域拦截
+ * 把 /api/* 全部就地填掉）—— 这条用例验的是**构建产物**能不能跑起来。
+ *
+ * CDP 走共用的 e2e/cdp.mjs（调试端口 + WebSocket）。它原来自带一份
+ * `--remote-debugging-pipe` 的实现，Chrome 147 起那条路会以
+ * "Crashing due to FD ownership violation" 直接崩掉 —— 症状是连一条断言都跑不到，
+ * 死在 Page.navigate 的超时上。cdp.mjs 当初就是为了绕开这件事抽出来的。
+ *
+ * 跑：node e2e/knowledge-governance.mjs
+ *     IVYEA_E2E_SKIP_BUILD=1 跳过 npm run build（dist 已经是新的时候用）
+ */
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+import { WsCDP, chromeArgs, evaluate, waitFor } from "./cdp.mjs";
 
-class PipeCDP {
-  constructor(process) {
-    this.process = process;
-    this.input = process.stdio[3];
-    this.output = process.stdio[4];
-    this.nextId = 1;
-    this.pending = new Map();
-    this.listeners = new Map();
-    this.buffer = Buffer.alloc(0);
-    this.stderr = "";
-    process.stderr.on("data", (chunk) => { this.stderr += chunk.toString("utf8"); });
-    const rejectPending = (error) => {
-      for (const pending of this.pending.values()) pending.reject(error);
-      this.pending.clear();
-    };
-    this.input.on("error", (cause) => rejectPending(new Error(`Chrome input pipe failed: ${cause.message}`)));
-    this.output.on("error", (cause) => rejectPending(new Error(`Chrome output pipe failed: ${cause.message}`)));
-    process.on("exit", (code, signal) => {
-      const error = new Error(
-        `Chrome exited before E2E completion (code=${code}, signal=${signal}): ${this.stderr.slice(-2000)}`,
-      );
-      rejectPending(error);
-    });
-    process.on("error", (cause) => {
-      const error = new Error(`Chrome failed to start: ${cause.message}`);
-      rejectPending(error);
-    });
-    this.output.on("data", (chunk) => this.consume(chunk));
-  }
-
-  consume(chunk) {
-    this.buffer = Buffer.concat([this.buffer, chunk]);
-    let boundary;
-    while ((boundary = this.buffer.indexOf(0)) >= 0) {
-      const raw = this.buffer.subarray(0, boundary).toString("utf8");
-      this.buffer = this.buffer.subarray(boundary + 1);
-      if (!raw) continue;
-      const message = JSON.parse(raw);
-      if (message.id) {
-        const pending = this.pending.get(message.id);
-        if (!pending) continue;
-        this.pending.delete(message.id);
-        if (message.error) pending.reject(new Error(message.error.message));
-        else pending.resolve(message.result || {});
-        continue;
-      }
-      for (const listener of this.listeners.get(message.method) || []) {
-        listener(message.params || {}, message.sessionId || "");
-      }
-    }
-  }
-
-  send(method, params = {}, sessionId = "", timeout = 15_000) {
-    const id = this.nextId++;
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        if (!this.pending.delete(id)) return;
-        reject(new Error(
-          `CDP request timed out after ${timeout}ms (${method}): ${this.stderr.slice(-2000)}`,
-        ));
-      }, timeout);
-      this.pending.set(id, {
-        resolve: (value) => {
-          clearTimeout(timer);
-          resolve(value);
-        },
-        reject: (error) => {
-          clearTimeout(timer);
-          reject(error);
-        },
-      });
-      const message = { id, method, params };
-      if (sessionId) message.sessionId = sessionId;
-      this.input.write(`${JSON.stringify(message)}\0`);
-    });
-  }
-
-  on(method, listener) {
-    const rows = this.listeners.get(method) || [];
-    rows.push(listener);
-    this.listeners.set(method, rows);
-  }
-}
 
 const governance = {
   ok: true,
@@ -170,29 +101,13 @@ function apiPayload(url, method) {
   return {};
 }
 
-async function evaluate(send, expression) {
-  const result = await send("Runtime.evaluate", {
-    expression,
-    awaitPromise: true,
-    returnByValue: true,
-  });
-  if (result.exceptionDetails) throw new Error(result.exceptionDetails.text || "browser evaluation failed");
-  return result.result?.value;
-}
-
-async function waitFor(send, expression, label, timeout = 20_000) {
-  const deadline = Date.now() + timeout;
-  while (Date.now() < deadline) {
-    if (await evaluate(send, expression)) return;
-    await delay(100);
-  }
-  throw new Error(`timed out waiting for ${label}`);
-}
-
 async function setValue(send, selector, value) {
   await evaluate(send, `(() => {
     const element = document.querySelector(${JSON.stringify(selector)});
-    if (!element) throw new Error("missing element: ${selector}");
+    // 选择器要**再序列化一次**才能拼进这句报错里：这些 data-testid 选择器自带双引号，
+    // 直接插进字符串字面量会把它提前闭合，整段表达式变成语法错误 —— 而语法错误是在
+    // 解析时炸的，元素在不在根本轮不到判断，报出来的也只是一句 "missing )"。
+    if (!element) throw new Error("missing element: " + ${JSON.stringify(selector)});
     const proto = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype
       : element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(proto, "value").set.call(element, ${JSON.stringify(value)});
@@ -226,13 +141,7 @@ async function run() {
     </script><script type="module"`);
 
   const profile = await mkdtemp(path.join(os.tmpdir(), "ivyea-knowledge-e2e-"));
-  const chrome = spawn("google-chrome", [
-    "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
-    "--disable-breakpad", "--disable-crash-reporter", "--disable-crashpad-for-testing", "--noerrdialogs",
-    "--allow-file-access-from-files", "--disable-web-security", "--remote-debugging-pipe",
-    `--user-data-dir=${profile}`, "about:blank",
-  ], { stdio: ["ignore", "ignore", "pipe", "pipe", "pipe"] });
-  const cdp = new PipeCDP(chrome);
+  const { cdp, chrome } = await WsCDP.launch(chromeArgs(profile));
   try {
     const { targetId } = await cdp.send("Target.createTarget", { url: "about:blank" });
     const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
@@ -248,6 +157,17 @@ async function run() {
       if (request.url.startsWith("file:///brain")) {
         body = appHtml;
         contentType = "text/html; charset=utf-8";
+      } else if (request.url.startsWith("file:///assets/")) {
+        // 懒加载分块的 CSS/JS。index.html 里那些 "/assets/…" 上面已经改写成绝对
+        // file:// 地址了，但 **vite 运行时自己算的那一份没经过改写** —— 它按站点根
+        // 拼出 /assets/Brain-*.css，在 file:// 下就是 file:///assets/…，取不到就是
+        // 一句 "Unable to preload CSS for /assets/Brain-*.css"，整页变「页面渲染出错」。
+        // 这条分支就是把它们指回 dist/assets。
+        const name = path.basename(new URL(request.url).pathname);
+        body = await readFile(path.join(dist, "assets", name));
+        contentType = name.endsWith(".css") ? "text/css; charset=utf-8"
+          : name.endsWith(".js") ? "text/javascript; charset=utf-8"
+          : "application/octet-stream";
       } else {
         body = JSON.stringify(apiPayload(request.url, request.method));
         contentType = "application/json; charset=utf-8";
@@ -267,35 +187,47 @@ async function run() {
       send("Runtime.enable"),
       send("Fetch.enable", { patterns: [
         { urlPattern: "file:///brain*", requestStage: "Request" },
+        { urlPattern: "file:///assets/*", requestStage: "Request" },
         { urlPattern: "https://ivyea-e2e.local/api/*", requestStage: "Request" },
       ] }),
     ]);
     await send("Page.navigate", { url: "file:///brain?tab=governance" });
-    await waitFor(send, `document.body.innerText.includes("IvyeaAgent 知识治理中心")`, "governance center");
+    // **要先等文档本身出现**：navigate 返回只代表请求发出去了，这一刻 document.body
+    // 还可能是 null，而 waitFor 里的表达式一抛异常就直接失败、不会重试。
+    await waitFor(send, `!!document.body`, "文档就绪", 20_000);
+    await waitFor(send, `document.body.innerText.includes("IvyeaAgent 知识治理中心")`, "governance center", 20_000);
     assert.equal(await evaluate(send, `document.body.innerText.includes("41/41")`), true);
 
     await evaluate(send, `document.querySelector('[data-testid="knowledge-view-evidence"]').click()`);
-    await waitFor(send, `!!document.querySelector('[data-testid="knowledge-evidence-view"]')`, "evidence view");
+    await waitFor(send, `!!document.querySelector('[data-testid="knowledge-evidence-view"]')`, "evidence view", 20_000);
     await setValue(send, '[data-testid="evidence-kind"]', "settlement_report");
     await setValue(send, '[data-testid="evidence-title"]', "E2E settlement evidence");
     await setValue(send, '[data-testid="evidence-message"]', "Payment released for settlement");
     await setValue(send, '[data-testid="evidence-content"]', "Contact email owner@example.com; settlement reconciled.");
     await evaluate(send, `document.querySelector('[data-testid="evidence-authorized"]').click()`);
     await evaluate(send, `document.querySelector('[data-testid="evidence-rights"]').click()`);
-    await waitFor(send, `!document.querySelector('[data-testid="evidence-preview-button"]').disabled`, "enabled preview button");
+    await waitFor(send, `!document.querySelector('[data-testid="evidence-preview-button"]').disabled`, "enabled preview button", 20_000);
     await evaluate(send, `document.querySelector('[data-testid="evidence-preview-button"]').click()`);
-    await waitFor(send, `!!document.querySelector('[data-testid="evidence-preview"]')`, "sanitized evidence preview");
+    await waitFor(send, `!!document.querySelector('[data-testid="evidence-preview"]')`, "sanitized evidence preview", 20_000);
     assert.equal(await evaluate(send, `document.body.innerText.includes("原始文件保留：否")`), true);
 
     await evaluate(send, `document.querySelector('[data-testid="evidence-apply-button"]').click()`);
-    await waitFor(send, `!!document.querySelector('.confirm-ok-normal')`, "confirmation dialog");
+    await waitFor(send, `!!document.querySelector('.confirm-ok-normal')`, "confirmation dialog", 20_000);
     await evaluate(send, `document.querySelector('.confirm-ok-normal').click()`);
-    await waitFor(send, `document.body.innerText.includes("user.evidence.settlement.e2e")`, "applied evidence row");
+    await waitFor(send, `document.body.innerText.includes("user.evidence.settlement.e2e")`, "applied evidence row", 20_000);
     assert.deepEqual(browserErrors, []);
     process.stdout.write("knowledge governance browser E2E passed\n");
   } finally {
-    try { chrome.kill("SIGKILL"); } catch {}
-    await rm(profile, { recursive: true, force: true });
+    // **先等 Chrome 真的退出再删 profile。** SIGKILL 之后它还要一小会儿才收摊，
+    // 立刻删会撞上它正在写的缓存目录（ENOTEMPTY）—— 而这个来自 finally 的错误会
+    // 把真正的失败原因整个盖掉，排查时看到的只有一句 rmdir 失败。
+    try { chrome.kill("SIGKILL"); } catch { /* 已经没了 */ }
+    await new Promise((resolve) => {
+      chrome.once("exit", resolve);
+      setTimeout(resolve, 3_000);
+    });
+    await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+      .catch(() => { /* 临时目录删不掉不该让用例失败 */ });
   }
 }
 
