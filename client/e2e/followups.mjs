@@ -145,12 +145,19 @@ async function run() {
     // ── 四、收尾：自动决策说明 + 时刻 ─────────────────────────────────────
     await waitFor(send, `document.body.innerText.includes("先说结论")`, "正文吐完", 40_000);
     // 等 final 真的到（自动决策和收尾时刻都在它里面）—— 正文吐完 ≠ 这一轮结束。
-    await waitFor(send, `!!document.querySelector(".cc-turn-clock")`, "这一轮收尾", 30_000);
+    //
+    // 收尾那一行**跟在「复制 / 重新生成」后面**（.cc-acts-meta），不再自己占一行。
+    // .cc-turn-clock 现在只兜没有那排按钮的两种轮次：回答失败的，和只有执行过程
+    // 没有正文的。两个都认，才既钉得住新位置、又不假设这一轮一定走哪条路。
+    const CLOCK = ".cc-acts-meta, .cc-turn-clock";
+    await waitFor(send, `!!document.querySelector("${CLOCK}")`, "这一轮收尾", 30_000);
     const wrap = await evaluate(send, `(() => {
       const auto = document.querySelector(".cc-autodec");
+      const clock = document.querySelector("${CLOCK}");
       return {
         auto: (auto?.textContent || "").trim(),
-        clock: (document.querySelector(".cc-turn-clock")?.textContent || "").trim(),
+        clock: (clock?.textContent || "").trim(),
+        inActions: !!clock?.closest(".cc-acts"),
         userTime: (document.querySelector(".cc-user-time")?.textContent || "").trim(),
       };
     })()`);
@@ -159,6 +166,8 @@ async function run() {
     assert.ok(wrap.auto.includes("按环比"), "自动决策说明里要写清楚定的是哪一项");
     assert.ok(/^结束于 \d{1,2}:\d{2}/.test(wrap.clock) && /用时/.test(wrap.clock),
               `回答末尾该有「结束于 …·用时 …」（当前：「${wrap.clock}」）`);
+    // 这一轮有正文、没失败 —— 那它该在动作行里，而不是又自己占一行。
+    assert.ok(wrap.inActions, "收尾时刻该跟在「复制 / 重新生成」那一行后面");
     assert.ok(/^\d{1,2}:\d{2}:\d{2}$/.test(wrap.userTime),
               `用户那句话旁边该有发送时刻（当前：「${wrap.userTime}」）`);
 
@@ -242,9 +251,10 @@ async function run() {
         // 停完输入框回到常态：主键是发送，不再是"追加"
         placeholder: document.querySelector(".cc-input")?.getAttribute("placeholder") || "",
         stillRunning: !!document.querySelector(".cc-stop-secondary"),
-        clock: (document.querySelector(".cc-turn-clock")?.textContent || "").trim(),
+        // 同上：收尾时刻在动作行里（.cc-acts-meta），.cc-turn-clock 只兜没有动作行的轮次。
+        clock: (document.querySelector(CLOCK)?.textContent || "").trim(),
       };
-    })()`);
+    })()`.replace("CLOCK", JSON.stringify(CLOCK)));
     assert.ok(stopped.note, "时间线上要留一行「已停止」——否则界面只是忽然不动了");
     assert.ok(stopped.toast, "要明确告诉用户这一轮真的停了");
     assert.equal(stopped.stillRunning, false, "停完之后不该还挂着停止键");

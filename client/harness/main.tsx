@@ -135,6 +135,19 @@ if (q.get("overflow") === "1") {
 const font = q.get("font");
 if (font) localStorage.setItem("ivyea-ops.ui.font", font);
 
+// 版本更新说明：**默认标成"看过了"**。
+//
+// 上面为了钉主题写了 ivyea-ops.theme、为了跳过引导写了 ivyea-tour:*，而 WhatsNew
+// 正是靠这些痕迹判断"这是个升级上来的老用户"（见 looksLikeReturningUser）——
+// 于是每个全新的浏览器配置一打开任务台，就被一张 .app-dialog 盖在最上面。
+// 它挡的正是输入框：E2E 里 `click(".cc-input")` 点到的是弹层，随后 insertText
+// 一个字也没进输入框，表现为"这一轮跑不起来"（live-turn / followups 都栽在这里，
+// 而且看起来像产品坏了）。?wn=1 / ?wn=fresh 那两档要的就是它弹出来，所以不写。
+if (!wn) {
+  const { RELEASES } = await import("../src/components/WhatsNew");
+  localStorage.setItem("ivyea-ops.whatsnew", JSON.stringify(RELEASES.map((r) => r.id)));
+}
+
 // 真实入口。放在最后 import：它内部会立刻跑主题启动逻辑并 render。
 import("../src/main");
 
