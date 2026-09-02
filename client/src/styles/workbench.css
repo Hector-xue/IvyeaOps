@@ -5522,6 +5522,23 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 .cs-question-opt-label em{font-style:normal;padding:0 6px;border-radius:999px;font-size:var(--fs-10);
   background:color-mix(in srgb,var(--acc) 16%,transparent);color:var(--acc)}
 .cs-question-opt-desc{font-size:var(--fs-105);color:var(--t3);line-height:1.6}
+/* 「跳过这题」：挂在问句右端，做成弱按钮 —— 它是出路，不是主路。 */
+.cs-question-skip{float:right;margin-left:8px;padding:1px 8px;border:1px solid var(--b);
+  border-radius:999px;background:transparent;color:var(--t3);font-size:var(--fs-10);
+  cursor:pointer;transition:color .15s,border-color .15s}
+.cs-question-skip:hover{color:var(--t2);border-color:var(--b2)}
+.cs-question-skip[aria-pressed="true"]{color:var(--acc);border-color:var(--acc)}
+/* 跳过之后整块压暗，但**不隐藏** —— 用户得能看见自己跳过了什么，也能撤销。 */
+.cs-question-block.is-skipped .cs-question-options,
+.cs-question-block.is-skipped .cs-question-text{opacity:.45}
+.cs-question-block.is-skipped .cs-question-skip{opacity:1}
+.cs-question-opt:disabled{cursor:default}
+/* 「其他…」：虚线边框，一眼区分"这不是它给的选项，是你自己写"。 */
+.cs-question-other{border-style:dashed}
+.cs-question-input{width:100%;padding:7px 10px;border:1px solid var(--acc);border-radius:9px;
+  background:var(--bg);color:var(--t);font-size:var(--fs-115);font-family:inherit;outline:none}
+.cs-question-input::placeholder{color:var(--t3)}
+.cs-question-skipall{color:var(--t3)}
 .cs-question-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .cs-question-hint{font-size:var(--fs-10);color:var(--t3)}
 .cs-question-done{flex-direction:row;align-items:flex-start;gap:8px;font-size:var(--fs-11);color:var(--t3)}

@@ -1665,7 +1665,13 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
                           <span className="cc-autodec-mark">⏱</span>
                           <div>
                             <b>这一轮有 {t.autoDecisions.length} 项是按推荐项自动定的</b>
-                            （弹了选项卡但没人在超时前选）：
+                            {/* 为什么自动定的，按 agent 给的 reason 分开说 —— 用户主动
+                                点了「跳过」却被告知"没人在超时前选"，那是冤枉他。 */}
+                            （{t.autoDecisions.every((d) => d.reason === "skipped")
+                                ? "你跳过了这几问，交给它按推荐项决定"
+                                : t.autoDecisions.some((d) => d.reason === "skipped")
+                                  ? "有的是你跳过的，有的是没人在超时前选"
+                                  : "弹了选项卡但没人在超时前选"}）：
                             {t.autoDecisions.map((d) => (
                               <div key={d.question} className="cc-autodec-row">
                                 {d.header ? `【${d.header}】` : ""}{d.question} → <b>{d.chosen}</b>

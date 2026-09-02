@@ -117,21 +117,47 @@ async function run() {
       return {
         timer: (el.querySelector(".cs-question-timer")?.textContent || "").trim(),
         recommended: (rec?.textContent || "").trim(),
-        options: [...el.querySelectorAll(".cs-question-opt")].length,
+        // 「其他…」共用 .cs-question-opt 的样式，数给定选项时要把它排掉
+        options: [...el.querySelectorAll(".cs-question-opt:not(.cs-question-other)")].length,
         desc: (el.querySelector(".cs-question-opt-desc")?.textContent || "").trim(),
         primaryDisabled: !!el.querySelector(".cs-btn-primary")?.disabled,
+        hasOther: !!el.querySelector(".cs-question-other"),
+        hasSkip: !!el.querySelector(".cs-question-skip"),
+        hasSkipAll: !!el.querySelector(".cs-question-skipall"),
       };
     })()`);
     assert.equal(card.options, 2, "两个选项都要画出来");
+    assert.ok(card.hasOther, "给的选项都不合适时要能自己写一个");
+    assert.ok(card.hasSkip && card.hasSkipAll, "要能跳过：单题一个、整张卡一个");
     assert.equal(card.recommended, "推荐", "推荐项必须标出来 —— 那是「我不选会发生什么」的答案");
     assert.ok(card.desc.length > 0, "每个选项要说清楚选它意味着什么");
     assert.ok(/按推荐项继续/.test(card.timer),
               `倒计时要说明到点会按推荐项继续，而不是作废（当前：「${card.timer}」）`);
     assert.ok(card.primaryDisabled, "一个都没选时不该能提交");
 
+    // ── 三之二、自己写一个答案 ────────────────────────────────────────────
+    // 先验自由作答：写完再改回选给定选项，两条路都走一遍。给的选项永远列不全，
+    // 这条路断了，用户就只能干等超时或者另起一句话说。
+    await evaluate(send, `document.querySelector(".cs-question-other").click()`);
+    await waitFor(send, `!!document.querySelector(".cs-question-input")`, "自由输入框", 10_000);
+    await evaluate(send, `(() => {
+      const el = document.querySelector(".cs-question-input");
+      const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+      set.call(el, "都不合适，我要第三种做法");
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    })()`);
+    const withFree = await evaluate(send, `(() => {
+      const el = document.querySelector(".cs-question");
+      return JSON.stringify({ primaryDisabled: !!el.querySelector(".cs-btn-primary")?.disabled });
+    })()`);
+    assert.equal(JSON.parse(withFree).primaryDisabled, false,
+                 "写了自己的答案之后就该能提交");
+    // 收回自由作答，回到选给定选项那条路（下面接着验答案回送）
+    await evaluate(send, `document.querySelector(".cs-question-other").click()`);
+
     // 用元素自己的 click()，不用坐标点击：这一轮还在流式吐字，卡片会随内容上下漂，
     // 按坐标点很容易落到隔壁（本机连跑 6 次，坐标点法挂了 3 次）。
-    await evaluate(send, `document.querySelector(".cs-question-opt").click()`);
+    await evaluate(send, `document.querySelector(".cs-question-opt:not(.cs-question-other)").click()`);
     await waitFor(send, `!!document.querySelector(".cs-question-opt.is-on")`, "选项被选中", 10_000);
     await evaluate(send, `document.querySelector(".cs-question .cs-btn-primary").click()`);
     await waitFor(send, `!!document.querySelector(".cs-question-done")`, "选完转成回执", 15_000);
