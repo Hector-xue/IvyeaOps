@@ -1067,25 +1067,20 @@ def knowledge_cards(limit: int = 200) -> dict[str, Any]:
     return request_json("GET", f"/v1/knowledge/cards?limit={safe_limit}")
 
 
-def knowledge_card(card_id: str) -> dict[str, Any]:
-    """按 id 取一张知识卡的原文。
-
-    任务台结尾的「引用知识」列表里，官方卡带真实 https 地址（点了跳外网），
-    而**治理卡与用户上传的文档没有外网原文** —— 它们的地址是 `ivyea://knowledge/<id>`
-    这类内部协议。前端出于安全只放行 http(s)（防 `javascript:` 伪协议），于是这几条
-    就变成了点不动的死文本（用户原话："引用来源怎么不能直接点击跳转到原文了"）。
-    原文其实一直在系统里，只是 ops 此前没有代理这个接口。
-    """
-    safe_id = urllib.parse.quote(str(card_id or "").strip(), safe="")
-    return request_json("GET", f"/v1/knowledge/cards/{safe_id}")
-
-
 def knowledge_search(query: str, limit: int = 8) -> dict[str, Any]:
     params = urllib.parse.urlencode({"q": query, "limit": max(1, min(int(limit or 8), 50))})
     return request_json("GET", f"/v1/knowledge/search?{params}")
 
 
 def knowledge_card(card_id: str) -> dict[str, Any]:
+    """按 id 取一张知识卡的原文。
+
+    v1.13.5 起还供任务台的「引用来源 → 查看原文」用：结尾「引用知识」里，官方卡带
+    真实 https 地址（点了跳外网），而治理卡与用户上传的文档**没有外网原文** ——
+    它们的地址是 `ivyea://knowledge/<id>` 这类内部协议，前端出于安全只放行 http(s)
+    （防 `javascript:` 伪协议），于是成了点不动的死文本。原文一直在系统里，
+    这个函数把它取出来。（此前只有 service 有，路由层没暴露。）
+    """
     safe_id = urllib.parse.quote(str(card_id).strip(), safe="")
     return request_json("GET", f"/v1/knowledge/cards/{safe_id}")
 
