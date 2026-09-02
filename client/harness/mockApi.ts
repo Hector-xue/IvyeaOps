@@ -647,6 +647,17 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
                    usage: { prompt_tokens: 24_600, completion_tokens: 1_180,
                             prompt_cache_hit_tokens: 12_300, llm_ms: 31_500 } },
         }),
+        // 逐轮时刻表。**不铺这条，回答末尾那行「结束于 09:31 · 用时 9.0秒」在
+        // 验证台里就一次都出不来** —— 恢复出来的轮次身上没有前端自己掐的表，
+        // 时刻全靠 agent 落盘的 turn_times 带回来（见 lib/sessionRestore）。
+        // 四轮各给一个不同的时长：1 秒以内 / 几秒 / 一分多 / 二十多分钟，
+        // 四种量级的文案长度都不一样，排版只在最长的那种上才看得出问题。
+        turn_times: [
+          { turn: 0, started_at: now - 96 * 60_000, ended_at: now - 96 * 60_000 + 800, ms: 800 },
+          { turn: 1, started_at: now - 94 * 60_000, ended_at: now - 94 * 60_000 + 9_000, ms: 9_000 },
+          { turn: 2, started_at: now - 90 * 60_000, ended_at: now - 90 * 60_000 + 78_000, ms: 78_000 },
+          { turn: 3, started_at: now - 60 * 60_000, ended_at: now - 60 * 60_000 + 1_412_000, ms: 1_412_000 },
+        ],
         context: {
           used: 1520 + 6910 + messages, window: 128000,
           percent: Number((((1520 + 6910 + messages) * 100) / 128000).toFixed(2)),
@@ -673,6 +684,24 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
     health: { version: new URLSearchParams(location.search).get("oldagent") === "1" ? "1.15.1" : "1.15.4",
               model: { model: "deepseek-v4-pro" } },
   })],
+  // 版本卡片 + 一键更新。**默认装成 Windows 内置（frozen）且有新版** —— 这一档的
+  // 结果文案最长（"内置 IvyeaAgent 随 IvyeaOps 一起更新——请用左下角的「更新」…"），
+  // 版式一旦收不住，就是它把「版本与更新」这张卡撑得老高、连带拉高同排两张。
+  // ?agentfrozen=0 换成可独立升级的源码装（结果文案很短，验的是另一端）。
+  ["/ivyea-agent/version", () => {
+    const frozen = new URLSearchParams(location.search).get("agentfrozen") !== "0";
+    return { version: "1.16.3", installed: "1.16.3", latest: "1.16.4", latest_known: true,
+             frozen, update_available: true, available: true };
+  }],
+  ["/ivyea-agent/upgrade", { started: true }],
+  // 进度直接给终局（done）：要验的是"结果文案怎么排版"，不是进度条动画。
+  ["/ivyea-agent/upgrade/progress", () => {
+    const frozen = new URLSearchParams(location.search).get("agentfrozen") !== "0";
+    return frozen
+      ? { phase: "done", percent: 100, before: "1.16.3", after: "1.16.3", ok: true,
+          note: "内置 IvyeaAgent 随 IvyeaOps 一起更新——请用左下角的「更新」升级 IvyeaOps 即可。" }
+      : { phase: "done", percent: 100, before: "1.16.3", after: "1.16.4", ok: true, note: "" };
+  }],
   // 模型选择器的数据源。**必须有没配 key 的那几家**：面板把它们收进「未配置密钥」
   // 分组，那一段的样式只在这种数据下才渲染得出来。
   // 订阅登录：**三种流程各留一个**（device / paste / token），还要留"已登录"和
@@ -780,6 +809,10 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   }],
   // 亚马逊官方 API。**故意给"凭据配好了、站点只配了一半"**：
   // 全绿的话，未配置态和逐步自检那两条分支根本渲染不到。
+  // 每个字段旁边的「测试」。detail **必须够长**：短句在哪种排版下都好看，只有长句
+  // 才逼得出结果条的换行 —— .hs-key-inline 那一档（密钥输入框和按钮挤在同一排）
+  // 只剩几十像素给结果条，验的就是它到底会换行还是把这一排顶出去。
+  ["/settings/test", { ok: true, detail: "连通正常：api.apimart.ai，模型 gpt-image-2 可用（耗时 1.2s）" }],
   ["/settings/amazon", () => ({
     ok: true, configured: true, ads_configured: false, ads_uses_own_app: false,
     region: "eu", spapi_host: "https://sellingpartnerapi-eu.amazon.com",
@@ -1538,6 +1571,16 @@ export function installMockApi(): void {
    * 永远不会执行，而症状是"验证台里什么都没发生"，根本看不出是开关掉了。
    */
   const wantFollowups = new URLSearchParams(location.search).get("followups") === "1";
+  /**
+   * 审批与"整段重抄"两档同理，**必须在装配时读**。
+   *
+   * 原来的 `?approval=1` 是在流里现读 location.search 的 —— 而任务台拿到
+   * session_id 之后就 `navigate("/console?session=…", {replace:true})` 把地址栏整个
+   * 换掉了，等流跑到审批那一段，参数早就不在地址里。症状是"加了参数什么都没发生"，
+   * 看不出是开关掉了。（这条坑上面那段注释已经写过一次，这里是第二次踩。）
+   */
+  const wantApprovals = Number(new URLSearchParams(location.search).get("approval") || 0);
+  const wantRestate = new URLSearchParams(location.search).get("restate") === "1";
 
   /** 一段真的 SSE —— 兜底通道读的是流，喂 JSON 它一个字也解不出来。 */
   const sse = (chunks: string[]) => new Response(
@@ -1652,18 +1695,47 @@ export function installMockApi(): void {
         // ?approval=1 时插一张确认卡。**它此前在验证台里根本渲染不出来** ——
         // 假流从不发 permission_request，于是"审批档位选了放行、卡片长什么样、
         // 点了确认之后流怎么继续"这一整条最要紧的链路，一次都没被验过。
-        if (new URLSearchParams(location.search).get("approval") === "1") {
+        // ?approval=1 一张；**?approval=3 连发三张** —— 「本会话都允许」那一档下
+        // 一轮里连批十几次是常态，而"十几条回执堆在一起长什么样"只有连发才验得到。
+        for (let n = 1; n <= wantApprovals; n++) {
           await beat(500);
           send("permission_request", {
-            request_id: "req-demo-1", session_id: "s-live", op_type: "lingxing_write",
-            title: "把 3 个搜索词加为否定关键词", destructive: true,
+            request_id: `req-demo-${n}`, session_id: "s-live", op_type: "lingxing_write",
+            title: `把 3 个搜索词加为否定关键词（第 ${n} 批）`, destructive: true,
             preview: "广告活动：Trail Camera - Auto\n否词：cheap camera / free camera / camera app",
             options: [{ key: "approve", label: "批准这一次" },
-                      { key: "session", label: "本会话都允许" },
+                      { key: "session", label: "本会话同类都批准" },
                       { key: "deny", label: "拒绝" }],
             expires_at: Math.floor(Date.now() / 1000) + 600,
           });
           await beat(2500);
+        }
+        // ── 模型把同一段结论整段重抄 ──────────────────────────────────
+        // ?restate=1 装成 z-ai/glm-5.3-flash 那种毛病：每次工具调用之后把已经说过
+        // 的那张表从头再写一遍，只在末尾添一行。**不铺这一段，"同一张表连出三遍"
+        // 在验证台里根本复现不出来**，去重规则也就无从验证。
+        // 三稿：4 行 → 5 行（前缀扩写）→ 5 行（一字不差的完全重复），两种都要覆盖。
+        if (wantRestate) {
+          const head = "\n\n| 事项 | 结论 |\n| --- | --- |\n"
+            + "| AI 生图链路 | 你额度用完，暂不可用 |\n"
+            + "| 程序化作图 | 可行：宿主机 Python + Pillow |\n"
+            + "| matplotlib | 未安装（需要的话 `pip install matplotlib` 可解锁更快的图表绘制） |\n"
+            + "| run_python | 是隔离沙箱，文件不落盘，出图不能用 |\n";
+          const more = "| 图表内嵌聊天渲染 | 需要管理员在「任务台 → 工作区」绑定目录，当前未绑定 |\n";
+          const drafts = [head, head + more, head + more];
+          for (let n = 0; n < drafts.length; n++) {
+            if (n > 0) {
+              send("step", { type: "step", id: `rs${n}`, seq: 10 + n, phase: "tool",
+                             name: "执行命令", tool: "run_shell", status: "running" });
+              await beat(400);
+              send("step", { type: "step", id: `rs${n}`, seq: 10 + n, phase: "tool",
+                             name: "执行命令", tool: "run_shell", status: "ok", ms: 400 });
+              send("answer_reset", { reason: "tool_call" });
+            }
+            await beat(300);
+            send("token", { text: drafts[n] });
+            await beat(500);
+          }
         }
         // ── 选项卡 + 追加指令 ─────────────────────────────────────────
         // ?followups=1 时铺这一段。两件事在验证台里都必须**真的发生过**，否则

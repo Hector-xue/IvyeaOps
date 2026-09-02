@@ -14,9 +14,11 @@
  * 段的边界由 lib/turnStream 在**工具开始跑的那一刻**封定（seq = 当时已有多少步），
  * 所以这里只需按 seq 把步骤切片摆到对应段的后面。
  */
+import { useMemo } from "react";
 import ActivityFeed, { type MatchedSkill, type Thought } from "./ActivityFeed";
 import { MarkdownReport } from "../../lib/reportFormat";
 import type { ConsoleStep } from "../../lib/stepLabels";
+import { restatedIndexes } from "../../lib/restatement";
 
 export type TurnBodyProps = {
   text: string;
@@ -49,14 +51,25 @@ function blocksOf(text: string, segments: { seq: number; text: string }[],
   });
   if (stepCount > cursor) out.push({ kind: "steps", key: `s${cursor}-${stepCount}`, from: cursor, to: stepCount });
   if (text) out.push({ kind: "text", key: "tail", text });
-  return out;
+
+  // 同一段话被后面某一段**整段重抄了一遍**就只留最后那一份（判据见 lib/restatement：
+  // 逐字前缀，不是相似度）。有些模型每次工具调用之后都会把已经说过的那张表从头
+  // 再写一遍，界面把每一稿都留着就是"同一张表连出三遍"。
+  // **执行过程一块都不动**：被丢掉的只是重复的话，工具是真跑过的。
+  const texts = out.filter((b): b is Extract<Block, { kind: "text" }> => b.kind === "text");
+  const drop = restatedIndexes(texts.map((b) => b.text));
+  if (!drop.size) return out;
+  const dropped = new Set(texts.filter((_, i) => drop.has(i)).map((b) => b.key));
+  return out.filter((b) => b.kind !== "text" || !dropped.has(b.key));
 }
 
 export default function TurnBody({
   text, segments = [], steps = [], thoughts = [], skills = [], memoryRecall = [],
   running, failed, elapsedMs, liveThought = "", onPickImage,
 }: TurnBodyProps) {
-  const blocks = blocksOf(text, segments, steps.length);
+  // 每个 token 都会重渲染，而判重要逐段比字符串 —— 用 memo 钉住，别每帧都算一遍。
+  const blocks = useMemo(() => blocksOf(text, segments, steps.length),
+                         [text, segments, steps.length]);
   // 一段都没封过（老会话、还没调过工具）时，blocks 退化成"一块过程 + 一块正文"，
   // 也就是改动前的样子 —— 没有分段信息就不假装有。
   const lastSteps = [...blocks].reverse().find((b) => b.kind === "steps");

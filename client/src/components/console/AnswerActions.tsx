@@ -19,12 +19,20 @@ import { useState } from "react";
 import Icon from "../Icon";
 
 export default function AnswerActions({
-  text, onRegenerate,
+  text, onRegenerate, meta,
 }: {
   /** 这一轮的正文（markdown 原文）。 */
   text: string;
   /** 没有上一条用户提问时（比如恢复出来的半截会话）就不给这个按钮。 */
   onRegenerate?: () => void;
+  /**
+   * 这一轮的收尾时刻与时长（「结束于 09:31 · 用时 9.0秒」）。
+   *
+   * 它原来自己占一行，紧贴在这排按钮下面。可这两样说的是同一件事的两半 ——
+   * 「这一轮完了：拿走 / 再来一次 / 花了多久」—— 拆成两行只是在回答和输入框
+   * 之间又垫高一截，还多出一条和按钮左缘对不齐的基线。
+   */
+  meta?: string;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -60,6 +68,7 @@ export default function AnswerActions({
           <span>重新生成</span>
         </button>
       )}
+      {!!meta && <span className="cc-acts-meta">{meta}</span>}
     </div>
   );
 }

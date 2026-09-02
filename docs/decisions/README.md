@@ -49,6 +49,7 @@ git log 记得住「改了什么」，记不住「为什么不选另一条路」
 | [0029](./0029-merge-lingxing-into-cockpit.md) | 领星 ERP 并入运营驾驶舱：同一个工单系统不该跨两个板块 | 2026-08-29 |
 | [0030](./0030-show-image-reuses-workspace-binding.md) | Agent 给用户看图，权限复用「工作区绑目录」 | 2026-08-30 |
 | [0031](./0031-uploads-default-to-this-conversation.md) | 上传的文件默认只属于这次对话 | 2026-08-30 |
+| [0032](./0032-drop-restated-drafts.md) | 模型把同一段整段重抄时，只留最后一份（逐字前缀判据） | 2026-09-02 |
 
 ## 模板
 

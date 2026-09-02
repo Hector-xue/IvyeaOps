@@ -16,6 +16,7 @@ import { imageRefUrl } from "../api/assistant";
 import { stripInjected } from "./stripInjected";
 import { mergeStep, stepFromEvent, type ConsoleStep } from "./stepLabels";
 import type { ServerStats } from "./turnStats";
+import { restatedIndexes } from "./restatement";
 
 /** 一份会话附件在记录里的样子：文件名 +（可能有的）原件下载地址。 */
 export type RestoredDoc = { name: string; url: string };
@@ -200,6 +201,33 @@ export function restoreSession(detail: IvyeaChatSessionDetail | null | undefined
     const last = [...turns].reverse().find((t) => t.role === "assistant");
     if (last) flushInto(last);
     else turns.push({ role: "assistant", text: "", steps: pending });
+  }
+
+  // 同一段话被后面那条**整段重抄了一遍**（判据见 lib/restatement）。有些模型每次
+  // 工具调用之后都会把已经说过的结论从头再写一遍，存档里那几条都是真实存在的
+  // assistant 消息 —— 恢复出来就是同一张表连着铺三遍，和直播时看到的一样。
+  // 只留最后那一份；被作废的那一格如果还挂着执行过程就留下壳（工具是真跑过的，
+  // 不能跟着话一起没），什么都不挂的才整格拿掉。
+  const assistantsByTurn = new Map<number, RestoredTurn[]>();
+  for (const turn of turns) {
+    if (turn.role !== "assistant") continue;
+    const no = turnNoOf.get(turn);
+    if (no === undefined) continue;
+    const group = assistantsByTurn.get(no);
+    if (group) group.push(turn);
+    else assistantsByTurn.set(no, [turn]);
+  }
+  const superseded = new Set<RestoredTurn>();
+  for (const group of assistantsByTurn.values()) {
+    const drop = restatedIndexes(group.map((t) => t.text || ""));
+    group.forEach((turn, i) => {
+      if (!drop.has(i)) return;
+      if (turn.steps?.length) turn.text = "";
+      else superseded.add(turn);
+    });
+  }
+  for (let i = turns.length - 1; i >= 0; i--) {
+    if (superseded.has(turns[i])) turns.splice(i, 1);
   }
 
   // 收尾时刻与时长挂在**每一轮最后一条**回答上：一轮里 agent 边做边说会产生好几条
