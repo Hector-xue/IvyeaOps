@@ -32,6 +32,10 @@ export type TurnBodyProps = {
   elapsedMs?: number;
   liveThought?: string;
   onPickImage?: (e: React.MouseEvent<HTMLDivElement>) => void;
+  /** 准备阶段在做什么（agent ≥ v1.16.6）。只喂最后一组 —— 前面那些早跑完了。 */
+  stage?: string;
+  /** 这一轮的 id。过程块的折叠覆盖按 `轮:块` 记，一轮里有多块。 */
+  turnKey?: string;
 };
 
 type Block =
@@ -65,7 +69,7 @@ function blocksOf(text: string, segments: { seq: number; text: string }[],
 
 export default function TurnBody({
   text, segments = [], steps = [], thoughts = [], skills = [], memoryRecall = [],
-  running, failed, elapsedMs, liveThought = "", onPickImage,
+  running, failed, elapsedMs, liveThought = "", onPickImage, turnKey = "", stage = "",
 }: TurnBodyProps) {
   // 每个 token 都会重渲染，而判重要逐段比字符串 —— 用 memo 钉住，别每帧都算一遍。
   const blocks = useMemo(() => blocksOf(text, segments, steps.length),
@@ -102,6 +106,8 @@ export default function TurnBody({
         return (
           <ActivityFeed
             key={b.key}
+            // 一轮有多个过程块，全局折叠要能记住"用户单独展开了哪一块"
+            feedKey={`${turnKey}:${b.key}`}
             steps={slice}
             // 思考锚在"第几步"上，跟着它所属的那一段走；这里把 seq 平移到切片坐标系。
             // 区间**左闭右开**：seq === to 的那一段思考发生在下一批工具之前，属于
@@ -117,11 +123,15 @@ export default function TurnBody({
             elapsedMs={isLast ? elapsedMs : undefined}
             running={isLast ? running : false}
             liveThought={isLast ? liveThought : ""}
+            stage={isLast ? stage : ""}
           />
         );
       })}
       {/* 一个字都还没出来、也还没有步骤：给个"正在准备"的过程块，别整片空白。 */}
-      {!blocks.length && running && <ActivityFeed steps={[]} running elapsedMs={elapsedMs} />}
+      {!blocks.length && running && (
+        <ActivityFeed steps={[]} running elapsedMs={elapsedMs} stage={stage}
+                      feedKey={`${turnKey}:prep`} />
+      )}
     </>
   );
 }

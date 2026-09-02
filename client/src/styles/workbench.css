@@ -5647,3 +5647,13 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 .af-line:hover .af-mem-x{opacity:.7}
 .af-mem-x:hover{color:var(--red,#e5484d);opacity:1}
 @media (hover:none){.af-mem-x{opacity:.6}}
+
+/* 一键收起执行过程。跟同一行的进度条/统计条同一套观感：小、安静、不抢视线，
+   但必须点得着 —— 上一版把单块折叠做成 9px 箭头时用户根本没认出那是开关。 */
+.cc-collapse-all{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:2px 8px;border:1px solid var(--wb-border,rgba(0,0,0,.09));
+  border-radius:999px;background:transparent;color:inherit;
+  font-size:1em;line-height:1.6;opacity:.75;cursor:pointer;white-space:nowrap;
+}
+.cc-collapse-all:hover{opacity:1;background:var(--wb-hover,rgba(0,0,0,.04));}

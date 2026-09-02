@@ -21,12 +21,13 @@
  * 行尾一个 9px 的小箭头，用户根本没认出那是开关 —— 所以它现在是一条明确的、
  * 常驻的头部按钮。
  */
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import Icon from "../Icon";
 import StepsMark from "./StepsMark";
 import ThinkingDots from "./ThinkingDots";
 import { formatMs, type ConsoleStep } from "../../lib/stepLabels";
 import { ivyeaMemoryIrrelevant } from "../../api/ivyeaAgent";
+import { isFeedCollapsed, subscribeFeedCollapse, toggleFeed } from "../../lib/feedCollapse";
 
 export type MatchedSkill = { id: string; title: string; domain?: string; score?: number };
 
@@ -114,6 +115,7 @@ function StepLine({ step }: { step: ConsoleStep }) {
 
 export default function ActivityFeed({
   steps, thoughts = [], skills = [], memoryRecall = [], running, elapsedMs, liveThought = "",
+  feedKey = "", stage = "",
 }: {
   steps: ConsoleStep[];
   /** 模型的思考，按批成段（agent ≥ v1.10.3 且开了 stream_reasoning）。没有就是没有。 */
@@ -124,8 +126,27 @@ export default function ActivityFeed({
   elapsedMs?: number;
   /** 还没被冲刷成段的那一段思考 —— 正在想的话就该边想边显示（同样只占一行）。 */
   liveThought?: string;
+  /**
+   * 这一块在整页里的身份，供"一键收起"记住单块覆盖。
+   * 一轮会渲染多个过程块，所以不能只用轮 id。
+   */
+  feedKey?: string;
+  /**
+   * 准备阶段在做什么（agent ≥ v1.16.6 的 stage 事件）。
+   * 没有它时退回原来那句"正在准备" —— 不假装知道。
+   */
+  stage?: string;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  /*
+   * 折叠状态走全局 store 而不是各自的 useState：一轮里有多个过程块、一个会话又有
+   * 很多轮，逐个点收起是用户实际抱怨过的事。全局值管"没被单独动过"的块，
+   * 用户点某一块就给那一块建个覆盖（见 lib/feedCollapse）。
+   */
+  const collapsed = useSyncExternalStore(
+    subscribeFeedCollapse,
+    () => isFeedCollapsed(feedKey),
+    () => false, // 服务端渲染快照：一律按展开算
+  );
   const [showAll, setShowAll] = useState(false);
   // 点过"这条没关系"的记忆：只在本地划掉，不重排也不隐藏整行 —— 用户要看得见
   // 自己刚才做了什么。真正的降权发生在 agent 那边（扣命中 + 记 misses）。
@@ -142,13 +163,23 @@ export default function ActivityFeed({
   if (!items.length && !running) return null;
 
   const realSteps = steps.filter((s) => s.phase !== "note" && s.phase !== "plan").length;
+  /*
+   * 阶段性汇报：最近一个还没跑完的步骤在做什么；都跑完了就报最后一个。
+   * 只取"类型"不取参数 —— 参数动辄是一整条命令，塞进头部这一行会把耗时挤出去，
+   * 而这一行的硬约束是**永远只占一行**。
+   */
+  const nowDoing = useMemo(() => {
+    const real = steps.filter((s) => s.phase !== "note" && s.phase !== "plan");
+    const active = [...real].reverse().find((s) => s.status === "running");
+    return (active || real[real.length - 1])?.title || "";
+  }, [steps]);
   const hidden = showAll ? 0 : Math.max(0, items.length - FEED_TAIL);
   const shown = hidden ? items.slice(hidden) : items;
 
   return (
     <div className={"af" + (collapsed ? " af-collapsed" : "")}>
       {/* 折叠开关。常驻、带文字、点得着 —— 上一版是行尾一个 9px 的箭头，没人认得出。 */}
-      <button type="button" className="af-head" onClick={() => setCollapsed((v) => !v)}
+      <button type="button" className="af-head" onClick={() => toggleFeed(feedKey)}
               aria-expanded={!collapsed}>
         {/* 一个图标管两个状态（跑完/跑着），形状不变、只是行依次亮 —— 换图标时
             页面上不会有一次形状跳变。见 components/console/StepsMark。 */}
@@ -163,7 +194,17 @@ export default function ActivityFeed({
         <span className="af-head-meta">
           {/* 用 filter 拼，别用固定的分隔符：0 步的时候原来会拼出孤零零一个
               "· 5.4s"，看着像前面掉了什么东西。 */}
-          {[realSteps > 0 ? `${realSteps} 步` : (running ? "正在准备" : ""),
+          {/*
+              跑着的时候这里要回答"现在到底在干什么"：
+              - 还没有步骤 → 显示准备阶段（"载入会话历史与记忆"/"等待模型响应"）。
+                agent 老版本没有 stage 事件，退回原来那句"正在准备"，不假装知道。
+              - 已经有步骤 → 显示**阶段性汇报**："37 步 · 正在 写入文件 · 2m14s"。
+                此前只有一个步数，Windows 上一轮几十步跑十几分钟，界面上那个数字
+                一直在涨却说不出在涨什么（用户原话："一大串的执行列表，没有阶段性
+                的输出汇报"）。
+           */}
+          {[realSteps > 0 ? `${realSteps} 步` : (running ? (stage || "正在准备") : ""),
+            running && realSteps > 0 && nowDoing ? `正在 ${nowDoing}` : "",
             elapsedMs !== undefined ? formatMs(elapsedMs) : ""].filter(Boolean).join(" · ")}
         </span>
         <span className="af-head-toggle">

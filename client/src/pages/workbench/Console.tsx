@@ -31,6 +31,7 @@ import { aggregateStats, clockText, fmtDuration, mergeStats, type ServerStats, t
 import { type MatchedSkill, type Thought } from "../../components/console/ActivityFeed";
 import TurnBody from "../../components/console/TurnBody";
 import StatsBar from "../../components/console/StatsBar";
+import CollapseAllFeeds from "../../components/console/CollapseAllFeeds";
 import ContextMeter from "../../components/console/ContextMeter";
 import DockMeta from "../../components/console/DockMeta";
 import ApprovalCard, { ApprovalReceipt, groupApprovals } from "../../components/console/ApprovalCard";
@@ -168,6 +169,8 @@ type Turn = {
    * 一轮思考几万字全存进 state 会让每次 patch 都拷一遍大字符串。
    */
   reasoning?: string;
+  /** 准备阶段在做什么（agent ≥ v1.16.6）。老 agent 没有这条，界面退回"正在准备"。 */
+  stage?: string;
   /**
    * 思考按**批**成段：两次工具调用之间的所有思考合成一段人话。
    *
@@ -1547,6 +1550,7 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
                       {/* 正文与执行过程按发生顺序交错 —— 说一段、做几件事、再说一段。
                           见 components/console/TurnBody 顶部那段"为什么要交错"。 */}
                       <TurnBody
+                        turnKey={t.id}
                         text={t.text}
                         segments={t.segments}
                         steps={t.steps || []}
@@ -1557,6 +1561,7 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
                         running={t.running}
                         failed={t.failed}
                         liveThought={t.reasoning}
+                        stage={t.stage}
                         onPickImage={pickAnswerImage}
                       />
                       {/*
@@ -1729,6 +1734,9 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
               <DockMeta>
                 <ContextMeter usage={ctxUsage} />
                 <StatsBar stats={sessionStats} />
+                {/* 一键收起所有轮次的执行过程。摆在这一行是因为它从头到尾都在视野里 ——
+                    放滚动区顶部的话，人往下翻着看过程时它就滚没了。 */}
+                <CollapseAllFeeds />
               </DockMeta>
             </div>
           </>
