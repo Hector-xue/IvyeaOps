@@ -79,6 +79,7 @@ import { splitModelId } from "../../components/console/ModelPicker";
 import { getSettings, patchSettings } from "../../api/settings";
 import { errText } from "../../lib/errText";
 import { openSettings } from "../../components/SettingsDialog";
+import { openLightbox } from "../../lib/lightbox";
 
 /** 老版本 agent 的自由文本叙述最多保留最近几行 —— 长任务的叙述能有几十条。 */
 const MAX_NOTES = 12;
@@ -1508,7 +1509,9 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
                         {!!t.images?.length && (
                           <div className="cc-user-imgs">
                             {t.images.map((src, i) => (
-                              <img key={i} src={src} alt="附图" loading="lazy"
+                              <img key={i} src={src} alt="附图" loading="lazy" title="点击查看原图"
+                                   onClick={() => openLightbox(
+                                     (t.images ?? []).map((u) => ({ src: u, alt: "附图" })), i)}
                                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                             ))}
                           </div>
@@ -1662,7 +1665,13 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
                           <span className="cc-autodec-mark">⏱</span>
                           <div>
                             <b>这一轮有 {t.autoDecisions.length} 项是按推荐项自动定的</b>
-                            （弹了选项卡但没人在超时前选）：
+                            {/* 为什么自动定的，按 agent 给的 reason 分开说 —— 用户主动
+                                点了「跳过」却被告知"没人在超时前选"，那是冤枉他。 */}
+                            （{t.autoDecisions.every((d) => d.reason === "skipped")
+                                ? "你跳过了这几问，交给它按推荐项决定"
+                                : t.autoDecisions.some((d) => d.reason === "skipped")
+                                  ? "有的是你跳过的，有的是没人在超时前选"
+                                  : "弹了选项卡但没人在超时前选"}）：
                             {t.autoDecisions.map((d) => (
                               <div key={d.question} className="cc-autodec-row">
                                 {d.header ? `【${d.header}】` : ""}{d.question} → <b>{d.chosen}</b>

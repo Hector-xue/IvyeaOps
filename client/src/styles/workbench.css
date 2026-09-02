@@ -3460,7 +3460,9 @@ button.ni{width:auto;align-self:stretch;background:transparent;border:none;borde
 .cc-user-col .cc-bubble{max-width:100%}
 .cc-user-imgs{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
 .cc-user-imgs img{max-width:min(180px,42vw);max-height:180px;border-radius:10px;
-  border:1px solid var(--b);background:var(--bg2)}
+  border:1px solid var(--b);background:var(--bg2);cursor:zoom-in;
+  transition:border-color .15s,transform .15s}
+.cc-user-imgs img:hover{border-color:var(--acc);transform:translateY(-1px)}
 /* 我带的会话附件。靠右和图片对齐（都是"我发出去的东西"），中性底不抢气泡的色 ——
    它是这一轮的附注，不是这一轮的正文。 */
 .cc-user-docs{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
@@ -4445,7 +4447,7 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 .cc-imgs{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px}
 .cc-img{position:relative;display:inline-flex;width:52px;height:52px;border-radius:var(--r);
   overflow:hidden;border:1px solid var(--b2)}
-.cc-img img{width:100%;height:100%;object-fit:cover}
+.cc-img img{width:100%;height:100%;object-fit:cover;cursor:zoom-in}
 .cc-img>button{position:absolute;top:0;right:0;width:16px;height:16px;border:none;
   background:rgba(0,0,0,.6);color:var(--on-acc);font-size:var(--fs-9);cursor:pointer;line-height:16px;padding:0}
 .cc-img-note{font-size:var(--fs-95);color:var(--t3)}
@@ -4871,12 +4873,26 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 .md-pre-lang{font-size:.8em;color:var(--t3);margin-bottom:6px;letter-spacing:.06em}
 .md-code{white-space:pre;display:block}
 /* 正文里的图片 —— 任务台出图靠它显示。整行只有一张图时走 .md-figure 的大图，
-   夹在文字里的走行内小图。点一下能收进输入框当下一轮原图，所以给 pointer。 */
-.md-figure{margin:10px 0}
-.md-img{max-width:100%;border-radius:8px;border:1px solid var(--b);cursor:pointer;
+   夹在文字里的走行内小图。点图看原图(灯箱)，所以给 zoom-in。 */
+.md-figure{position:relative;display:block;margin:10px 0}
+.md-img-wrap{position:relative;display:inline-block;vertical-align:middle}
+.md-img{max-width:100%;border-radius:8px;border:1px solid var(--b);cursor:zoom-in;
   transition:border-color .15s,transform .15s}
 .md-img:hover{border-color:var(--acc);transform:translateY(-1px)}
 .md-img-block{display:block;max-height:520px;object-fit:contain;background:var(--bg3)}
+/* 「用作下一轮原图」的角标。默认不出现 —— 只有任务台的回答块里才有这个动作，
+   其它板块的报告图点开看看就完了，多一枚按钮只会让人猜它是干嘛的。 */
+.md-img-pick{display:none;position:absolute;top:8px;right:8px;width:26px;height:26px;
+  align-items:center;justify-content:center;padding:0;border:1px solid rgba(255,255,255,.22);
+  border-radius:8px;background:rgba(18,20,26,.62);color:#fff;font-size:13px;line-height:1;
+  cursor:pointer;opacity:0;transition:opacity .15s,background .15s}
+.cc-answer .md-img-pick,.cc-narration .md-img-pick{display:inline-flex}
+.md-figure:hover .md-img-pick,.md-img-wrap:hover .md-img-pick,
+.md-img-pick:focus-visible{opacity:1}
+.md-img-pick:hover{background:rgba(18,20,26,.86)}
+@media (hover:none){                       /* 触屏没有 hover，角标常驻 */
+  .cc-answer .md-img-pick,.cc-narration .md-img-pick{opacity:.9}
+}
 .md-a{color:var(--acc);text-decoration:none;border-bottom:1px solid transparent}
 .md-a:hover{border-bottom-color:var(--acc)}
 .md-table-wrap{overflow-x:auto;margin:10px 0}
@@ -5506,6 +5522,23 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 .cs-question-opt-label em{font-style:normal;padding:0 6px;border-radius:999px;font-size:var(--fs-10);
   background:color-mix(in srgb,var(--acc) 16%,transparent);color:var(--acc)}
 .cs-question-opt-desc{font-size:var(--fs-105);color:var(--t3);line-height:1.6}
+/* 「跳过这题」：挂在问句右端，做成弱按钮 —— 它是出路，不是主路。 */
+.cs-question-skip{float:right;margin-left:8px;padding:1px 8px;border:1px solid var(--b);
+  border-radius:999px;background:transparent;color:var(--t3);font-size:var(--fs-10);
+  cursor:pointer;transition:color .15s,border-color .15s}
+.cs-question-skip:hover{color:var(--t2);border-color:var(--b2)}
+.cs-question-skip[aria-pressed="true"]{color:var(--acc);border-color:var(--acc)}
+/* 跳过之后整块压暗，但**不隐藏** —— 用户得能看见自己跳过了什么，也能撤销。 */
+.cs-question-block.is-skipped .cs-question-options,
+.cs-question-block.is-skipped .cs-question-text{opacity:.45}
+.cs-question-block.is-skipped .cs-question-skip{opacity:1}
+.cs-question-opt:disabled{cursor:default}
+/* 「其他…」：虚线边框，一眼区分"这不是它给的选项，是你自己写"。 */
+.cs-question-other{border-style:dashed}
+.cs-question-input{width:100%;padding:7px 10px;border:1px solid var(--acc);border-radius:9px;
+  background:var(--bg);color:var(--t);font-size:var(--fs-115);font-family:inherit;outline:none}
+.cs-question-input::placeholder{color:var(--t3)}
+.cs-question-skipall{color:var(--t3)}
 .cs-question-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .cs-question-hint{font-size:var(--fs-10);color:var(--t3)}
 .cs-question-done{flex-direction:row;align-items:flex-start;gap:8px;font-size:var(--fs-11);color:var(--t3)}

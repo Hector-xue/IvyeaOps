@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { openLightbox } from '../../../../../lib/lightbox';
 
 interface ImageAttachmentProps {
   file: File;
@@ -18,7 +19,13 @@ const ImageAttachment = ({ file, onRemove, uploadProgress, error }: ImageAttachm
   
   return (
     <div className="group relative">
-      <img src={preview} alt={file.name} className="h-20 w-20 rounded object-cover" />
+      <img
+        src={preview}
+        alt={file.name}
+        title="点击查看原图"
+        className="h-20 w-20 cursor-zoom-in rounded object-cover"
+        onClick={() => preview && openLightbox({ src: preview, alt: file.name })}
+      />
       {uploadProgress !== undefined && uploadProgress < 100 && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/50">
           <div className="text-xs text-white">{uploadProgress}%</div>

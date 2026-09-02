@@ -18,6 +18,7 @@ import {
 } from "../../lib/approvalModes";
 import type { ConsolePreset, IvyeaSkillInfo } from "../../api/ivyeaAgent";
 import ModelPicker from "./ModelPicker";
+import { openLightbox } from "../../lib/lightbox";
 
 /** `@` 引用的一条：把知识库里的东西真的带进本轮，而不只是在文字里提一嘴。 */
 /**
@@ -431,7 +432,10 @@ export default function Composer({
         <div className="cc-imgs">
           {images.map((src, i) => (
             <span className="cc-img" key={i}>
-              <img src={src} alt={`图片 ${i + 1}`} />
+              {/* 缩略图只有 52px，看不清自己选了什么 —— 点一下看原图。 */}
+              <img src={src} alt={`图片 ${i + 1}`} title="点击查看原图"
+                   onClick={() => openLightbox(
+                     images.map((u, j) => ({ src: u, alt: `图片 ${j + 1}` })), i)} />
               <button type="button" title="移除"
                       onClick={() => onImagesChange?.(images.filter((_, j) => j !== i))}>✕</button>
             </span>
