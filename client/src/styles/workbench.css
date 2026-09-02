@@ -5637,3 +5637,13 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
   display:flex;justify-content:flex-end}
 .wn-actions .cp-btn{padding:7px 20px}
 @media (max-width:760px){.wn{font-size:var(--fs-11)}.wn-lead{font-size:var(--fs-12)}}
+
+/* 活动行里"这条记忆没关系"的小叉。默认几乎看不见，鼠标移到那一行才浮出来 ——
+   它是纠错入口，不该和正文抢注意力。 */
+.af-mem{white-space:nowrap}
+.af-mem-off{text-decoration:line-through;opacity:.5}
+.af-mem-x{margin-left:2px;padding:0 3px;border:none;background:none;color:var(--t3);
+  font-size:var(--fs-10);line-height:1;cursor:pointer;opacity:0;transition:opacity .15s,color .15s}
+.af-line:hover .af-mem-x{opacity:.7}
+.af-mem-x:hover{color:var(--red,#e5484d);opacity:1}
+@media (hover:none){.af-mem-x{opacity:.6}}

@@ -1214,6 +1214,19 @@ export async function ivyeaChatCancel(params: { session_id: string }) {
  * `session_id` **必填**：ops 按会话归属放行（那份归属落在库里，ops 重启还在），
  * 而不是靠内存里的 request_id 登记表 —— 后者一重启，用户面前那张卡就点不动了。
  */
+/**
+ * 「这条记忆跟我问的没关系」。
+ *
+ * 每轮回忆了哪几条本来就画在活动行里，顺手点一下的成本几乎为零 —— 这是误召唯一
+ * 可持续的发现渠道（靠人翻日志找误召不可能长期做下去）。agent 收到后会扣掉那次
+ * 不该记的命中，并按次数在遗忘打分里给它降权。
+ */
+export async function ivyeaMemoryIrrelevant(key: string) {
+  const { data } = await api.post<{ ok: boolean; error?: string }>(
+    "/ivyea-agent/memory/irrelevant", { key }, { timeout: 15000 });
+  return data;
+}
+
 export async function ivyeaChatQuestion(params: {
   request_id: string;
   session_id: string;

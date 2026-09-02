@@ -1259,6 +1259,12 @@ class MemoryNameBody(BaseModel):
     name: str = ""
 
 
+class MemoryIrrelevantBody(BaseModel):
+    """key 是界面上显示的那个 "category/name" 串。"""
+
+    key: str = ""
+
+
 class MemoryCoreBody(BaseModel):
     block: str = ""
     operation: str = "append"
@@ -1335,6 +1341,17 @@ def memory_confirm(body: MemoryNameBody,
 def memory_reject(body: MemoryNameBody,
                   _admin: str = Depends(require_admin)) -> dict[str, Any]:
     return _call(svc.request_json, "POST", "/v1/memory/reject", _payload(body))
+
+
+@router.post("/memory/irrelevant")
+def memory_irrelevant(body: MemoryIrrelevantBody,
+                      _admin: str = Depends(require_admin)) -> dict[str, Any]:
+    """「这条跟我问的没关系」。
+
+    界面上每轮都画着"回忆了哪几条"，顺手点一下的成本几乎为零 —— 这是误召唯一
+    可持续的发现渠道。agent 那边会扣掉那次不该记的命中，并按次数在遗忘打分里降权。
+    """
+    return _call(svc.request_json, "POST", "/v1/memory/irrelevant", _payload(body))
 
 
 @router.post("/memory/core")

@@ -26,6 +26,7 @@ import Icon from "../Icon";
 import StepsMark from "./StepsMark";
 import ThinkingDots from "./ThinkingDots";
 import { formatMs, type ConsoleStep } from "../../lib/stepLabels";
+import { ivyeaMemoryIrrelevant } from "../../api/ivyeaAgent";
 
 export type MatchedSkill = { id: string; title: string; domain?: string; score?: number };
 
@@ -126,6 +127,14 @@ export default function ActivityFeed({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  // 点过"这条没关系"的记忆：只在本地划掉，不重排也不隐藏整行 —— 用户要看得见
+  // 自己刚才做了什么。真正的降权发生在 agent 那边（扣命中 + 记 misses）。
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  const dismissMemory = (name: string) => {
+    setDismissed((prev) => (prev.includes(name) ? prev : [...prev, name]));
+    // 失败也不回滚：这只是一条反馈，为它弹错误提示的干扰大于价值。
+    void ivyeaMemoryIrrelevant(name).catch(() => {});
+  };
   const items = useMemo(() => build(steps, thoughts, skills, memoryRecall),
                         [steps, thoughts, skills, memoryRecall]);
   const live = running && liveThought.trim() ? oneLine(liveThought) : "";
@@ -192,7 +201,22 @@ export default function ActivityFeed({
                     <span className="af-kind">记忆</span>
                     <span className="af-text">
                       · 回忆了 {item.names.length} 条 ·{" "}
-                      {item.names.map((n) => n.split("/").pop()).join("、")}
+                      {/* 每条后面挂一个"×"：看到它引用了不相干的东西，顺手点一下。
+                          这是误召唯一可持续的发现渠道 —— 靠人翻日志找不现实，而
+                          这一行本来就在眼前。点过之后 agent 会给那条降权。 */}
+                      {item.names.map((n, i) => (
+                        <span className="af-mem" key={n}>
+                          {i > 0 && "、"}
+                          <span className={dismissed.includes(n) ? "af-mem-off" : undefined}>
+                            {n.split("/").pop()}
+                          </span>
+                          {!dismissed.includes(n) && (
+                            <button type="button" className="af-mem-x"
+                                    title="这条跟我问的没关系"
+                                    onClick={() => dismissMemory(n)}>×</button>
+                          )}
+                        </span>
+                      ))}
                     </span>
                   </div>
                 </div>
