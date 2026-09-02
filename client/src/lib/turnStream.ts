@@ -60,6 +60,11 @@ export type TurnPatchable = {
   /** 用户在这一轮跑着的时候补的话，agent 已经把它插进了当前上下文。 */
   injected?: { id: string; text: string; ts?: number }[];
   reasoning?: string;
+  /**
+   * 准备阶段在做什么（agent ≥ v1.16.6 的 stage 事件）。
+   * 第一个 token 之前那几十秒此前界面上只有一句"正在准备"，用户不知道在准备什么。
+   */
+  stage?: string;
   readonlyBlocked?: number;
   /** 正文的分段边界：每段是"两次工具调用之间说的那段话"。见 segments 的注释。 */
   segments?: { seq: number; text: string }[];
@@ -184,6 +189,10 @@ export function createTurnStream(deps: TurnStreamDeps): TurnStream {
       if (typeof d?.read_only === "boolean") deps.setReadOnly?.(d.read_only);
     },
     onContext: (d) => deps.setCtxUsage(d),
+    // 准备阶段进展（agent ≥ v1.16.6）。第一个 token 之前那几十秒此前是全黑的，
+    // 现在把"在准备什么"直接写在过程块的头一行上。老 agent 不发这条 —— stage
+    // 一直是空串，界面退回原来那句"正在准备"。
+    onStage: (d) => deps.patch({ stage: String(d?.label || d?.stage || "") }),
     onSkillMatch: (d) => deps.patch({ skills: (d?.skills || []) as MatchedSkill[] }),
     onMemoryRecall: (d) => deps.patch({ memoryRecall: (d?.names || []) as string[] }),
     onStep: (ev) => {

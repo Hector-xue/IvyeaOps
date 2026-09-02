@@ -679,6 +679,15 @@ export type IvyeaStreamHandlers = {
      */
     onContext?: (data: IvyeaContextUsage) => void;
     /**
+     * 准备阶段的进展（agent ≥ v1.16.6）。
+     *
+     * 第一个 token 之前，serve 要载入会话历史、召回记忆、组工具清单（可能要连 MCP）、
+     * 匹配技能 —— 加起来动辄几十秒，此前**一个字节都不发**，界面上只有一句干巴巴的
+     * "正在准备"（用户原话："有点黑盒的感觉…不知道在准备什么"）。
+     * 老 agent 不发这条：界面退回原来那句"正在准备"，不白屏也不假装知道。
+     */
+    onStage?: (data: { stage?: string; label?: string; elapsed_ms?: number }) => void;
+    /**
      * Agent 自己排的计划变了（agent ≥ v1.16.1，每次 todo_write 落地后播一份）。
      * 老 agent 不发这条 —— 计划只能等 final 那一份，界面上"接下来要干什么"
      * 在这一轮跑完前就是空的，而不是编一条出来。
@@ -825,6 +834,9 @@ async function pumpSse(res: Response, handlers: IvyeaStreamHandlers) {
       handlers.onReasoning?.(typeof data === "string" ? { text: data } : data || {});
     }
     else if (event === "context") handlers.onContext?.(data);
+    // 准备阶段进展。必须显式分流：落进下面的 onEvent 兜底会被当成"老 agent 的自由
+    // 文本叙述"，于是一串 {"stage":"tools",...} 直接印在对话里。
+    else if (event === "stage") handlers.onStage?.(typeof data === "string" ? {} : data || {});
     // todos 同样要显式分流：落进 onEvent 会被当成老 agent 的自由文本叙述。
     else if (event === "todos") handlers.onTodos?.(typeof data === "string" ? {} : data || {});
     else if (event === "step") handlers.onStep?.(data);
@@ -1308,6 +1320,26 @@ export async function ivyeaKnowledgeFile(path: string) {
     file?: { path: string; name: string; size: number; mtime: number; content: string };
   }>("/ivyea-agent/knowledge/file", { params: { path } });
   return { ok: data.ok, content: String(data.file?.content || ""), name: data.file?.name || "" };
+}
+
+/**
+ * 一张知识卡的原文。供任务台里「引用来源 → 查看原文」用。
+ *
+ * 治理卡与用户上传的文档在互联网上没有原文，引用行给的是 `ivyea://knowledge/<id>`
+ * 这类内部协议 —— 渲染器出于安全不放行（伪协议防线），此前就成了点不动的死文本。
+ * 原文一直在系统里，这个接口把它取出来。
+ */
+export async function ivyeaKnowledgeCard(id: string) {
+  const { data } = await api.get<{
+    ok: boolean;
+    card?: { id?: string; title?: string; body?: string; content?: string; summary?: string };
+  }>(`/ivyea-agent/knowledge/cards/${encodeURIComponent(id)}`);
+  const c = data.card || {};
+  return {
+    ok: data.ok,
+    title: String(c.title || id),
+    content: String(c.body || c.content || c.summary || ""),
+  };
 }
 
 export async function ivyeaKnowledgeSearch(q: string, limit = 8) {

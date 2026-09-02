@@ -1629,6 +1629,12 @@ def knowledge_cards(limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
     return _call(svc.knowledge_cards, limit)
 
 
+@router.get("/knowledge/cards/{card_id:path}")
+def knowledge_card(card_id: str) -> dict[str, Any]:
+    """一张知识卡的原文。供任务台里「引用知识」那几条内部协议地址跳转过来。"""
+    return _call(svc.knowledge_card, card_id)
+
+
 @router.get("/knowledge/search")
 def knowledge_search(q: str = Query("", max_length=1000), limit: int = Query(8, ge=1, le=50)) -> dict[str, Any]:
     return _call(svc.knowledge_search, q, limit)

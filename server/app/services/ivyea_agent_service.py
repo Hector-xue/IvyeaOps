@@ -1073,6 +1073,14 @@ def knowledge_search(query: str, limit: int = 8) -> dict[str, Any]:
 
 
 def knowledge_card(card_id: str) -> dict[str, Any]:
+    """按 id 取一张知识卡的原文。
+
+    v1.13.5 起还供任务台的「引用来源 → 查看原文」用：结尾「引用知识」里，官方卡带
+    真实 https 地址（点了跳外网），而治理卡与用户上传的文档**没有外网原文** ——
+    它们的地址是 `ivyea://knowledge/<id>` 这类内部协议，前端出于安全只放行 http(s)
+    （防 `javascript:` 伪协议），于是成了点不动的死文本。原文一直在系统里，
+    这个函数把它取出来。（此前只有 service 有，路由层没暴露。）
+    """
     safe_id = urllib.parse.quote(str(card_id).strip(), safe="")
     return request_json("GET", f"/v1/knowledge/cards/{safe_id}")
 

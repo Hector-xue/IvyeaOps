@@ -5647,3 +5647,38 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 .af-line:hover .af-mem-x{opacity:.7}
 .af-mem-x:hover{color:var(--red,#e5484d);opacity:1}
 @media (hover:none){.af-mem-x{opacity:.6}}
+
+/* 一键收起执行过程。跟同一行的进度条/统计条同一套观感：小、安静、不抢视线，
+   但必须点得着 —— 上一版把单块折叠做成 9px 箭头时用户根本没认出那是开关。 */
+.cc-collapse-all{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:2px 8px;border:1px solid var(--wb-border,rgba(0,0,0,.09));
+  border-radius:999px;background:transparent;color:inherit;
+  font-size:1em;line-height:1.6;opacity:.75;cursor:pointer;white-space:nowrap;
+}
+.cc-collapse-all:hover{opacity:1;background:var(--wb-hover,rgba(0,0,0,.04));}
+
+/* 引用来源里的「查看原文」。做成按钮而不是链接：它打开的是站内浮层，不是外链，
+   长得像外链会让人以为要跳走。 */
+.md-cite{
+  display:inline-flex;align-items:center;gap:3px;
+  padding:0 6px;border:1px solid var(--wb-border,rgba(0,0,0,.12));border-radius:5px;
+  background:transparent;color:var(--a,#2c7);font:inherit;font-size:.92em;
+  cursor:pointer;vertical-align:baseline;
+}
+.md-cite:hover{background:var(--wb-hover,rgba(0,0,0,.05));}
+
+/* 引用原文浮层 */
+.src-mask{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.45);backdrop-filter:blur(2px);padding:24px}
+.src-card{width:min(780px,100%);max-height:80vh;display:flex;flex-direction:column;
+  background:var(--bg,#fff);border:1px solid var(--b,rgba(0,0,0,.1));border-radius:12px;
+  box-shadow:0 12px 40px rgba(0,0,0,.22);overflow:hidden}
+.src-head{display:flex;align-items:center;gap:10px;padding:12px 14px;
+  border-bottom:1px solid var(--b,rgba(0,0,0,.08))}
+.src-title{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.src-close{border:none;background:transparent;cursor:pointer;color:inherit;opacity:.7;padding:4px}
+.src-close:hover{opacity:1}
+.src-body{padding:14px 16px;overflow:auto}
+.src-hint{color:var(--t2,#888);font-size:13px;line-height:1.8}
+.src-raw{word-break:break-all;font-family:ui-monospace,Consolas,monospace;font-size:11.5px}
