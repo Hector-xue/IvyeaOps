@@ -14,6 +14,7 @@ import { ToolRenderer, shouldHideToolResult } from '../../tools';
 import { Reasoning, ReasoningTrigger, ReasoningContent } from '../../../../shared/view/ui';
 import { Markdown } from './Markdown';
 import MessageCopyControl from './MessageCopyControl';
+import { openLightbox } from '../../../../../lib/lightbox';
 
 type DiffLine = {
   type: string;
@@ -130,8 +131,12 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, o
                     key={img.name || idx}
                     src={img.data}
                     alt={img.name}
-                    className="h-auto max-w-full cursor-pointer rounded-lg transition-opacity hover:opacity-90"
-                    onClick={() => window.open(img.data, '_blank')}
+                    className="h-auto max-w-full cursor-zoom-in rounded-lg transition-opacity hover:opacity-90"
+                    title="点击查看原图"
+                    /* 原来是 window.open(img.data)，而 img.data 是 data: URI ——
+                       现代浏览器一律拦截顶层 data: 导航，点了没反应。走灯箱。 */
+                    onClick={() => openLightbox(
+                      (message.images ?? []).map((it) => ({ src: it.data, alt: it.name })), idx)}
                   />
                 ))}
               </div>

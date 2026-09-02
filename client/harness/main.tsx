@@ -148,6 +148,16 @@ if (!wn) {
   localStorage.setItem("ivyea-ops.whatsnew", JSON.stringify(RELEASES.map((r) => r.id)));
 }
 
+// 灯箱直通车：`window.__openLightbox(src)`。
+//
+// /agents 那棵树（#ccui-root，作用域化 Tailwind）验证台不覆盖，而那边最容易翻的
+// 车恰恰是 **data: URI**：老代码 `window.open(data:...)` 被浏览器当顶层 data: 导航
+// 拦掉，点了没反应。灯箱换掉它之后，"data: 图到底显不显示得出来"必须真在浏览器里
+// 点一次才算数 —— 这个入口就是给那次点击用的，不进产品构建。
+import("../src/lib/lightbox").then(({ openLightbox }) => {
+  (window as unknown as Record<string, unknown>).__openLightbox = openLightbox;
+});
+
 // 真实入口。放在最后 import：它内部会立刻跑主题启动逻辑并 render。
 import("../src/main");
 

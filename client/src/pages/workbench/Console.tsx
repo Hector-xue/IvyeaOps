@@ -79,6 +79,7 @@ import { splitModelId } from "../../components/console/ModelPicker";
 import { getSettings, patchSettings } from "../../api/settings";
 import { errText } from "../../lib/errText";
 import { openSettings } from "../../components/SettingsDialog";
+import { openLightbox } from "../../lib/lightbox";
 
 /** 老版本 agent 的自由文本叙述最多保留最近几行 —— 长任务的叙述能有几十条。 */
 const MAX_NOTES = 12;
@@ -1508,7 +1509,9 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
                         {!!t.images?.length && (
                           <div className="cc-user-imgs">
                             {t.images.map((src, i) => (
-                              <img key={i} src={src} alt="附图" loading="lazy"
+                              <img key={i} src={src} alt="附图" loading="lazy" title="点击查看原图"
+                                   onClick={() => openLightbox(
+                                     (t.images ?? []).map((u) => ({ src: u, alt: "附图" })), i)}
                                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                             ))}
                           </div>

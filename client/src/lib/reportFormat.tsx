@@ -6,6 +6,7 @@
  * Pure functions + one presentational React component — no app state.
  */
 import React from "react";
+import { openLightbox } from "./lightbox";
 
 // ─── Markdown → React ─────────────────────────────────────────────────────────
 
@@ -142,22 +143,67 @@ function looksLikeImage(url: string): boolean {
 }
 
 /**
- * 正文里的图片。带 `data-md-img` 是给任务台用的：它在容器上挂一个委托点击，
- * 点一下就把这张图收进输入框当下一轮的原图。渲染器自己不认识任务台。
+ * 点开正文里的图看原图。同一块内容里的图算一组，可以左右翻。
+ *
+ * 「同一块」靠往上找最近的、装着多张图的祖先来定 —— 渲染器返回的是 fragment，
+ * 没有自己的根容器，消费方(任务台 / 各板块报告)的外层类名也各不一样，硬编码
+ * 选择器迟早漏掉一处。
+ */
+function openImageGroup(el: HTMLImageElement): void {
+  let scope: HTMLElement = el;
+  for (let n: HTMLElement | null = el.parentElement, hop = 0; n && hop < 6; n = n.parentElement, hop++) {
+    if (n.querySelectorAll("img.md-img").length > 1) { scope = n; break; }
+  }
+  const all = scope === el ? [el]
+    : [...scope.querySelectorAll<HTMLImageElement>("img.md-img")];
+  openLightbox(all.map((n) => ({ src: n.currentSrc || n.src, alt: n.alt })),
+               Math.max(all.indexOf(el), 0));
+}
+
+/**
+ * 正文里的图片。点图看原图；右上角那枚角标带 `data-md-img`，是给任务台用的 ——
+ * 它在容器上挂一个委托点击，点一下就把这张图收进输入框当下一轮的原图。
+ *
+ * 角标默认不显示，由消费方的 CSS 决定要不要露出来(见 workbench.css 里
+ * `.cc-answer .md-img-pick`)。渲染器自己仍然不认识任务台：它只负责把钩子留在
+ * DOM 上，谁想用谁自己接。
+ *
+ * ⚠️ `data-md-img` 只挂在角标上，不能挂回 `<img>`：挂上去的话点图会同时触发
+ * 「看原图」和容器上那个「收进输入框」的委托，一次点击干两件事。
  */
 function mdImage(src: string, alt: string, key: React.Key, block: boolean): React.ReactNode {
   const img = (
     <img
-      key={key}
+      key="img"
       className={block ? "md-img md-img-block" : "md-img"}
       src={src}
       alt={alt || "生成的图片"}
       loading="lazy"
-      data-md-img={src}
-      title={alt || "点击可作为下一轮的原图"}
+      /* 配图来自第三方站点，带 Referer 会被防盗链挡掉（实测百度百科图床带
+         Referer 直接 403、不带就 200）。图裂了整段回答就毁了，一律不发来源。 */
+      referrerPolicy="no-referrer"
+      title="点击查看原图"
+      onClick={(e) => openImageGroup(e.currentTarget)}
     />
   );
-  return block ? <div key={key} className="md-figure">{img}</div> : img;
+  const pick = (
+    <button
+      key="pick"
+      type="button"
+      className="md-img-pick"
+      data-md-img={src}
+      title="用作下一轮的原图"
+      aria-label="用作下一轮的原图"
+    >
+      ⤴
+    </button>
+  );
+  return (
+    <span key={key} className={block ? "md-figure" : "md-img-wrap"}>
+      {img}
+      {pick}
+    </span>
+  );
 }
 
 /** 整行只有一张图时按大图渲染 —— 出的图挤成一行文字里的小方块等于没出。 */
