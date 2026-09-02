@@ -7,6 +7,7 @@
  */
 import React from "react";
 import { openLightbox } from "./lightbox";
+import { citationSourceLabel, parseCitationSource, requestOpenSource } from "./citationSource";
 
 // ─── Markdown → React ─────────────────────────────────────────────────────────
 
@@ -220,8 +221,12 @@ function soleImage(line: string): { src: string; alt: string } | null {
 
 function renderInline(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
-  //  ![alt](src) | [text](href) | **粗** | `码` | *斜* | 裸链接
-  const re = /!\[([^\]]*)\]\(([^)\s]+)\)|\[([^\]]+)\]\(([^)\s]+)\)|\*\*(.+?)\*\*|`(.+?)`|\*(.+?)\*|(https?:\/\/[^\s<>"'）】]+)/g;
+  //  ![alt](src) | [text](href) | **粗** | `码` | *斜* | 裸链接 | 站内来源协议
+  //
+  // 最后那一组是引用来源里的 `ivyea://` / `ivyea-upload://`：它们在互联网上没有原文，
+  // 原文在系统里。不放行进 href（那是伪协议防线，不能开口子），而是渲染成一个
+  // 「查看原文」按钮，由 Console 去站内取。见 lib/citationSource。
+  const re = /!\[([^\]]*)\]\(([^)\s]+)\)|\[([^\]]+)\]\(([^)\s]+)\)|\*\*(.+?)\*\*|`(.+?)`|\*(.+?)\*|(https?:\/\/[^\s<>"'）】]+)|((?:ivyea|ivyea-upload):\/\/[^\s<>"'）】]+)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
@@ -246,6 +251,15 @@ function renderInline(text: string): React.ReactNode {
       if (!href) parts.push(m[8]);
       else if (looksLikeImage(href)) parts.push(mdImage(href, "", m.index, false));
       else parts.push(<a key={m.index} className="md-a" href={href} target="_blank" rel="noreferrer noopener">{m[8]}</a>);
+    } else if (m[9] !== undefined) {
+      // 站内来源：不显示原始 URI —— `ivyea-upload://up-20260713-…/knowledge-….md`
+      // 对用户没有任何意义，它杵在屏幕上本身就是这个 bug 的一部分。
+      const src = parseCitationSource(m[9]);
+      parts.push(src
+        ? <button key={m.index} type="button" className="md-cite"
+                  onClick={() => requestOpenSource(src)}
+                  title={m[9]}>{citationSourceLabel(src)}</button>
+        : m[9]);
     }
     last = m.index + m[0].length;
   }

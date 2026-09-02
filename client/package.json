@@ -18,7 +18,8 @@
     "test:session-url": "node e2e/session-url.mjs",
     "test:live-dock": "node e2e/live-dock.mjs",
     "test:live-turn": "node e2e/live-turn.mjs",
-    "test:followups": "node e2e/followups.mjs"
+    "test:followups": "node e2e/followups.mjs",
+    "test:citation": "node e2e/citation-restatement.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",

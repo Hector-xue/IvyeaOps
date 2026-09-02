@@ -1322,6 +1322,26 @@ export async function ivyeaKnowledgeFile(path: string) {
   return { ok: data.ok, content: String(data.file?.content || ""), name: data.file?.name || "" };
 }
 
+/**
+ * 一张知识卡的原文。供任务台里「引用来源 → 查看原文」用。
+ *
+ * 治理卡与用户上传的文档在互联网上没有原文，引用行给的是 `ivyea://knowledge/<id>`
+ * 这类内部协议 —— 渲染器出于安全不放行（伪协议防线），此前就成了点不动的死文本。
+ * 原文一直在系统里，这个接口把它取出来。
+ */
+export async function ivyeaKnowledgeCard(id: string) {
+  const { data } = await api.get<{
+    ok: boolean;
+    card?: { id?: string; title?: string; body?: string; content?: string; summary?: string };
+  }>(`/ivyea-agent/knowledge/cards/${encodeURIComponent(id)}`);
+  const c = data.card || {};
+  return {
+    ok: data.ok,
+    title: String(c.title || id),
+    content: String(c.body || c.content || c.summary || ""),
+  };
+}
+
 export async function ivyeaKnowledgeSearch(q: string, limit = 8) {
   const { data } = await api.get<{ ok: boolean; results: any[] }>("/ivyea-agent/knowledge/search", {
     params: { q, limit },

@@ -32,6 +32,7 @@ import { type MatchedSkill, type Thought } from "../../components/console/Activi
 import TurnBody from "../../components/console/TurnBody";
 import StatsBar from "../../components/console/StatsBar";
 import CollapseAllFeeds from "../../components/console/CollapseAllFeeds";
+import SourceViewer from "../../components/console/SourceViewer";
 import ContextMeter from "../../components/console/ContextMeter";
 import DockMeta from "../../components/console/DockMeta";
 import ApprovalCard, { ApprovalReceipt, groupApprovals } from "../../components/console/ApprovalCard";
@@ -1742,6 +1743,10 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
           </>
         )}
       </div>
+
+      {/* 引用来源里的站内原文查看器。挂在这里而不是每条引用各自持有一个：
+          一屏可能有十几条引用，浮层只该有一个。 */}
+      <SourceViewer />
 
       {/* 产物栏在悬浮球里放不下，也不该放：面板的价值是"不离开当前页面问一句"，
           真要看产物/待办/审批留痕，点开任务台。 */}
