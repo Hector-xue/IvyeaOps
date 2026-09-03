@@ -69,7 +69,7 @@ export type TurnPatchable = {
   stage?: string;
   readonlyBlocked?: number;
   /**
-   * 目标模式的验收清单（agent ≥ v1.17）。
+   * 目标模式的验收清单（agent ≥ v1.16.8）。
    *
    * 这是**运行时判定的结果**，不是模型的自述 —— 目标模式存在的全部理由就是
    * "模型说完成不算完成"，所以界面上画的进度也必须来自判定，不能来自正文。

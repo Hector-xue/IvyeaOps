@@ -150,7 +150,7 @@ class ChatBody(BaseModel):
     # 读流的那几处（技能执行、知识库问答）没有人能点，弹了只会白等一个超时。
     # 默认 False，且为 False 时由 _chat_payload 剔除，老 daemon 收到的 payload 不变。
     interactive: bool = False
-    # 目标模式（agent ≥ v1.17）：把这一句拆成可验收的标准，达成之前不收尾 ——
+    # 目标模式（agent ≥ v1.16.8）：把这一句拆成可验收的标准，达成之前不收尾 ——
     # agent 会自己规划、执行、真实测试、修完再测，循环到全部达成或用户喊停。
     # 默认 False 且为 False 时由 _chat_payload 剔除，老 daemon 收到的 payload 不变。
     # **agent 侧只在 plan_mode=false 时生效**：只读档里什么都写不了，目标自然达不成。

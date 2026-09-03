@@ -554,7 +554,7 @@ export type IvyeaChatPayload = {
    */
   interactive?: boolean;
   /**
-   * 目标模式（agent ≥ v1.17）：把这一句当成**要达成的目标**，不是一次问答。
+   * 目标模式（agent ≥ v1.16.8）：把这一句当成**要达成的目标**，不是一次问答。
    *
    * agent 先把它拆成可验收的标准，然后规划 → 执行 → 真实测试 → 修 → 再测，
    * 直到逐条验收通过、用户喊停、或撞成本闸才收尾。**只在 plan_mode=false 时生效**：
@@ -728,7 +728,7 @@ export type IvyeaStreamHandlers = {
      */
     onQuestion?: (data: IvyeaQuestionRequest) => void;
     /**
-     * 目标模式的进度（agent ≥ v1.17）。
+     * 目标模式的进度（agent ≥ v1.16.8）。
      * phase: start=立约 · judged=判了一轮还差几条 · achieved=全部达成 · stopped=停了。
      * 老 agent 不发这条 —— 验收清单整块不出现，而不是画一个编出来的进度。
      */
@@ -766,7 +766,7 @@ export type IvyeaQuestionRequest = {
 };
 
 /**
- * 目标模式的验收清单（agent ≥ v1.17）。
+ * 目标模式的验收清单（agent ≥ v1.16.8）。
  *
  * **确定性投影**：进度由 agent 的运行时判定后播过来，前端只负责画 ——
  * 不去解析正文猜"它是不是做完了"（那正是目标模式要消灭的东西）。
