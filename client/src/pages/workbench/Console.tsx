@@ -37,6 +37,7 @@ import ContextMeter from "../../components/console/ContextMeter";
 import DockMeta from "../../components/console/DockMeta";
 import ApprovalCard, { ApprovalReceipt, groupApprovals } from "../../components/console/ApprovalCard";
 import QuestionCard from "../../components/console/QuestionCard";
+import GoalCard from "../../components/console/GoalCard";
 import Composer, { approvalPayload, type ApprovalMode, type ComposerDoc, type ComposerRef, type ComposerValue } from "../../components/console/Composer";
 import ArtifactRail, { type RailApproval, type RailTodo } from "../../components/console/ArtifactRail";
 import FollowUps from "../../components/console/FollowUps";
@@ -72,6 +73,7 @@ import {
   type ConsolePreset,
   type IvyeaContextUsage,
   type IvyeaFileChange,
+  type IvyeaGoalState,
   type IvyeaAutoDecision,
   type IvyeaPermissionRequest,
   type IvyeaQuestionRequest,
@@ -205,6 +207,11 @@ type Turn = {
   autoDecisions?: IvyeaAutoDecision[];
   /** 用户在这一轮跑着的时候补的话（已插进当前上下文）。 */
   injected?: { id: string; text: string; ts?: number }[];
+  /**
+   * 目标模式的验收清单（agent ≥ v1.17）。运行时判定的结果，不是模型的自述。
+   * 没开目标模式的轮次没有它 —— 那张卡整块不出现。
+   */
+  goal?: IvyeaGoalState;
 };
 
 /**
@@ -1048,6 +1055,9 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
           model: modelSwitchable && modelPick ? modelPick : undefined,
           plan_mode,
           approval,
+          // 目标模式：达成之前不收尾。只在打开时下发 —— 关着的时候整个字段消失，
+          // 老 agent 收到的 payload 与加这个开关之前逐字一致。
+          goal_mode: composer.goal || undefined,
           // 人设排最前：它定义"以什么身份、什么判断标准作答"，逻辑上先于本轮材料。
           system: [
             composer.system ? "[角色设定 —— 按这个身份和判断标准作答]\n" + composer.system : "",
@@ -1551,6 +1561,12 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
                     </div>
                   ) : (
                     <div className="cc-ai wb-enter" key={t.id}>
+                      {/*
+                        * 目标模式的验收清单摆在**这一轮的最上面** —— 它是这一轮的
+                        * 总纲（"什么时候才算完"），而不是收尾时的一份附录。跑着的时候
+                        * 用户最需要看的就是它：还剩几条、卡在哪一条。
+                        */}
+                      {!!t.goal?.criteria?.length && <GoalCard goal={t.goal} />}
                       {/* 正文与执行过程按发生顺序交错 —— 说一段、做几件事、再说一段。
                           见 components/console/TurnBody 顶部那段"为什么要交错"。 */}
                       <TurnBody

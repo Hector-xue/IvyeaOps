@@ -1624,6 +1624,25 @@ export function installMockApi(): void {
         };
         send("start", { session_id: "s-live", turn_id: "t-live", model: "deepseek-v4-pro",
                         approval: "none", read_only: true });
+        // 目标模式：**按请求体里的开关铺**，不是无条件铺。没开的时候验证台里
+        // 一张验收清单都不该出现 —— 否则"关着的时候界面是什么样"就永远验不到。
+        const goalOn = Boolean((window as any).__lastChatBody?.goal_mode);
+        const goalCriteria = [
+          { index: 1, text: "找出花费上涨的主因并给出数字", verify: "报表里能核对到的口径与数字",
+            status: "met", reason: "搜索词报表已跑通，CPC 上升 28% 有据" },
+          { index: 2, text: "给出可直接执行的否词与竞价动作", verify: "每条动作指到具体的词与数字",
+            status: "unmet", reason: "只给了方向，还没落到具体词" },
+          { index: 3, text: "动作经过护栏校验（不误伤品牌词）", verify: "对照保护词清单逐条过一遍",
+            status: "pending", reason: "" },
+        ];
+        const goalState = (over: Record<string, unknown> = {}) => ({
+          objective: "把这周广告花费上涨的原因查清楚，并给出能直接执行的优化动作",
+          status: "active", criteria: goalCriteria, met: 1, total: 3, rounds: 1, ...over,
+        });
+        if (goalOn) {
+          send("goal", { session_id: "s-live", phase: "start", note: "目标模式已立约",
+                         goal: goalState({ criteria: goalCriteria.map((c) => ({ ...c, status: "pending", reason: "" })), met: 0, rounds: 0 }) });
+        }
         // 上下文用量：真 agent 在第一个 token 之前就发一份，收尾再发一份（见
         // service.chat_stream）。验证台不铺这条，上下文进度条就永远验不到。
         // 开口前的自动召回。活动行里画成一行"回忆了 N 条"，每条后面挂一个"×" ——
@@ -1783,6 +1802,12 @@ export function installMockApi(): void {
             send("token", { text: `\n\n（收到追加要求：${item.text}）` });
           }
         }
+        // 一次验收判定：还差两条 —— 界面上那张卡当场变，时间线上补一行。
+        if (goalOn) {
+          await beat(500);
+          send("goal", { session_id: "s-live", phase: "judged",
+                         note: "目标还差 2/3 条没达成，继续干。", goal: goalState() });
+        }
         await beat(600);
         for (const t of ["\n\n## 先说结论\n\n", "这一周花费涨了 34%，", "其中 28% 来自单次点击成本上升。"]) {
           await beat(500);
@@ -1790,6 +1815,7 @@ export function installMockApi(): void {
           send("token", { text: t });
         }
         send("final", { session_id: "s-live", turn_id: "t-live",
+                        ...(goalOn ? { goal: goalState() } : {}),
                         ...(followups ? {
                           started_ms: Date.now() - 42_000, ended_ms: Date.now(), ms: 42_000,
                           auto_decisions: [{ question: "报表口径按哪个来？", header: "口径",

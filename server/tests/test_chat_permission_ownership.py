@@ -145,6 +145,19 @@ def test_approval_tiers_pass_through_and_junk_is_rejected():
             mod.ChatBody(message="hi", approval=bad)
 
 
+def test_goal_mode_is_opt_in_and_actually_reaches_the_daemon():
+    """目标模式必须真的传下去 —— ChatBody 是白名单，漏一个字段的表现是
+    "任务台上按钮亮着，agent 那边压根不知道"，而且没有任何报错指向这里。
+
+    默认关同样要钉死：它会让 agent 自己接着干下去（步数预算 600、还能自动续期），
+    默认开等于替所有调用方（定时任务、技能执行、知识库问答）做了这个决定。"""
+    assert "goal_mode" not in mod._chat_payload(mod.ChatBody(message="hi"))
+    payload = mod._chat_payload(mod.ChatBody(message="hi", goal_mode=True,
+                                             plan_mode=False, approval="auto"))
+    assert payload["goal_mode"] is True
+    assert payload["plan_mode"] is False and payload["approval"] == "auto"
+
+
 def test_stream_reasoning_is_opt_in_and_actually_reaches_the_daemon():
     """思考流开关必须真的传下去 —— ChatBody 是白名单，漏一个字段的表现是
     "前端明明发了，界面上却什么都没有"，而且没有任何报错指向这里。

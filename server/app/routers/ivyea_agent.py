@@ -150,6 +150,11 @@ class ChatBody(BaseModel):
     # 读流的那几处（技能执行、知识库问答）没有人能点，弹了只会白等一个超时。
     # 默认 False，且为 False 时由 _chat_payload 剔除，老 daemon 收到的 payload 不变。
     interactive: bool = False
+    # 目标模式（agent ≥ v1.17）：把这一句拆成可验收的标准，达成之前不收尾 ——
+    # agent 会自己规划、执行、真实测试、修完再测，循环到全部达成或用户喊停。
+    # 默认 False 且为 False 时由 _chat_payload 剔除，老 daemon 收到的 payload 不变。
+    # **agent 侧只在 plan_mode=false 时生效**：只读档里什么都写不了，目标自然达不成。
+    goal_mode: bool = False
 
 
 class ChatSessionCreateBody(BaseModel):
@@ -390,6 +395,7 @@ _CHAT_OPTIONAL_DEFAULTS: dict[str, Any] = {
     "defer_citation_text": False,
     "stream_reasoning": False,
     "interactive": False,
+    "goal_mode": False,
     "approval": "none",
     # source 是 ops 自己的记账字段（会话来自任务台/AI问答/知识库），agent 不认识它。
     # 放进 defaults 里只是为了默认值被剔除；非默认值另有 _pop_ops_only 兜底。

@@ -53,6 +53,15 @@ export type ComposerValue = {
   text: string;
   workspace: string;
   approval: ApprovalMode;
+  /**
+   * 目标模式：这句话是**一个要达成的目标**，不是一次问答。
+   *
+   * 开着的时候 agent 先把它拆成可验收的标准，然后规划 → 执行 → 真实测试 → 修 →
+   * 再测，逐条验收通过才收尾；没达成会自己接着干，直到你喊停或撞成本闸。
+   * 它和审批档位是两件事（一个管"什么时候算完"，一个管"能不能写"），但**打开它
+   * 会把档位切到完全放行** —— 一路要人点确认的目标不可能自己跑到底。
+   */
+  goal?: boolean;
   skill: string;
   /** 套用的预设名。只用来显示那枚芯片，让人知道现在带着谁的人设在跑。 */
   preset?: string;
@@ -184,6 +193,20 @@ export default function Composer({
     };
   };
 
+  /**
+   * 目标模式开关。打开时**顺手把审批档位切到完全放行**。
+   *
+   * 两件事本来正交（一个管"什么时候算完"，一个管"能不能写"），但组合起来只有
+   * 一种是有意义的：一路要人点确认的"自己跑到底"根本跑不到底，而只读档里
+   * 什么都写不了、目标永远达不成 —— agent 侧干脆规定 plan_mode 下目标模式不生效。
+   * 所以这里替用户把档位调到位，并且**调得看得见**：档位芯片当场变成"完全放行"，
+   * 他随时可以改回去。关掉目标模式不动档位 —— 那是他自己的选择，不该被回滚。
+   */
+  const toggleGoal = () => {
+    if (value.goal) { onChange({ goal: false }); return; }
+    onChange({ goal: true, approval: "full" });
+  };
+
   const slashItems: SlashItem[] = useMemo(() => {
     const items: SlashItem[] = [];
     // 预设排在最前：它一次把技能、审批档位、工作区三样都设好，
@@ -223,6 +246,15 @@ export default function Composer({
         run: () => onChange({ approval: m.value }),
       });
     }
+    // `/goal` —— 与 IvyeaAgent CLI 的同名命令一致（终端里说"目标模式"也是这个开关）。
+    items.push({
+      key: "goal",
+      label: value.goal ? "目标模式 · 关闭" : "目标模式 · 打开",
+      keywords: "goal 目标 目标模式 达成 验收",
+      hint: value.goal ? "回到普通轮次：一问一答，说完就停"
+                       : "拆成验收标准，自测自修循环到达成为止（会切到完全放行）",
+      run: () => toggleGoal(),
+    });
     // `/model` —— 和 IvyeaAgent CLI 里那条命令同名同义。终端里能这么切，
     // 网页上也该能，不然同一个产品两套操作方式。
     items.push({
@@ -235,7 +267,7 @@ export default function Composer({
     if (onNewTask) items.push({ key: "new", label: "新建任务", run: onNewTask });
     return items;
   }, [presets, skills, scenes, onNewTask, onChange,
-      modelSwitchable, modelValue, modelLabel, onModelSettings]);
+      modelSwitchable, modelValue, modelLabel, onModelSettings, value.goal]);
 
   const matches = useMemo(() => {
     if (!menu) return [] as { key: string; label: string; hint?: string; run: () => void }[];
@@ -553,6 +585,23 @@ export default function Composer({
             leading={<Icon name={"mode-" + value.approval} size={14} />}
             dropdownClassName="cc-sheet cc-sheet-mode"
           />
+          {/*
+            * 目标模式。放在审批档位右边，因为它俩回答的是同一类问题："这一轮会
+            * 怎么跑"。开着的时候必须一眼看得出来 —— 这是**唯一**一个会让 agent
+            * 自己接着干下去的开关，看不见它就等于不知道自己按下了什么。
+            */}
+          <button
+            type="button"
+            className={"cc-chip cc-chip-mode cc-chip-goal" + (value.goal ? " is-on" : "")}
+            aria-pressed={value.goal ? "true" : "false"}
+            title={value.goal
+              ? "目标模式：开。我会先把你的话拆成可验收的标准，然后自己规划、执行、真实测试、修完再测，逐条通过才收尾。点一下关掉。"
+              : "目标模式：把这句话当成一个要达成的目标 —— 我拆出验收标准后自测自修循环到全部达成，中途你随时能打断。打开会把审批档位切到「完全放行」。"}
+            onClick={toggleGoal}
+          >
+            <Icon name="goal" size={14} />
+            目标模式
+          </button>
           {value.preset && (
             /*
              * 人设**必须可见**。一段看不见的系统提示在悄悄改变回答的口吻和判断标准，

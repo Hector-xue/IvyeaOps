@@ -88,6 +88,8 @@ const ICONS: Record<string, LucideIcon> = {
   "mode-readonly": Eye,
   "mode-ask": ShieldCheck,
   "mode-full": Zap,
+  // 目标模式：靶心。和审批三档并排放，形状上一眼分得开（看/盾/闪电 vs 靶）。
+  goal: Target,
   // ── 场景 ──
   "ad-waste": TrendingDown,
   // ── 执行叙述（console/ActivityFeed）──
