@@ -16,6 +16,7 @@
  */
 import { useMemo } from "react";
 import ActivityFeed, { type MatchedSkill, type Thought } from "./ActivityFeed";
+import AnswerSources from "./AnswerSources";
 import { MarkdownReport } from "../../lib/reportFormat";
 import type { ConsoleStep } from "../../lib/stepLabels";
 import { restatedIndexes } from "../../lib/restatement";
@@ -127,6 +128,9 @@ export default function TurnBody({
           />
         );
       })}
+      {/* 回答落定之后，把这一轮真抓过的网页摆成一条能点的链条。跑着的时候不摆 ——
+          那会儿它还在长，而且用户此刻要看的是进度不是出处。 */}
+      {!running && <AnswerSources steps={steps} />}
       {/* 一个字都还没出来、也还没有步骤：给个"正在准备"的过程块，别整片空白。 */}
       {!blocks.length && running && (
         <ActivityFeed steps={[]} running elapsedMs={elapsedMs} stage={stage}
