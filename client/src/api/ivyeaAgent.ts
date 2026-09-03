@@ -553,6 +553,14 @@ export type IvyeaChatPayload = {
    * 服务端自己读流的那几处没有人能点，弹了只会让那一轮白等一个超时。
    */
   interactive?: boolean;
+  /**
+   * 目标模式（agent ≥ v1.16.8）：把这一句当成**要达成的目标**，不是一次问答。
+   *
+   * agent 先把它拆成可验收的标准，然后规划 → 执行 → 真实测试 → 修 → 再测，
+   * 直到逐条验收通过、用户喊停、或撞成本闸才收尾。**只在 plan_mode=false 时生效**：
+   * 只读档里什么都写不了，目标自然达不成。老 agent 不认识这个字段会直接忽略。
+   */
+  goal_mode?: boolean;
   /** 追加到本轮系统提示的额外上下文（@ 引用的资料就走这里）。 */
   system?: string;
   /**
@@ -719,6 +727,12 @@ export type IvyeaStreamHandlers = {
      * 所以这张卡片永远不会把一轮任务挂死。
      */
     onQuestion?: (data: IvyeaQuestionRequest) => void;
+    /**
+     * 目标模式的进度（agent ≥ v1.16.8）。
+     * phase: start=立约 · judged=判了一轮还差几条 · achieved=全部达成 · stopped=停了。
+     * 老 agent 不发这条 —— 验收清单整块不出现，而不是画一个编出来的进度。
+     */
+    onGoal?: (data: { phase?: string; note?: string; goal?: IvyeaGoalState }) => void;
     /** 选项卡超时，已按推荐项继续。 */
     onQuestionTimeout?: (data: { request_id: string }) => void;
     /**
@@ -749,6 +763,33 @@ export type IvyeaQuestionRequest = {
   questions: IvyeaQuestion[];
   timeout_s?: number;
   expires_at?: number;
+};
+
+/**
+ * 目标模式的验收清单（agent ≥ v1.16.8）。
+ *
+ * **确定性投影**：进度由 agent 的运行时判定后播过来，前端只负责画 ——
+ * 不去解析正文猜"它是不是做完了"（那正是目标模式要消灭的东西）。
+ */
+export type IvyeaGoalCriterion = {
+  index: number;
+  text: string;
+  verify?: string;
+  /** pending=还没判 · met=有真实证据 · unmet=没做到 · unverifiable=这个环境验不了 */
+  status: "pending" | "met" | "unmet" | "unverifiable";
+  reason?: string;
+};
+
+export type IvyeaGoalState = {
+  objective?: string;
+  /** active=还在做 · achieved=全部达成 · stopped=停了（撞预算/熔断/用户退出） */
+  status?: "active" | "achieved" | "stopped";
+  stop_reason?: string;
+  criteria?: IvyeaGoalCriterion[];
+  out_of_scope?: string[];
+  met?: number;
+  total?: number;
+  rounds?: number;
 };
 
 /** 本轮里**替用户定的**那些选择（没人在超时前选，按推荐项走了）。 */
@@ -839,6 +880,9 @@ async function pumpSse(res: Response, handlers: IvyeaStreamHandlers) {
     else if (event === "stage") handlers.onStage?.(typeof data === "string" ? {} : data || {});
     // todos 同样要显式分流：落进 onEvent 会被当成老 agent 的自由文本叙述。
     else if (event === "todos") handlers.onTodos?.(typeof data === "string" ? {} : data || {});
+    // 目标模式的验收进度。同样必须显式分流 —— 落进 onEvent 会被当成自由文本叙述，
+    // 于是一串 {"phase":"judged",...} 直接印在对话里。
+    else if (event === "goal") handlers.onGoal?.(typeof data === "string" ? {} : data || {});
     else if (event === "step") handlers.onStep?.(data);
     else if (event === "skill_match") handlers.onSkillMatch?.(data);
     // 记忆召回同样必须显式分流：落进下面的 onEvent 兜底会被当成"老 agent 的自由

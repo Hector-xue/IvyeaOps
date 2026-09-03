@@ -19,6 +19,7 @@ import {
   type IvyeaAutoDecision,
   type IvyeaContextUsage,
   type IvyeaFileChange,
+  type IvyeaGoalState,
   type IvyeaPermissionRequest,
   type IvyeaQuestionRequest,
   type IvyeaStreamHandlers,
@@ -39,6 +40,7 @@ const GATE_NOTE: Record<string, string> = {
   "gate:citation": "知识引用未通过校验，正在重写这段回答",
   "gate:verify": "完成前自验证未通过，正在重写这段回答",
   "gate:progress": "阶段汇报尚未闭环，正在重写这段回答",
+  "gate:goal": "目标还没达成，正在继续干（不是重写回答）",
 };
 
 /** 这一轮里模型的一段思考。seq = 冲刷时已经有多少步（靠它和步骤穿插排序）。 */
@@ -66,6 +68,13 @@ export type TurnPatchable = {
    */
   stage?: string;
   readonlyBlocked?: number;
+  /**
+   * 目标模式的验收清单（agent ≥ v1.16.8）。
+   *
+   * 这是**运行时判定的结果**，不是模型的自述 —— 目标模式存在的全部理由就是
+   * "模型说完成不算完成"，所以界面上画的进度也必须来自判定，不能来自正文。
+   */
+  goal?: IvyeaGoalState;
   /** 正文的分段边界：每段是"两次工具调用之间说的那段话"。见 segments 的注释。 */
   segments?: { seq: number; text: string }[];
 };
@@ -224,6 +233,17 @@ export function createTurnStream(deps: TurnStreamDeps): TurnStream {
     // 计划**当场**落地：原来只在 onFinal 收一次，于是"接下来要干什么"要等这一轮
     // 跑完才看得到 —— 而那正是最不需要它的时刻。
     onTodos: (d) => { if (Array.isArray(d?.todos)) deps.setTodos(d.todos); },
+    // 目标模式：立约 / 每次验收判定 / 达成 / 停了，都当场落地。
+    // 时间线上也留一行 —— "它为什么还在跑"这件事必须看得见，否则用户只会觉得
+    // 这一轮没完没了（而那恰恰是他自己按下的开关）。
+    onGoal: (d) => {
+      const goal = (d?.goal || {}) as IvyeaGoalState;
+      if (goal && Object.keys(goal).length) deps.patch({ goal });
+      const note = String(d?.note || "").split("\n")[0].trim();
+      if (note && d?.phase !== "start") {
+        deps.patch((t) => ({ steps: mergeStep(t.steps || [], noteStep(note, noteSeq++)) }));
+      }
+    },
     onPermission: (req) => deps.patch((t) => ({ approvals: [...(t.approvals || []), { req }] })),
     // 选项卡：模型拿不准，把岔路摆出来让人点。没人点也不会挂死 —— agent 侧
     // 到点自己按推荐项继续，届时发 question_timeout。
@@ -318,6 +338,10 @@ export function createTurnStream(deps: TurnStreamDeps): TurnStream {
         deps.patch({ readonlyBlocked: d.readonly_blocked });
       }
       if (Array.isArray(d?.todos)) deps.setTodos(d.todos);
+      // 目标模式的终态。断链重接、从存档恢复时，这是唯一能拿到验收清单的地方。
+      if (d?.goal && typeof d.goal === "object" && Object.keys(d.goal).length) {
+        deps.patch({ goal: d.goal as IvyeaGoalState });
+      }
       // 这一轮有哪几项是替用户定的。**界面自己说**，不指望模型在总结里提一句 ——
       // 同 memory_recall 的道理：确定性的信号才敢让用户依赖。
       if (Array.isArray(d?.auto_decisions) && d.auto_decisions.length) {

@@ -3839,6 +3839,13 @@ button.af-line:hover{background:var(--bg2)}
   background:color-mix(in srgb,var(--red) 10%,transparent)}
 .cc-chip-mode.tone-danger:hover{background:color-mix(in srgb,var(--red) 16%,transparent);color:var(--red)}
 .cc-chip-mode svg{opacity:1}
+/* 目标模式：关着的时候和普通芯片一样安静，开着的时候填一层主色。
+   它是**唯一**一个会让 Agent 自己接着干下去的开关 —— 开没开必须一眼看得出来，
+   而不是靠用户记得自己点过。用主色而不是红：这不是危险档位，是工作方式。 */
+.cc-chip-goal.is-on{color:var(--acc);font-weight:600;
+  border-color:color-mix(in srgb,var(--acc) 45%,transparent);
+  background:color-mix(in srgb,var(--acc) 10%,transparent)}
+.cc-chip-goal.is-on:hover{background:color-mix(in srgb,var(--acc) 16%,transparent);color:var(--acc)}
 /* 老类名留着：quiet 皮肤和历史用法还在引它 */
 .cc-chip-warn{border-color:rgba(245,158,11,.45);color:var(--amber)}
 /* 模型名和左边那几枚芯片**同一个字号**，层级差别交给颜色和字重去表达 ——
@@ -5702,3 +5709,27 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
   color:inherit;font:inherit;opacity:.7;cursor:pointer;text-decoration:underline;
 }
 .cc-sources-more:hover{opacity:1}
+
+/* ── 目标模式的验收清单（components/console/GoalCard）──────────────────────
+   它回答的是"这一轮什么时候才算完"，所以摆在回答上方、和执行过程并排看。
+   进度条画的是**判定结果**，不是模型的自述。 */
+.cc-goal{margin:8px 0;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;
+  background:var(--bg2);font-size:13px;line-height:1.55}
+.cc-goal-achieved{border-color:color-mix(in srgb,var(--acc) 45%,transparent)}
+.cc-goal-stopped{border-color:color-mix(in srgb,var(--amber) 45%,transparent)}
+.cc-goal-head{display:flex;align-items:center;gap:6px}
+.cc-goal-mark{color:var(--acc);font-weight:700}
+.cc-goal-count{margin-left:auto;color:var(--t3);font-size:12px}
+.cc-goal-objective{margin-top:2px;color:var(--t2)}
+.cc-goal-bar{margin:8px 0;height:4px;border-radius:999px;background:var(--bd);overflow:hidden}
+.cc-goal-bar>i{display:block;height:100%;background:var(--acc);
+  transition:width var(--dur) var(--ease)}
+.cc-goal-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.cc-goal-item{display:flex;gap:8px;align-items:flex-start}
+.cc-goal-sign{flex:0 0 auto;width:14px;text-align:center;font-weight:700;color:var(--t3)}
+.cc-goal-item.is-met .cc-goal-sign{color:var(--acc)}
+.cc-goal-item.is-unmet .cc-goal-sign{color:var(--amber)}
+.cc-goal-item.is-met .cc-goal-text{color:var(--t3)}
+.cc-goal-text{color:var(--t2)}
+.cc-goal-reason,.cc-goal-verify{color:var(--t3);font-size:12px}
+.cc-goal-stop,.cc-goal-tip{margin-top:8px;color:var(--t3);font-size:12px}

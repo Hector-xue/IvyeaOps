@@ -231,6 +231,14 @@ html:is([data-skin="quiet"],[data-skin="lucent"]) .cc-chip-mode.tone-danger {
   border: 1px solid color-mix(in srgb, var(--red) 55%, transparent) !important;
   background: color-mix(in srgb, var(--red) 10%, transparent) !important;
 }
+/* 目标模式开着的时候同理：上面 ③ 那条把所有 .cc-chip 的底色和边框扒光了，
+   不在这里补回来，简约皮肤下"开着"就只剩一行绿字 —— 而它是**唯一**一个会让
+   Agent 自己接着干下去的开关，看不出开没开的代价比多一层底色大得多。
+   用主色不用红：这不是危险档位，是工作方式。 */
+html:is([data-skin="quiet"],[data-skin="lucent"]) .cc-chip-goal.is-on {
+  border: 1px solid color-mix(in srgb, var(--acc) 50%, transparent) !important;
+  background: color-mix(in srgb, var(--acc) 10%, transparent) !important;
+}
 /* 「有新版本」现在是账户行头像上那颗红点 + 菜单里那一行变红（见 .sb-acct-dot /
    .sb-menu-item.has-update），不再是一个带框按钮 —— 它们本身就没有边框可留。 */
 
