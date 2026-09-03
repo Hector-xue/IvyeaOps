@@ -65,6 +65,28 @@ assert.equal(restates(A, A.replace("---", "***")), false, "正文分割线被改
 assert.deepEqual([...restatedIndexes([T1, T2, `${T2}\n| 三脚架 | 89 |`])].sort(), [0, 1],
                  "多稿只留最后一份");
 
+/* 第二种抄法（实测 glm-5.3-flash）：它重抄的是**手上正在写的那张表**，不是整篇 ——
+   第二稿没带上第一稿的那个小标题，"以第一稿开头"因此不成立，前缀判据一条都收不住。
+   但每一稿都一字不差地躺在后面那一稿里，所以判据从"前缀"放宽到"包含"。 */
+const D1 = `### 1. 大厂具名薪资（全国范围公开招聘）
+
+| 公司 | 岗位 | 月薪 | 薪数 |
+|---|---|---|---|
+| 字节 · 豆包 | FDE | 3.5–7 万 | 15 薪 |`;
+const D2 = `| 公司 | 岗位 | 月薪 | 薪数 |
+|---|---|---|---|
+| 字节 · 豆包 | FDE | 3.5–7 万 | 15 薪 |
+| 阿里云 | FDE | 2–5 万 | 16 薪 |`;
+const FINAL = `${D1}
+| 阿里云 | FDE | 2–5 万 | 16 薪 |
+| 腾讯云 | FDE | 3.5–6.5 万 | 15 薪 |`;
+
+assert.equal(restates(D1, D2), false, "第二稿没包含小标题，它作废不了第一稿");
+assert.deepEqual([...restatedIndexes([D1, D2, FINAL])].sort(), [0, 1],
+                 "但终稿把两份草稿都包含了 —— 三张表只留最后一张（这条是用户报的回归）");
+assert.equal(restates(D2, D2.replace("2–5 万", "3–6 万")), false,
+             "改了数字就是新版本，不是重述 —— 放宽到「包含」也不能吞真话");
+
 // ── 引用来源：「不能直接点击跳转到原文」──────────────────────────────────
 assert.deepEqual(parseCitationSource("ivyea://knowledge/governance.source_quality"),
                  { kind: "card", id: "governance.source_quality", raw: "ivyea://knowledge/governance.source_quality" });
@@ -87,5 +109,21 @@ for (const broken of ["", "ivyea://knowledge/", "ivyea-upload://"]) {
 const up = parseCitationSource("ivyea-upload://a/b.md");
 assert.ok(!citationSourceLabel(up).includes("ivyea"), "标签不该暴露原始 URI");
 assert.ok(citationSourceLabel(up).includes("原文"));
+
+// ── 来源链条：从步骤里挑出真抓过的网页（不猜、不做模糊匹配）──────────────
+const { answerSources } = await load("src/lib/answerSources.ts", "answerSources");
+const steps = [
+  { name: "web_search", args: { query: "FDE 薪资" } },
+  { name: "web_fetch", args: { url: "https://ccaf101.com/fde/salary" } },
+  { name: "web_fetch", args: { url: "https://ccaf101.com/fde/salary" } },   // 同一页抓两遍
+  { name: "web_fetch", args: { url: "https://www.fdehub.cc/report?y=2026" } },
+  { name: "web_fetch", args: { url: "ivyea://knowledge/x" } },             // 内部协议不是外链
+  { name: "web_fetch", args: {} },
+  { name: "read_file", args: { url: "https://not-a-fetch.example/" } },
+];
+assert.deepEqual(answerSources(steps).map((s) => [s.host, s.path]),
+                 [["ccaf101.com", "/fde/salary"], ["fdehub.cc", "/report?y=2026"]],
+                 "只要抓过的网页，去重、去 www、非 http 一律不摆");
+assert.deepEqual(answerSources([]), [], "没抓过网页就没有这一条");
 
 console.log("citation-restatement: 全部通过");

@@ -5682,3 +5682,23 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 .src-body{padding:14px 16px;overflow:auto}
 .src-hint{color:var(--t2,#888);font-size:13px;line-height:1.8}
 .src-raw{word-break:break-all;font-family:ui-monospace,Consolas,monospace;font-size:11.5px}
+
+/* 回答底下那条「本轮抓取的网页」。安静但点得着：不抢回答的视线，又不能像
+   .md-cite 那样长得像行内按钮 —— 它是一整条出处，摆在回答之后自成一块。 */
+.cc-sources{margin:10px 0 2px;font-size:.92em;color:var(--t2,#888)}
+.cc-sources-head{opacity:.8;margin-bottom:4px}
+.cc-sources-list{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px 6px}
+.cc-sources-list a{
+  display:inline-flex;align-items:baseline;gap:4px;max-width:100%;
+  padding:1px 8px;border:1px solid var(--wb-border,rgba(0,0,0,.1));border-radius:999px;
+  color:inherit;text-decoration:none;
+}
+.cc-sources-list a:hover{background:var(--wb-hover,rgba(0,0,0,.04));color:var(--a,#2c7)}
+.cc-sources-host{white-space:nowrap}
+/* 路径只是用来分辨同一站的两页，挤不下就截断 —— 域名一个字都不能少。 */
+.cc-sources-path{opacity:.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:16em}
+.cc-sources-more{
+  margin-top:4px;padding:0;border:none;background:transparent;
+  color:inherit;font:inherit;opacity:.7;cursor:pointer;text-decoration:underline;
+}
+.cc-sources-more:hover{opacity:1}

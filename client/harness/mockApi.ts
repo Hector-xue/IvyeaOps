@@ -1677,6 +1677,17 @@ export function installMockApi(): void {
           send("step", { type: "step", id: "b" + i, seq: i, phase: "tool", name: st[0],
                          status: "ok", ms: 160 });
         }
+        // 抓两个网页：回答落定之后底下那条「本轮抓取的网页」就是从这里来的
+        // （AnswerSources 只认 web_fetch 步骤上的 url，不猜、不做模糊匹配）。
+        for (const [i, url] of ["https://www.fdehub.cc/report",
+                                "https://ccaf101.com/fde/salary"].entries()) {
+          if (halted()) return;
+          send("step", { type: "step", id: "w" + i, seq: 10 + i, phase: "tool",
+                         name: "web_fetch", args: { url }, status: "running" });
+          await beat(140);
+          send("step", { type: "step", id: "w" + i, seq: 10 + i, phase: "tool",
+                         name: "web_fetch", args: { url }, status: "ok", ms: 140 });
+        }
         await beat(500);
         for (const t of ["数据源确认了：只有 sorftime，没有广告报表拉取工具。",
                          "那就先用本地那份搜索词报表跑，缺的字段回头再补。"]) {

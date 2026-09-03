@@ -720,7 +720,10 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
     try {
       await ivyeaAgentSessionLive(sid, {
         ...stream.handlers,
-        onLiveBegin: () => { attached = true; },
+        // 接上了。**要接着往下调 stream 自己那个** —— 断链重接时它要把这一格里
+        // 那半截旧正文清掉（回放会从头再给一遍，见 turnStream 的 onLiveBegin）。
+        // 这里直接覆盖成 `() => { attached = true; }` 就把那件事悄悄吃掉了。
+        onLiveBegin: (d) => { attached = true; stream.handlers.onLiveBegin?.(d); },
       }, { signal });
     } catch {
       return attached;      // 404 = 这条会话没有活轮；其余按接不上处理

@@ -183,6 +183,24 @@ export function createTurnStream(deps: TurnStreamDeps): TurnStream {
 
   const handlers: IvyeaStreamHandlers = {
     onFileChange: (d) => deps.setFileChanges((prev) => [...prev, d]),
+    /**
+     * 接进活轮日志 —— 它**从头回放**：live_turn.follow 里 sent_len 从 0 起，
+     * 正文一个字不落地再发一遍（客户端手上已经有多少，服务端并不知道）。
+     *
+     * 断链重接走的是**同一格**轮次（见 Console 的 followLive：管子断了但那一轮
+     * 还在后台跑，不重发、改接活轮日志），那一格里往往已经攒了半截正文。不清空
+     * 就是在旧的半截上再摞一份完整的 —— 断两次摞三份，屏幕上就是用户报的
+     * "同一张表连出三遍，刷新一下才正常"（刷新走存档，存档里本来就只有一份）。
+     *
+     * 清的只有**回放会重新给的那些**：正文、它的分段、以及手里那半帧缓冲。
+     * · 步骤不清：按 tool_call_id 合并（mergeStep），回放不会重复。
+     * · 思考不清：reasoning 不进事件环，回放给不回来，清了就真没了。
+     */
+    onLiveBegin: () => {
+      cancelFlush();
+      finalText = "";
+      deps.patch({ text: "", segments: [] });
+    },
     onStart: (d) => {
       if (d?.session_id) deps.onSessionId?.(String(d.session_id));
       if (d?.model) deps.setModel?.(typeof d.model === "string" ? d.model : d.model?.model || "");

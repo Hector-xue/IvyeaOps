@@ -96,6 +96,23 @@ async function run() {
     assert.equal(dockIcon.text, "", `状态坞把图标名画成了文字：「${dockIcon.text}」`);
     assert.ok(dockIcon.svg, "状态坞该画一个真图标");
 
+    // ── 二·五、回答落定之后：底下那条「本轮抓取的网页」必须真的能点 ────────
+    // 用户报的是"末尾的引用来源还是不能直接点击跳转"，所以这里量的不是"有没有这块
+    // 东西"，而是它到底是不是 <a href>、地址对不对、会不会在新标签页打开。
+    // **必须排在状态坞之后**：来源要等这一轮跑完才画，而状态坞只在跑着的时候存在
+    // （running = busy && !atBottom），先等来源就等于把状态坞等没了。
+    await waitFor(send, `!!document.querySelector(".cc-sources a")`,
+                  "回答底下的来源链条", 30_000);
+    const sources = await evaluate(send, `(() => [...document.querySelectorAll(".cc-sources a")]
+      .map((a) => ({ href: a.getAttribute("href"), target: a.getAttribute("target"),
+                     rel: a.getAttribute("rel"), text: a.textContent.trim() })))()`);
+    assert.deepEqual(sources.map((s) => s.href),
+                     ["https://www.fdehub.cc/report", "https://ccaf101.com/fde/salary"],
+                     "抓过的两页都要在，且是原样的地址");
+    assert.ok(sources.every((s) => s.target === "_blank" && (s.rel || "").includes("noopener")),
+              "外链在新标签页开，且不把 opener 交出去");
+    assert.ok(sources[0].text.includes("fdehub.cc"), `域名要看得见，实际是「${sources[0].text}」`);
+
     // ── 三、打开一条**正在跑**的会话：进度接得上 ──────────────────────────
     await send("Page.navigate", { url: `${ORIGIN}/?r=/console&session=s-live&live=1` });
     await waitFor(send, `document.querySelectorAll(".cc-bubble").length > 0`,
