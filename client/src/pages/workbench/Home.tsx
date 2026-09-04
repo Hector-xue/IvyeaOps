@@ -202,13 +202,18 @@ function LingXingToolsDialog({ panel, setPanel, onClose }: {
         </nav>
       }
     >
-      <Suspense fallback={<div className="app-dialog-loading">加载中…</div>}>
-        {panel === "browse" && (
-          <LingXingBrowse datasets={datasets} active={dataset} setActive={setDataset} storeSid={storeSid} />
-        )}
-        {panel === "audit" && <LingXingAudit />}
-        {panel === "config" && <LingXingConfig />}
-      </Suspense>
+      {/* 滚动区必须由内容方自己开：.app-dialog-body 是 overflow:hidden 的 flex 容器
+          （对话框外壳不替内容决定怎么滚，表格类面板可能要自己接管）。这三个面板都是
+          普通流式内容，统一在这一层滚 —— 少了它，配置页从「③ 总开关」往下够不着。 */}
+      <div className="lx-tools-body">
+        <Suspense fallback={<div className="app-dialog-loading">加载中…</div>}>
+          {panel === "browse" && (
+            <LingXingBrowse datasets={datasets} active={dataset} setActive={setDataset} storeSid={storeSid} />
+          )}
+          {panel === "audit" && <LingXingAudit />}
+          {panel === "config" && <LingXingConfig />}
+        </Suspense>
+      </div>
     </AppDialog>
   );
 }
