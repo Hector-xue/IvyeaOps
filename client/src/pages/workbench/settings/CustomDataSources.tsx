@@ -6,6 +6,7 @@ import {
   type AutoReport, type CapabilityOutcome,
 } from "../../../api/dataSources";
 import { loadCustomDataSources } from "../../../lib/dataSource";
+import { errText } from "../../../lib/errText";
 
 // 自定义 MCP 数据源的配置界面。
 //
@@ -120,9 +121,13 @@ function slugFromUrl(url: string): string {
   }
 }
 
-function detail(e: unknown): string {
-  const anyE = e as { response?: { data?: { detail?: string } }; message?: string };
-  return anyE?.response?.data?.detail || anyE?.message || "";
+/** 后端错误归一成一句话。
+ *
+ *  **必须走 errText**：FastAPI 的 422 里 `detail` 是对象数组，直接塞进 JSX 会让
+ *  React 整页崩成「渲染失败」，而真正的原因（哪个参数传错了）一个字都不会露出来。
+ *  仓库有门禁卡这条（scripts/check-errtext.mjs）。 */
+function detail(e: unknown, fallback = "操作失败"): string {
+  return errText(e, fallback);
 }
 
 export default function CustomDataSources() {
