@@ -879,6 +879,36 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
         params: ["keyword", "site"], required: ["keyword"] },
     ],
   }],
+  // 自动配置的报告。**故意留两项没配成** —— 全绿的话"没配上会怎样"那段提示
+  // 和「高级设置」的引导永远渲染不到。
+  ["/data-sources/autoconfig", {
+    source: null,
+    report: {
+      ok: true, tools: 7, surfaces: ["home", "market", "playbook"],
+      capabilities: [
+        { id: "home_asin_pulse", label: "ASIN 监控卡片", ok: true, tool: "item_lookup",
+          matched: 12, missing: ["coupon", "deal", "inventory"] },
+        { id: "home_product_trend_series", label: "ASIN 销量趋势", ok: true,
+          tool: "item_sales_history", matched: 2, missing: [] },
+        { id: "home_keyword_pulse", label: "关键词监控卡片", ok: true, tool: "term_metrics",
+          matched: 3, missing: ["competition_index"] },
+        { id: "home_keyword_trend_series", label: "关键词趋势", ok: true, tool: "term_history",
+          matched: 2, missing: [] },
+        { id: "home_keyword_extends", label: "拓展词", ok: true, tool: "term_related",
+          matched: 5, missing: [] },
+        { id: "home_category", label: "类目大盘", ok: true, tool: "category_top",
+          matched: 9, missing: [] },
+        { id: "keyword_pipeline", label: "关键词采集（市场调研 / 打法推荐）", ok: true,
+          tool: "term_metrics、term_history、term_related", matched: 3, missing: [] },
+        { id: "asin_pipeline", label: "ASIN 采集（市场调研 / 打法推荐）", ok: true,
+          tool: "item_lookup、item_sales_history", matched: 2, missing: [] },
+        { id: "home_market_metrics", label: "大盘指标", ok: false,
+          error: "category_top 的返回里认不出需要的字段" },
+        { id: "home_keyword_purchase_evidence", label: "关键词购买佐证", ok: false,
+          error: "没有找到合适的工具" },
+      ],
+    },
+  }],
   ["/data-sources/test", {
     ok: true, errors: [], filled_fields: 7,
     result: { asin: "B0DEMO1234", title: "Demo Widget", price: 19.99, bsr: 1234,

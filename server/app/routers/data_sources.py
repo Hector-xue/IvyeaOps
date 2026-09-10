@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.core.security import require_user
+from app.services import custom_source_autoconfig as _auto
 from app.services import custom_source_mcp as _mcp
 from app.services import custom_source_provider as _provider
 from app.services import custom_source_registry as _registry
@@ -28,6 +29,15 @@ router = APIRouter()
 
 class SourceBody(BaseModel):
     source: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AutoBody(BaseModel):
+    source: Dict[str, Any] = Field(default_factory=dict)
+    # 自动配置要真调一次工具，得有个能查得到东西的样例。默认值挑的是各站都有货、
+    # 各家数据源都覆盖得到的品类词和一个长销款 ASIN；用户自己的品类当然更准。
+    sample_keyword: str = "wireless earbuds"
+    sample_asin: str = "B08N5WRWNW"
+    marketplace: str = "US"
 
 
 class TestBody(BaseModel):
@@ -84,6 +94,34 @@ async def probe_source(body: SourceBody, _u: str = Depends(require_user)) -> Dic
     # 所以这里明确告诉用户：能列出工具 ≠ 密钥有效，密钥要靠"试跑"验证。
     result["note"] = "工具清单通常不需要鉴权即可读取，能列出工具不代表密钥有效；请用「试跑」验证。"
     return result
+
+
+@router.post("/data-sources/autoconfig")
+async def autoconfig_source(body: AutoBody, _u: str = Depends(require_user)) -> Dict[str, Any]:
+    """探测 + 试调 + 自动生成字段映射。
+
+    不落盘 —— 结果回给前端，用户看过报告再点保存。自动配错了还能进「高级」里改。
+    """
+    cfg = _hydrate(body.source)
+    try:
+        out = await _auto.autoconfigure(
+            cfg, body.sample_keyword.strip(), body.sample_asin.strip(), body.marketplace,
+        )
+        # 回给前端的配置里把凭据摘掉 —— hydrate 补进去的是明文，原样回传等于让密钥
+        # 在响应体里再走一趟网络、还会落进浏览器内存和 devtools 的历史里。
+        # 前端保存时用的是用户自己那份 auth，不依赖这里回传。
+        if out.get("source"):
+            auth = dict(out["source"].get("auth") or {})
+            out["source"]["auth"] = {**auth, "value": "",
+                                     "value_set": bool(str(auth.get("value") or "").strip())}
+        return out
+    except _mcp.CustomSourceError as exc:
+        return {"source": None, "report": {"ok": False, "error": str(exc),
+                                           "tools": 0, "capabilities": [], "surfaces": []}}
+    except Exception as exc:      # noqa: BLE001 — 自动配置失败是常态，不该变成 500
+        logger.debug("自动配置失败", exc_info=True)
+        return {"source": None, "report": {"ok": False, "error": str(exc),
+                                           "tools": 0, "capabilities": [], "surfaces": []}}
 
 
 @router.post("/data-sources/test")

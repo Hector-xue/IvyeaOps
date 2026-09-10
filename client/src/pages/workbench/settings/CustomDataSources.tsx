@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
 import {
   listDataSources, saveDataSource, deleteDataSource, probeDataSource, testDataSource,
+  autoconfigDataSource,
   type CustomDataSource, type CapabilitySpec, type ProbeResult, type TestResult,
+  type AutoReport,
 } from "../../../api/dataSources";
 import { loadCustomDataSources } from "../../../lib/dataSource";
 
 // 自定义 MCP 数据源的配置界面。
 //
-// 配一个源就是三步，界面顺序刻意和这三步一致：
-//   ① 连上（端点 + 鉴权 → 探测出对方有哪些工具）
-//   ② 翻译（把对方的工具和字段映射成工作台内部那套字段名）
-//   ③ 验证（真调一次，看翻译出来的结果对不对）
-// 第②步是全部工作量所在，所以每个能力都直接把「工作台要什么字段」列出来让人
-// 对着填，而不是丢一个空的 JSON 编辑器让人猜。
+// 默认动线只有两步：**填端点和密钥 → 点「自动配置」**。工具叫什么、参数怎么传、
+// 返回里哪个字段是价格，都由后端探测 + 真调一次样例推断出来（见
+// services/custom_source_autoconfig）。配完直接保存，板块下拉里就能选。
+//
+// 手工映射整个收进「高级」折叠区 —— 它是自动推断出错时的补救口，不是常规路径。
+// 上一版把这一屏当默认界面，等于把内部的映射 DSL 甩给用户，是设计错误。
 
 type CapKind = "record" | "rows" | "series" | "pipeline";
 
@@ -22,8 +24,8 @@ const CAPS: {
 }[] = [
   {
     id: "keyword_pipeline", kind: "pipeline", label: "关键词采集（市场调研 / 打法推荐）",
-    hint: "按顺序调用若干工具，结果整包交给 AI 生成报告。不需要字段映射 —— AI 直接读原始 JSON。",
-    testHint: "填一个关键词，如 ipad case",
+    hint: "按顺序调用若干工具，结果整包交给 AI 生成报告。不需要字段映射。",
+    testHint: "填一个关键词",
   },
   {
     id: "asin_pipeline", kind: "pipeline", label: "ASIN 采集（市场调研 / 打法推荐）",
@@ -38,8 +40,7 @@ const CAPS: {
   },
   {
     id: "home_keyword_pulse", kind: "record", label: "关键词监控卡片（首页）",
-    hint: "关键词的搜索量 / 竞价 / 竞争度。趋势线走下面的「关键词趋势」能力。",
-    testHint: "填一个关键词",
+    hint: "关键词的搜索量 / 竞价 / 竞争度。", testHint: "填一个关键词",
     fields: ["monthly_search_volume", "recommended_cpc_bid", "purchase_rate", "competition_index"],
   },
   {
@@ -49,25 +50,24 @@ const CAPS: {
   },
   {
     id: "home_keyword_purchase_evidence", kind: "record", label: "关键词购买佐证（首页）",
-    hint: "拓展词的月购买量，用来给机会词补一条真实成交佐证。只需映射一个 value。",
+    hint: "拓展词的月购买量。只需映射一个 value。",
     testHint: "填一个关键词", fields: ["value"],
   },
   {
     id: "home_category", kind: "rows", label: "类目大盘（首页）",
-    hint: "类目 Top 商品列表；价格带和汇总由工作台按这些商品自己算。",
+    hint: "类目 Top 商品列表；价格带和汇总由工作台自己算。",
     testHint: "填类目词 / nodeId / ASIN",
     rowFields: ["asin", "title", "brand", "image", "price", "bsr", "est_sales", "rating", "review_count"],
     summaryFields: ["category_name", "node_id", "avg_price", "total_sales"],
   },
   {
     id: "home_market_metrics", kind: "record", label: "大盘指标（首页趋势记录）",
-    hint: "每日记录一次的搜索量 / 销量 / 均价，是首页趋势图的数据来源。",
-    testHint: "填一个关键词",
+    hint: "每日记录一次的搜索量 / 销量 / 均价。", testHint: "填一个关键词",
     fields: ["search_volume", "total_sales", "avg_price", "node_id", "node_id_path", "category_name"],
   },
   {
     id: "home_keyword_trend_series", kind: "series", label: "关键词趋势",
-    hint: "时间序列。day 支持 2024-05-07 / 202405 / 2024年05月，只到月份会补成 1 号。",
+    hint: "时间序列。day 支持 2024-05-07 / 202405 / 2024年05月。",
     testHint: "填一个关键词", rowFields: ["day", "value"],
   },
   {
@@ -96,6 +96,11 @@ function blank(): CustomDataSource {
 function jsonText(value: unknown): string {
   if (value === undefined || value === null) return "";
   try { return JSON.stringify(value, null, 2); } catch { return ""; }
+}
+
+function detail(e: unknown): string {
+  const anyE = e as { response?: { data?: { detail?: string } }; message?: string };
+  return anyE?.response?.data?.detail || anyE?.message || "";
 }
 
 export default function CustomDataSources() {
@@ -129,9 +134,9 @@ export default function CustomDataSources() {
         <div>
           <div className="hs-section-title">自定义数据源</div>
           <div className="hs-section-desc">
-            把任意 MCP 数据源接进首页 / 市场调研 / 打法推荐。填一次「工具名 + 字段映射」，
-            它就会出现在各板块的数据源下拉里，和内置的三家并列。
-            内置的 Sorftime / SIF / 卖家精灵不受这里影响。
+            接自己的 MCP 数据源：填端点和密钥，点「自动配置」，剩下的交给它自己探测。
+            配好后就出现在首页 / 市场调研 / 打法推荐的数据源下拉里，和内置三家并列
+            —— 内置的 Sorftime / SIF / 卖家精灵不受影响。
           </div>
         </div>
         <button className="hs-save-btn" disabled={busy}
@@ -192,7 +197,13 @@ function Editor({ value, onChange, onSaved, onCancel }: {
   onCancel: () => void;
 }) {
   const [probe, setProbe] = useState<ProbeResult | null>(null);
+  const [report, setReport] = useState<AutoReport | null>(null);
+  const [autoBusy, setAutoBusy] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [advanced, setAdvanced] = useState(false);
+  const [sampleOpen, setSampleOpen] = useState(false);
+  const [sampleKeyword, setSampleKeyword] = useState("wireless earbuds");
+  const [sampleAsin, setSampleAsin] = useState("B08N5WRWNW");
   const [err, setErr] = useState("");
 
   const set = <K extends keyof CustomDataSource>(key: K, v: CustomDataSource[K]) =>
@@ -202,6 +213,21 @@ function Editor({ value, onChange, onSaved, onCancel }: {
     const next = { ...(value.capabilities || {}) };
     if (spec === null) delete next[id]; else next[id] = spec;
     onChange({ ...value, capabilities: next });
+  };
+
+  const configured = Object.keys(value.capabilities || {}).length;
+
+  const runAuto = async () => {
+    setErr(""); setReport(null); setAutoBusy(true);
+    try {
+      const out = await autoconfigDataSource(value, sampleKeyword, sampleAsin, "US");
+      setReport(out.report);
+      if (out.source) onChange({ ...out.source, auth: value.auth });
+    } catch (e: unknown) {
+      setErr(detail(e) || "自动配置失败");
+    } finally {
+      setAutoBusy(false);
+    }
   };
 
   const runProbe = async () => {
@@ -218,11 +244,10 @@ function Editor({ value, onChange, onSaved, onCancel }: {
   };
 
   const toolNames = (probe?.tools || []).map((t) => t.name);
+  const canAuto = !!value.url.trim() && !!value.id.trim();
 
   return (
     <div className="cds-editor">
-      {/* ① 连接 */}
-      <div className="cds-step"><span className="cds-step-t">① 连接</span></div>
       <div className="cds-grid">
         <label className="cds-f">
           <span>显示名称</span>
@@ -250,91 +275,143 @@ function Editor({ value, onChange, onSaved, onCancel }: {
             <option value="none">不需要鉴权</option>
           </select>
         </label>
-        {(value.auth.mode === "query" || value.auth.mode === "header") && (
-          <label className="cds-f">
-            <span>{value.auth.mode === "query" ? "参数名" : "Header 名"}</span>
-            <input className="hs-input" value={value.auth.name}
-              placeholder={value.auth.mode === "query" ? "key" : "X-API-Key"}
-              onChange={(e) => set("auth", { ...value.auth, name: e.target.value })} />
-          </label>
-        )}
         {value.auth.mode !== "none" && (
           <label className="cds-f">
-            <span>密钥{value.auth.value_set && !value.auth.value ? "（已保存，留空即不改）" : ""}</span>
+            <span>密钥{value.auth.value_set && !value.auth.value ? "（已保存，留空不改）" : ""}</span>
             <input className="hs-input" type="password" autoComplete="new-password"
               value={value.auth.value} placeholder={value.auth.value_set ? "••••••" : "粘贴密钥"}
               onChange={(e) => set("auth", { ...value.auth, value: e.target.value })} />
           </label>
         )}
-        <label className="cds-f">
-          <span>数据信封路径<i>（可选）</i></span>
-          <input className="hs-input" value={value.envelope} placeholder="留空自动识别，如 data"
-            onChange={(e) => set("envelope", e.target.value)} />
-        </label>
-        <label className="cds-f cds-f-check">
-          <input type="checkbox" checked={value.handshake}
-            onChange={(e) => set("handshake", e.target.checked)} />
-          <span>调用前先发 initialize 握手（多数服务器需要，个别不需要）</span>
-        </label>
-        <label className="cds-f cds-f-check">
-          <input type="checkbox" checked={value.enabled}
-            onChange={(e) => set("enabled", e.target.checked)} />
-          <span>启用（停用后各板块下拉里不再出现）</span>
-        </label>
+        {(value.auth.mode === "query" || value.auth.mode === "header") && (
+          <label className="cds-f">
+            <span>{value.auth.mode === "query" ? "参数名" : "Header 名"}<i>（一般不用改）</i></span>
+            <input className="hs-input" value={value.auth.name}
+              placeholder={value.auth.mode === "query" ? "key" : "X-API-Key"}
+              onChange={(e) => set("auth", { ...value.auth, name: e.target.value })} />
+          </label>
+        )}
       </div>
 
       <div className="cds-actions">
-        <button className="cds-btn" onClick={() => void runProbe()}>探测可用工具</button>
-        {probe && !probe.ok && <span className="cds-err">{probe.error}</span>}
-        {probe && probe.ok && (
-          <span className="cds-ok">读到 {probe.count} 个工具</span>
-        )}
+        <button className="cds-primary" disabled={autoBusy || !canAuto}
+          onClick={() => void runAuto()}>
+          {autoBusy ? "正在探测并试调…" : configured ? "重新自动配置" : "自动配置"}
+        </button>
+        <button className="cds-link" onClick={() => setSampleOpen((o) => !o)}>
+          {sampleOpen ? "收起样例" : "换个样例试"}
+        </button>
+        {!canAuto && <span className="cds-note">先填端点和标识 id</span>}
+        {err && <span className="cds-err">{err}</span>}
       </div>
-      {probe?.ok && (
-        <div className="cds-note">{probe.note}</div>
-      )}
-      {probe?.ok && (
-        <div className="cds-tools">
-          {probe.tools.map((t) => (
-            <div key={t.name} className="cds-tool">
-              <code>{t.name}</code>
-              <span className="cds-tool-params">
-                {t.params.length ? t.params.join(", ") : "无参数"}
-              </span>
-              {t.description && <div className="cds-tool-desc">{t.description}</div>}
-            </div>
-          ))}
+
+      {sampleOpen && (
+        <div className="cds-sample">
+          <div className="cds-note">
+            自动配置要拿真实数据试调一次才认得出字段。换成你自己的品类词和在售 ASIN 会更准。
+          </div>
+          <div className="cds-grid">
+            <label className="cds-f">
+              <span>样例关键词</span>
+              <input className="hs-input" value={sampleKeyword}
+                onChange={(e) => setSampleKeyword(e.target.value)} />
+            </label>
+            <label className="cds-f">
+              <span>样例 ASIN</span>
+              <input className="hs-input" value={sampleAsin}
+                onChange={(e) => setSampleAsin(e.target.value)} />
+            </label>
+          </div>
         </div>
       )}
 
-      {/* ② 板块 */}
-      <div className="cds-step"><span className="cds-step-t">② 在哪些板块出现</span></div>
-      <div className="cds-surfaces">
-        {SURFACES.map((s) => {
-          const on = value.surfaces.includes(s.id);
-          const ok = !!value.capabilities?.[s.requires];
-          return (
-            <label key={s.id} className={"cds-surface" + (on ? " on" : "")}>
-              <input type="checkbox" checked={on}
-                onChange={(e) => set("surfaces",
-                  e.target.checked ? [...value.surfaces, s.id] : value.surfaces.filter((x) => x !== s.id))} />
-              <span>{s.label}</span>
-              {!ok && <em>需先配置「{CAPS.find((c) => c.id === s.requires)?.label}」</em>}
-            </label>
-          );
-        })}
+      {report && <AutoResult report={report} />}
+
+      <div className="cds-adv-hd">
+        <button className="cds-link" onClick={() => setAdvanced((a) => !a)}>
+          {advanced ? "▾ 收起高级设置" : "▸ 高级设置（自动配置认错了才需要动）"}
+        </button>
+        {configured > 0 && !advanced && (
+          <span className="cds-note">已配置 {configured} 项能力</span>
+        )}
       </div>
 
-      {/* ③ 能力映射 */}
-      <div className="cds-step"><span className="cds-step-t">③ 能力映射</span><i>占位符：{PLACEHOLDERS}</i></div>
-      {CAPS.map((cap) => (
-        <CapabilityBlock
-          key={cap.id} cap={cap} tools={toolNames}
-          spec={value.capabilities?.[cap.id]}
-          onChange={(spec) => setCap(cap.id, spec)}
-          source={value}
-        />
-      ))}
+      {advanced && (
+        <div className="cds-adv">
+          <div className="cds-step"><span className="cds-step-t">连接细节</span></div>
+          <div className="cds-grid">
+            <label className="cds-f">
+              <span>数据信封路径<i>（可选）</i></span>
+              <input className="hs-input" value={value.envelope} placeholder="留空自动识别，如 data"
+                onChange={(e) => set("envelope", e.target.value)} />
+            </label>
+            <label className="cds-f">
+              <span>单次调用超时（秒）</span>
+              <input className="hs-input" type="number" min={5} max={300} value={value.timeout}
+                onChange={(e) => set("timeout", Number(e.target.value) || 40)} />
+            </label>
+            <label className="cds-f cds-f-check">
+              <input type="checkbox" checked={value.handshake}
+                onChange={(e) => set("handshake", e.target.checked)} />
+              <span>调用前先发 initialize 握手（多数服务器需要，个别不需要）</span>
+            </label>
+            <label className="cds-f cds-f-check">
+              <input type="checkbox" checked={value.enabled}
+                onChange={(e) => set("enabled", e.target.checked)} />
+              <span>启用（停用后各板块下拉里不再出现）</span>
+            </label>
+          </div>
+
+          <div className="cds-actions">
+            <button className="cds-btn" onClick={() => void runProbe()}>只看工具清单</button>
+            {probe && !probe.ok && <span className="cds-err">{probe.error}</span>}
+            {probe?.ok && <span className="cds-ok">读到 {probe.count} 个工具</span>}
+          </div>
+          {probe?.ok && <div className="cds-note">{probe.note}</div>}
+          {probe?.ok && (
+            <div className="cds-tools">
+              {probe.tools.map((t) => (
+                <div key={t.name} className="cds-tool">
+                  <code>{t.name}</code>
+                  <span className="cds-tool-params">
+                    {t.params.length ? t.params.join(", ") : "无参数"}
+                  </span>
+                  {t.description && <div className="cds-tool-desc">{t.description}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="cds-step"><span className="cds-step-t">在哪些板块出现</span></div>
+          <div className="cds-surfaces">
+            {SURFACES.map((s) => {
+              const on = value.surfaces.includes(s.id);
+              const ok = !!value.capabilities?.[s.requires];
+              return (
+                <label key={s.id} className={"cds-surface" + (on ? " on" : "")}>
+                  <input type="checkbox" checked={on}
+                    onChange={(e) => set("surfaces",
+                      e.target.checked ? [...value.surfaces, s.id] : value.surfaces.filter((x) => x !== s.id))} />
+                  <span>{s.label}</span>
+                  {!ok && <em>需先配置「{CAPS.find((c) => c.id === s.requires)?.label}」</em>}
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="cds-step">
+            <span className="cds-step-t">能力映射</span><i>占位符：{PLACEHOLDERS}</i>
+          </div>
+          {CAPS.map((cap) => (
+            <CapabilityBlock
+              key={cap.id} cap={cap} tools={toolNames}
+              spec={value.capabilities?.[cap.id]}
+              onChange={(spec) => setCap(cap.id, spec)}
+              source={value}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="cds-actions cds-actions-end">
         {err && <span className="cds-err">{err}</span>}
@@ -343,6 +420,66 @@ function Editor({ value, onChange, onSaved, onCancel }: {
           {saving ? "保存中…" : "保存数据源"}
         </button>
       </div>
+    </div>
+  );
+}
+
+function AutoResult({ report }: { report: AutoReport }) {
+  const labels: Record<string, string> = {
+    home: "首页驾驶舱", market: "市场调研", playbook: "打法推荐",
+  };
+  const ok = report.capabilities.filter((c) => c.ok);
+  const failed = report.capabilities.filter((c) => !c.ok);
+
+  if (!report.ok) {
+    return (
+      <div className="cds-report cds-report-bad">
+        <div className="cds-report-hd">没能自动配好</div>
+        <div className="cds-note">{report.error || "这台服务器的工具都没能返回可用数据。"}</div>
+        <div className="cds-note">
+          可以展开下面的「高级设置」看看它到底有哪些工具，手动指定一次。
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="cds-report">
+      <div className="cds-report-hd">
+        读到 {report.tools} 个工具，配好 {ok.length} 项能力
+        {report.surfaces.length > 0 && (
+          <> · 可用板块：{report.surfaces.map((s) => labels[s] || s).join("、")}</>
+        )}
+      </div>
+      {report.surfaces.length === 0 && (
+        <div className="cds-note">
+          没有板块能点亮 —— 首页要 ASIN 监控卡片，市场调研/打法推荐要关键词采集。
+        </div>
+      )}
+      <ul className="cds-report-list">
+        {ok.map((c) => (
+          <li key={c.id}>
+            <span className="cds-ok">✓</span> {c.label}
+            <span className="cds-report-detail">
+              用 <code>{c.tool}</code>
+              {typeof c.matched === "number" && <>，映射 {c.matched} 个字段</>}
+              {c.missing && c.missing.length > 0 && <>（缺 {c.missing.join("、")}）</>}
+            </span>
+          </li>
+        ))}
+        {failed.map((c) => (
+          <li key={c.id}>
+            <span className="cds-skip">—</span> {c.label}
+            <span className="cds-report-detail">{c.error}</span>
+          </li>
+        ))}
+      </ul>
+      {failed.length > 0 && (
+        <div className="cds-note">
+          没配上的这几项，对应的功能就不出数据（其余照常用）。要补就展开「高级设置」手动指定。
+        </div>
+      )}
+      <div className="cds-note">确认无误后点右下角「保存数据源」。</div>
     </div>
   );
 }
@@ -380,8 +517,7 @@ function CapabilityBlock({ cap, spec, tools, onChange, source }: {
         {names.map((name) => (
           <label key={name} className="cds-map-row">
             <code>{name}</code>
-            <input className="hs-input" spellCheck={false}
-              placeholder="如 price 或 a||b"
+            <input className="hs-input" spellCheck={false} placeholder="如 price 或 a||b"
               value={(spec?.[key] as Record<string, string> | undefined)?.[name] || ""}
               onChange={(e) => patch({
                 [key]: { ...(spec?.[key] || {}), [name]: e.target.value },
@@ -421,7 +557,7 @@ function CapabilityBlock({ cap, spec, tools, onChange, source }: {
             <label className="cds-f">
               <span>调用工具</span>
               <input className="hs-input" list={`cds-tools-${cap.id}`} value={spec?.tool || ""}
-                placeholder="工具名（先探测可自动补全）"
+                placeholder="工具名"
                 onChange={(e) => patch({ tool: e.target.value })} />
               <datalist id={`cds-tools-${cap.id}`}>
                 {tools.map((t) => <option key={t} value={t} />)}
@@ -430,7 +566,7 @@ function CapabilityBlock({ cap, spec, tools, onChange, source }: {
             <label className="cds-f">
               <span>{cap.kind === "record" ? "记录路径" : "列表路径"}<i>（可选）</i></span>
               <input className="hs-input"
-                placeholder={cap.kind === "record" ? "留空自动，如 data" : "留空自动，如 data.top100_products"}
+                placeholder={cap.kind === "record" ? "留空自动，如 data" : "留空自动，如 data.items"}
                 value={(cap.kind === "record" ? spec?.record : spec?.rows) || ""}
                 onChange={(e) => patch(cap.kind === "record"
                   ? { record: e.target.value } : { rows: e.target.value })} />
@@ -482,7 +618,7 @@ function StepsEditor({ steps, tools, onChange }: {
     <div className="cds-cap-body">
       {steps.map((step, i) => (
         <div key={i} className="cds-step-row">
-          <input className="hs-input" placeholder="这一步叫什么（会显示在采集进度里）"
+          <input className="hs-input" placeholder="这一步叫什么（显示在采集进度里）"
             value={step.label} onChange={(e) => patch(i, { label: e.target.value })} />
           <input className="hs-input" list="cds-tools-pipeline" placeholder="工具名"
             value={step.tool} onChange={(e) => patch(i, { tool: e.target.value })} />
@@ -503,9 +639,4 @@ function StepsEditor({ steps, tools, onChange }: {
         onClick={() => onChange([...steps, { label: "", tool: "", args: {} }])}>+ 加一步</button>
     </div>
   );
-}
-
-function detail(e: unknown): string {
-  const anyE = e as { response?: { data?: { detail?: string } }; message?: string };
-  return anyE?.response?.data?.detail || anyE?.message || "";
 }

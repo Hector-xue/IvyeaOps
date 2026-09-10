@@ -69,9 +69,32 @@ export async function deleteDataSource(id: string): Promise<void> {
 
 // 探测和试跑都要真打一次外部服务器，30 秒的全局默认不够用。
 const SLOW = { timeout: 120000 };
+// 自动配置会连着真调十几个工具（每个都可能几秒），120 秒不够；
+// 这里放宽到 5 分钟，进度由界面上的忙态负责交代。
+const AUTOCONFIG = { timeout: 300000 };
 
 export async function probeDataSource(source: CustomDataSource): Promise<ProbeResult> {
   const r = await api.post("/data-sources/probe", { source }, SLOW);
+  return r.data;
+}
+
+export type AutoReport = {
+  ok: boolean;
+  error?: string;
+  tools: number;
+  surfaces: string[];
+  capabilities: {
+    id: string; label: string; ok: boolean;
+    tool?: string; matched?: number; missing?: string[]; error?: string;
+  }[];
+};
+
+export async function autoconfigDataSource(
+  source: CustomDataSource, sampleKeyword: string, sampleAsin: string, marketplace: string,
+): Promise<{ source: CustomDataSource | null; report: AutoReport }> {
+  const r = await api.post("/data-sources/autoconfig", {
+    source, sample_keyword: sampleKeyword, sample_asin: sampleAsin, marketplace,
+  }, AUTOCONFIG);
   return r.data;
 }
 
