@@ -42,6 +42,8 @@ import Composer, { approvalPayload, type ApprovalMode, type ComposerDoc, type Co
 import ArtifactRail, { type RailApproval, type RailTodo } from "../../components/console/ArtifactRail";
 import FollowUps from "../../components/console/FollowUps";
 import AnswerActions from "../../components/console/AnswerActions";
+import AnswerFiles from "../../components/console/AnswerFiles";
+import FilePreview from "../../components/console/FilePreview";
 import LiveDock from "../../components/console/LiveDock";
 import {
   CONSOLE_PRESETS_CHANGED,
@@ -358,6 +360,8 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
    * 上面那个 fileChanges 是实时事件，页面一卸载就没了（历史会话恢复时也会被清空）。
    */
   const [sessionFiles, setSessionFiles] = useState<ConsoleFile[]>([]);
+  /** 点开预览的那个产物。抽屉只有一个，和 SourceViewer 同理。 */
+  const [previewFile, setPreviewFile] = useState<ConsoleFile | null>(null);
   const [followUps, setFollowUps] = useState<string[]>([]);
   const [followLoading, setFollowLoading] = useState(false);
   const [followEnabled, setFollowEnabled] = useState(prefs.current.followUps !== false);
@@ -379,6 +383,31 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
     }, 700);
     return () => window.clearTimeout(t);
   }, [sessionId, fileChanges.length]);
+
+  /**
+   * 产物归到哪一轮 —— 按时间，不按 id。
+   *
+   * 库里虽然记了 turn_id，但页面上的轮次 id 是前端自己生成的（uid()），
+   * 恢复历史会话时更是重新缝出来的，两边对不上。而每一轮的结束时刻是有的：
+   * 一个文件属于**第一个"结束时刻不早于它"的回答**。正在跑的那一轮没有
+   * endedAt，于是刚写出来的文件自然落到它下面 —— 这正是最常见的那一幕：
+   * 跑完当场就想把东西拿走。
+   */
+  const filesByTurn = useMemo(() => {
+    const map = new Map<string, ConsoleFile[]>();
+    const answers = turns.filter((t) => t.role === "assistant");
+    if (!answers.length || !sessionFiles.length) return map;
+    const last = answers[answers.length - 1];
+    for (const f of [...sessionFiles].sort((a, b) => a.last_seen - b.last_seen)) {
+      const at = f.last_seen * 1000;
+      // 3 秒宽容：落库时刻和轮次结束时刻来自不同的时钟读数，卡死会把
+      // 收尾那一刻写出来的文件推到下一轮去。
+      const owner = answers.find((t) => (t.endedAt ?? Infinity) + 3000 >= at) || last;
+      const arr = map.get(owner.id);
+      if (arr) arr.push(f); else map.set(owner.id, [f]);
+    }
+    return map;
+  }, [turns, sessionFiles]);
 
   // 历史会话按轮分页：`from` 是本页最早的轮号，取更早一页时当游标传回去。
   const [earlier, setEarlier] = useState<{ hasMore: boolean; from: number; loading: boolean }>(
@@ -1615,6 +1644,12 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
                         stage={t.stage}
                         onPickImage={pickAnswerImage}
                       />
+                      {/* 这一轮跑出来的文件。跑的过程中就显示 —— 文件一落盘就该
+                          能拿走，不必等整轮说完。 */}
+                      <AnswerFiles
+                        files={filesByTurn.get(t.id) || []}
+                        onOpen={setPreviewFile}
+                      />
                       {/*
                         * 正文和输入框之间的收尾。跑的过程中不出现 —— 正在写的一段
                         * 话底下挂一排"复制/重新生成"，等于请用户复制一份还没写完的
@@ -1797,6 +1832,11 @@ function ConsoleInner({ embedded = false, sessionId: embedSession = "",
       {/* 引用来源里的站内原文查看器。挂在这里而不是每条引用各自持有一个：
           一屏可能有十几条引用，浮层只该有一个。 */}
       <SourceViewer />
+
+      {/* 产物预览抽屉。和引用查看器一样只该有一个：一屏可能有十几张文件卡片。 */}
+      {previewFile && (
+        <FilePreview file={previewFile} onClose={() => setPreviewFile(null)} />
+      )}
 
       {/* 产物栏在悬浮球里放不下，也不该放：面板的价值是"不离开当前页面问一句"，
           真要看产物/待办/审批留痕，点开任务台。 */}

@@ -98,7 +98,8 @@ _BASELINE_SCHEMA = (
         action     TEXT NOT NULL DEFAULT '',
         changes    INTEGER NOT NULL DEFAULT 1,
         first_seen REAL NOT NULL DEFAULT 0,
-        last_seen  REAL NOT NULL DEFAULT 0
+        last_seen  REAL NOT NULL DEFAULT 0,
+        turn_id    TEXT NOT NULL DEFAULT ''
     );
     """,
     "CREATE INDEX IF NOT EXISTS idx_console_files_session ON console_files(session_id, last_seen DESC);",
@@ -150,8 +151,19 @@ def _m002_add_preset_system(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE console_presets ADD COLUMN system TEXT NOT NULL DEFAULT ''")
 
 
+def _m003_add_file_turn(conn: sqlite3.Connection) -> None:
+    """给产物索引补 turn_id 列 —— 文件卡片要挂在**产出它的那条回答**下面。
+
+    存量行留空：老记录挂不到具体某一轮，就统一在会话末尾那条回答下面出现，
+    而不是凭空猜一个 turn。
+    """
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(console_files)")}
+    if "turn_id" not in cols:
+        conn.execute("ALTER TABLE console_files ADD COLUMN turn_id TEXT NOT NULL DEFAULT ''")
+
+
 # 追加即可，永远不要重排或删除已应用过的迁移。
-_MIGRATIONS: tuple = (_m001_add_source, _m002_add_preset_system)
+_MIGRATIONS: tuple = (_m001_add_source, _m002_add_preset_system, _m003_add_file_turn)
 
 # 会话来源：任务台 / AI 问答 / 知识库对话 / 终端。前三处是收编进这个会话库的
 # 网页入口，左栏靠它区分并筛选。
@@ -412,8 +424,14 @@ def _file_id(session_id: str, path: str) -> str:
     return hashlib.sha1(raw).hexdigest()[:16]
 
 
-def record_file(session_id: str, principal: str, path: str, action: str = "") -> None:
-    """记一次产物写入。同路径重复写只累加次数，不新增行。"""
+def record_file(session_id: str, principal: str, path: str, action: str = "",
+                turn_id: str = "") -> None:
+    """记一次产物写入。同路径重复写只累加次数，不新增行。
+
+    ``turn_id`` 是为了把文件卡片挂到**产出它的那条回答**下面 —— 产物列在侧栏里
+    没人找得到（生产上线以来一次都没被点开过）。同一个文件被后面几轮又改了的话，
+    turn_id 跟着更新到最后一次：卡片应该出现在"最后写它的那条回答"下面。
+    """
     session_id = (session_id or "").strip()
     path = (path or "").strip()
     if not session_id or not path:
@@ -425,15 +443,17 @@ def record_file(session_id: str, principal: str, path: str, action: str = "") ->
         row = conn.execute("SELECT changes FROM console_files WHERE id = ?", (fid,)).fetchone()
         if row:
             conn.execute(
-                "UPDATE console_files SET changes = ?, last_seen = ?, action = ? WHERE id = ?",
-                (int(row["changes"] or 0) + 1, now, (action or "")[:20], fid),
+                "UPDATE console_files SET changes = ?, last_seen = ?, action = ?, turn_id = ?"
+                " WHERE id = ?",
+                (int(row["changes"] or 0) + 1, now, (action or "")[:20],
+                 (turn_id or "")[:64], fid),
             )
         else:
             conn.execute(
                 "INSERT INTO console_files (id, session_id, principal, path, name, action,"
-                " changes, first_seen, last_seen) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)",
+                " changes, first_seen, last_seen, turn_id) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)",
                 (fid, session_id, principal or "", path[:1000], name[:200],
-                 (action or "")[:20], now, now),
+                 (action or "")[:20], now, now, (turn_id or "")[:64]),
             )
 
 

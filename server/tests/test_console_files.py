@@ -291,3 +291,37 @@ def test_files_only_tee_records_without_registering():
     assert out == frames[0]
     assert [r["name"] for r in cs.session_files("s7")] == ["c.md"]
     assert cs.session_row("s7") is None
+
+
+# ── 产物挂到哪一轮 ───────────────────────────────────────────────────────────
+#
+# 卡片要出现在**产出它的那条回答**下面。产物列在右侧那条 40px 图标条里没人找得到
+# —— 上线以来生产库一直是 0 行，用户的原话是"我刚才测试了一下压根没看到"。
+
+def test_turn_id_is_recorded():
+    cs.record_file("s1", "u", "/w/a.md", "create", "turn-1")
+    row = cs.session_files("s1")[0]
+    assert row["turn_id"] == "turn-1"
+
+
+def test_turn_id_follows_the_latest_write():
+    """同一个文件被后面几轮又改了，卡片该跟到最后写它的那条回答下面。"""
+    cs.record_file("s1", "u", "/w/a.md", "create", "turn-1")
+    cs.record_file("s1", "u", "/w/a.md", "overwrite", "turn-4")
+    rows = cs.session_files("s1")
+    assert len(rows) == 1, "同路径重复写不该攒出多行"
+    assert rows[0]["turn_id"] == "turn-4"
+    assert rows[0]["changes"] == 2
+
+
+def test_missing_turn_id_is_harmless():
+    """老记录没有 turn_id —— 留空即可，别拿它当错误。"""
+    cs.record_file("s1", "u", "/w/a.md", "create")
+    assert cs.session_files("s1")[0]["turn_id"] == ""
+
+
+def test_write_action_from_a_command_is_recorded():
+    """run_command / run_python 写出来的文件，action 是 write（拿不到改前内容）。"""
+    cs.record_file("s1", "u", "/w/report.csv", "write", "t1")
+    row = cs.session_files("s1")[0]
+    assert row["action"] == "write" and row["name"] == "report.csv"

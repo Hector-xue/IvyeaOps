@@ -172,9 +172,11 @@ export default function FilePreview({ file, onClose }: { file: ConsoleFile; onCl
     return <pre className="cfp-pre scroll-thin">{text}</pre>;
   };
 
+  // 右侧抽屉而不是居中弹窗：看的是一份文档，左边的对话得留着 —— 一边对照原文
+  // 一边看结论是这个面板最常见的用法，居中弹窗会把对话整个盖掉。
   return (
-    <div className="modal-bd" onClick={onClose}>
-      <div className="modal-card cfp-card" onClick={(e) => e.stopPropagation()}>
+    <div className="cfp-bd" onClick={onClose}>
+      <div className="cfp-drawer" onClick={(e) => e.stopPropagation()}>
         <div className="m-head">
           <Icon name="file" size={15} />
           <span className="m-title">{file.name}</span>

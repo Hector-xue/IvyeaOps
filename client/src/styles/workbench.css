@@ -4586,9 +4586,35 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 
 /* 预览弹层：正文区自己滚，头部与元信息钉住 —— 一份 500 行的 md 不该把
  * 文件名和下载按钮顶出视口 */
-.cfp-card{width:min(920px,94vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
-.cfp-card .m-head{flex:0 0 auto;gap:10px}
-.cfp-card .m-head .cs-btn{text-decoration:none}
+.cfp-bd{position:fixed;inset:0;z-index:1000;display:flex;justify-content:flex-end;background:rgba(0,0,0,.42)}
+.cfp-drawer{width:min(760px,92vw);height:100%;display:flex;flex-direction:column;overflow:hidden;
+  background:var(--bg1,var(--bg));border-left:1px solid var(--b);box-shadow:-8px 0 28px rgba(0,0,0,.18);
+  animation:cfpIn .16s ease-out}
+@keyframes cfpIn{from{transform:translateX(24px);opacity:.6}to{transform:none;opacity:1}}
+.cfp-drawer .m-head{flex:0 0 auto;gap:10px;display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid var(--b)}
+.cfp-drawer .m-head .m-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-13);color:var(--t)}
+.cfp-drawer .m-head .cs-btn{text-decoration:none}
+@media(max-width:760px){.cfp-drawer{width:100%;border-left:none}}
+
+/* 回答底下的产物卡片 */
+.caf{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 2px}
+.caf-card{display:flex;align-items:stretch;border:1px solid var(--b);border-radius:8px;background:var(--bg2);
+  overflow:hidden;transition:border-color .12s,box-shadow .12s;max-width:100%}
+.caf-card:hover{border-color:var(--b2);box-shadow:0 1px 6px rgba(0,0,0,.06)}
+.caf-card.gone{opacity:.55}
+.caf-main{display:flex;align-items:center;gap:10px;padding:9px 12px;background:none;border:none;
+  font-family:var(--font);cursor:pointer;text-align:left;min-width:0;color:inherit}
+.caf-main:disabled{cursor:default}
+.caf-icon{display:flex;align-items:center;justify-content:center;width:34px;height:34px;flex:none;
+  border-radius:7px;background:var(--bg);color:var(--t2)}
+.caf-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.caf-name{font-size:var(--fs-12);color:var(--t);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px}
+.caf-meta{font-size:var(--fs-10);color:var(--t3)}
+.caf-dl{display:flex;align-items:center;justify-content:center;width:38px;flex:none;
+  border-left:1px solid var(--b);color:var(--t3);text-decoration:none;transition:color .12s,background .12s}
+.caf-dl:hover{color:var(--t);background:var(--bg)}
+.caf-card.gone .caf-dl{pointer-events:none}
+@media(max-width:600px){.caf-card{width:100%}.caf-main{flex:1}.caf-name{max-width:none}}
 .cfp-meta{flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   padding:6px 16px;border-bottom:1px solid var(--b);font-size:var(--fs-9);color:var(--t3)}
 .cfp-meta code{font-family:'JetBrains Mono','Fira Code','SF Mono',Consolas,monospace;

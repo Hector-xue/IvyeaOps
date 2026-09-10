@@ -565,7 +565,8 @@ def _tee_session_events(chunks: Any, principal: str, workspace: str = "",
                             console_sessions.record_file(
                                 str(data.get("session_id") or "") or live_sid,
                                 principal, str(data.get("path") or ""),
-                                str(data.get("action") or ""))
+                                str(data.get("action") or ""),
+                                str(data.get("turn_id") or ""))
                             continue
                         if is_start:
                             sid = str(data.get("session_id") or "")
@@ -632,7 +633,8 @@ def _tee_files_only(chunks: Any, principal: str) -> Any:
                     data = _json.loads(line[5:].strip().decode("utf-8", "replace"))
                     console_sessions.record_file(
                         str(data.get("session_id") or ""), principal,
-                        str(data.get("path") or ""), str(data.get("action") or ""))
+                        str(data.get("path") or ""), str(data.get("action") or ""),
+                        str(data.get("turn_id") or ""))
             if len(buf) > 2_000_000:
                 buf = buf[-4096:]
         except Exception:  # noqa: BLE001 — 记账失败绝不能影响转发
