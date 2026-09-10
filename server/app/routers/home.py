@@ -20,7 +20,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.security import require_user
-from app.services import asin_pulse_service, category_service, market_traffic_service, sellersprite_service
+from app.services import (
+    asin_pulse_service, category_service, custom_source_provider,
+    custom_source_registry, market_traffic_service, sellersprite_service,
+)
 from app.services.asin_pulse_service import SNAPSHOT_METRICS
 
 logger = logging.getLogger("ivyea.routers.home")
@@ -34,9 +37,18 @@ _DATA_SOURCES = {"sorftime", "sellersprite"}
 
 def _data_source(value: str | None) -> str:
     source = (value or "sorftime").strip().lower()
-    if source not in _DATA_SOURCES:
+    if source not in _DATA_SOURCES and not custom_source_registry.is_custom(source):
         raise HTTPException(400, f"unsupported data_source: {source}")
     return source
+
+
+def _custom(source: str):
+    """已注册的自定义 MCP 数据源 → provider；内置三家一律返回 None。
+
+    内置分支一行没动：自定义源只在它们**前面**短路。这样换源出问题时，
+    排查范围永远只在新加的那一条路上。
+    """
+    return custom_source_provider.provider_for(source)
 
 
 def _source_key(source: str, value: str) -> str:
@@ -304,8 +316,10 @@ async def pulse(req: PulseReq, _user: str = Depends(require_user)) -> dict:
     if not asin:
         raise HTTPException(400, "asin cannot be empty")
 
+    custom = _custom(source)
     pulse_data = (
-        await sellersprite_service.home_asin_pulse(asin, req.marketplace)
+        await custom.home_asin_pulse(asin, req.marketplace) if custom
+        else await sellersprite_service.home_asin_pulse(asin, req.marketplace)
         if source == "sellersprite"
         else await asin_pulse_service.fetch_asin_pulse(asin, req.marketplace)
     )
@@ -488,8 +502,10 @@ async def category(req: CategoryReq, _user: str = Depends(require_user)) -> dict
 
     source = _data_source(req.data_source)
     mode = req.mode if req.mode in ("category", "keyword") else "category"
+    custom = _custom(source)
     data = (
-        await sellersprite_service.home_category(req.query, req.marketplace, mode)
+        await custom.home_category(req.query, req.marketplace, mode) if custom
+        else await sellersprite_service.home_category(req.query, req.marketplace, mode)
         if source == "sellersprite"
         else await category_service.fetch_category(req.query, req.marketplace, mode)
     )
@@ -665,8 +681,10 @@ def market_series(
 
 async def _record_market_one(query: str, marketplace: str, data_source: str = "sorftime") -> bool:
     source = _data_source(data_source)
+    custom = _custom(source)
     m = (
-        await sellersprite_service.home_market_metrics(query, marketplace)
+        await custom.home_market_metrics(query, marketplace) if custom
+        else await sellersprite_service.home_market_metrics(query, marketplace)
         if source == "sellersprite"
         else await market_traffic_service.fetch_market_metrics(query, marketplace)
     )
@@ -685,8 +703,10 @@ async def _record_market_one(query: str, marketplace: str, data_source: str = "s
 
 async def _record_asin_one(asin: str, marketplace: str, data_source: str = "sorftime") -> bool:
     source = _data_source(data_source)
+    custom = _custom(source)
     pulse_data = (
-        await sellersprite_service.home_asin_pulse(asin, marketplace)
+        await custom.home_asin_pulse(asin, marketplace) if custom
+        else await sellersprite_service.home_asin_pulse(asin, marketplace)
         if source == "sellersprite"
         else await asin_pulse_service.fetch_asin_pulse(asin, marketplace)
     )
@@ -783,7 +803,10 @@ async def backfill_history(
     qk = _source_key(source, query.strip().lower())
     today = _today_key()
 
-    if source == "sellersprite":
+    custom = _custom(source)
+    if custom:
+        sv_series, sv_err = await custom.home_keyword_trend_series(query, marketplace)
+    elif source == "sellersprite":
         sv_series, sv_err = await sellersprite_service.home_keyword_trend_series(query, marketplace)
     else:
         sv_series, sv_err = await market_traffic_service.fetch_keyword_trend_series(query, marketplace)
@@ -810,7 +833,9 @@ async def backfill_history(
     asin_points = 0
     asin_errors = 0
     for asin in watched:
-        if source == "sellersprite":
+        if custom:
+            series, err = await custom.home_product_trend_series(asin, marketplace)
+        elif source == "sellersprite":
             series, err = await sellersprite_service.home_product_trend_series(asin, marketplace)
         else:
             series, err = await market_traffic_service.fetch_product_trend_series(asin, marketplace)
@@ -879,6 +904,15 @@ async def market_daily_backfill(req: DailyBackfillReq, _user: str = Depends(requ
     category node from `category` (ASIN reverse-lookup recommended). Search volume
     has no daily equivalent on Sorftime, so only sales/price get daily points."""
     source = _data_source(req.data_source)
+    custom = _custom(source)
+    if custom:
+        # 日粒度类目历史依赖 Sorftime 的 category_report_from_history 这一个专用工具，
+        # 没有通用等价物。自定义源走「导入历史」按月回填，不要在这里假装能填。
+        return {
+            "error": f"「{custom.name}」不支持近 31 天类目日历史回填；请使用“导入历史”按月回填",
+            "filled": 0, "asin_daily": 0, "node_id": "", "category_name": None,
+            "days": 0, "data_source": source,
+        }
     if source == "sellersprite":
         return {
             "error": "卖家精灵当前提供月度趋势，不提供近 31 天类目日历史；可使用“导入历史”回填月度数据",
@@ -1041,7 +1075,12 @@ async def keyword_pulse(req: KeywordPulseReq, _user: str = Depends(require_user)
     if not kw:
         raise HTTPException(400, "keyword cannot be empty")
 
-    if source == "sellersprite":
+    custom = _custom(source)
+    if custom:
+        result = await custom.home_keyword_pulse(kw, req.marketplace)
+        detail = result.get("detail")
+        detail_err = result.get("detail_error")
+    elif source == "sellersprite":
         result = await sellersprite_service.home_keyword_pulse(kw, req.marketplace)
         detail = result.get("detail")
         detail_err = result.get("detail_error")
@@ -1123,7 +1162,10 @@ async def keyword_extends(req: KeywordPulseReq, _user: str = Depends(require_use
     source = _data_source(req.data_source)
     if not kw:
         raise HTTPException(400, "keyword cannot be empty")
-    if source == "sellersprite":
+    custom = _custom(source)
+    if custom:
+        items, err = await custom.home_keyword_extends(kw, req.marketplace)
+    elif source == "sellersprite":
         items, err = await sellersprite_service.home_keyword_extends(kw, req.marketplace)
     else:
         from app.services.sorftime_service import _make_client, _safe_call, rows
@@ -1210,7 +1252,15 @@ async def keyword_extends_sales(req: KeywordPulseReq, _user: str = Depends(requi
     targets = [i for i in sorted(items, key=lambda x: x.get("score", 0), reverse=True)
                if i.get("evidence_sales") is None][:8]
 
-    if source == "sellersprite":
+    custom = _custom(source)
+    if custom:
+        for it in targets:
+            evidence = await custom.home_keyword_purchase_evidence(
+                str(it.get("keyword") or ""), req.marketplace,
+            )
+            if evidence is not None:
+                it["evidence_sales"] = round(evidence)
+    elif source == "sellersprite":
         for it in targets:
             evidence = await sellersprite_service.home_keyword_purchase_evidence(
                 str(it.get("keyword") or ""), req.marketplace,

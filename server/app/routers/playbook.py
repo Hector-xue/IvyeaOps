@@ -202,19 +202,31 @@ _DATA_SOURCES = {"sorftime", "sellersprite"}
 def _normalize_data_source(data_source: str) -> str:
     value = (data_source or "sorftime").strip().lower()
     if value not in _DATA_SOURCES:
-        raise ValueError(f"unsupported data source: {value}")
+        from app.services import custom_source_registry
+        if not custom_source_registry.is_custom(value):
+            raise ValueError(f"unsupported data source: {value}")
     return value
 
 
 def _pipeline_for(data_source: str):
-    if _normalize_data_source(data_source) == "sellersprite":
+    value = _normalize_data_source(data_source)
+    from app.services import custom_source_provider
+    custom = custom_source_provider.provider_for(value)
+    if custom:
+        return custom
+    if value == "sellersprite":
         from app.services import sellersprite_service
         return sellersprite_service
     return sorftime_service
 
 
 def _source_label(data_source: str) -> str:
-    return "卖家精灵" if _normalize_data_source(data_source) == "sellersprite" else "Sorftime"
+    value = _normalize_data_source(data_source)
+    from app.services import custom_source_registry
+    cfg = custom_source_registry.get(value)
+    if cfg:
+        return str(cfg.get("name") or value)
+    return "卖家精灵" if value == "sellersprite" else "Sorftime"
 
 
 def _has_collected_data(data: object) -> bool:

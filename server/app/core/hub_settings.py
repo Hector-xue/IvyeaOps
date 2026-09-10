@@ -74,6 +74,9 @@ _DEFAULTS: Dict[str, Any] = {
     "sorftime_key": "",      # sorftime.com — 市场调研、关键词趋势
     "sif_key": "",           # sif.com — 深度分析工具箱（独立账号和 key）
     "sellersprite_key": "",  # sellersprite.com — 竞品关键词分析
+    # 用户自建的 MCP 数据源（JSON 数组，见 services/custom_source_registry）。
+    # 内置三家与这里互不影响；默认空数组 = 老装机升级后一切照旧。
+    "custom_data_sources": "",
     # 知识库文件根目录（笔记/上传落盘位置，与 GBrain 无关，前门是 IvyeaAgent）
     "brain_root": "",           # empty = use env / default /root/brain
     "openai_api_key": "",       # 视觉识别（AI 图片分析）用的 OpenAI key

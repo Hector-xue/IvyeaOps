@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { DATA_SOURCES, dataSourceMeta, type DataSourceId, type DataSourceSurface } from "../lib/dataSource";
+import { useDataSources, dataSourceMeta, type DataSourceId, type DataSourceSurface } from "../lib/dataSource";
 
 // Shared market-data source dropdown for 首页 / 市场调研 / 打法推荐.
 // Availability is evaluated per surface so a source can never appear active on
@@ -27,6 +27,7 @@ export default function DataSourcePicker({
     return () => document.removeEventListener("mousedown", h);
   }, [open]);
 
+  const sources = useDataSources();
   const cur = dataSourceMeta(value, surface);
 
   return (
@@ -42,7 +43,7 @@ export default function DataSourcePicker({
       </button>
       {open && (
         <div className="market-mkt-dropdown">
-          {DATA_SOURCES.map((source) => {
+          {sources.map((source) => {
             const s = dataSourceMeta(source.id, surface);
             return (
               <button

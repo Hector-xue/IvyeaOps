@@ -29,6 +29,7 @@ import {
 import { useAuth } from "../../App";
 import SubscriptionLogin from "../../components/settings/SubscriptionLogin";
 import { errText } from "../../lib/errText";
+import CustomDataSources from "./settings/CustomDataSources";
 
 type SaveStatus = "idle" | "saving" | "ok" | "error";
 
@@ -2339,6 +2340,9 @@ export default function HubSettings({ focusSection = "" }: { focusSection?: stri
         </Field>
 
       </Section>
+
+      {/* -- 核心 2.5: 自定义 MCP 数据源（内置三家在上面那块，互不影响） -- */}
+      <CustomDataSources />
 
       {/* -- 核心 3: 全局兜底大模型 -- */}
       <Section

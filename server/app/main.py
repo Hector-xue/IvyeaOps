@@ -39,6 +39,7 @@ from app.routers import schedules as schedules_router
 from app.routers import assistant as assistant_router
 from app.routers import help as help_router
 from app.routers import hub_settings as hub_settings_router
+from app.routers import data_sources as data_sources_router
 from app.routers import projects as projects_router
 from app.routers import git as git_router
 from app.routers import setup as setup_router
@@ -634,6 +635,7 @@ app.include_router(skill_tools_router.router, prefix="/api/skill-tools", tags=["
 app.include_router(schedules_router.router, prefix="/api", tags=["schedules"], dependencies=[Depends(require_module("agents"))])
 # --- Admin-only: config / other users / infra (never grantable) ---
 app.include_router(hub_settings_router.router, prefix="/api", tags=["settings"], dependencies=_ADMIN)
+app.include_router(data_sources_router.router, prefix="/api", tags=["data-sources"], dependencies=_ADMIN)
 app.include_router(projects_router.router, prefix="/api", tags=["projects"], dependencies=_ADMIN)
 app.include_router(git_router.router, prefix="/api", tags=["git"], dependencies=_ADMIN)
 app.include_router(setup_router.router, prefix="/api", tags=["setup"], dependencies=_ADMIN)

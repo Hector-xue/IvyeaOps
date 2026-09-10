@@ -51,6 +51,7 @@ git log 记得住「改了什么」，记不住「为什么不选另一条路」
 | [0031](./0031-uploads-default-to-this-conversation.md) | 上传的文件默认只属于这次对话 | 2026-08-30 |
 | [0032](./0032-drop-restated-drafts.md) | 模型把同一段整段重抄时，只留最后一份（逐字前缀判据） | 2026-09-02 |
 | [0033](./0033-console-artifacts-are-addressed-by-id.md) | 任务台产物按 id 寻址，路径永不来自前端；html 永不 inline | 2026-09-10 |
+| [0034](./0034-custom-mcp-data-sources.md) | 自定义 MCP 数据源做成注册表+映射配置，内置三家保持写死 | 2026-09-10 |
 
 ## 模板
 

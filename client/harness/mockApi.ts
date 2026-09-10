@@ -847,6 +847,43 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
   // 才逼得出结果条的换行 —— .hs-key-inline 那一档（密钥输入框和按钮挤在同一排）
   // 只剩几十像素给结果条，验的就是它到底会换行还是把这一排顶出去。
   ["/settings/test", { ok: true, detail: "连通正常：api.apimart.ai，模型 gpt-image-2 可用（耗时 1.2s）" }],
+  // 自定义 MCP 数据源。**故意给一条"配了一半"的**：勾了首页板块、能力只配了
+  // ASIN 卡片 —— 半配态才验得到"哪些板块还点不亮"的提示，全配的话那行永远不出现。
+  ["/data-sources", {
+    sources: [{
+      id: "myerp", name: "我的 ERP", enabled: true, transport: "http",
+      url: "https://mcp.example.com/mcp",
+      auth: { mode: "query", name: "key", value: "", value_set: true },
+      headers: {}, headers_set: [], handshake: true, envelope: "", timeout: 40,
+      surfaces: ["home"],
+      capabilities: {
+        home_asin_pulse: {
+          tool: "product_detail",
+          args: { asin: "{asin}", site: "{marketplace}" },
+          fields: { title: "productName", price: "priceInfo.amount", bsr: "rank.main" },
+        },
+      },
+      note: "",
+    }],
+    capabilities: ["keyword_pipeline", "asin_pipeline", "home_asin_pulse"],
+    surfaces: ["market", "playbook", "home"],
+    surface_requires: { market: ["keyword_pipeline"], playbook: ["keyword_pipeline"], home: ["home_asin_pulse"] },
+  }],
+  ["/data-sources/probe", {
+    ok: true, count: 2,
+    note: "工具清单通常不需要鉴权即可读取，能列出工具不代表密钥有效；请用「试跑」验证。",
+    tools: [
+      { name: "product_detail", description: "按 ASIN 查商品详情，返回标题/价格/BSR/评分等字段",
+        params: ["asin", "site"], required: ["asin"] },
+      { name: "keyword_detail", description: "关键词搜索量与竞价",
+        params: ["keyword", "site"], required: ["keyword"] },
+    ],
+  }],
+  ["/data-sources/test", {
+    ok: true, errors: [], filled_fields: 7,
+    result: { asin: "B0DEMO1234", title: "Demo Widget", price: 19.99, bsr: 1234,
+              rating: 4.5, review_count: 88, data_source: "custom:myerp", error: null },
+  }],
   ["/settings/amazon", () => ({
     ok: true, configured: true, ads_configured: false, ads_uses_own_app: false,
     region: "eu", spapi_host: "https://sellingpartnerapi-eu.amazon.com",

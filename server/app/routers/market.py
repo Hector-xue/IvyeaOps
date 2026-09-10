@@ -189,14 +189,23 @@ _DATA_SOURCES = {"sorftime", "sellersprite"}
 def _normalize_data_source(data_source: str) -> str:
     value = (data_source or "sorftime").strip().lower()
     if value not in _DATA_SOURCES:
-        raise ValueError(f"unsupported data source: {value}")
+        from app.services import custom_source_registry
+        if not custom_source_registry.is_custom(value):
+            raise ValueError(f"unsupported data source: {value}")
     return value
 
 
 def _pipeline_for(data_source: str):
-    """Data-collection service for the selected source. Both expose
-    keyword_pipeline / asin_pipeline(query, marketplace, on_progress) -> (data, errors)."""
-    if _normalize_data_source(data_source) == "sellersprite":
+    """Data-collection service for the selected source. All expose
+    keyword_pipeline / asin_pipeline(query, marketplace, on_progress) -> (data, errors).
+
+    自定义源返回的是 CustomProvider 实例而不是模块 —— 方法名一致，调用方无感。"""
+    value = _normalize_data_source(data_source)
+    from app.services import custom_source_provider
+    custom = custom_source_provider.provider_for(value)
+    if custom:
+        return custom
+    if value == "sellersprite":
         from app.services import sellersprite_service
         return sellersprite_service
     return sorftime_service
@@ -204,7 +213,14 @@ def _pipeline_for(data_source: str):
 
 def _source_label(data_source: str) -> str:
     """Human name of the data source for the report's 数据声明."""
-    return "卖家精灵" if _normalize_data_source(data_source) == "sellersprite" else "Sorftime"
+    value = _normalize_data_source(data_source)
+    from app.services import custom_source_registry
+    cfg = custom_source_registry.get(value)
+    if cfg:
+        # 报告的「数据声明」必须写真实来源名。挂个 "自定义" 等于把出处抹掉，
+        # 事后没人能回答这份报告的数字是哪来的。
+        return str(cfg.get("name") or value)
+    return "卖家精灵" if value == "sellersprite" else "Sorftime"
 
 
 def _has_collected_data(data: object) -> bool:
