@@ -326,6 +326,88 @@ def match_fields(sample: Any, targets: Tuple[str, ...]) -> Tuple[Dict[str, str],
 
 # ── 主流程 ──────────────────────────────────────────────────────────────────
 
+def _eligible_tools(rule: Dict[str, Any], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """把工具按"为什么用不上"分好类。
+
+    上一版这里只回一句"没有找到合适的工具"，把三种完全不同的情况糊在一起：
+    真没有这类工具 / 有但必填参数认不出 / 有而且参数也没问题、只是名字和描述里
+    没有我认得的词。第三种明明是"它有，我没认出来"，说成"没有"会让人以为
+    这台服务器不支持，直接放弃。
+    """
+    fits: List[Dict[str, Any]] = []          # 吃对输入、参数也填得上的
+    scored: List[tuple] = []                 # 其中名字/描述还能对上号的
+    unfillable: List[str] = []               # 有必填参数认不出来，调不动
+    for tool in tools:
+        args, unresolved = build_args(tool.get("inputSchema"))
+        if unresolved:
+            unfillable.append(str(tool.get("name")))
+            continue
+        inputs = _inputs_of(args)
+        if rule["needs"] == "asin" and "asin" not in inputs:
+            continue
+        if rule["needs"] == "keyword" and not ({"keyword", "query"} & inputs):
+            continue
+        fits.append({"tool": str(tool.get("name")), "args": args,
+                     "description": str(tool.get("description") or "")[:120]})
+        score = _score_tool(tool, rule)
+        if score > 0:
+            scored.append((score, tool, args))
+    scored.sort(key=lambda c: -c[0])
+    return {"fits": fits, "scored": scored, "unfillable": unfillable}
+
+
+def _no_tool_reason(rule: Dict[str, Any], pool: Dict[str, Any]) -> Dict[str, Any]:
+    """候选为空时，说清到底是哪一种没有。"""
+    what = "ASIN" if rule["needs"] == "asin" else "关键词"
+    if pool["fits"]:
+        # 有工具、参数也填得上，纯粹是名字/描述里没有认得出的线索。
+        # 这种情况必须把工具名端出来让用户自己挑 —— 它是"我没认出来"，不是"没有"。
+        return {
+            "reason": "not_recognized",
+            "error": f"有 {len(pool['fits'])} 个吃「{what}」的工具，但从名字和描述认不出哪个是干这件事的",
+            "candidates": pool["fits"][:8],
+        }
+    if pool["unfillable"]:
+        return {
+            "reason": "unfillable",
+            "error": (f"没有吃「{what}」的工具；另有 "
+                      f"{len(pool['unfillable'])} 个工具的必填参数认不出该填什么"
+                      f"（{'、'.join(pool['unfillable'][:3])}…），跳过了"),
+            "candidates": [],
+        }
+    return {"reason": "no_tool", "error": f"这台服务器没有吃「{what}」的工具", "candidates": []}
+
+
+def _build_spec(rule: Dict[str, Any], payload: Any, tool_name: str,
+                args: Dict[str, Any], envelope: str) -> Dict[str, Any]:
+    """按真实返回生成映射，并判断够不够用。"""
+    spec: Dict[str, Any] = {"tool": tool_name, "args": args}
+    if rule["kind"] == "record":
+        sample = _mcp.record(payload, envelope)
+        mapping, missing = match_fields(sample, rule["fields"])
+        for src, dst in (rule.get("rename") or {}).items():
+            if src in mapping:
+                mapping[dst] = mapping.pop(src)
+        missing = [(rule.get("rename") or {}).get(m, m) for m in missing]
+        spec["fields"] = mapping
+        matched = mapping
+    else:
+        rows = _mcp.rows(payload, envelope)
+        sample = rows[0] if rows else {}
+        mapping, missing = match_fields(sample, rule["row_fields"])
+        spec["row_fields"] = mapping
+        matched = mapping
+        if rule.get("summary_fields"):
+            summary, _ = match_fields(_mcp.record(payload, envelope), rule["summary_fields"])
+            if summary:
+                spec["summary_fields"] = summary
+
+    must = [m for m in rule.get("must", ()) if m not in matched]
+    must = [(rule.get("rename") or {}).get(m, m) for m in must]
+    enough = not must and len(matched) >= rule.get("min_fields", 1)
+    return {"spec": spec, "matched": matched, "missing": missing, "must": must, "enough": enough}
+
+
 async def _try_capability(
     state: Dict[str, Any], rule: Dict[str, Any], tools: List[Dict[str, Any]],
     variables: Dict[str, Any], envelope: str,
@@ -333,67 +415,80 @@ async def _try_capability(
     """给一项能力挑工具、真调一次、按真实返回生成映射。"""
     cap_id = rule["id"]
     label = _CAP_LABELS[cap_id]
-    candidates = []
-    for tool in tools:
-        args, unresolved = build_args(tool.get("inputSchema"))
-        if unresolved:
-            continue                          # 有必填参数填不上，调不动
-        inputs = _inputs_of(args)
-        if rule["needs"] == "asin" and "asin" not in inputs:
-            continue
-        if rule["needs"] == "keyword" and not ({"keyword", "query"} & inputs):
-            continue
-        score = _score_tool(tool, rule)
-        if score > 0:
-            candidates.append((score, tool, args))
-    if not candidates:
-        return {"id": cap_id, "label": label, "ok": False,
-                "error": "没有找到合适的工具"}
+    pool = _eligible_tools(rule, tools)
+    if not pool["scored"]:
+        return {"id": cap_id, "label": label, "ok": False, **_no_tool_reason(rule, pool)}
 
-    candidates.sort(key=lambda c: -c[0])
     last_error = ""
+    last_reason = "no_data"
     # 只试前三名：再往下分数已经很低，每试一个都是一次真实调用（要花钱/配额）。
-    for _score, tool, args in candidates[:3]:
+    for _score, tool, args in pool["scored"][:3]:
         name = str(tool.get("name"))
         try:
             payload = await _mcp.call_tool(state, name, _provider.render_args(args, variables))
         except Exception as exc:              # noqa: BLE001 — 换下一个候选继续试
-            last_error = str(exc)
+            last_error = f"调用 {name} 失败：{exc}"
+            last_reason = "call_failed"
             continue
 
-        spec: Dict[str, Any] = {"tool": name, "args": args}
-        kind = rule["kind"]
-        if kind == "record":
-            sample = _mcp.record(payload, envelope)
-            mapping, missing = match_fields(sample, rule["fields"])
-            for src, dst in (rule.get("rename") or {}).items():
-                if src in mapping:
-                    mapping[dst] = mapping.pop(src)
-            missing = [(rule.get("rename") or {}).get(m, m) for m in missing]
-            spec["fields"] = mapping
-            matched = mapping
-        else:
-            rows = _mcp.rows(payload, envelope)
-            sample = rows[0] if rows else {}
-            mapping, missing = match_fields(sample, rule["row_fields"])
-            spec["row_fields"] = mapping
-            matched = mapping
-            if rule.get("summary_fields"):
-                summary, _ = match_fields(_mcp.record(payload, envelope), rule["summary_fields"])
-                if summary:
-                    spec["summary_fields"] = summary
-
-        must = [m for m in rule.get("must", ()) if m not in matched]
-        must = [(rule.get("rename") or {}).get(m, m) for m in must]
-        if must or len(matched) < rule.get("min_fields", 1):
-            last_error = f"{name} 的返回里认不出" + "、".join(must or ["需要的字段"])
+        built = _build_spec(rule, payload, name, args, envelope)
+        if not built["enough"]:
+            last_error = (f"{name} 调通了，但返回里认不出"
+                          + "、".join(built["must"] or ["需要的字段"]))
+            last_reason = "no_data"
             continue
 
         return {"id": cap_id, "label": label, "ok": True, "tool": name,
-                "spec": spec, "matched": len(matched), "missing": missing}
+                "spec": built["spec"], "matched": len(built["matched"]),
+                "missing": built["missing"]}
 
+    # 试过但都不成：把还没试过的工具一并给出来，用户可以自己指一个。
+    tried = {str(t.get("name")) for _s, t, _a in pool["scored"][:3]}
+    rest = [f for f in pool["fits"] if f["tool"] not in tried]
     return {"id": cap_id, "label": label, "ok": False,
-            "error": last_error or "候选工具都没返回可用数据"}
+            "reason": last_reason,
+            "error": last_error or "候选工具都没返回可用数据",
+            "candidates": rest[:8]}
+
+
+async def remap_capability(cfg: Dict[str, Any], cap_id: str, tool_name: str,
+                           sample_keyword: str, sample_asin: str,
+                           marketplace: str = "US") -> Dict[str, Any]:
+    """用**指定的**工具重新推断某一项能力的映射。
+
+    自动挑错了、或者压根没认出来时的补救口：用户从工具清单里指一个，字段映射
+    仍然由系统按真实返回推断 —— 让人挑工具是合理的，让人逐个填字段路径不是。
+    """
+    rule = next((r for r in _CAP_RULES if r["id"] == cap_id), None)
+    if not rule:
+        raise _mcp.CustomSourceError(f"{cap_id} 不支持指定工具（采集类能力请在下面直接加步骤）")
+    variables = _provider.template_vars(
+        keyword=sample_keyword, query=sample_keyword, asin=sample_asin,
+        marketplace=marketplace, top_n=30, size=30,
+    )
+    envelope = str(cfg.get("envelope") or "")
+    async with _mcp.session(cfg) as state:
+        tools = await _mcp.list_tools(state)
+        tool = next((t for t in tools if str(t.get("name")) == tool_name), None)
+        if not tool:
+            raise _mcp.CustomSourceError(f"这台服务器上没有名为 {tool_name} 的工具")
+        args, unresolved = build_args(tool.get("inputSchema"))
+        if unresolved:
+            raise _mcp.CustomSourceError(
+                f"{tool_name} 的必填参数 {'、'.join(unresolved)} 认不出该填什么，"
+                "只能在下面手动写入参模板")
+        payload = await _mcp.call_tool(
+            state, tool_name, _provider.render_args(args, variables))
+
+    built = _build_spec(rule, payload, tool_name, args, envelope)
+    return {
+        "ok": built["enough"],
+        "spec": built["spec"],
+        "matched": len(built["matched"]),
+        "missing": built["missing"],
+        "error": None if built["enough"]
+        else f"{tool_name} 的返回里认不出" + "、".join(built["must"] or ["需要的字段"]),
+    }
 
 
 def _pipeline_steps(tools: List[Dict[str, Any]], want_input: str) -> List[Dict[str, Any]]:

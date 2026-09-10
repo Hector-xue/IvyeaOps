@@ -124,6 +124,37 @@ async def autoconfig_source(body: AutoBody, _u: str = Depends(require_user)) -> 
                                            "tools": 0, "capabilities": [], "surfaces": []}}
 
 
+class RemapBody(BaseModel):
+    source: Dict[str, Any] = Field(default_factory=dict)
+    capability: str
+    tool: str
+    sample_keyword: str = "wireless earbuds"
+    sample_asin: str = "B08N5WRWNW"
+    marketplace: str = "US"
+
+
+@router.post("/data-sources/remap")
+async def remap_capability(body: RemapBody, _u: str = Depends(require_user)) -> Dict[str, Any]:
+    """用指定的工具重新推断某一项能力的字段映射。
+
+    自动挑错了或压根没认出来时的补救口。**让人挑工具是合理的，让人逐个填字段
+    路径不是** —— 所以这里只接受一个工具名，映射照样由系统按真实返回推断。
+    """
+    cfg = _hydrate(body.source)
+    if body.capability not in _registry.CAPABILITIES:
+        raise HTTPException(400, f"未知能力：{body.capability}")
+    try:
+        return await _auto.remap_capability(
+            cfg, body.capability, body.tool.strip(),
+            body.sample_keyword.strip(), body.sample_asin.strip(), body.marketplace,
+        )
+    except _mcp.CustomSourceError as exc:
+        return {"ok": False, "spec": None, "error": str(exc)}
+    except Exception as exc:      # noqa: BLE001 — 指错工具是常态，不该变成 500
+        logger.debug("重新推断映射失败", exc_info=True)
+        return {"ok": False, "spec": None, "error": str(exc)}
+
+
 @router.post("/data-sources/test")
 async def test_source(body: TestBody, _u: str = Depends(require_user)) -> Dict[str, Any]:
     cfg = _hydrate(body.source)

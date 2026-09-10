@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import {
   listDataSources, saveDataSource, deleteDataSource, probeDataSource, testDataSource,
-  autoconfigDataSource,
+  autoconfigDataSource, remapCapability,
   type CustomDataSource, type CapabilitySpec, type ProbeResult, type TestResult,
-  type AutoReport,
+  type AutoReport, type CapabilityOutcome,
 } from "../../../api/dataSources";
 import { loadCustomDataSources } from "../../../lib/dataSource";
 
@@ -441,6 +441,8 @@ function Editor({ value, onChange, onSaved, onCancel }: {
             <CapabilityBlock
               key={cap.id} cap={cap} tools={toolNames}
               spec={value.capabilities?.[cap.id]}
+              outcome={report?.capabilities.find((c) => c.id === cap.id)}
+              sample={{ keyword: sampleKeyword, asin: sampleAsin }}
               onChange={(spec) => setCap(cap.id, spec)}
               source={value}
             />
@@ -520,14 +522,18 @@ function AutoResult({ report }: { report: AutoReport }) {
   );
 }
 
-function CapabilityBlock({ cap, spec, tools, onChange, source }: {
+function CapabilityBlock({ cap, spec, tools, outcome, sample, onChange, source }: {
   cap: (typeof CAPS)[number];
   spec?: CapabilitySpec;
   tools: string[];
+  outcome?: CapabilityOutcome;
+  sample: { keyword: string; asin: string };
   onChange: (spec: CapabilitySpec | null) => void;
   source: CustomDataSource;
 }) {
   const on = !!spec;
+  const [picking, setPicking] = useState("");
+  const [pickErr, setPickErr] = useState("");
   const [argsText, setArgsText] = useState(() => jsonText(spec?.args) || "{}");
   const [argsBad, setArgsBad] = useState(false);
   const [test, setTest] = useState<TestResult | null>(null);
@@ -564,6 +570,24 @@ function CapabilityBlock({ cap, spec, tools, onChange, source }: {
     </div>
   );
 
+  // 用户从候选里指一个工具 → 字段映射仍然由后端按真实返回推断。
+  // 让人挑工具是合理的，让人逐个填字段路径不是。
+  const pick = async (tool: string) => {
+    setPicking(tool); setPickErr("");
+    try {
+      const out = await remapCapability(source, cap.id, tool, sample.keyword, sample.asin);
+      if (out.spec) {
+        onChange(out.spec);
+        setArgsText(jsonText(out.spec.args) || "{}");
+      }
+      if (!out.ok) setPickErr(out.error || "这个工具的返回里认不出需要的字段");
+    } catch (e: unknown) {
+      setPickErr(detail(e) || "试这个工具失败");
+    } finally {
+      setPicking("");
+    }
+  };
+
   const runTest = async () => {
     setTesting(true); setTest(null);
     try { setTest(await testDataSource(source, cap.id, testQuery, "US")); }
@@ -581,6 +605,24 @@ function CapabilityBlock({ cap, spec, tools, onChange, source }: {
         <span className="cds-cap-name">{cap.label}</span>
         <span className="cds-cap-hint">{cap.hint}</span>
       </label>
+
+      {!on && outcome && !outcome.ok && (
+        <div className="cds-cap-why">
+          <div className="cds-note">未自动配置：{outcome.error}</div>
+          {outcome.candidates && outcome.candidates.length > 0 && (
+            <div className="cds-pick">
+              <span className="cds-note">从这几个里指一个试试（字段映射仍然自动推断）：</span>
+              {outcome.candidates.map((c) => (
+                <button key={c.tool} className="cds-btn" disabled={!!picking}
+                  title={c.description} onClick={() => void pick(c.tool)}>
+                  {picking === c.tool ? "试跑中…" : c.tool}
+                </button>
+              ))}
+            </div>
+          )}
+          {pickErr && <div className="cds-err">{pickErr}</div>}
+        </div>
+      )}
 
       {on && cap.kind === "pipeline" && (
         <StepsEditor steps={spec?.steps || []} tools={tools}

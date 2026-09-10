@@ -84,11 +84,30 @@ export type AutoReport = {
   tools: number;
   surfaces: string[];
   auth?: string;
-  capabilities: {
-    id: string; label: string; ok: boolean;
-    tool?: string; matched?: number; missing?: string[]; error?: string;
-  }[];
+  capabilities: CapabilityOutcome[];
 };
+
+export type CapabilityOutcome = {
+  id: string; label: string; ok: boolean;
+  tool?: string; matched?: number; missing?: string[]; error?: string;
+  // 没配上时说清是哪一种：这台服务器真没有这类工具 / 有但必填参数认不出 /
+  // 有而且参数没问题、只是名字认不出 / 调用失败 / 调通了但返回里没有需要的字段
+  reason?: "no_tool" | "unfillable" | "not_recognized" | "call_failed" | "no_data";
+  // reason 是 not_recognized 或试过仍不成时，还能用的工具 —— 让用户自己指一个
+  candidates?: { tool: string; description: string; args: Record<string, unknown> }[];
+};
+
+export async function remapCapability(
+  source: CustomDataSource, capability: string, tool: string,
+  sampleKeyword: string, sampleAsin: string, marketplace = "US",
+): Promise<{ ok: boolean; spec: CapabilitySpec | null; matched?: number;
+             missing?: string[]; error?: string | null }> {
+  const r = await api.post("/data-sources/remap", {
+    source, capability, tool,
+    sample_keyword: sampleKeyword, sample_asin: sampleAsin, marketplace,
+  }, SLOW);
+  return r.data;
+}
 
 export async function autoconfigDataSource(
   source: CustomDataSource, sampleKeyword: string, sampleAsin: string, marketplace: string,

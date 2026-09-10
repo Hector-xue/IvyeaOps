@@ -386,3 +386,141 @@ def test_no_key_means_no_auth(server):
     out = asyncio.run(auto.autoconfigure(
         _auth_cfg(server, ""), "wireless earbuds", "B08N5WRWNW"))
     assert out["source"]["auth"]["mode"] == "none"
+
+
+# ── 没配上时，说清是哪一种"没有" ─────────────────────────────────────────────
+
+class _VagueHandler(BaseHTTPRequestHandler):
+    """工具**有**，参数也填得上，但名字和描述里没有任何认得出的线索。
+
+    这正是"它有、我没认出来"那一种 —— 报成"没有找到合适的工具"会让人以为
+    这台服务器不支持，直接放弃。
+    """
+
+    def log_message(self, *a):
+        return
+
+    def do_POST(self):  # noqa: N802
+        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0) or 0)) or b"{}")
+        method = body.get("method")
+        if method == "initialize":
+            return self._sse({"protocolVersion": "2024-11-05"})
+        if method == "tools/list":
+            return self._sse({"tools": [
+                {"name": "f_001", "description": "接口一",
+                 "inputSchema": {"type": "object", "required": ["asin"],
+                                 "properties": {"asin": {}, "site": {}}}},
+                {"name": "f_002", "description": "接口二",
+                 "inputSchema": {"type": "object", "required": ["query"],
+                                 "properties": {"query": {}, "site": {}}}},
+                {"name": "f_003", "description": "接口三",
+                 "inputSchema": {"type": "object", "required": ["mysteryParam"],
+                                 "properties": {"mysteryParam": {}}}},
+            ]})
+        if method != "tools/call":
+            return self._sse({})
+        name = (body.get("params") or {}).get("name")
+        data = ITEM if name == "f_001" else TERM
+        return self._sse({"content": [{"type": "text",
+                                       "text": json.dumps({"code": "OK", "data": data})}]})
+
+    def _sse(self, result):
+        payload = json.dumps({"jsonrpc": "2.0", "id": 1, "result": result})
+        raw = f"event: message\ndata: {payload}\n\n".encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+
+@pytest.fixture()
+def vague_server():
+    srv = HTTPServer(("127.0.0.1", 0), _VagueHandler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{srv.server_port}/mcp"
+    srv.shutdown()
+    srv.server_close()
+
+
+def _by_id(report, cap_id):
+    return next(c for c in report["capabilities"] if c["id"] == cap_id)
+
+
+def test_unrecognized_tools_are_offered_not_denied(vague_server):
+    """认不出 ≠ 没有。必须把工具名端出来让用户自己挑。"""
+    out = asyncio.run(auto.autoconfigure(_cfg(vague_server), "wireless earbuds", "B08N5WRWNW"))
+    item = _by_id(out["report"], "home_asin_pulse")
+    assert item["ok"] is False
+    assert item["reason"] == "not_recognized"
+    assert "认不出哪个" in item["error"]
+    assert [c["tool"] for c in item["candidates"]] == ["f_001"]
+    assert item["candidates"][0]["args"] == {"asin": "{asin}", "site": "{marketplace}"}
+
+
+def test_reason_distinguishes_missing_tool_from_unfillable(vague_server, server):
+    """三种"没有"要能分开：真没有 / 参数认不出 / 名字认不出。"""
+    vague = _by_id(asyncio.run(auto.autoconfigure(
+        _cfg(vague_server), "kw", "B0"))["report"], "home_asin_pulse")
+    assert vague["reason"] == "not_recognized"
+
+    # 正常那台服务器上，每项能力要么配成了，要么给得出理由
+    full = asyncio.run(auto.autoconfigure(_cfg(server), "wireless earbuds", "B08N5WRWNW"))
+    for item in full["report"]["capabilities"]:
+        if not item["ok"]:
+            assert item["reason"] in ("no_tool", "not_recognized", "unfillable",
+                                      "no_data", "call_failed")
+            assert item["error"]
+
+
+def test_failed_call_reports_which_tool(server, monkeypatch):
+    """调用失败要说是哪个工具失败的，不然没法排查。"""
+    from app.services import custom_source_mcp as mcp
+    real = mcp.call_tool
+
+    async def flaky(state, tool, args):
+        if tool == "item_lookup":
+            raise mcp.CustomSourceError("quota exceeded")
+        return await real(state, tool, args)
+
+    monkeypatch.setattr(mcp, "call_tool", flaky)
+    out = asyncio.run(auto.autoconfigure(_cfg(server), "wireless earbuds", "B08N5WRWNW"))
+    item = _by_id(out["report"], "home_asin_pulse")
+    assert item["ok"] is False
+    assert "item_lookup" in item["error"] and "quota exceeded" in item["error"]
+
+
+# ── 指定工具重新推断 ─────────────────────────────────────────────────────────
+
+def test_remap_infers_mapping_for_a_hand_picked_tool(vague_server):
+    """用户只指工具名，字段映射仍然由系统推断 —— 不该退回手填路径。"""
+    out = asyncio.run(auto.remap_capability(
+        _cfg(vague_server), "home_asin_pulse", "f_001", "wireless earbuds", "B08N5WRWNW"))
+    assert out["ok"] is True
+    assert out["spec"]["tool"] == "f_001"
+    assert out["spec"]["fields"]["title"] == "productName"
+    assert out["spec"]["fields"]["price"] == "sellPrice"
+    assert out["matched"] >= 8
+
+
+def test_remap_rejects_unknown_tool(vague_server):
+    from app.services import custom_source_mcp as mcp
+    with pytest.raises(mcp.CustomSourceError) as exc:
+        asyncio.run(auto.remap_capability(
+            _cfg(vague_server), "home_asin_pulse", "nope", "kw", "B0"))
+    assert "没有名为" in str(exc.value)
+
+
+def test_remap_explains_unfillable_params(vague_server):
+    from app.services import custom_source_mcp as mcp
+    with pytest.raises(mcp.CustomSourceError) as exc:
+        asyncio.run(auto.remap_capability(
+            _cfg(vague_server), "home_asin_pulse", "f_003", "kw", "B0"))
+    assert "mysteryParam" in str(exc.value)
+
+
+def test_remap_reports_when_the_picked_tool_has_no_usable_fields(vague_server):
+    """指了个不对的工具要如实说，不能生成一份全空的映射假装配好了。"""
+    out = asyncio.run(auto.remap_capability(
+        _cfg(vague_server), "home_asin_pulse", "f_002", "wireless earbuds", "B08N5WRWNW"))
+    assert out["ok"] is False and out["error"]

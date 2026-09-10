@@ -5863,3 +5863,5 @@ html:is([data-skin="quiet"],[data-skin="lucent"],[data-skin="flat"]) .sb-workspa
 .cds-adv{margin-top:4px}
 .cds-surface-ro{cursor:default;color:var(--t3)}
 .cds-surface-ro.on{color:var(--t);border-color:var(--b2)}
+.cds-cap-why{padding:0 10px 9px;display:flex;flex-direction:column;gap:5px}
+.cds-pick{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
