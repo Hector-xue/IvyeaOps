@@ -17,6 +17,20 @@ from app.services import custom_source_provider as provider
 from app.services import custom_source_registry as registry
 
 
+@pytest.fixture(autouse=True)
+def _clean_registry():
+    """每个用例开跑前清空注册表。
+
+    conftest 把 data_dir 指到临时目录是**整轮共享**的，而注册表落在
+    hub_settings 里 —— 不清的话，上一个文件存的源会被下一个文件数进去，
+    表现为"单跑全绿、一起跑就挂"。
+    """
+    from app.core import hub_settings
+    hub_settings.save({"custom_data_sources": ""})
+    yield
+    hub_settings.save({"custom_data_sources": ""})
+
+
 # 一台仿真的 MCP 服务器：工具名和字段名都**故意和内置两家都不一样**，
 # 免得测出来的是"照抄了 Sorftime 的字段名"而不是"真能自动认"。
 TOOLS = [
@@ -292,3 +306,83 @@ def test_autoconfig_route_does_not_echo_the_secret(server, monkeypatch):
     assert out["source"]["auth"]["value"] == ""
     assert out["source"]["auth"]["value_set"] is True
     assert "super-secret" not in json.dumps(out, ensure_ascii=False)
+
+
+# ── 鉴权自动探测 ─────────────────────────────────────────────────────────────
+
+class _AuthHandler(BaseHTTPRequestHandler):
+    """只认 ``?secret-key=right`` 的服务器，且 tools/list **不鉴权**。
+
+    工具清单不鉴权是真实世界的常态，也正是"能列出工具 ≠ 密钥有效"这条坑的来源。
+    """
+
+    def log_message(self, *a):
+        return
+
+    def do_POST(self):  # noqa: N802
+        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0) or 0)) or b"{}")
+        method = body.get("method")
+        if method == "initialize":
+            return self._sse({"protocolVersion": "2024-11-05"})
+        if method == "tools/list":
+            return self._sse({"tools": [TOOLS[0], TOOLS[2]]})     # 不看密钥，照列
+        if method != "tools/call":
+            return self._sse({})
+        if "secret-key=right" not in self.path:
+            return self._sse({"isError": True,
+                              "content": [{"type": "text", "text": "unauthorized"}]})
+        name = (body.get("params") or {}).get("name")
+        data = ITEM if name == "item_lookup" else TERM
+        return self._sse({"content": [{"type": "text",
+                                       "text": json.dumps({"code": "OK", "data": data})}]})
+
+    def _sse(self, result):
+        payload = json.dumps({"jsonrpc": "2.0", "id": 1, "result": result})
+        raw = f"event: message\ndata: {payload}\n\n".encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+
+@pytest.fixture()
+def auth_server():
+    srv = HTTPServer(("127.0.0.1", 0), _AuthHandler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{srv.server_port}/mcp"
+    srv.shutdown()
+    srv.server_close()
+
+
+def _auth_cfg(url: str, key: str) -> dict:
+    return registry.validate({
+        "id": "auth", "name": "鉴权源", "url": url,
+        "auth": {"mode": "auto", "name": "", "value": key},
+        "capabilities": {},
+    })
+
+
+def test_auth_is_detected_without_asking_the_user(auth_server):
+    """用户只填密钥，不选"鉴权方式"、不填"参数名" —— 那是机器试几次就知道的事。"""
+    out = asyncio.run(auto.autoconfigure(
+        _auth_cfg(auth_server, "right"), "wireless earbuds", "B08N5WRWNW"))
+    assert out["source"]["auth"]["mode"] == "query"
+    assert out["source"]["auth"]["name"] == "secret-key"
+    assert out["report"]["auth"] == "URL 参数 secret-key"
+    assert out["report"]["ok"]
+
+
+def test_wrong_key_is_not_mistaken_for_a_working_auth(auth_server):
+    """密钥错了必须说密钥错，不能因为 tools/list 能列就当配好了。"""
+    from app.services import custom_source_mcp as mcp
+    with pytest.raises(mcp.CustomSourceError) as exc:
+        asyncio.run(auto.autoconfigure(
+            _auth_cfg(auth_server, "wrong"), "wireless earbuds", "B08N5WRWNW"))
+    assert "密钥" in str(exc.value)
+
+
+def test_no_key_means_no_auth(server):
+    out = asyncio.run(auto.autoconfigure(
+        _auth_cfg(server, ""), "wireless earbuds", "B08N5WRWNW"))
+    assert out["source"]["auth"]["mode"] == "none"

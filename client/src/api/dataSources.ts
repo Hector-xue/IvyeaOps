@@ -3,7 +3,7 @@ import { api } from "./client";
 // 自定义 MCP 数据源的增删改 / 探测 / 试跑。
 // 内置三家（Sorftime / 卖家精灵 / SIF）不走这里，它们的 key 仍在 settings.ts。
 
-export type AuthMode = "none" | "query" | "header" | "bearer";
+export type AuthMode = "auto" | "none" | "query" | "header" | "bearer";
 
 export type CapabilitySpec = {
   tool?: string;
@@ -83,6 +83,7 @@ export type AutoReport = {
   error?: string;
   tools: number;
   surfaces: string[];
+  auth?: string;
   capabilities: {
     id: string; label: string; ok: boolean;
     tool?: string; matched?: number; missing?: string[]; error?: string;

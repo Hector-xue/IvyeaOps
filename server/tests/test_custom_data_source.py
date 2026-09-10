@@ -16,6 +16,20 @@ from app.services import custom_source_provider as provider
 from app.services import custom_source_registry as registry
 
 
+@pytest.fixture(autouse=True)
+def _clean_registry():
+    """每个用例开跑前清空注册表。
+
+    conftest 把 data_dir 指到临时目录是**整轮共享**的，而注册表落在
+    hub_settings 里 —— 不清的话，上一个文件存的源会被下一个文件数进去，
+    表现为"单跑全绿、一起跑就挂"。
+    """
+    from app.core import hub_settings
+    hub_settings.save({"custom_data_sources": ""})
+    yield
+    hub_settings.save({"custom_data_sources": ""})
+
+
 # ── 路径取值 ─────────────────────────────────────────────────────────────────
 
 def test_resolve_path_dotted_and_index():
@@ -170,11 +184,32 @@ def test_validate_rejects_bad_slug_and_url():
         registry.validate(_cfg(url="mcp.example.com"))
 
 
-def test_validate_requires_capability_for_selected_surface():
-    """勾了板块却没配对应能力 = 下拉里多一个点不亮的源，必须在保存时就拦住。"""
+def test_surfaces_are_derived_not_taken_from_input():
+    """板块是**推导**出来的：配了什么能力就在什么板块出现。
+
+    上一版让用户自己勾板块，勾了却还没配对应能力就直接报错 —— 连"自动配置"
+    那个按钮都被这条校验拦死了。板块是结果，不是输入。
+    """
+    # 调用方乱指定也不作数
+    cleaned = registry.validate(_cfg(surfaces=["market", "playbook", "home"], capabilities={}))
+    assert cleaned["surfaces"] == []
+
+    only_home = registry.validate(_cfg(surfaces=[], capabilities={
+        "home_asin_pulse": {"tool": "t", "args": {}, "fields": {"title": "t"}}}))
+    assert only_home["surfaces"] == ["home"]
+
+    both = registry.validate(_cfg(surfaces=[], capabilities={
+        "home_asin_pulse": {"tool": "t", "args": {}, "fields": {"title": "t"}},
+        "keyword_pipeline": {"steps": [{"label": "a", "tool": "t", "args": {}}]}}))
+    assert both["surfaces"] == ["home", "market", "playbook"]
+
+
+def test_errors_never_leak_internal_identifiers():
+    """报错是给人看的 —— 用户没见过 keyword_pipeline 这种名字。"""
     with pytest.raises(registry.RegistryError) as exc:
-        registry.validate(_cfg(surfaces=["market"], capabilities={}))
-    assert "keyword_pipeline" in str(exc.value)
+        registry.validate(_cfg(capabilities={"keyword_pipeline": {"steps": []}}))
+    assert "keyword_pipeline" not in str(exc.value)
+    assert "关键词采集" in str(exc.value)
 
 
 def test_save_roundtrip_masks_secret_but_keeps_it(tmp_path, monkeypatch):

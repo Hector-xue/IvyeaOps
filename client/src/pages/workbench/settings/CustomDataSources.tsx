@@ -9,12 +9,17 @@ import { loadCustomDataSources } from "../../../lib/dataSource";
 
 // 自定义 MCP 数据源的配置界面。
 //
-// 默认动线只有两步：**填端点和密钥 → 点「自动配置」**。工具叫什么、参数怎么传、
-// 返回里哪个字段是价格，都由后端探测 + 真调一次样例推断出来（见
-// services/custom_source_autoconfig）。配完直接保存，板块下拉里就能选。
+// 默认动线只有两步：**填端点和密钥 → 点「自动配置」**。
 //
-// 手工映射整个收进「高级」折叠区 —— 它是自动推断出错时的补救口，不是常规路径。
-// 上一版把这一屏当默认界面，等于把内部的映射 DSL 甩给用户，是设计错误。
+// 默认视图里没有的东西，都是因为它们本来就不该问：
+//   · 鉴权方式 / 参数名 —— 挨个试一遍就知道了（custom_source_mcp.detect_auth）
+//   · 在哪些板块出现 —— 配了什么能力就在什么板块出现，是结果不是输入
+//   · 名称 / 标识 id —— 从端点域名自动填，改不改随意
+//   · 工具名 / 字段映射 —— 探测 + 真调一次样例推断出来
+//
+// 这几样上一版全在默认界面上，还因为"勾了板块却没配对应能力"的校验把「自动配置」
+// 按钮本身给拦死了。手工映射整个收进「高级设置」，它是自动推断出错时的补救口，
+// 不是常规路径。
 
 type CapKind = "record" | "rows" | "series" | "pipeline";
 
@@ -87,7 +92,7 @@ const PLACEHOLDERS = "{keyword} {query} {asin} {marketplace} {month} {month_dash
 function blank(): CustomDataSource {
   return {
     id: "", name: "", enabled: true, transport: "http", url: "",
-    auth: { mode: "query", name: "key", value: "" },
+    auth: { mode: "auto", name: "", value: "" },
     headers: {}, handshake: true, envelope: "", timeout: 40,
     surfaces: [], capabilities: {}, note: "",
   };
@@ -96,6 +101,23 @@ function blank(): CustomDataSource {
 function jsonText(value: unknown): string {
   if (value === undefined || value === null) return "";
   try { return JSON.stringify(value, null, 2); } catch { return ""; }
+}
+
+/** 能力名去掉括号里的板块注解：「关键词采集（市场调研 / 打法推荐）」→「关键词采集」 */
+function shortLabel(capId: string): string {
+  const full = CAPS.find((c) => c.id === capId)?.label || capId;
+  return full.replace(/（[^）]*）/g, "").trim();
+}
+
+/** 从端点域名推一个标识：https://mcp.example.com/mcp → example */
+function slugFromUrl(url: string): string {
+  try {
+    const host = new URL(url.trim()).hostname;
+    const parts = host.split(".").filter((x) => !["www", "mcp", "api", "open", "gateway"].includes(x));
+    return (parts[0] || host).toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 32);
+  } catch {
+    return "";
+  }
 }
 
 function detail(e: unknown): string {
@@ -205,9 +227,22 @@ function Editor({ value, onChange, onSaved, onCancel }: {
   const [sampleKeyword, setSampleKeyword] = useState("wireless earbuds");
   const [sampleAsin, setSampleAsin] = useState("B08N5WRWNW");
   const [err, setErr] = useState("");
+  // 名称和 id 从端点域名自动填。用户一旦自己改过就不再覆盖 —— 边打字边被改掉
+  // 是最烦人的一种"智能"。
+  const [nameTouched, setNameTouched] = useState(!!value.name);
+  const [idTouched, setIdTouched] = useState(!!value.id);
 
   const set = <K extends keyof CustomDataSource>(key: K, v: CustomDataSource[K]) =>
     onChange({ ...value, [key]: v });
+
+  const changeUrl = (url: string) => {
+    const slug = slugFromUrl(url);
+    onChange({
+      ...value, url,
+      id: idTouched ? value.id : slug,
+      name: nameTouched ? value.name : slug,
+    });
+  };
 
   const setCap = (id: string, spec: CapabilitySpec | null) => {
     const next = { ...(value.capabilities || {}) };
@@ -244,53 +279,29 @@ function Editor({ value, onChange, onSaved, onCancel }: {
   };
 
   const toolNames = (probe?.tools || []).map((t) => t.name);
-  const canAuto = !!value.url.trim() && !!value.id.trim();
+  // 只认端点。id 是自动填的，别再拿它挡住这个按钮。
+  const canAuto = !!value.url.trim();
 
   return (
     <div className="cds-editor">
       <div className="cds-grid">
-        <label className="cds-f">
-          <span>显示名称</span>
-          <input className="hs-input" value={value.name} placeholder="例如：我的 ERP"
-            onChange={(e) => set("name", e.target.value)} />
-        </label>
-        <label className="cds-f">
-          <span>标识 id</span>
-          <input className="hs-input" value={value.id} placeholder="myerp（小写字母/数字/-/_）"
-            onChange={(e) => set("id", e.target.value)} />
-        </label>
         <label className="cds-f cds-f-wide">
           <span>MCP 端点</span>
           <input className="hs-input" value={value.url} spellCheck={false}
             placeholder="https://mcp.example.com/mcp"
-            onChange={(e) => set("url", e.target.value)} />
+            onChange={(e) => changeUrl(e.target.value)} />
         </label>
         <label className="cds-f">
-          <span>鉴权方式</span>
-          <select className="hs-input" value={value.auth.mode}
-            onChange={(e) => set("auth", { ...value.auth, mode: e.target.value as never })}>
-            <option value="query">URL 参数（?key=…）</option>
-            <option value="header">自定义 Header</option>
-            <option value="bearer">Authorization: Bearer</option>
-            <option value="none">不需要鉴权</option>
-          </select>
+          <span>密钥<i>{value.auth.value_set && !value.auth.value ? "（已保存，留空不改）" : "（没有就留空）"}</i></span>
+          <input className="hs-input" type="password" autoComplete="new-password"
+            value={value.auth.value} placeholder={value.auth.value_set ? "••••••" : "粘贴密钥"}
+            onChange={(e) => set("auth", { ...value.auth, value: e.target.value })} />
         </label>
-        {value.auth.mode !== "none" && (
-          <label className="cds-f">
-            <span>密钥{value.auth.value_set && !value.auth.value ? "（已保存，留空不改）" : ""}</span>
-            <input className="hs-input" type="password" autoComplete="new-password"
-              value={value.auth.value} placeholder={value.auth.value_set ? "••••••" : "粘贴密钥"}
-              onChange={(e) => set("auth", { ...value.auth, value: e.target.value })} />
-          </label>
-        )}
-        {(value.auth.mode === "query" || value.auth.mode === "header") && (
-          <label className="cds-f">
-            <span>{value.auth.mode === "query" ? "参数名" : "Header 名"}<i>（一般不用改）</i></span>
-            <input className="hs-input" value={value.auth.name}
-              placeholder={value.auth.mode === "query" ? "key" : "X-API-Key"}
-              onChange={(e) => set("auth", { ...value.auth, name: e.target.value })} />
-          </label>
-        )}
+        <label className="cds-f">
+          <span>显示名称<i>（自动填，可改）</i></span>
+          <input className="hs-input" value={value.name} placeholder="从端点自动填"
+            onChange={(e) => { setNameTouched(true); set("name", e.target.value); }} />
+        </label>
       </div>
 
       <div className="cds-actions">
@@ -301,7 +312,7 @@ function Editor({ value, onChange, onSaved, onCancel }: {
         <button className="cds-link" onClick={() => setSampleOpen((o) => !o)}>
           {sampleOpen ? "收起样例" : "换个样例试"}
         </button>
-        {!canAuto && <span className="cds-note">先填端点和标识 id</span>}
+        {!canAuto && <span className="cds-note">填上 MCP 端点就能点</span>}
         {err && <span className="cds-err">{err}</span>}
       </div>
 
@@ -340,6 +351,30 @@ function Editor({ value, onChange, onSaved, onCancel }: {
         <div className="cds-adv">
           <div className="cds-step"><span className="cds-step-t">连接细节</span></div>
           <div className="cds-grid">
+            <label className="cds-f">
+              <span>标识 id<i>（存历史数据用，保存后别改）</i></span>
+              <input className="hs-input" value={value.id} placeholder="从端点自动填"
+                onChange={(e) => { setIdTouched(true); set("id", e.target.value); }} />
+            </label>
+            <label className="cds-f">
+              <span>鉴权方式<i>（自动配置会自己试出来）</i></span>
+              <select className="hs-input" value={value.auth.mode}
+                onChange={(e) => set("auth", { ...value.auth, mode: e.target.value as never })}>
+                <option value="auto">自动探测</option>
+                <option value="query">URL 参数（?key=…）</option>
+                <option value="header">自定义 Header</option>
+                <option value="bearer">Authorization: Bearer</option>
+                <option value="none">不需要鉴权</option>
+              </select>
+            </label>
+            {(value.auth.mode === "query" || value.auth.mode === "header") && (
+              <label className="cds-f">
+                <span>{value.auth.mode === "query" ? "参数名" : "Header 名"}</span>
+                <input className="hs-input" value={value.auth.name}
+                  placeholder={value.auth.mode === "query" ? "key" : "X-API-Key"}
+                  onChange={(e) => set("auth", { ...value.auth, name: e.target.value })} />
+              </label>
+            )}
             <label className="cds-f">
               <span>数据信封路径<i>（可选）</i></span>
               <input className="hs-input" value={value.envelope} placeholder="留空自动识别，如 data"
@@ -382,19 +417,19 @@ function Editor({ value, onChange, onSaved, onCancel }: {
             </div>
           )}
 
-          <div className="cds-step"><span className="cds-step-t">在哪些板块出现</span></div>
+          <div className="cds-step">
+            <span className="cds-step-t">在哪些板块出现</span>
+            <i>由下面配了哪些能力决定，不用手动勾</i>
+          </div>
           <div className="cds-surfaces">
             {SURFACES.map((s) => {
-              const on = value.surfaces.includes(s.id);
-              const ok = !!value.capabilities?.[s.requires];
+              const on = !!value.capabilities?.[s.requires];
               return (
-                <label key={s.id} className={"cds-surface" + (on ? " on" : "")}>
-                  <input type="checkbox" checked={on}
-                    onChange={(e) => set("surfaces",
-                      e.target.checked ? [...value.surfaces, s.id] : value.surfaces.filter((x) => x !== s.id))} />
-                  <span>{s.label}</span>
-                  {!ok && <em>需先配置「{CAPS.find((c) => c.id === s.requires)?.label}」</em>}
-                </label>
+                <span key={s.id} className={"cds-surface cds-surface-ro" + (on ? " on" : "")}>
+                  {on ? "✓" : "—"} {s.label}
+                  {/* 这一行本身就是"市场调研"，能力名里的括号注解再写一遍纯属噪音 */}
+                  {!on && <em>缺「{shortLabel(s.requires)}」</em>}
+                </span>
               );
             })}
           </div>
@@ -451,6 +486,7 @@ function AutoResult({ report }: { report: AutoReport }) {
           <> · 可用板块：{report.surfaces.map((s) => labels[s] || s).join("、")}</>
         )}
       </div>
+      {report.auth && <div className="cds-note">鉴权方式已自动认出：{report.auth}</div>}
       {report.surfaces.length === 0 && (
         <div className="cds-note">
           没有板块能点亮 —— 首页要 ASIN 监控卡片，市场调研/打法推荐要关键词采集。

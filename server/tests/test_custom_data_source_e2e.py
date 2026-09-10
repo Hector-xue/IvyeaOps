@@ -19,6 +19,20 @@ import app.routers.home as home
 from app.services import custom_source_registry as registry
 
 
+@pytest.fixture(autouse=True)
+def _clean_registry():
+    """每个用例开跑前清空注册表。
+
+    conftest 把 data_dir 指到临时目录是**整轮共享**的，而注册表落在
+    hub_settings 里 —— 不清的话，上一个文件存的源会被下一个文件数进去，
+    表现为"单跑全绿、一起跑就挂"。
+    """
+    from app.core import hub_settings
+    hub_settings.save({"custom_data_sources": ""})
+    yield
+    hub_settings.save({"custom_data_sources": ""})
+
+
 class _MCPHandler(BaseHTTPRequestHandler):
     """一台最小 MCP 服务器：SSE 应答 + 查询参数鉴权 + 「失败装在成功里」。"""
 

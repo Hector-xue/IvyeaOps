@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.services import custom_source_mcp as _mcp
 from app.services import custom_source_provider as _provider
@@ -420,6 +420,21 @@ def _pipeline_steps(tools: List[Dict[str, Any]], want_input: str) -> List[Dict[s
     return steps
 
 
+def _pick_probe_tool(tools: List[Dict[str, Any]]) -> Optional[Tuple[str, Dict[str, Any]]]:
+    """挑一个参数填得上的工具，用来验鉴权。优先参数少的 —— 少一个参数就少一种
+    "调不通其实是参数不对"的干扰。"""
+    candidates = []
+    for tool in tools:
+        args, unresolved = build_args(tool.get("inputSchema"))
+        if unresolved:
+            continue
+        candidates.append((len(args), str(tool.get("name")), args))
+    if not candidates:
+        return None
+    candidates.sort()
+    return candidates[0][1], candidates[0][2]
+
+
 async def autoconfigure(cfg: Dict[str, Any], sample_keyword: str,
                         sample_asin: str, marketplace: str = "US") -> Dict[str, Any]:
     """探测 + 试调 + 生成映射。返回补好 capabilities/surfaces 的配置和一份人话报告。"""
@@ -430,11 +445,30 @@ async def autoconfigure(cfg: Dict[str, Any], sample_keyword: str,
     )
     results: List[Dict[str, Any]] = []
     capabilities: Dict[str, Any] = {}
+    auth_note = ""
 
     async with _mcp.session(cfg) as state:
         tools = await _mcp.list_tools(state)
         if not tools:
             raise _mcp.CustomSourceError("这台服务器没有返回任何工具")
+
+    # 鉴权写法没定下来就先试出来。用户界面上不问"鉴权方式"和"参数名" ——
+    # 那是机器试几次就能知道的事，不该占两个输入框还让人猜。
+    if str((cfg.get("auth") or {}).get("mode") or "auto") == "auto":
+        probe = _pick_probe_tool(tools)
+        if not probe:
+            raise _mcp.CustomSourceError("这台服务器的工具都有认不出的必填参数，没法自动配置")
+        tool_name, probe_args = probe
+        found = await _mcp.detect_auth(
+            cfg, tool_name, _provider.render_args(probe_args, variables))
+        if not found:
+            raise _mcp.CustomSourceError(
+                "密钥试了几种常见的传法都没通过。确认密钥没填错；"
+                "如果这台服务器用的是别的传法，可以在「高级设置」里手动指定")
+        cfg = {**cfg, "auth": {**found, "value": (cfg.get("auth") or {}).get("value", "")}}
+        auth_note = _mcp.auth_label(found)
+
+    async with _mcp.session(cfg) as state:
 
         for rule in _CAP_RULES:
             outcome = await _try_capability(state, rule, tools, variables, envelope)
@@ -453,11 +487,8 @@ async def autoconfigure(cfg: Dict[str, Any], sample_keyword: str,
             results.append({"id": cap_id, "label": _CAP_LABELS[cap_id], "ok": False,
                             "error": "没有找到吃这类输入的工具"})
 
-    surfaces = []
-    if "home_asin_pulse" in capabilities:
-        surfaces.append("home")
-    if "keyword_pipeline" in capabilities:
-        surfaces += ["market", "playbook"]
+    from app.services import custom_source_registry as _registry
+    surfaces = _registry.derive_surfaces(capabilities)
 
     return {
         "source": {**cfg, "capabilities": capabilities, "surfaces": surfaces},
@@ -465,6 +496,7 @@ async def autoconfigure(cfg: Dict[str, Any], sample_keyword: str,
             "tools": len(tools),
             "capabilities": results,
             "surfaces": surfaces,
+            "auth": auth_note,
             "ok": bool(capabilities),
         },
     }

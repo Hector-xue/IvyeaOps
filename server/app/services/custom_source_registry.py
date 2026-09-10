@@ -26,11 +26,13 @@ PREFIX = "custom:"
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 
-SURFACES = ("market", "playbook", "home")
+SURFACES = ("home", "market", "playbook")
 
 TRANSPORTS = ("http", "sse")
 
-AUTH_MODES = ("none", "query", "header", "bearer")
+# "auto" 是**未解析**状态：自动配置会挨个试出真正管用的那种，然后写回具体值。
+# 用户界面上没有「鉴权方式」这个选项，就是靠这一档。
+AUTH_MODES = ("auto", "none", "query", "header", "bearer")
 
 # 一个数据源能提供的能力。名字与 sellersprite_service 的同名函数逐字对齐 ——
 # 那组函数就是 ops 内部的事实契约，新源必须长成一样才能插进现有板块。
@@ -47,12 +49,42 @@ CAPABILITIES = (
     "home_product_trend_series",
 )
 
-# 板块能用起来的最低能力要求：缺了这些，该板块就算勾了 surface 也点不亮。
+# 板块要能用起来，至少得有这些能力。**这是推导规则，不是校验规则** ——
+# 配了什么能力就在什么板块出现，用户不需要（也不应该）自己勾板块。
 SURFACE_REQUIRES: Dict[str, tuple[str, ...]] = {
+    "home": ("home_asin_pulse",),
     "market": ("keyword_pipeline",),
     "playbook": ("keyword_pipeline",),
-    "home": ("home_asin_pulse",),
 }
+
+SURFACE_LABELS: Dict[str, str] = {
+    "home": "首页驾驶舱", "market": "市场调研", "playbook": "打法推荐",
+}
+
+# 报错里只许出现这些名字。用户没见过 keyword_pipeline 这种内部标识符，
+# 拿它写报错等于什么都没说。
+CAPABILITY_LABELS: Dict[str, str] = {
+    "keyword_pipeline": "关键词采集",
+    "asin_pipeline": "ASIN 采集",
+    "home_asin_pulse": "ASIN 监控卡片",
+    "home_keyword_pulse": "关键词监控卡片",
+    "home_keyword_extends": "拓展词",
+    "home_keyword_purchase_evidence": "关键词购买佐证",
+    "home_category": "类目大盘",
+    "home_market_metrics": "大盘指标",
+    "home_keyword_trend_series": "关键词趋势",
+    "home_product_trend_series": "ASIN 销量趋势",
+}
+
+
+def cap_label(cap_id: str) -> str:
+    return CAPABILITY_LABELS.get(cap_id, cap_id)
+
+
+def derive_surfaces(capabilities: Dict[str, Any]) -> List[str]:
+    """配了什么能力，就在什么板块出现。"""
+    return [s for s in SURFACES
+            if all(c in capabilities for c in SURFACE_REQUIRES.get(s, ()))]
 
 _MASK = ""     # 回传前端的占位：空串 + *_set 标记
 
@@ -172,16 +204,16 @@ def _require(cond: bool, message: str) -> None:
 
 
 def _clean_capability(name: str, spec: Any) -> Dict[str, Any]:
-    _require(isinstance(spec, dict), f"能力 {name} 的配置必须是对象")
+    _require(isinstance(spec, dict), f"「{cap_label(name)}」的配置必须是对象")
     spec = dict(spec)
     if name in ("keyword_pipeline", "asin_pipeline"):
         steps = spec.get("steps")
-        _require(isinstance(steps, list) and steps, f"能力 {name} 至少要配 1 个采集步骤")
+        _require(isinstance(steps, list) and steps, f"「{cap_label(name)}」至少要配 1 个采集步骤")
         cleaned_steps = []
         for index, step in enumerate(steps):
-            _require(isinstance(step, dict), f"{name} 第 {index + 1} 步必须是对象")
+            _require(isinstance(step, dict), f"「{cap_label(name)}」第 {index + 1} 步必须是对象")
             tool = str(step.get("tool") or "").strip()
-            _require(bool(tool), f"{name} 第 {index + 1} 步缺 tool")
+            _require(bool(tool), f"「{cap_label(name)}」第 {index + 1} 步没填工具名")
             cleaned_steps.append({
                 "label": str(step.get("label") or tool).strip(),
                 "tool": tool,
@@ -189,7 +221,7 @@ def _clean_capability(name: str, spec: Any) -> Dict[str, Any]:
             })
         return {"steps": cleaned_steps}
     tool = str(spec.get("tool") or "").strip()
-    _require(bool(tool), f"能力 {name} 缺 tool")
+    _require(bool(tool), f"「{cap_label(name)}」没填工具名")
     out: Dict[str, Any] = {
         "tool": tool,
         "args": spec.get("args") if isinstance(spec.get("args"), dict) else {},
@@ -204,28 +236,28 @@ def validate(item: Dict[str, Any]) -> Dict[str, Any]:
     """规范化 + 校验一份配置，返回可落盘的干净对象。"""
     _require(isinstance(item, dict), "配置必须是对象")
     slug = _strip_prefix(str(item.get("id") or "").strip().lower())
-    _require(bool(_SLUG_RE.match(slug)), "id 只能用小写字母/数字/下划线/短横线，1-32 位")
+    _require(bool(_SLUG_RE.match(slug)),
+                 "标识 id 只能用小写字母、数字、下划线和短横线，1-32 位")
 
     name = str(item.get("name") or "").strip() or slug
     transport = str(item.get("transport") or "http").strip().lower()
     _require(transport in TRANSPORTS, f"transport 只支持 {'/'.join(TRANSPORTS)}")
 
     url = str(item.get("url") or "").strip()
-    _require(url.startswith("https://") or url.startswith("http://"), "url 必须是 http(s) 地址")
+    _require(url.startswith("https://") or url.startswith("http://"),
+                 "MCP 端点要填完整地址，以 https:// 开头")
     # 端点写成 http 是 ops 自己踩过的坑（密钥会明文过网），这里只警告不拦截：
     # 局域网自建网关确实可能是 http。
     auth_in = item.get("auth") if isinstance(item.get("auth"), dict) else {}
-    mode = str(auth_in.get("mode") or "none").strip().lower()
-    _require(mode in AUTH_MODES, f"auth.mode 只支持 {'/'.join(AUTH_MODES)}")
+    mode = str(auth_in.get("mode") or "auto").strip().lower()
+    _require(mode in AUTH_MODES, "鉴权方式不认识")
     if mode == "query":
-        _require(bool(str(auth_in.get("name") or "").strip()), "query 鉴权要填参数名（如 key）")
+        _require(bool(str(auth_in.get("name") or "").strip()), "URL 参数鉴权要填参数名（如 key）")
     if mode == "header":
-        _require(bool(str(auth_in.get("name") or "").strip()), "header 鉴权要填 Header 名")
+        _require(bool(str(auth_in.get("name") or "").strip()), "Header 鉴权要填 Header 名")
 
     headers = item.get("headers") if isinstance(item.get("headers"), dict) else {}
     headers = {str(k).strip(): str(v or "") for k, v in headers.items() if str(k).strip()}
-
-    surfaces = [s for s in (item.get("surfaces") or []) if s in SURFACES]
 
     caps_in = item.get("capabilities") if isinstance(item.get("capabilities"), dict) else {}
     capabilities: Dict[str, Any] = {}
@@ -236,9 +268,10 @@ def validate(item: Dict[str, Any]) -> Dict[str, Any]:
             continue
         capabilities[cap] = _clean_capability(cap, spec)
 
-    for surface in surfaces:
-        missing = [c for c in SURFACE_REQUIRES.get(surface, ()) if c not in capabilities]
-        _require(not missing, f"勾选了「{surface}」板块就必须配置能力：{'、'.join(missing)}")
+    # 板块是**推导**出来的，不接受调用方指定 —— 上一版让用户自己勾，勾了却还没配
+    # 对应能力就保存不了，连"自动配置"这个按钮都被这条校验拦死。板块是结果，
+    # 不是输入。
+    surfaces = derive_surfaces(capabilities)
 
     timeout = item.get("timeout")
     try:

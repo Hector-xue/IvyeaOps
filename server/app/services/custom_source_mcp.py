@@ -17,7 +17,7 @@ from __future__ import annotations
 import json as _json
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlencode, urlparse, urlunparse
 
 import httpx
@@ -58,7 +58,9 @@ class CustomSourceError(RuntimeError):
 def _endpoint(cfg: Dict[str, Any]) -> str:
     url = str(cfg.get("url") or "").strip()
     auth = cfg.get("auth") or {}
-    if str(auth.get("mode")) == "query" and auth.get("value"):
+    # "auto" 是自动配置**还没跑**的状态。真到了调用这一步，按最常见的 ?key= 走 ——
+    # 自动配置跑过一次就会把它写成具体档位，正常流程不会停在 auto。
+    if str(auth.get("mode")) in ("query", "auto") and auth.get("value"):
         parts = urlparse(url)
         query = parts.query
         extra = urlencode({str(auth.get("name") or "key"): str(auth["value"])})
@@ -170,6 +172,59 @@ def record(payload: Any, envelope: str = "") -> Dict[str, Any]:
     if isinstance(node, list) and node and isinstance(node[0], dict):
         return node[0]
     return {}
+
+
+# 见过的鉴权写法，按出现频率排。自动配置会挨个试，第一个真能调通的就是它。
+# 让用户自己选"鉴权方式"再填"参数名"是没必要的 —— 这件事机器试几次就知道了。
+AUTH_CANDIDATES: List[Dict[str, str]] = [
+    {"mode": "query", "name": "key"},
+    {"mode": "query", "name": "secret-key"},
+    {"mode": "query", "name": "api_key"},
+    {"mode": "query", "name": "apikey"},
+    {"mode": "query", "name": "token"},
+    {"mode": "bearer", "name": ""},
+    {"mode": "header", "name": "X-API-Key"},
+    {"mode": "header", "name": "Authorization"},
+]
+
+AUTH_LABELS = {
+    "none": "不需要鉴权",
+    "query": "URL 参数",
+    "bearer": "Authorization: Bearer",
+    "header": "自定义 Header",
+}
+
+
+def auth_label(auth: Dict[str, Any]) -> str:
+    mode = str(auth.get("mode") or "")
+    name = str(auth.get("name") or "")
+    if mode == "query":
+        return f"URL 参数 {name or 'key'}"
+    if mode == "header":
+        return f"Header {name or 'X-API-Key'}"
+    return AUTH_LABELS.get(mode, mode)
+
+
+async def detect_auth(cfg: Dict[str, Any], probe_tool: str,
+                      probe_args: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """挨个试鉴权写法，返回第一个真能调通工具的那种。
+
+    为什么必须用 ``tools/call`` 来验而不是 ``tools/list``：大量服务器的工具清单
+    **不鉴权**，瞎填的 key 也能列出来。拿它当判据，八种写法会全部"成功"，
+    等于什么都没测。
+    """
+    value = str((cfg.get("auth") or {}).get("value") or "").strip()
+    if not value:
+        return {"mode": "none", "name": ""}
+    for candidate in AUTH_CANDIDATES:
+        trial = {**cfg, "auth": {**candidate, "value": value}}
+        try:
+            async with session(trial) as state:
+                await call_tool(state, probe_tool, probe_args)
+            return candidate
+        except Exception:               # noqa: BLE001 — 换下一种写法接着试
+            logger.debug("鉴权写法 %s 不通，试下一种", candidate, exc_info=True)
+    return None
 
 
 @asynccontextmanager
