@@ -41,6 +41,13 @@ jobs:
           # macOS 用户装的是发行版包，跟着 3.12 那栏走就够。
           - os: macos-latest
             python: "3.9"
+          # ubuntu-latest 已切到 26.04，setup-python 在上面没有 3.9 的构建，
+          # 装 Python 那一步就失败、测试一条都没跑。3.9 这栏改钉 22.04（下面 include）。
+          - os: ubuntu-latest
+            python: "3.9"
+        include:
+          - os: ubuntu-22.04
+            python: "3.9"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
