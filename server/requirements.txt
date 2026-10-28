@@ -14,7 +14,7 @@ openpyxl>=3.1.0
 # HTML 报告里 Ctrl+P —— 为一个导出格式要求每台机器装 chrome 不划算。
 python-pptx>=1.0.0
 pypdf>=4.0.0
-psd-tools==1.10.2
+psd-tools==1.17.4
 Pillow>=11.0.0
 python-multipart>=0.0.9
 pyte>=0.8.2
