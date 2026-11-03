@@ -534,24 +534,39 @@ async def _lingxing_dashboard(args: dict[str, Any]) -> Any:
 
 
 async def _lingxing_optimizer(args: dict[str, Any]) -> Any:
-    # 规则引擎早已改成后台任务（POST 启动 → 轮询），这里启动后就地等它跑完，
-    # 让 agent 一次调用就拿到候选结果；原来调的 lingxing.optimizer_run 已不存在。
+    """启动（或续查）一次领星规则引擎运行，就地等一会儿再返回。
+
+    规则引擎是后台任务（POST 启动 → 轮询）。原来调的 lingxing.optimizer_run 已不存在。
+    **等待上限 240 秒**：工具调用走 HTTP（/api/ivyea-agent/ops-tools/call），随包发的
+    nginx 对 /api/ 的读超时是 300 秒，等得比它久，代理会先断开，agent 只拿到网络错误
+    （冷启动跑 30 天窗口要逐日拉报表，可能超过 5 分钟）。没跑完就把运行 ID 交回去，
+    agent 再次调用时带上 run_id 只续查同一次运行，不会重复启动。
+    """
     import asyncio
     import time as _time
     from app.routers import lingxing
     from app.services import lingxing_optimizer as lxopt
-    run = await lingxing.optimizer_run_start(
-        sid=int(args.get("sid") or 0),
-        days=int(args.get("days") or 0),
-    )
-    deadline = _time.monotonic() + 15 * 60
-    while _time.monotonic() < deadline:
+    run_id = str(args.get("run_id") or "").strip()
+    if run_id:
+        run = lxopt.get_opt_run(run_id)
+        if not run:
+            return {"error": f"找不到优化运行 {run_id}"}
+    else:
+        run = await lingxing.optimizer_run_start(
+            sid=int(args.get("sid") or 0),
+            days=int(args.get("days") or 0),
+        )
+    deadline = _time.monotonic() + 240
+    while True:
         cur = lxopt.get_opt_run(run["id"]) or run
         if cur.get("status") in ("done", "failed"):
             return cur
+        if _time.monotonic() >= deadline:
+            break
         await asyncio.sleep(2)
-    cur = lxopt.get_opt_run(run["id"]) or run
-    cur["note"] = "规则引擎仍在后台运行，可稍后用运行 ID 查看结果"
+    cur = dict(cur)
+    cur["note"] = (f"规则引擎仍在后台运行（{cur.get('phase') or '进行中'}）。"
+                   f"稍后用 run_id={cur['id']} 再调用本工具即可取结果，不要重新启动。")
     return cur
 
 
@@ -734,7 +749,7 @@ TOOLS: tuple[OpsTool, ...] = (
     OpsTool("skill_tools_list", "skill-hub", "Skill 工具列表", "列出 Skill Tools 板块可运行工具。", _obj(query=_str("搜索词"), category=_str("分类"), limit=_int(default=30)), _skill_tools_list),
     OpsTool("lingxing_status", "lingxing", "领星状态", "读取领星集成开关和后端配置状态。", _obj(), _lingxing_status),
     OpsTool("lingxing_dashboard", "lingxing", "领星广告大盘", "读取领星广告数据大盘。", _obj(sids=_str("逗号分隔 SID，空=全部"), days=_int(default=7)), _lingxing_dashboard, long_running=True),
-    OpsTool("lingxing_optimizer", "lingxing", "领星规则优化候选", "运行领星店铺广告规则引擎，生成候选操作。", _obj(sid=_int("店铺 SID"), days=_int(default=0)), _lingxing_optimizer, long_running=True),
+    OpsTool("lingxing_optimizer", "lingxing", "领星规则优化候选", "运行领星店铺广告规则引擎，生成候选操作。最多等 4 分钟；没跑完会返回 run_id，带上它再调用即可取结果。", _obj(sid=_int("店铺 SID"), days=_int(default=0), run_id=_str("续查上一次未跑完的运行 ID；填了就不再启动新运行")), _lingxing_optimizer, long_running=True),
     OpsTool("lingxing_datasets", "lingxing", "领星数据集清单",
             "列出可读的领星数据集和每个数据集要哪些参数。**读数据前先看这个**。",
             _obj(), _lingxing_datasets),
