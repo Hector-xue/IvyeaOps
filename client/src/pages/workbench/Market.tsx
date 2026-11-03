@@ -14,6 +14,7 @@ import { FLAG_URL, MARKETPLACES } from "../../lib/marketplaces";
 import { getDataSource, setDataSource, dataSourceMeta, type DataSourceId } from "../../lib/dataSource";
 import DataSourcePicker from "../../components/DataSourcePicker";
 import DeepAnalysisPanel from "../../components/DeepAnalysisPanel";
+import { saveText } from "../../lib/saveBlob";
 
 // Local display shape — uses camelCase; converted from the snake_case API type.
 interface LocalHistoryEntry {
@@ -670,13 +671,7 @@ export default function Market() {
 // ─── Download Utilities ───────────────────────────────────────────────────────
 
 function triggerDownload(content: string, filename: string, mime: string) {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  saveText(content, filename, mime);
 }
 
 // CSV: extract all markdown tables; fall back to section-content structure if none found.

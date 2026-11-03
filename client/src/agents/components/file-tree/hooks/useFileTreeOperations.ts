@@ -4,6 +4,7 @@ import JSZip from 'jszip';
 import { api } from '../../../utils/api';
 import type { FileTreeNode } from '../types/types';
 import type { Project } from '../../../types/app';
+import { saveBlob } from '../../../../lib/saveBlob';
 
 // Invalid filename characters
 const INVALID_FILENAME_CHARS = /[<>:"/\\|?*\x00-\x1f]/;
@@ -249,17 +250,7 @@ export function useFileTreeOperations({
   }, [showToast, t]);
 
   const triggerBrowserDownload = useCallback((blob: Blob, fileName: string) => {
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-
-    anchor.href = url;
-    anchor.download = fileName;
-
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-
-    URL.revokeObjectURL(url);
+    saveBlob(blob, fileName);
   }, []);
 
   // Download file or folder

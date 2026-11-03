@@ -15,6 +15,7 @@ import Icon from "../Icon";
 import { MarkdownReport } from "../../lib/reportFormat";
 import FilePreview, { fmtSize, fmtTime } from "./FilePreview";
 import { consoleFileRawUrl, type ConsoleFile, type IvyeaFileChange } from "../../api/ivyeaAgent";
+import { saveText } from "../../lib/saveBlob";
 
 export type RailTodo = { content?: string; status?: string; [k: string]: any };
 export type RailApproval = { title: string; decision: string; at: number };
@@ -154,13 +155,7 @@ export default function ArtifactRail({
   };
 
   const downloadReport = () => {
-    const blob = new Blob([report], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `ivyea-${sessionId || "console"}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+    saveText(report, `ivyea-${sessionId || "console"}.md`, "text/markdown;charset=utf-8");
   };
 
   // 一条产物都没有时整条栏不渲染。
