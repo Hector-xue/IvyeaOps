@@ -47,6 +47,7 @@ function Sidebar({
   const { latestVersion, currentVersion, releaseInfo, installMode } = useVersionCheck(
     'siteboon',
     'claudecodeui',
+    false,
   );
   const updateAvailable = false;
   const { preferences, setPreference } = useUiPreferences();

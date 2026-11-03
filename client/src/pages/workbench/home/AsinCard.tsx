@@ -1,5 +1,6 @@
 import type { AsinPulse, PulseDelta } from "../../../api/home";
 import { amazonDp } from "../../../lib/marketplaces";
+import { symOfMarketplace } from "../lingxingCurrency";
 
 export type AsinState =
   | { kind: "idle" }
@@ -14,8 +15,12 @@ function fmtVol(v: number | null | undefined): string {
   return String(Math.round(v));
 }
 
-function fmtPrice(v: number | null | undefined): string {
-  return v == null ? "—" : "$" + v.toFixed(2);
+/** 价格 0 = 数据源没取到在售价（无购物车 / 缺货 / 下架），不是"免费"，显示成 — 。
+ *  符号跟站点走：日本站不该显示 $。 */
+function fmtPrice(v: number | null | undefined, marketplace: string): string {
+  if (v == null || v <= 0) return "—";
+  const sym = symOfMarketplace(marketplace);
+  return sym + (sym === "¥" ? Math.round(v).toLocaleString("en-US") : v.toFixed(2));
 }
 
 function fmtWhen(ts: number): string {
@@ -71,7 +76,7 @@ export default function AsinCard({ asin, label, marketplace, state, onRemove, on
       </div>
 
       {state.kind === "idle" && (
-        <button className="asin-fetch-hint" onClick={onRefresh}>点击拉取数据 ↻</button>
+        <button className="asin-fetch-hint" onClick={onRefresh}>点击拉取数据</button>
       )}
       {state.kind === "loading" && (
         <div aria-busy="true" aria-live="polite" style={{ display: "grid", gap: 7, paddingTop: 4 }}>
@@ -87,7 +92,7 @@ export default function AsinCard({ asin, label, marketplace, state, onRemove, on
         <>
           <div className="asin-metrics">
             <div className="asin-metric">
-              <div className="asin-metric-val">{fmtPrice(pulse!.price)} <Delta v={delta.price} kind="price" /></div>
+              <div className="asin-metric-val">{fmtPrice(pulse!.price, marketplace)} <Delta v={delta.price} kind="price" /></div>
               <div className="asin-metric-label">价格</div>
             </div>
             <div className="asin-metric">

@@ -226,7 +226,7 @@ export default function IdeaSkill({ embedded }: { embedded?: boolean } = {}) {
 
   return (
     <div>
-      {!embedded && <div className="ptitle">/ 想法工坊</div>}
+      {!embedded && <div className="ptitle">想法工坊</div>}
       <div style={{ fontSize: "var(--fs-10)", color: "var(--t3)", marginBottom: 16 }}>
         一句话描述你的想法，AI 深入理解需求 → 制定方案 → 复核优化 → 生成并自检 Skill
       </div>

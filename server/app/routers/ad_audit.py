@@ -123,8 +123,9 @@ class AdStatusResult(BaseModel):
 
 @router.get("/runners")
 def ad_runners(_user: str = Depends(require_user)) -> Dict[str, Any]:
-    """Same matrix as ASIN audit — the UI re-uses it."""
-    return {"runners": ad_audit.runner_status()}
+    """执行器可用性矩阵。与广告审计实际解析执行器（runners.resolve_with_pref）同源。"""
+    from app.services.runners import runner_status
+    return {"runners": runner_status()}
 
 
 def _job_to_upload_result(job: ad_audit.AdJob) -> AdUploadResult:

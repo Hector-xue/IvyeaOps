@@ -325,7 +325,6 @@ export default function Playbook() {
       {/* Header row */}
       <div className="market-header">
         <span className="market-title">
-          <span className="market-title-icon">◎</span>
           亚马逊打法推荐
         </span>
 

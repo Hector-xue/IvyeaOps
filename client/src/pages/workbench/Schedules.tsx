@@ -243,16 +243,14 @@ function SchedulesInner() {
   return (
     <div className="cap-page">
       <div className="home-topbar">
-        <span className="home-title"><span style={{ color: "var(--acc)" }}>⏱</span> 定时任务</span>
-        <span style={{ fontSize: "var(--fs-11)", color: "var(--t3)" }}>到点让 Agent 自己跑一轮</span>
+        <h1 className="home-title">定时任务</h1>
+        <span className="home-topbar-hint">到点让 Agent 自己跑一轮</span>
       </div>
 
       <div className="sch-notice">
-        <span className="cs-icon">⚑</span>
         <span>
-          定时任务**始终只读**：Agent 会巡检、分析、把要改的东西列清楚，但不会真的动线上数据。
-          没人在屏幕前的时候，自动批准写操作太危险 —— 要落地就看完结果再去对应板块执行。
-          {tz && <> 触发时刻按 <b>服务器时区 {tz}</b> 计算，不是你浏览器所在的时区。</>}
+          定时任务<b>始终只读</b>：Agent 只巡检和列出建议，不改线上数据，要落地请看完结果再去对应板块执行。
+          {tz && <> 触发时间按服务器时区 <b>{tz}</b> 计算。</>}
         </span>
       </div>
 

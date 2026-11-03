@@ -168,7 +168,7 @@ export default function ServerMonitor() {
   if (err && !snap) {
     return (
       <div>
-        <div className="ptitle">/ 服务器监控</div>
+        <div className="ptitle">服务器监控</div>
         <div className="card" style={{ color: "var(--red)", fontSize: "var(--fs-11)" }}>
           ✗ {err}
         </div>
@@ -179,7 +179,7 @@ export default function ServerMonitor() {
   if (!snap) {
     return (
       <div>
-        <div className="ptitle">/ 服务器监控</div>
+        <div className="ptitle">服务器监控</div>
         <div aria-busy="true" aria-live="polite" style={{ display: "grid", gap: 10 }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
             {Array.from({ length: 4 }).map((_, i) => (
@@ -216,9 +216,10 @@ export default function ServerMonitor() {
         className="ptitle"
         style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
       >
-        <span>/ 服务器监控 · localhost</span>
-        <span style={{ fontSize: "var(--fs-9)", color: "var(--t3)", textTransform: "none" }}>
-          ● live · 3s
+        <span>服务器监控</span>
+        <span style={{ fontSize: "var(--fs-12)", fontWeight: 400, color: "var(--t3)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <i style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--acc)", display: "inline-block" }} />
+          实时 · 每 3 秒刷新
         </span>
       </div>
 
@@ -806,7 +807,7 @@ function TokenUsagePanel({ data }: { data: TokenUsageData }) {
 
   return (
     <>
-      <div className="ptitle" style={{ marginTop: 20 }}>/ Token 使用量统计</div>
+      <div className="ptitle" style={{ marginTop: 28, fontSize: 15 }}>Token 使用量统计</div>
 
       {/* Grand totals — cumulative across all sources & full history */}
       {totals && (

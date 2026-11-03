@@ -32,6 +32,11 @@ const BY_CODE: Record<string, Cur> = {
   SA: BY_COUNTRY_CN["沙特阿拉伯"], EG: BY_COUNTRY_CN["埃及"],
 };
 
+/** 亚马逊站点代码 → 本币符号。未知站点返回 "$"（市场侧数据源默认按美国站给价）。 */
+export function symOfMarketplace(code: string | undefined): string {
+  return (code && BY_CODE[code.toUpperCase()]?.sym) || "$";
+}
+
 function curOfSeller(s: any): Cur | undefined {
   if (!s) return undefined;
   if (s.country && BY_COUNTRY_CN[s.country]) return BY_COUNTRY_CN[s.country];

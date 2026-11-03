@@ -1,0 +1,258 @@
+/* 视觉整理层（2026-11-03）
+ * ============================================================================
+ *
+ * 起因：用户反馈「页面很乱、没设计感、密密麻麻」。逐页截图对照后，问题集中在
+ * 四件事，这一层只管这四件，不重写任何组件的结构：
+ *
+ *   1. **页标题没有规范。** 有的是 9px 全大写的「/ 分析工具」（终端主题时代的
+ *      面包屑写法），有的带符号图标，有的是大号标题 —— 每页一种。统一成一个
+ *      真正的页标题：一个字号、一个字重、没有斜杠和符号。
+ *   2. **字太小、行太挤。** 驾驶舱正文 10~11px、单元格 6px 内边距。数据密集
+ *      不等于要挤：表格行高、KPI 数字字号拉开之后，同样的信息量读起来更快。
+ *   3. **符号当图标。** ↗ ◈ ⊞ ★ ☰ ◷ ◎ ◆ ▤ 在不同字体里粗细、基线都不一样，
+ *      排在一行里就是「没挑过」。JSX 里已经删掉，这里补齐删掉后的间距。
+ *   4. **驾驶舱两组 tab 两套版式。** 市场组有内边距和分区卡片，经营组（广告 /
+ *      促销 / 建议 / 工单）贴边、原生下拉框、按钮样式也不同。统一内边距和控件。
+ *
+ * 纪律：
+ *   - **只用主题通用变量**（--t/--t2/--t3/--b/--b2/--bg1/--bg2/--acc/...），
+ *     20 套主题都跟得上，不为某一套写死颜色。
+ *   - 字号能用 --fs-* 的用 --fs-*（门道主题会重排这张表）；只有 ≥17px 的标题
+ *     和大数字写 px，与 workbench.css 的约定一致。
+ *   - 中文标题不加负字距（中文字面本来就满，压字距只会糊）。
+ *   - 选择器尽量收在 `.home-cockpit` 等页面根之下，不碰别的板块。
+ * ============================================================================ */
+
+/* ── 1. 页标题 ────────────────────────────────────────────────────────────── */
+.ptitle{
+  font-size:18px;font-weight:600;color:var(--t);letter-spacing:0;text-transform:none;
+  line-height:1.35;margin-bottom:16px;padding-bottom:0;border-bottom:none;
+}
+@media (max-width:760px){ .ptitle{font-size:16px;margin-bottom:12px} }
+/* 标题后面跟一句说明的写法（.ptitle-sub 由各页按需使用） */
+.ptitle-sub{display:block;margin-top:4px;font-size:var(--fs-13);font-weight:400;color:var(--t3);line-height:1.6}
+
+/* ── 2. 驾驶舱外壳：顶栏 / 异动条 / tab ─────────────────────────────────── */
+.home-cockpit .home-topbar{padding:22px 28px 14px;gap:12px}
+.home-title{
+  font-size:18px;font-weight:600;color:var(--t);letter-spacing:0;line-height:1.3;
+  display:flex;align-items:baseline;gap:10px;margin:0 auto 0 0;
+}
+.home-date{font-size:var(--fs-13);font-weight:400;color:var(--t3);letter-spacing:0}
+
+.home-cockpit .home-alerts{padding:0 28px 14px;gap:10px}
+.home-cockpit .home-alerts-empty{font-size:var(--fs-12)}
+.home-alerts-label{flex-shrink:0;font-size:var(--fs-12);color:var(--t3)}
+.home-cockpit .home-alert-chip{
+  font-size:var(--fs-12);padding:4px 10px;border-radius:999px;gap:6px;
+  background:var(--bg2);border:1px solid transparent;
+}
+.home-cockpit .home-alert-chip:hover{border-color:var(--b2)}
+.home-cockpit .home-alert-asin{max-width:150px}
+.home-alert-own{margin-left:5px;font-size:var(--fs-10);font-weight:400;color:var(--t3)}
+
+.home-cockpit .home-tabs{padding:0 20px;gap:2px}
+.home-tab{
+  padding:11px 10px 10px;font-size:var(--fs-13);font-family:inherit;color:var(--t3);gap:0;
+}
+.home-tab:hover{color:var(--t)}
+.home-tab.active{color:var(--t);font-weight:600;border-bottom-color:var(--acc)}
+.home-tab-group{font-size:var(--fs-12);letter-spacing:0;padding:0 6px 0 8px;color:var(--t3);opacity:.85}
+.home-tab-group-sep{margin-left:10px;padding-left:16px}
+.home-cockpit .lx-badge{margin-left:5px}
+/* 同一套顶栏 + tab 也用在能力市场、定时任务（它们在 .content 的内边距里，不再额外留白） */
+.cap-page .home-topbar{padding:0 0 14px;gap:12px}
+.cap-page .home-tabs{padding:0;margin-bottom:12px}
+.home-tab-icon{display:none}
+.home-topbar-hint{font-size:var(--fs-13);color:var(--t3)}
+
+/* 市场调研 / 打法推荐 / 用户管理的页头（原来是 9px 全大写的灰字 + 符号） */
+.market-header{padding-bottom:12px;margin-bottom:4px;gap:12px}
+.market-title{font-size:18px;font-weight:600;color:var(--t);letter-spacing:0;text-transform:none}
+.market-title-icon{display:none}
+
+/* 经营组的状态标记（替代原来三个并排彩点） */
+.home-ops-state{
+  display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-12);color:var(--t2);
+  padding:4px 10px;border-radius:999px;background:var(--bg2);cursor:default;white-space:nowrap;
+}
+.home-ops-dot{width:7px;height:7px;border-radius:50%;background:var(--t3);flex-shrink:0}
+.home-ops-state.ok .home-ops-dot{background:var(--acc)}
+.home-ops-state.warn{color:var(--amber)}
+.home-ops-state.warn .home-ops-dot{background:var(--amber)}
+.home-ops-state.hot{color:var(--red)}
+.home-ops-state.hot .home-ops-dot{background:var(--red)}
+.home-ops-sep{color:var(--t3);margin:0 -1px}
+
+/* 所有 tab 的正文统一内边距（原来市场组 16/20、经营组 12/20、各自不同） */
+.home-cockpit .pulse-page,
+.home-cockpit .cp-page,
+.home-cockpit .home-ops-scroll{padding:20px 28px 40px}
+.home-cockpit .pulse-page,.home-cockpit .cp-page{gap:16px}
+@media (max-width:760px){
+  .home-cockpit .home-topbar{padding:14px 14px 10px}
+  .home-cockpit .home-alerts{padding:0 14px 10px}
+  .home-cockpit .home-tabs{padding:0 6px}
+  .home-cockpit .pulse-page,
+  .home-cockpit .cp-page,
+  .home-cockpit .home-ops-scroll{padding:14px 14px 28px}
+}
+
+/* ── 3. 驾驶舱控件：按钮 / 分段 / 下拉 / 输入 ─────────────────────────────── */
+.home-cockpit .cp-btn{
+  padding:6px 12px;font-size:var(--fs-12);font-family:inherit;border-radius:7px;
+  border:1px solid var(--b);background:var(--bg1);color:var(--t2);line-height:1.3;
+}
+.home-cockpit .cp-btn:hover:not(:disabled){border-color:var(--b2);background:var(--bg2);color:var(--t)}
+.home-cockpit .cp-btn.primary{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}
+.home-cockpit .cp-btn.primary:hover:not(:disabled){background:var(--acc);filter:brightness(1.06);color:var(--on-acc)}
+.home-cockpit .cp-btn.tiny{padding:3px 9px;font-size:var(--fs-12);border-radius:6px}
+
+.home-cockpit .cp-seg{border:none;border-radius:8px;background:var(--bg2);padding:2px;gap:2px}
+.home-cockpit .cp-seg-btn{
+  padding:5px 12px;font-size:var(--fs-12);font-family:inherit;border-radius:6px;color:var(--t3);
+}
+.home-cockpit .cp-seg-btn:hover{color:var(--t)}
+.home-cockpit .cp-seg-btn.active{
+  background:var(--bg1);color:var(--t);font-weight:600;
+  box-shadow:0 1px 2px rgba(0,0,0,.08),0 0 0 1px var(--b);
+}
+
+.home-cockpit .cp-select{
+  -webkit-appearance:none;appearance:none;
+  padding:6px 30px 6px 12px;font-size:var(--fs-12);font-family:inherit;border-radius:7px;
+  border:1px solid var(--b);color:var(--t);cursor:pointer;
+  background:var(--bg1) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5l3 3 3-3' fill='none' stroke='%23888' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+}
+.home-cockpit .cp-select:hover{border-color:var(--b2)}
+/* 静谧 / 琉璃皮肤对所有 select 写了 `background: … !important`，会把箭头图一起清掉；
+   这里特异性 (0,2,0) 高于皮肤的 (0,1,2)，再带 !important 才补得回来。 */
+.home-cockpit .cp-select{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5l3 3-3 3' transform='rotate(90 5 5)' fill='none' stroke='%23888' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+  background-repeat:no-repeat !important;background-position:right 10px center !important;
+}
+
+.home-cockpit .pulse-header{gap:10px}
+.home-cockpit .pulse-input-wrap{margin-right:auto}
+.home-cockpit .pulse-input{
+  font-family:inherit;font-size:var(--fs-13);padding:6px 12px;border-radius:7px;width:240px;
+  background:var(--bg1);border-color:var(--b);
+}
+.home-cockpit .pulse-input:focus{width:300px;border-color:var(--acc)}
+.home-cockpit .tbtn{font-family:inherit;font-size:var(--fs-12);padding:5px 10px;border-radius:7px}
+
+/* ── 4. 驾驶舱内容：KPI / 说明 / 分区 / 表格 ──────────────────────────────── */
+.cp-toolbar{gap:10px}
+.cp-asof{font-size:var(--fs-12);color:var(--t3);white-space:nowrap}
+
+.home-cockpit .cp-kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;transition:opacity .15s}
+.home-cockpit .cp-kpis.is-stale{opacity:.55}
+.home-cockpit .cp-kpi{padding:14px 16px;border-radius:10px;background:var(--bg1);border:1px solid var(--b)}
+.home-cockpit .cp-kpi-label{font-size:var(--fs-12);color:var(--t3);margin-bottom:6px}
+.home-cockpit .cp-kpi-value{
+  font-size:22px;font-weight:600;letter-spacing:-.01em;line-height:1.2;
+  display:flex;align-items:baseline;flex-wrap:wrap;gap:0 8px;
+}
+.home-cockpit .cp-delta{font-size:var(--fs-12);font-weight:500;letter-spacing:0}
+
+/* 说明：原来是 2~3 行「◈ …」长句贴在 KPI 下面。收成一行，其余折叠。 */
+.cp-notes{font-size:var(--fs-12);color:var(--t3);line-height:1.65;padding-left:10px;border-left:2px solid var(--b)}
+.cp-notes.warn{border-left-color:color-mix(in srgb,var(--amber) 60%,transparent)}
+.cp-notes-more{
+  margin-left:8px;border:none;background:none;padding:0;font:inherit;color:var(--t2);
+  cursor:pointer;text-decoration:underline;text-underline-offset:2px;text-decoration-color:var(--b2);
+}
+.cp-notes-more:hover{color:var(--t)}
+.cp-notes-line{margin-top:2px}
+
+.home-cockpit .cp-anomaly-strip{gap:8px}
+.home-cockpit .cp-anomaly-chip{font-size:var(--fs-12);padding:4px 11px}
+
+.cp-section{display:flex;flex-direction:column;gap:6px;min-width:0}
+.home-cockpit .cp-subhead{
+  padding:6px 0 4px;font-size:var(--fs-13);font-weight:600;color:var(--t);
+  display:flex;align-items:baseline;gap:10px;
+}
+.cp-subhead-meta{font-size:var(--fs-12);font-weight:400;color:var(--t3)}
+
+.home-cockpit .cp-table{font-size:var(--fs-13)}
+.home-cockpit .cp-table th{
+  padding:8px 12px;font-size:var(--fs-12);font-weight:500;color:var(--t3);
+  border-bottom:1px solid var(--b);white-space:nowrap;
+}
+.home-cockpit .cp-table td{padding:10px 12px;border-bottom:1px solid var(--b);color:var(--t2);vertical-align:middle}
+.home-cockpit .cp-table .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.home-cockpit .cp-table th.num{text-align:right}
+/* 名称列原来是 display:flex 的 td —— 这会让它脱离表格布局，表头下划线和
+   单元格对不齐（截图里「活动」那一列的横线断开就是这个）。改回 table-cell。 */
+.home-cockpit .cp-table td.cp-col-name{display:table-cell;max-width:none;white-space:nowrap}
+.home-cockpit .cp-col-name > *{vertical-align:middle}
+.home-cockpit .cp-col-name > * + *{margin-left:6px}
+.home-cockpit .cp-camp-name{display:inline-block;max-width:280px}
+.home-cockpit .cp-row:hover td{background:color-mix(in srgb,var(--t) 3%,transparent)}
+.home-cockpit .cp-row-detail td{background:color-mix(in srgb,var(--t) 2.5%,transparent)}
+.home-cockpit .cp-row-toggle{
+  display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;
+  color:var(--t3);transition:transform .15s ease,background .12s;
+}
+.home-cockpit .cp-row-toggle:hover{background:var(--bg2);color:var(--t)}
+.home-cockpit .cp-row-toggle.open{transform:rotate(90deg)}
+.home-cockpit .cp-col-actions{display:table-cell;white-space:nowrap;text-align:right}
+.home-cockpit .cp-col-actions .cp-btn + .cp-btn{margin-left:6px}
+.home-cockpit .cp-mkt{font-size:var(--fs-10);padding:0 5px;border-radius:4px;color:var(--t3)}
+.home-cockpit .cp-acos-target{font-size:var(--fs-11)}
+.home-cockpit .cp-pace-text{font-size:var(--fs-12)}
+.home-cockpit .cp-detail-metrics{font-size:var(--fs-12);gap:18px}
+.home-cockpit .cp-anomaly{font-size:var(--fs-12)}
+.cp-link{border:none;background:none;padding:0;font:inherit;color:var(--t);cursor:pointer}
+.cp-link:hover{color:var(--acc);text-decoration:underline;text-underline-offset:2px}
+
+.home-cockpit .cp-empty{padding:56px 20px}
+.home-cockpit .cp-empty-title{font-size:var(--fs-15);font-weight:600;color:var(--t2);margin-bottom:8px}
+.home-cockpit .cp-empty-desc{font-size:var(--fs-13);line-height:1.75}
+.home-cockpit .cp-loading{font-size:var(--fs-13)}
+.home-cockpit .cp-hour-panel{border-radius:10px;padding:14px 16px}
+.home-cockpit .cp-hour-hd{font-size:var(--fs-13);font-weight:600;color:var(--t)}
+
+/* 促销日历 */
+.home-cockpit .cp-stat{font-size:var(--fs-12)}
+.home-cockpit .cp-stat b{font-size:var(--fs-15)}
+.home-cockpit .cp-kind-btn{font-size:var(--fs-12);padding:4px 12px}
+.home-cockpit .cp-freshness{font-size:var(--fs-12)}
+.home-cockpit .cp-card{border-radius:10px;padding:14px 16px}
+.home-cockpit .cp-name{font-size:var(--fs-13)}
+.home-cockpit .cp-card-meta,.home-cockpit .cp-budget-text,.home-cockpit .cp-asin{font-size:var(--fs-12)}
+
+/* 市场组 */
+.home-cockpit .pulse-insights{gap:12px}
+.home-cockpit .pulse-insight,.home-cockpit .pulse-matrix{border-radius:10px}
+.home-cockpit .pulse-insight-hd,.home-cockpit .pulse-matrix-hd{background:transparent;padding:12px 14px 8px;border-bottom:none}
+.pulse-insight-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.home-cockpit .pulse-insight-title,.home-cockpit .pulse-matrix-title{font-size:var(--fs-13);font-weight:600;color:var(--t)}
+.home-cockpit .pulse-insight-badge{font-family:inherit;font-size:var(--fs-12);font-weight:600}
+.home-cockpit .pulse-insight-row{font-size:var(--fs-13);padding:7px 14px;border-bottom:1px solid var(--b)}
+.home-cockpit .pulse-insight-val{font-family:inherit;font-size:var(--fs-12);font-variant-numeric:tabular-nums}
+.home-cockpit .pulse-insight-empty{font-size:var(--fs-12);padding:18px 14px}
+.home-cockpit .pulse-matrix-legend{font-size:var(--fs-11)}
+.home-cockpit .pulse-section-label{font-size:var(--fs-13);color:var(--t);letter-spacing:0;padding-top:6px}
+.home-cockpit .pulse-onboard{gap:10px}
+.home-cockpit .pulse-onboard-title{font-size:var(--fs-15);font-weight:600}
+.home-cockpit .pulse-onboard-sub{font-size:var(--fs-13);max-width:440px}
+
+/* ── 5. 提示 / 声明：从整块彩底框降为左侧细线 ──────────────────────────────
+   这类文字要「看得见」，但不该是页面上最抢眼的东西。整块琥珀底让它比正文还重。 */
+.sch-notice,.mk-disclaimer{
+  margin:0 0 16px;padding:2px 0 2px 12px;border:none;border-left:2px solid var(--b2);border-radius:0;
+  background:transparent;font-size:var(--fs-12);line-height:1.7;color:var(--t3);
+}
+.sch-notice{border-left-color:color-mix(in srgb,var(--amber) 65%,transparent)}
+.sch-notice b,.mk-disclaimer b{color:var(--t2);font-weight:600}
+
+/* KPI 的环比固定放在数字下面一行：并排时窄卡片会自动折行、宽卡片不折，六张卡高低不齐 */
+.home-cockpit .cp-kpi-value{flex-direction:column;align-items:flex-start;gap:2px}
+.home-cockpit .cp-table .cp-delta{margin-left:6px}
+@media (max-width:760px){
+  .home-cockpit .cp-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .home-cockpit .cp-kpi{padding:12px 14px}
+  .home-cockpit .cp-kpi-value{font-size:18px}
+}

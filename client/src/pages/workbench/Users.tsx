@@ -93,8 +93,8 @@ export default function Users() {
   return (
     <div className="market-page">
       <div className="market-header">
-        <span className="market-title"><span className="market-title-icon">⊙</span> 用户管理</span>
-        <button className="tbtn" style={{ marginLeft: "auto" }} onClick={load}>↻ 刷新</button>
+        <span className="market-title">用户管理</span>
+        <button className="tbtn" style={{ marginLeft: "auto" }} onClick={load}>刷新</button>
       </div>
 
       {err && <div className="market-error">{err}</div>}

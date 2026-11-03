@@ -15,7 +15,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.agents import ws as ws_module
-from app.agents.routers import (auth, commands, core, files, git, mcp_utils, projects,
+from app.agents.routers import (auth, commands, core, files, git, mcp_utils, plugins, projects,
                               providers, sessions, settings, taskmaster, user)
 
 api_router = APIRouter()
@@ -30,6 +30,7 @@ api_router.include_router(taskmaster.router, prefix="/taskmaster", tags=["agents
 api_router.include_router(settings.router, prefix="/settings", tags=["agents-settings"])
 api_router.include_router(commands.router, prefix="/commands", tags=["agents-commands"])
 api_router.include_router(mcp_utils.router, prefix="/mcp-utils", tags=["agents-mcp-utils"])
+api_router.include_router(plugins.router, prefix="/plugins", tags=["agents-plugins"])
 # File ops use full paths (/projects/{id}/file..., /browse-filesystem, /create-folder).
 api_router.include_router(files.router, tags=["agents-files"])
 

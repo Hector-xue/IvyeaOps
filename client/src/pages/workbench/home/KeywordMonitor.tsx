@@ -171,13 +171,13 @@ function SummaryBar({ keywords, states }: { keywords: string[]; states: Record<s
 
 type InsightItem = { keyword: string; val: string };
 
-function InsightPanel({ icon, title, accent, items, emptyText }: {
-  icon: string; title: string; accent: string; items: InsightItem[]; emptyText: string;
+function InsightPanel({ title, accent, items, emptyText }: {
+  title: string; accent: string; items: InsightItem[]; emptyText: string;
 }) {
   return (
     <div className="pulse-insight">
       <div className="pulse-insight-hd">
-        <span className="pulse-insight-icon" style={{ color: `var(--${accent})` }}>{icon}</span>
+        <i className="pulse-insight-dot" style={{ background: `var(--${accent})` }} />
         <span className="pulse-insight-title">{title}</span>
         <span className="pulse-insight-badge" style={{ color: items.length ? `var(--${accent})` : undefined }}>{items.length}</span>
       </div>
@@ -224,9 +224,9 @@ function InsightPanels({ keywords, states }: { keywords: string[]; states: Recor
 
   return (
     <div className="pulse-insights">
-      <InsightPanel icon="◎" title="低竞机会词" accent="acc"   items={opportunities} emptyText="暂无低竞争高搜索量词" />
-      <InsightPanel icon="↑" title="趋势上升"   accent="acc"   items={rising}        emptyText="暂无上升趋势词" />
-      <InsightPanel icon="⚠" title="竞争预警"   accent="red"   items={alerts}        emptyText="当前无高竞争词" />
+      <InsightPanel title="低竞机会词" accent="acc"   items={opportunities} emptyText="暂无低竞争高搜索量词" />
+      <InsightPanel title="趋势上升"   accent="acc"   items={rising}        emptyText="暂无上升趋势词" />
+      <InsightPanel title="竞争预警"   accent="red"   items={alerts}        emptyText="当前无高竞争词" />
     </div>
   );
 }
@@ -239,7 +239,9 @@ function ScatterPlot({ points }: { points: PlotPoint[] }) {
   if (points.length < 2) return null;
 
   const VW = 580, VH = 190;
-  const L = 12, R = 12, T = 18, B = 24;
+  const L = 12, R = 12, T = 20, B = 22;
+  // 点位离象限边缘留出余量：极值点原来正好落在边框上，和角上的轴说明叠在一起。
+  const INSET = 14;
   const PW = VW - L - R, PH = VH - T - B;
   const midX = L + PW / 2, midY = T + PH / 2;
 
@@ -248,8 +250,8 @@ function ScatterPlot({ points }: { points: PlotPoint[] }) {
   const logMax = Math.log10(Math.max(...vols));
   const logRange = logMax - logMin || 1;
 
-  const toX = (c: number) => L + (Math.min(Math.max(c, 0), 100) / 100) * PW;
-  const toY = (v: number) => T + PH - ((Math.log10(Math.max(v, 200)) - logMin) / logRange) * PH;
+  const toX = (c: number) => L + INSET + (Math.min(Math.max(c, 0), 100) / 100) * (PW - INSET * 2);
+  const toY = (v: number) => T + PH - INSET - ((Math.log10(Math.max(v, 200)) - logMin) / logRange) * (PH - INSET * 2);
 
   function dotColor(cx: number, cy: number) {
     const lowC = cx < midX, hiV = cy < midY;
@@ -262,7 +264,7 @@ function ScatterPlot({ points }: { points: PlotPoint[] }) {
   return (
     <div className="pulse-matrix">
       <div className="pulse-matrix-hd">
-        <span className="pulse-matrix-title">◉ 机会象限</span>
+        <span className="pulse-matrix-title">机会象限</span>
         <div className="pulse-matrix-legend">
           <span><i className="pml pml-g" />低竞高量·机会</span>
           <span><i className="pml pml-a" />高量高竞·激战</span>
@@ -281,10 +283,10 @@ function ScatterPlot({ points }: { points: PlotPoint[] }) {
           <line x1={midX} y1={T}   x2={midX} y2={T+PH} stroke="var(--b2)" strokeWidth="0.8" />
           <line x1={L}    y1={midY} x2={L+PW} y2={midY} stroke="var(--b2)" strokeWidth="0.8" />
           {/* Axis labels */}
-          <text x={L+3}    y={T+PH+18} fill="var(--t3)" fontSize="9" fontFamily="sans-serif">低竞争</text>
-          <text x={L+PW-30} y={T+PH+18} fill="var(--t3)" fontSize="9" fontFamily="sans-serif">高竞争</text>
-          <text x={L+3}    y={T+13}    fill="var(--t3)" fontSize="9" fontFamily="sans-serif">↑ 高搜索量</text>
-          <text x={L+3}    y={T+PH-3}  fill="var(--t3)" fontSize="9" fontFamily="sans-serif">↓ 低搜索量</text>
+          {/* 轴说明全部放在绘图区外，不和点位抢位置 */}
+          <text x={L}      y={T-7}     fill="var(--t3)" fontSize="9">搜索量 ↑</text>
+          <text x={L}      y={T+PH+15} fill="var(--t3)" fontSize="9">低竞争</text>
+          <text x={L+PW}   y={T+PH+15} fill="var(--t3)" fontSize="9" textAnchor="end">高竞争 →</text>
           {/* Points */}
           {points.map(p => {
             const cx = toX(p.competition), cy = toY(p.searchVolume);
@@ -296,7 +298,7 @@ function ScatterPlot({ points }: { points: PlotPoint[] }) {
               <g key={p.keyword}>
                 <circle cx={cx} cy={cy} r={6} fill={color} fillOpacity="0.8" />
                 <circle cx={cx} cy={cy} r={9} fill={color} fillOpacity="0.15" />
-                <text x={lx} y={cy + 4} fill="var(--t2)" fontSize="9" fontFamily="sans-serif" textAnchor={anchor}>{label}</text>
+                <text x={lx} y={cy + 3.5} fill="var(--t2)" fontSize="9" textAnchor={anchor}>{label}</text>
               </g>
             );
           })}
@@ -361,7 +363,7 @@ function KeywordCard({ keyword, state, marketplace, dataSource, onRemove, onRefr
           <button className="asin-icon-btn" onClick={onRemove} title="移除">✕</button>
         </div>
       </div>
-      {state.kind === "idle"    && <button className="asin-fetch-hint" onClick={onRefresh}>点击拉取数据 ↻</button>}
+      {state.kind === "idle"    && <button className="asin-fetch-hint" onClick={onRefresh}>点击拉取数据</button>}
       {state.kind === "loading" && (
         <div aria-busy="true" aria-live="polite" style={{ display: "grid", gap: 8, paddingTop: 4 }}>
           <div className="skeleton" style={{ height: 90, borderRadius: 6 }} />
@@ -406,7 +408,7 @@ function KeywordCard({ keyword, state, marketplace, dataSource, onRemove, onRefr
         <div className="kx-panel">
           <div className="kx-actions">
             <button className="tbtn" onClick={pullExt} disabled={extBusy}>
-              {extBusy ? <><span className="spin" style={{ marginRight: 5 }} />拉取中…</> : (ext && ext.length ? "↻ 刷新拓展词" : "拉取拓展词")}
+              {extBusy ? <><span className="spin" style={{ marginRight: 5 }} />拉取中…</> : (ext && ext.length ? "刷新拓展词" : "拉取拓展词")}
             </button>
             <button className="tbtn" onClick={deepExt} disabled={deepBusy || !ext || !ext.length}
               title={dataSource === "sellersprite"
@@ -570,9 +572,6 @@ export default function KeywordMonitor({ marketplace, dataSource }: { marketplac
     <div className="pulse-page">
       {/* ── Toolbar ── */}
       <div className="pulse-header">
-        <span className="pulse-header-title">
-          <span style={{ color: "var(--acc)" }}>◈</span> 关键词监控
-        </span>
         <div className="pulse-input-wrap">
           <input ref={inputRef} className="pulse-input" value={input}
             onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && addKeyword()}
@@ -583,14 +582,13 @@ export default function KeywordMonitor({ marketplace, dataSource }: { marketplac
           onClick={refreshAll}
           disabled={refreshing || keywords.length === 0}
           title={`实时刷新全部（每个词消耗 ${sourceName} 调用）`}>
-          {refreshing ? <><span className="spin" style={{ marginRight: 6 }} />查询中…</> : "↻ 全部刷新"}
+          {refreshing ? <><span className="spin" style={{ marginRight: 6 }} />查询中…</> : "全部刷新"}
         </button>
       </div>
 
       {keywords.length === 0 ? (
         /* ── Empty / Onboarding ── */
         <div className="pulse-onboard">
-          <div className="pulse-onboard-icon">◈</div>
           <div className="pulse-onboard-title">关键词监控台</div>
           <div className="pulse-onboard-sub">
             输入你关注的亚马逊关键词，自动拉取搜索量、竞争指数、CPC、月度趋势，并生成机会象限分析
@@ -614,7 +612,7 @@ export default function KeywordMonitor({ marketplace, dataSource }: { marketplac
           <ScatterPlot points={scatterPoints} />
 
           {/* ── Keyword cards ── */}
-          <div className="pulse-section-label">◈ 关键词详情</div>
+          <div className="pulse-section-label">关键词详情</div>
           <div className="pulse-grid">
             {sorted.map(kw => (
               <KeywordCard key={kw} keyword={kw} state={states[kw] ?? { kind: "idle" }} marketplace={marketplace} dataSource={dataSource}

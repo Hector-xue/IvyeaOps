@@ -353,7 +353,7 @@ export default function News() {
 
   return (
     <div>
-      <div className="ptitle">/ 资讯中心 · AI + 亚马逊卖家每日动态</div>
+      <div className="ptitle">资讯中心<span className="ptitle-sub">AI 与亚马逊卖家每日动态</span></div>
 
       <div
         style={{

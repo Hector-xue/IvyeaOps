@@ -181,7 +181,7 @@ export default function SkillTools({ embedded }: { embedded?: boolean } = {}) {
 
   return (
     <div>
-      {!embedded && <div className="ptitle">/ 运营商店</div>}
+      {!embedded && <div className="ptitle">运营商店</div>}
 
       {/* Search + filter bar */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>

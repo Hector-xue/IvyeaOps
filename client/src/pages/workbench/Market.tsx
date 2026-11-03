@@ -332,7 +332,6 @@ export default function Market() {
       {/* Header row */}
       <div className="market-header">
         <span className="market-title">
-          <span className="market-title-icon">◈</span>
           亚马逊市场调研
         </span>
 

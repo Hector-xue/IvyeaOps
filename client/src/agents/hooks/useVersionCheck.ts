@@ -25,13 +25,19 @@ const compareVersions = (v1: string, v2: string) => {
 
 export type InstallMode = 'git' | 'npm';
 
-export const useVersionCheck = (owner: string, repo: string) => {
+/**
+ * `enabled=false` 时完全不发请求。融进 ops 之后侧栏只是把横幅藏起来（updateAvailable 写死
+ * false），这个 hook 却仍然每 5 分钟去 api.github.com 查**上游 claudecodeui** 的版本 ——
+ * 查的是别人项目的版本，国内访问慢、未登录还会被限流 403，纯属浪费。
+ */
+export const useVersionCheck = (owner: string, repo: string, enabled = true) => {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const [releaseInfo, setReleaseInfo] = useState<ReleaseInfo | null>(null);
   const [installMode, setInstallMode] = useState<InstallMode>('git');
 
   useEffect(() => {
+    if (!enabled) return;
     const fetchInstallMode = async () => {
       try {
         const response = await fetch('/health');
@@ -44,9 +50,10 @@ export const useVersionCheck = (owner: string, repo: string) => {
       }
     };
     fetchInstallMode();
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     const checkVersion = async () => {
       try {
         const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`);
@@ -84,7 +91,7 @@ export const useVersionCheck = (owner: string, repo: string) => {
     checkVersion();
     const interval = setInterval(checkVersion, 5 * 60 * 1000); // Check every 5 minutes
     return () => clearInterval(interval);
-  }, [owner, repo]);
+  }, [owner, repo, enabled]);
 
   return { updateAvailable, latestVersion, currentVersion: version, releaseInfo, installMode };
 }; 

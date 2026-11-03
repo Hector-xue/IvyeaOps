@@ -534,11 +534,25 @@ async def _lingxing_dashboard(args: dict[str, Any]) -> Any:
 
 
 async def _lingxing_optimizer(args: dict[str, Any]) -> Any:
+    # 规则引擎早已改成后台任务（POST 启动 → 轮询），这里启动后就地等它跑完，
+    # 让 agent 一次调用就拿到候选结果；原来调的 lingxing.optimizer_run 已不存在。
+    import asyncio
+    import time as _time
     from app.routers import lingxing
-    return await lingxing.optimizer_run(
+    from app.services import lingxing_optimizer as lxopt
+    run = await lingxing.optimizer_run_start(
         sid=int(args.get("sid") or 0),
         days=int(args.get("days") or 0),
     )
+    deadline = _time.monotonic() + 15 * 60
+    while _time.monotonic() < deadline:
+        cur = lxopt.get_opt_run(run["id"]) or run
+        if cur.get("status") in ("done", "failed"):
+            return cur
+        await asyncio.sleep(2)
+    cur = lxopt.get_opt_run(run["id"]) or run
+    cur["note"] = "规则引擎仍在后台运行，可稍后用运行 ID 查看结果"
+    return cur
 
 
 async def _lingxing_operate_tickets(args: dict[str, Any]) -> Any:

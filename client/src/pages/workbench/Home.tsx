@@ -12,7 +12,7 @@ import SheetSelect from "../../components/SheetSelect";
 import AppDialog from "../../components/AppDialog";
 import { FLAG_URL } from "../../lib/marketplaces";
 import { ToastProvider } from "../../components/toast";
-import { Chip, inputStyle } from "./lingxingUi";
+import { inputStyle } from "./lingxingUi";
 import { useAuth } from "../../App";
 
 /*
@@ -64,16 +64,16 @@ const TOOL_PANELS: [ToolPanel, string][] = [
 
 // group:"ops" 的读的是自家店铺经营数据（领星），且广告看板能发起真会改线上投放的
 // 调整 —— 非管理员不显示，后端 /api/cockpit 与 /api/lingxing 也有真闸。
-const TABS: { key: HomeTab; label: string; icon: string; group: TabGroup }[] = [
-  { key: "market", label: "大盘流量", icon: "↗", group: "market" },
-  { key: "keyword", label: "关键词", icon: "◈", group: "market" },
-  { key: "competitor", label: "竞品监控", icon: "⊞", group: "market" },
-  { key: "own", label: "自有 ASIN", icon: "★", group: "market" },
-  { key: "category", label: "类目大盘", icon: "☰", group: "market" },
-  { key: "promo", label: "促销日历", icon: "◷", group: "ops" },
-  { key: "ads", label: "广告看板", icon: "◎", group: "ops" },
-  { key: "suggest", label: "优化建议", icon: "◆", group: "ops" },
-  { key: "tickets", label: "工单", icon: "▤", group: "ops" },
+const TABS: { key: HomeTab; label: string; group: TabGroup }[] = [
+  { key: "market", label: "大盘流量", group: "market" },
+  { key: "keyword", label: "关键词", group: "market" },
+  { key: "competitor", label: "竞品监控", group: "market" },
+  { key: "own", label: "自有 ASIN", group: "market" },
+  { key: "category", label: "类目大盘", group: "market" },
+  { key: "promo", label: "促销日历", group: "ops" },
+  { key: "ads", label: "广告看板", group: "ops" },
+  { key: "suggest", label: "优化建议", group: "ops" },
+  { key: "tickets", label: "工单", group: "ops" },
 ];
 const TAB_KEYS = new Set(TABS.map((t) => t.key));
 
@@ -99,26 +99,41 @@ function PanelFallback({ what }: { what: string }) {
 
 /* ── 经营侧：状态条 / 徽标 / 内容（都在 LingXingProvider 里） ──────────────── */
 
-/** 顶栏在经营组时显示的那一条：接没接上、写开关开没开、当前哪家店。 */
-function OpsContextBar({ onOpenConfig }: { onOpenConfig: () => void }) {
+/** 顶栏在经营组时显示的那一条：接没接上、写开关开没开、当前哪家店。
+ *
+ * 三个状态原来是三个并排的彩点（OpenAPI / 数据 / 操作开关），正常情况下三个都是
+ * 绿的，读起来是噪音。合成一个标记：正常时一句「领星 · 只读」，哪一环没接上就
+ * 只说那一环；完整三项放悬浮提示里。
+ *
+ * 店铺选择器只在**按单店取数**的 tab（优化建议 / 工单）出现。促销日历和广告看板
+ * 有自己的店铺范围（可以看全部店铺），顶栏再放一个会让人以为两者联动。 */
+function OpsContextBar({ tab, onOpenConfig }: { tab: HomeTab; onOpenConfig: () => void }) {
   const { status, sellers, storeSid, setStoreSid, enableMaster } = useLingXing();
+  const configured = !!status?.openapi_configured;
+  const enabled = !!status?.master_enabled;
+  const writable = !!status?.operate_active;
+  const state = !status ? "" : !configured ? "未配置凭证" : !enabled ? "数据未启用" : writable ? "可写" : "只读";
+  const tone = !status ? "" : !configured || !enabled ? "warn" : writable ? "hot" : "ok";
+  const detail = status
+    ? `OpenAPI：${configured ? "已配置" : "未配置"}\n数据总开关：${enabled ? "开" : "关"}\n操作开关：${writable ? "开（可写）" : "关（只读）"}`
+    : "";
+  const perStore = tab === "suggest" || tab === "tickets";
   return (
     <div className="home-ops-bar" data-tour="home-ops-status">
-      <Chip on={!!status?.openapi_configured} label={status?.openapi_configured ? "OpenAPI 已配置" : "未配置凭证"} />
-      <Chip on={!!status?.master_enabled} label={status?.master_enabled ? "数据已启用" : "数据未启用"} />
-      <Chip on={!!status?.operate_active} label={status?.operate_active ? "操作开关：开" : "操作开关：关(只读)"} warn={!!status?.operate_active} />
-      {status && !status.master_enabled && (
-        <button className="cp-btn primary" onClick={() => { void enableMaster(); }}>启用领星数据(只读)</button>
-      )}
-      {status?.master_enabled && (
-        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: "var(--fs-11)", color: "var(--t3)" }}>店铺</span>
-          <SheetSelect value={storeSid} onChange={setStoreSid} title="选择店铺" placeholder="（加载中/无）"
-            style={{ ...inputStyle, minWidth: 160 }}
-            options={sellers.map((s) => ({ value: String(s.sid), label: String(s.name || s.sid), sub: String(s.sid) }))} />
+      {status && (
+        <span className={"home-ops-state " + tone} title={detail}>
+          <i className="home-ops-dot" />领星<span className="home-ops-sep">·</span>{state}
         </span>
       )}
-      <button className="cp-btn" onClick={onOpenConfig} title="数据浏览 / 审计 / 配置">⚙ 领星工具</button>
+      {status && !enabled && configured && (
+        <button className="cp-btn primary" onClick={() => { void enableMaster(); }}>启用数据（只读）</button>
+      )}
+      {enabled && perStore && (
+        <SheetSelect value={storeSid} onChange={setStoreSid} title="选择店铺" placeholder="（加载中/无）"
+          style={{ ...inputStyle, minWidth: 160 }}
+          options={sellers.map((s) => ({ value: String(s.sid), label: String(s.name || s.sid), sub: String(s.sid) }))} />
+      )}
+      <button className="cp-btn" onClick={onOpenConfig} title="数据浏览 / 审计 / 配置">领星工具</button>
     </div>
   );
 }
@@ -191,7 +206,6 @@ function LingXingToolsDialog({ panel, setPanel, onClose }: {
   return (
     <AppDialog
       title="领星工具"
-      icon="⚙"
       onClose={onClose}
       nav={
         <nav className="app-dialog-nav-list">
@@ -311,14 +325,14 @@ function Cockpit({ isAdmin }: { isAdmin: boolean }) {
     <div className="home-cockpit">
       {/* ── Top bar: title + date + 随组切换的上下文 ── */}
       <div className="home-topbar">
-        <span className="home-title">
-          <span style={{ color: "var(--acc)" }}>◧</span> 运营驾驶舱
+        <h1 className="home-title">
+          运营驾驶舱
           <span className="home-date">{today}</span>
-        </span>
+        </h1>
         {/* 站点/数据源只对市场侧有意义（经营侧按**店铺**取数），所以这一条随组换掉，
             而不是把两套控件并排堆在一起让人猜哪个管哪边。 */}
         {isOps ? (
-          <OpsContextBar onOpenConfig={openConfig} />
+          <OpsContextBar tab={tab} onOpenConfig={openConfig} />
         ) : (
           <div data-tour="home-source" style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <DataSourcePicker value={dataSource} onChange={changeDataSource} surface="home" />
@@ -366,7 +380,6 @@ function Cockpit({ isAdmin }: { isAdmin: boolean }) {
         {visibleTabs.filter((t) => t.group === "market").map((t) => (
           <button key={t.key} className={"home-tab" + (tab === t.key ? " active" : "")}
                   onClick={() => setTab(t.key)}>
-            <span className="home-tab-icon">{t.icon}</span>
             <span className="home-tab-label">{t.label}</span>
           </button>
         ))}
@@ -376,7 +389,6 @@ function Cockpit({ isAdmin }: { isAdmin: boolean }) {
             {visibleTabs.filter((t) => t.group === "ops").map((t) => (
               <button key={t.key} className={"home-tab" + (tab === t.key ? " active" : "")}
                       onClick={() => setTab(t.key)}>
-                <span className="home-tab-icon">{t.icon}</span>
                 <span className="home-tab-label">{t.label}</span>
                 {t.key === "tickets" && <TicketBadge />}
               </button>
