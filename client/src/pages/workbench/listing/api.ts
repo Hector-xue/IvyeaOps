@@ -40,6 +40,24 @@ export const uploadImage = async (id: string, file: File) => {
 export const deleteUploadedImage = async (id: string, filename: string) =>
   (await api.delete(`/projects/${id}/uploaded-image/${encodeURIComponent(filename)}`)).data;
 
+/**
+ * 成图的下载文件名，和服务端 PSD 的命名规则一致（routers/listing/export.py）：
+ * `{ASIN}_{gallery|aplus}_{序号两位}_{角色}.{扩展名}`。以前 PNG 直接用存储文件名
+ * （一串哈希），同一张图下 PNG 和 PSD 名字对不上，下多了也认不出是哪张。
+ */
+export function listingFileName(asin: string, deliverable: string, index: number, role: string, ext: string): string {
+  const safe = (v: string, fb: string) =>
+    (String(v || "").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").replace(/^[ .-]+|[ .-]+$/g, "").slice(0, 60)) || fb;
+  const kind = deliverable === "aplus" ? "aplus" : "gallery";
+  return `${safe(asin, "listing")}_${kind}_${String(index + 1).padStart(2, "0")}_${safe(role, "shot")}.${ext}`;
+}
+
+/** 从成图 URL 推扩展名（存储文件名带后缀），推不出来按 png。 */
+export function extOfUrl(url: string): string {
+  const m = /\.(png|jpe?g|webp)(?:\?|$)/i.exec(url || "");
+  return m ? m[1].toLowerCase().replace("jpeg", "jpg") : "png";
+}
+
 /** 拉某张成图的 PSD（分层文件）。服务端要做 RLE 压缩，1600×1600 约两三秒。 */
 export const fetchPsd = async (id: string, deliverable: string, slot: string) => {
   let resp;

@@ -63,7 +63,7 @@ function WorkbenchInner() {
     <div>
       <div className="listing-page-head">
         <div>
-          <div className="ptitle">/ Listing 工作台</div>
+          <div className="ptitle">Listing 工作台</div>
           <p className="listing-page-sub">从产品事实到文案、视觉套图和最终交付的完整生产流程 · 长任务全部后台运行，可随时离开页面</p>
         </div>
         {project && (

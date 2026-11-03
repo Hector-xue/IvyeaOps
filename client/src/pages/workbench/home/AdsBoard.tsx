@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchAdsBoard, fetchHourly,
   type AdsBoard as AdsBoardData, type AdjustIntent, type Campaign,
@@ -25,6 +25,11 @@ const HEALTH_TEXT: Record<string, string> = {
 function pct(v: number | null | undefined, digits = 1): string {
   if (v == null) return "—";
   return `${(v * 100).toFixed(digits)}%`;
+}
+
+function hhmm(iso: string): string {
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? "" : d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 function num(v: number | null | undefined, digits = 0): string {
@@ -54,7 +59,7 @@ function Kpi({ label, value, delta, invert, hint }: {
 }
 
 /** 24 小时曲线。纯 SVG —— 一个折线图不值得拉一个图表库进来。 */
-function HourChart({ result }: { result: HourlyResult }) {
+function HourChart({ result, names }: { result: HourlyResult; names?: Record<string, string> }) {
   const series = result.series.filter(s => s.points.length > 0);
   if (series.length === 0) return <div className="cp-empty-inline">这天没有小时数据</div>;
   const max = Math.max(...series.flatMap(s => s.points.map(p => p.spend_cumulative)), 1);
@@ -79,7 +84,7 @@ function HourChart({ result }: { result: HourlyResult }) {
       <div className="cp-hour-legend">
         {series.map((s, i) => (
           <span key={s.campaign_id} className={`cp-hour-key c${i % 5}`}>
-            活动 {s.campaign_id} · 累计 {num(s.spend_total, 2)}
+            {names?.[s.campaign_id] || `活动 ${s.campaign_id}`} · 累计 {num(s.spend_total, 2)}
           </span>
         ))}
       </div>
@@ -98,8 +103,9 @@ function CampaignRow({ c, onAdjust, onHourly }: {
     <>
       <tr className={`cp-row cp-health-${c.health}`}>
         <td className="cp-col-name">
-          <button className="cp-row-toggle" onClick={() => setOpen(o => !o)}>
-            {open ? "▾" : "▸"}
+          <button className={"cp-row-toggle" + (open ? " open" : "")} onClick={() => setOpen(o => !o)}
+                  aria-label={open ? "收起" : "展开"} aria-expanded={open}>
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M3.5 2l3 3-3 3" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </button>
           <span className="cp-camp-name" title={c.name}>{c.name}</span>
           <span className="cp-mkt">{c.marketplace}</span>
@@ -111,16 +117,16 @@ function CampaignRow({ c, onAdjust, onHourly }: {
             </span>
           )}
         </td>
-        <td>{fmtMoney(c.spend, c.currency)}<Delta value={c.spend_change_pct} /></td>
-        <td>{fmtMoney(c.sales, c.currency)}</td>
-        <td>{c.orders}</td>
-        <td className={`cp-acos cp-health-${c.health}`}>
+        <td className="num">{fmtMoney(c.spend, c.currency)}<Delta value={c.spend_change_pct} /></td>
+        <td className="num">{fmtMoney(c.sales, c.currency)}</td>
+        <td className="num">{c.orders}</td>
+        <td className={`num cp-acos cp-health-${c.health}`}>
           {pct(c.acos)}
           <span className="cp-acos-target">
-            /目标 {c.target_acos != null ? pct(c.target_acos, 0) : "—"}
+            / {c.target_acos != null ? pct(c.target_acos, 0) : "—"}
           </span>
         </td>
-        <td>{fmtMoney(c.cpc, c.currency)}</td>
+        <td className="num">{fmtMoney(c.cpc, c.currency)}</td>
         <td>
           {used != null ? (
             // 百分比放在条子**旁边**而不是压在条子上：填充过半时数字会骑在
@@ -177,43 +183,62 @@ function CampaignRow({ c, onAdjust, onHourly }: {
   );
 }
 
+type StoreOpt = { sid: number; store: string; marketplace: string };
+
 export default function AdsBoard() {
   const [board, setBoard] = useState<AdsBoardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [days, setDays] = useState(7);
   const [store, setStore] = useState<number | "all">("all");
+  // 店铺下拉的选项单独存：选中某店后后端只回这一家，不能再从 board.by_store 取选项。
+  const [stores, setStores] = useState<StoreOpt[]>([]);
   const [hourly, setHourly] = useState<HourlyResult | null>(null);
   const [hourlyBusy, setHourlyBusy] = useState(false);
   const [drawer, setDrawer] = useState<
     { intent: AdjustIntent; label: string; unit: string } | null>(null);
+  const [showNotes, setShowNotes] = useState(false);
+  const hourRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * 选店要让**后端**按这家店重算，而不是前端过滤：
+   *  · 合计 / 环比 / 目标 ACOS 都是按所选范围算的，前端过滤只能改活动表，
+   *    顶部 KPI 还是全部店铺的数（以前就是这样，选了店 KPI 不变）；
+   *  · 活动表是全局 top 25，前端过滤会把这家店排在 25 名以外的活动全丢掉。
+   */
   const load = (force = false) => {
     setLoading(true); setError("");
-    fetchAdsBoard({ days, force })
-      .then(setBoard)
+    fetchAdsBoard({ days, force, sids: store === "all" ? "" : String(store) })
+      .then(b => {
+        setBoard(b);
+        if (store === "all") {
+          setStores(b.by_store.map(s => ({ sid: s.sid, store: s.store, marketplace: s.marketplace })));
+        }
+      })
       .catch(e => setError(errText(e, "加载失败")))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [days]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [days, store]);
 
-  const campaigns = useMemo(() => {
-    const list = board?.by_campaign ?? [];
-    return store === "all" ? list : list.filter(c => c.sid === store);
-  }, [board, store]);
+  const campaigns = board?.by_campaign ?? [];
+  const campaignNames = useMemo(
+    () => Object.fromEntries(campaigns.map(c => [c.campaign_id, c.name])), [campaigns]);
 
   const showHourly = async (c: Campaign) => {
     setHourlyBusy(true);
     try {
       setHourly(await fetchHourly(c.sid, [c.campaign_id]));
+      requestAnimationFrame(() => hourRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
     } catch (e: any) {
       setError(errText(e, "小时数据取不到"));
     } finally { setHourlyBusy(false); }
   };
 
   const t = board?.totals as Metrics | undefined;
-  const target = board?.by_store?.[0]?.target;
+  const target = store === "all"
+    ? (board?.by_store?.length === 1 ? board.by_store[0].target : undefined)
+    : board?.by_store?.find(s => s.sid === store)?.target;
 
   /**
    * 全部店铺是不是同一种币。
@@ -228,56 +253,65 @@ export default function AdsBoard() {
     [board]);
   const oneCur = currencies.length === 1 ? currencies[0] : undefined;
   const mixed = currencies.length > 1;
+  const mixedHint = mixed ? `跨 ${currencies.join(" / ")} 直接相加，只看趋势；准确金额见「分店对比」` : undefined;
+
+  const notes: string[] = [];
+  if (mixed) notes.push(`所选店铺横跨 ${currencies.join(" / ")} ${currencies.length} 种货币，顶部花费 / 销售额 / CPC 是直接相加的，只能看涨跌，不能当金额读。按店的准确数字见「分店对比」。`);
+  if (store === "all" && (board?.by_store?.length ?? 0) > 1) {
+    const withTarget = board!.by_store.filter(s => s.target?.note);
+    withTarget.forEach(s => notes.push(`${s.store}：${s.target.note}`));
+  } else if (target?.note) {
+    notes.push(target.note);
+  }
+  const skipped = board?.scope.skipped ?? [];
+  if (skipped.length) notes.push(`已跳过 ${skipped.map(s => `${s.name}（${s.reason}）`).join("、")}`);
 
   return (
-    <div className="cp-page">
+    <div className="cp-page cp-ads">
       <div className="cp-toolbar">
-        <div className="cp-seg">
+        <div className="cp-seg" role="tablist" aria-label="时间窗口">
           {[1, 7, 14, 30].map(d => (
             <button key={d} className={"cp-seg-btn" + (days === d ? " active" : "")}
-                    onClick={() => setDays(d)}>{d === 1 ? "昨天" : `${d}天`}</button>
+                    onClick={() => setDays(d)}>{d === 1 ? "昨天" : `近 ${d} 天`}</button>
           ))}
         </div>
-        <select className="cp-select" value={store}
+        <select className="cp-select" value={store} aria-label="店铺"
                 onChange={e => setStore(e.target.value === "all" ? "all" : Number(e.target.value))}>
           <option value="all">全部店铺</option>
-          {board?.by_store.map(s => (
+          {stores.map(s => (
             <option key={s.sid} value={s.sid}>{s.store}</option>
           ))}
         </select>
         <div className="cp-actions">
+          {board?.generated_at && !loading && (
+            <span className="cp-asof">更新于 {hhmm(board.generated_at)}</span>
+          )}
           <button className="cp-btn" onClick={() => load(true)} disabled={loading}>
-            {loading ? "刷新中…" : "立即刷新"}
+            {loading ? "刷新中…" : "刷新"}
           </button>
         </div>
       </div>
 
-      <div className="cp-kpis">
-        <Kpi label="广告花费" value={fmtMoney(t?.spend, oneCur)} delta={board?.delta.spend_pct} invert
-             hint={mixed ? "跨币种合计，仅看趋势" : undefined} />
-        <Kpi label="广告销售额" value={fmtMoney(t?.sales, oneCur)} delta={board?.delta.sales_pct}
-             hint={mixed ? "跨币种合计，仅看趋势" : undefined} />
+      <div className={"cp-kpis" + (loading && board ? " is-stale" : "")}>
+        <Kpi label="广告花费" value={fmtMoney(t?.spend, oneCur)} delta={board?.delta.spend_pct} invert hint={mixedHint} />
+        <Kpi label="广告销售额" value={fmtMoney(t?.sales, oneCur)} delta={board?.delta.sales_pct} hint={mixedHint} />
         <Kpi label="订单" value={num(t?.orders)} delta={board?.delta.orders_pct} />
         <Kpi label="ACOS" value={pct(t?.acos)}
              hint={target?.note || ""}
              delta={board?.delta.acos_delta != null ? board.delta.acos_delta * 100 : null} invert />
-        <Kpi label="CPC" value={fmtMoney(t?.cpc, oneCur)} />
+        <Kpi label="CPC" value={fmtMoney(t?.cpc, oneCur)} hint={mixedHint} />
         <Kpi label="点击" value={num(t?.clicks)} />
       </div>
 
-      {mixed && (
-        <div className="cp-target-note">
-          ◈ 所选店铺横跨 {currencies.join(" / ")} {currencies.length} 种货币 ——
-          上面的花费 / 销售额 / CPC 是<b>直接相加</b>的，只能看涨跌趋势，不能当金额读。
-          按店的准确数字见下方「分店对比」。
-        </div>
-      )}
-
-      {target?.note && <div className="cp-target-note">◈ {target.note}</div>}
-
-      {(board?.scope.skipped?.length ?? 0) > 0 && (
-        <div className="cp-skipped">
-          已跳过 {board!.scope.skipped.map(s => `${s.name}（${s.reason}）`).join("、")}
+      {notes.length > 0 && (
+        <div className={"cp-notes" + (mixed ? " warn" : "")}>
+          <span className="cp-notes-first">{notes[0]}</span>
+          {notes.length > 1 && (
+            <button className="cp-notes-more" onClick={() => setShowNotes(v => !v)}>
+              {showNotes ? "收起" : `还有 ${notes.length - 1} 条说明`}
+            </button>
+          )}
+          {showNotes && notes.slice(1).map((n, i) => <div key={i} className="cp-notes-line">{n}</div>)}
         </div>
       )}
 
@@ -299,70 +333,79 @@ export default function AdsBoard() {
         <div className="cp-empty">
           <div className="cp-empty-title">这段时间没有广告数据</div>
           <div className="cp-empty-desc">
-            活动全部处于归档/暂停，或者所选窗口内没有投放。
-            未开通广告的店铺已自动跳过。
+            活动都在归档或暂停，或者这段时间没有投放。未开通广告的店铺已自动跳过。
           </div>
-        </div>
-      )}
-
-      {(board?.by_store?.length ?? 0) > 1 && (
-        <div className="cp-table-wrap">
-          <div className="cp-subhead">分店对比（各店本币，不跨币种汇总）</div>
-          <table className="cp-table">
-            <thead>
-              <tr><th>店铺</th><th>花费</th><th>销售额</th><th>订单</th><th>ACOS</th><th>目标</th><th>CPC</th></tr>
-            </thead>
-            <tbody>
-              {board!.by_store.map(st => (
-                <tr key={st.sid} className="cp-row">
-                  <td className="cp-col-name">
-                    {st.store}<span className="cp-mkt">{st.marketplace}</span>
-                  </td>
-                  <td>{fmtMoney(st.spend, st.currency)}</td>
-                  <td>{fmtMoney(st.sales, st.currency)}</td>
-                  <td>{st.orders}</td>
-                  <td className={st.target?.target_acos != null && st.acos != null
-                    && st.acos > st.target.target_acos ? "cp-acos cp-health-watch" : "cp-acos"}>
-                    {pct(st.acos)}
-                  </td>
-                  <td>{st.target?.target_acos != null ? pct(st.target.target_acos, 0) : "—"}</td>
-                  <td>{fmtMoney(st.cpc, st.currency)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       )}
 
       {campaigns.length > 0 && (
-        <div className="cp-table-wrap">
-          <table className="cp-table">
-            <thead>
-              <tr>
-                <th>活动</th><th>花费</th><th>销售额</th><th>订单</th>
-                <th>ACOS</th><th>CPC</th><th>今日预算</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {campaigns.map(c => (
-                <CampaignRow key={`${c.sid}:${c.campaign_id}`} c={c}
-                             onAdjust={(intent, label, unit) => setDrawer({ intent, label, unit })}
-                             onHourly={showHourly} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <section className="cp-section">
+          <div className="cp-subhead">
+            活动<span className="cp-subhead-meta">按花费排序 · 前 {campaigns.length} 个</span>
+          </div>
+          <div className="cp-table-wrap">
+            <table className="cp-table">
+              <thead>
+                <tr>
+                  <th>活动</th><th className="num">花费</th><th className="num">销售额</th><th className="num">订单</th>
+                  <th className="num">ACOS</th><th className="num">CPC</th><th>今日预算</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {campaigns.map(c => (
+                  <CampaignRow key={`${c.sid}:${c.campaign_id}`} c={c}
+                               onAdjust={(intent, label, unit) => setDrawer({ intent, label, unit })}
+                               onHourly={showHourly} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
 
       {hourlyBusy && <div className="cp-loading">正在取小时数据…</div>}
       {hourly && (
-        <div className="cp-hour-panel">
+        <div className="cp-hour-panel" ref={hourRef}>
           <div className="cp-hour-hd">
-            <span>{hourly.date} · 累计花费（小时）</span>
-            <button className="cp-drawer-x" onClick={() => setHourly(null)}>×</button>
+            <span>{hourly.date} · 累计花费（按小时）</span>
+            <button className="cp-drawer-x" onClick={() => setHourly(null)} aria-label="关闭">×</button>
           </div>
-          <HourChart result={hourly} />
+          <HourChart result={hourly} names={campaignNames} />
         </div>
+      )}
+
+      {(board?.by_store?.length ?? 0) > 1 && (
+        <section className="cp-section">
+          <div className="cp-subhead">
+            分店对比<span className="cp-subhead-meta">各店本币，不跨币种汇总</span>
+          </div>
+          <div className="cp-table-wrap">
+            <table className="cp-table">
+              <thead>
+                <tr><th>店铺</th><th className="num">花费</th><th className="num">销售额</th><th className="num">订单</th><th className="num">ACOS</th><th className="num">目标</th><th className="num">CPC</th></tr>
+              </thead>
+              <tbody>
+                {board!.by_store.map(st => (
+                  <tr key={st.sid} className="cp-row">
+                    <td className="cp-col-name">
+                      <button className="cp-link" onClick={() => setStore(st.sid)} title="只看这家店">{st.store}</button>
+                      <span className="cp-mkt">{st.marketplace}</span>
+                    </td>
+                    <td className="num">{fmtMoney(st.spend, st.currency)}</td>
+                    <td className="num">{fmtMoney(st.sales, st.currency)}</td>
+                    <td className="num">{st.orders}</td>
+                    <td className={"num " + (st.target?.target_acos != null && st.acos != null
+                      && st.acos > st.target.target_acos ? "cp-acos cp-health-watch" : "cp-acos")}>
+                      {pct(st.acos)}
+                    </td>
+                    <td className="num">{st.target?.target_acos != null ? pct(st.target.target_acos, 0) : "—"}</td>
+                    <td className="num">{fmtMoney(st.cpc, st.currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
 
       {drawer && (

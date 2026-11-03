@@ -6,7 +6,8 @@ import {
   AlertTriangle, Check, ChevronDown, Download, FileStack, Image as ImageIcon, Info,
   Layers3, Loader2, Maximize2, RefreshCw, ShieldCheck, Sparkles, WandSparkles,
 } from "lucide-react";
-import { fetchPsd, messageOf } from "./api";
+import { extOfUrl, fetchPsd, listingFileName, messageOf } from "./api";
+import { saveBlob, saveUrl } from "../../../lib/saveBlob";
 import JobProgress from "./JobProgress";
 import { useToast } from "./toast";
 import type { ListingState } from "./useListingProject";
@@ -175,15 +176,24 @@ export default function VisualStep({ state }: { state: ListingState }) {
     setPsdBusy(slot);
     try {
       const { blob, name } = await fetchPsd(project.id, deliverable, slot);
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = name;
-      link.click();
-      URL.revokeObjectURL(link.href);
+      saveBlob(blob, name);
     } catch (error) {
       notify("error", `PSD 导出失败：${messageOf(error)}`);
     } finally {
       setPsdBusy("");
+    }
+  }
+
+  /** 单张 PNG：文件名与同一张的 PSD 对齐（ASIN_套图_序号_角色）。 */
+  async function downloadPng(image: PlanImage) {
+    if (!image.final_url) return;
+    const index = Math.max(0, images.indexOf(image));
+    const name = listingFileName(project?.asin || "", deliverable, index,
+      String(image.role || `第${index + 1}张`), extOfUrl(image.final_url));
+    try {
+      await saveUrl(image.final_url, name);
+    } catch (error) {
+      notify("error", `PNG 下载失败：${messageOf(error)}`);
     }
   }
 
@@ -214,11 +224,7 @@ export default function VisualStep({ state }: { state: ListingState }) {
         })),
       }, null, 2));
       const archive = await zip.generateAsync({ type: "blob" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(archive);
-      link.download = `listing_${deliverable}_${canDeliver ? "reviewed" : "draft"}.zip`;
-      link.click();
-      URL.revokeObjectURL(link.href);
+      saveBlob(archive, `${project?.asin || "listing"}_${deliverable}_${canDeliver ? "reviewed" : "draft"}.zip`);
       if (!canDeliver) notify("warn", "已导出草稿包；未人工复核的图片文件名带 DRAFT");
     } catch (error) {
       notify("error", `整套导出失败：${(error as Error).message || "未知错误"}`);
@@ -489,7 +495,12 @@ export default function VisualStep({ state }: { state: ListingState }) {
                     {cardRunning(selected) ? <><Loader2 className="spin" size={14} /> 处理中</> : active.final_url
                       ? <><RefreshCw size={14} /> 重做这张</> : <><Sparkles size={14} /> 图文直出</>}
                   </button>
-                  {active.final_url && <a className="vs-icon-button" href={active.final_url} download title="下载 PNG"><Download size={15} /></a>}
+                  {active.final_url && (
+                    <button className="vs-icon-button" type="button" title="下载 PNG"
+                      onClick={() => void downloadPng(active)}>
+                      <Download size={15} />
+                    </button>
+                  )}
                   {active.final_url && (
                     <button className="vs-icon-button" type="button"
                       disabled={psdBusy === String(active.slot || "")}

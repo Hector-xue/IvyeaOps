@@ -8,6 +8,7 @@ import SheetSelect from "../../components/SheetSelect";
 import { deleteSkill, updateSkill } from "../../api/skill";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { errText } from "../../lib/errText";
+import { saveText } from "../../lib/saveBlob";
 
 // ── Design tokens re-used below ──────────────────────────────────────────────
 const S = {
@@ -181,7 +182,7 @@ export default function SkillTools({ embedded }: { embedded?: boolean } = {}) {
 
   return (
     <div>
-      {!embedded && <div className="ptitle">/ 运营商店</div>}
+      {!embedded && <div className="ptitle">运营商店</div>}
 
       {/* Search + filter bar */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
@@ -528,11 +529,7 @@ function ToolPanel({ tool, onToolChanged }: { tool: SkillToolMeta; onToolChanged
 
   const copyOut = () => { void navigator.clipboard?.writeText(output); };
   const exportOut = () => {
-    const blob = new Blob([output], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `${tool.name.split("/").pop()}.md`; a.click();
-    URL.revokeObjectURL(url);
+    saveText(output, `${tool.name.split("/").pop()}.md`, "text/markdown;charset=utf-8");
   };
 
   return (

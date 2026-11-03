@@ -37,7 +37,7 @@ export default function Tools() {
   const confirm = useConfirm();
   return (
     <div>
-      <div className="ptitle">/ 分析工具</div>
+      <div className="ptitle">分析工具</div>
 
       {/* Primary tool: full-width ASIN audit */}
       <AsinAuditPanel />

@@ -459,7 +459,7 @@ const copyMessage = (m: ChatMsg) => {
 
   return (
     <div>
-      <div className="ptitle">/ 知识库工作台</div>
+      <div className="ptitle">知识库工作台</div>
 
       {/* 页头一行说清"这个库现在什么样" —— 原来这四个数字自己占一个「概览」标签，
           而看一眼数字不值得切一次标签。设置收进右边的齿轮，它是最低频的那个。 */}

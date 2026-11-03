@@ -2390,7 +2390,7 @@ export default function HubSettings({ focusSection = "" }: { focusSection?: stri
           inherit={[
             {
               label: "沿用主脑账号",
-              title: "抄 IvyeaAgent 主脑那套账号。注意仍要挑一个**支持图片输入**的模型",
+              title: "抄 IvyeaAgent 主脑那套账号。注意仍要挑一个「支持图片输入」的模型",
               run: () => {
                 set("vision_provider", vals.ivyea_agent_provider);
                 set("vision_api_key", vals.ivyea_agent_api_key);

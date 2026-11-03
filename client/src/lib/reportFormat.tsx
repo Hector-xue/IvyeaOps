@@ -8,6 +8,7 @@
 import React from "react";
 import { openLightbox } from "./lightbox";
 import { citationSourceLabel, parseCitationSource, requestOpenSource } from "./citationSource";
+import { saveText } from "./saveBlob";
 
 // ─── Markdown → React ─────────────────────────────────────────────────────────
 
@@ -270,13 +271,7 @@ function renderInline(text: string): React.ReactNode {
 // ─── Download utility ─────────────────────────────────────────────────────────
 
 export function triggerDownload(content: string, filename: string, mime: string) {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  saveText(content, filename, mime);
 }
 
 // ─── Fenced ```csv block extraction ───────────────────────────────────────────

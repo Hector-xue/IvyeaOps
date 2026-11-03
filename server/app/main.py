@@ -546,15 +546,19 @@ def _error_body(request: Request, status_code: int, message: str) -> dict:
     path = request.url.path
     if status_code in (401, 403) and (path == "/api/mcp" or path.startswith("/api/mcp/")):
         hint = "MCP 令牌无效、已过期、已撤销，或缺少该工具需要的权限。请在 IvyeaOps「系统配置 → 对外 MCP」重新生成。"
-    return {
-        "detail": message,
-        "error": {
-            "code": code,
-            "message": message,
-            "request_id": getattr(request.state, "request_id", ""),
-            "hint": hint,
-        },
+    info = {
+        "code": code,
+        "message": message,
+        "request_id": getattr(request.state, "request_id", ""),
+        "hint": hint,
     }
+    # /api/agents/* 是从 claudecodeui 移植来的前端在用，它的契约是 `data.error` 为
+    # **字符串**（几十处 setError(data.error) 直接渲染）。给它对象会让 React 抛
+    # "Objects are not valid as a React child" 整页崩，或显示成 [object Object]。
+    # 这一段让 error 回到字符串，结构化信息挪到 error_info，不丢。
+    if path.startswith("/api/agents/"):
+        return {"detail": message, "error": message, "error_info": info}
+    return {"detail": message, "error": info}
 
 
 @app.exception_handler(StarletteHTTPException)

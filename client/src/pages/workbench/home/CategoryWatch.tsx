@@ -73,9 +73,6 @@ export default function CategoryWatch({ marketplace, dataSource }: { marketplace
   return (
     <div className="pulse-page">
       <div className="pulse-header">
-        <span className="pulse-header-title">
-          <span style={{ color: "var(--acc)" }}>☰</span> 类目大盘
-        </span>
         <div className="market-mode-toggle">
           {(["category", "keyword"] as Mode[]).map(m => (
             <button key={m} className={"market-mode-btn" + (mode === m ? " active" : "")}
@@ -100,14 +97,13 @@ export default function CategoryWatch({ marketplace, dataSource }: { marketplace
             title={`实时分析（消耗 ${sourceName} 调用）`}>
             {status === "loading"
               ? <><span className="spin" style={{ marginRight: 6 }} />分析中…</>
-              : (result && status === "ok" ? "↻ 刷新分析" : "分析")}
+              : (result && status === "ok" ? "刷新分析" : "分析")}
           </button>
         </div>
       </div>
 
       {status === "idle" && (
         <div className="pulse-onboard">
-          <div className="pulse-onboard-icon">☰</div>
           <div className="pulse-onboard-title">{mode === "category" ? "类目榜（真实类目排行）" : "关键词搜索排行"}</div>
           <div className="pulse-onboard-sub">
             {mode === "category"

@@ -33,6 +33,15 @@ type PluginsContextValue = {
 
 const PluginsContext = createContext<PluginsContextValue | null>(null);
 
+/** 后端错误可能是字符串，也可能是 ops 的错误信封对象 {code, message}；渲染前一律转成字符串，
+ *  否则 React 会因 "Objects are not valid as a React child" 整页崩溃。 */
+function errText(data: any, fallback: string): string {
+  const v = data?.details ?? data?.error ?? data?.detail;
+  if (typeof v === 'string' && v) return v;
+  if (v && typeof v === 'object' && typeof v.message === 'string') return v.message;
+  return fallback;
+}
+
 export function usePlugins() {
   const context = useContext(PluginsContext);
   if (!context) {
@@ -57,7 +66,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         let errorMessage = `Failed to fetch plugins (${res.status})`;
         try {
           const data = await res.json();
-          errorMessage = data.details || data.error || errorMessage;
+          errorMessage = errText(data, errorMessage);
         } catch {
           errorMessage = res.statusText || errorMessage;
         }
@@ -87,7 +96,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         await refreshPlugins();
         return { success: true };
       }
-      return { success: false, error: data.details || data.error || 'Install failed' };
+      return { success: false, error: errText(data, 'Install failed') };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : 'Install failed' };
     }
@@ -103,7 +112,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         await refreshPlugins();
         return { success: true };
       }
-      return { success: false, error: data.details || data.error || 'Uninstall failed' };
+      return { success: false, error: errText(data, 'Uninstall failed') };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : 'Uninstall failed' };
     }
@@ -119,7 +128,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         await refreshPlugins();
         return { success: true };
       }
-      return { success: false, error: data.details || data.error || 'Update failed' };
+      return { success: false, error: errText(data, 'Update failed') };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : 'Update failed' };
     }
@@ -135,7 +144,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         let errorMessage = `Toggle failed (${res.status})`;
         try {
           const data = await res.json();
-          errorMessage = data.details || data.error || errorMessage;
+          errorMessage = errText(data, errorMessage);
         } catch {
           // response body wasn't JSON, use status text
           errorMessage = res.statusText || errorMessage;

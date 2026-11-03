@@ -170,9 +170,6 @@ export default function MarketTraffic({ marketplace, dataSource }: { marketplace
   return (
     <div className="pulse-page">
       <div className="pulse-header">
-        <span className="pulse-header-title">
-          <span style={{ color: "var(--acc)" }}>↗</span> 大盘流量
-        </span>
         <div className="pulse-input-wrap">
           <input
             ref={inputRef}
@@ -186,16 +183,15 @@ export default function MarketTraffic({ marketplace, dataSource }: { marketplace
         </div>
         <button className="tbtn" onClick={handleBackfill} disabled={backfilling || !selected}
           title={`用 ${sourceName} 趋势数据回填历史月度点`}>
-          {backfilling ? <><span className="spin" style={{ marginRight: 6 }} />导入中…</> : "⇣ 导入历史"}
+          {backfilling ? <><span className="spin" style={{ marginRight: 6 }} />导入中…</> : "导入历史"}
         </button>
         <button className="tbtn tbtn-acc" onClick={handleRecordNow} disabled={recording || mine.length === 0}>
-          {recording ? <><span className="spin" style={{ marginRight: 6 }} />记录中…</> : "↻ 立即记录"}
+          {recording ? <><span className="spin" style={{ marginRight: 6 }} />记录中…</> : "立即记录"}
         </button>
       </div>
 
       {mine.length === 0 ? (
         <div className="pulse-onboard">
-          <div className="pulse-onboard-icon">↗</div>
           <div className="pulse-onboard-title">大盘流量监控</div>
           <div className="pulse-onboard-sub">
             添加你关注的类目基线，系统每天自动记录大盘需求(搜索量)、TOP 合计销量与均价，

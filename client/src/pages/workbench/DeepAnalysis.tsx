@@ -23,7 +23,7 @@ export default function DeepAnalysis() {
 
   return (
     <div>
-      <div className="ptitle">/ 深度分析</div>
+      <div className="ptitle">深度分析</div>
 
       {!active || !activeTool ? (
         /* ── Tool grid ── */

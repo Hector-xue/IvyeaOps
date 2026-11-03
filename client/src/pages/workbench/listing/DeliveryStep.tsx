@@ -2,7 +2,8 @@
 // + 交付就绪清单。
 import { useMemo, useState } from "react";
 import { Check, Copy, Download, FileStack, FileText, Loader2, X } from "lucide-react";
-import { fetchPsd, messageOf } from "./api";
+import { extOfUrl, fetchPsd, listingFileName, messageOf } from "./api";
+import { saveBlob, saveText, saveUrl } from "../../../lib/saveBlob";
 import { useToast } from "./toast";
 import type { ListingState } from "./useListingProject";
 
@@ -38,8 +39,9 @@ export default function DeliveryStep({ state }: { state: ListingState }) {
   const finals = useMemo(() =>
     (["gallery", "aplus"] as const).flatMap((key) =>
       (creativeSets[key]?.images || [])
-        .filter((item) => item.final_url)
-        .map((item) => ({ ...item, deliverable: key }))),
+        // index 是它在整套方案里的位置（不是过滤后的位置），和 PSD 文件名的序号一致
+        .map((item, index) => ({ ...item, deliverable: key, index }))
+        .filter((item) => item.final_url)),
   [creativeSets]);
 
   const checklist = useMemo(() => {
@@ -70,11 +72,7 @@ export default function DeliveryStep({ state }: { state: ListingState }) {
     setPsdBusy(key);
     try {
       const { blob, name } = await fetchPsd(project.id, deliverable, slot);
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = name;
-      link.click();
-      URL.revokeObjectURL(link.href);
+      saveBlob(blob, name);
     } catch (error) {
       notify("error", `PSD 导出失败：${messageOf(error)}`);
     } finally {
@@ -90,12 +88,19 @@ export default function DeliveryStep({ state }: { state: ListingState }) {
   }
 
   function downloadTxt() {
-    const blob = new Blob([fullText], { type: "text/plain;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `listing_${project?.asin || "copy"}.txt`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    saveText(fullText, `listing_${project?.asin || "copy"}.txt`);
+  }
+
+  /** 单张 PNG：文件名与同一张的 PSD 对齐（ASIN_套图_序号_角色）。 */
+  async function downloadPng(item: { final_url?: string | null; role?: string; deliverable: string; index: number }) {
+    if (!item.final_url) return;
+    const name = listingFileName(project?.asin || "", item.deliverable, item.index,
+      item.role || `第${item.index + 1}张`, extOfUrl(item.final_url));
+    try {
+      await saveUrl(item.final_url, name);
+    } catch (error) {
+      notify("error", `PNG 下载失败：${messageOf(error)}`);
+    }
   }
 
   return (
@@ -165,7 +170,9 @@ export default function DeliveryStep({ state }: { state: ListingState }) {
                       : <i>草稿</i>}
                   </figcaption>
                   <div className="lst-final-actions" onClick={(e) => e.stopPropagation()}>
-                    <a href={item.final_url!} download title="下载 PNG"><Download size={11} /> PNG</a>
+                    <button type="button" title="下载 PNG" onClick={() => void downloadPng(item)}>
+                      <Download size={11} /> PNG
+                    </button>
                     <button type="button" disabled={psdBusy === key}
                       title="下载 PSD（成图 + 隐藏的产品真值图层，可直接进 Photoshop）"
                       onClick={() => void downloadPsd(String(item.deliverable), String(item.slot || ""))}>

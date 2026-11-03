@@ -110,10 +110,6 @@ export default function AsinMonitor({ kind, marketplace, dataSource, onChanged }
   return (
     <div className="pulse-page">
       <div className="pulse-header">
-        <span className="pulse-header-title">
-          <span style={{ color: "var(--acc)" }}>{kind === "own" ? "★" : "⊞"}</span>
-          {kind === "own" ? "自有 ASIN" : "竞品监控"}
-        </span>
         <div className="pulse-input-wrap">
           <input
             ref={inputRef}
@@ -129,13 +125,12 @@ export default function AsinMonitor({ kind, marketplace, dataSource, onChanged }
           onClick={refreshAll}
           disabled={refreshing || items.length === 0}
           title={`实时刷新全部（每个 ASIN 消耗 ${sourceName} 调用）`}>
-          {refreshing ? <><span className="spin" style={{ marginRight: 6 }} />刷新中…</> : "↻ 全部刷新"}
+          {refreshing ? <><span className="spin" style={{ marginRight: 6 }} />刷新中…</> : "全部刷新"}
         </button>
       </div>
 
       {items.length === 0 ? (
         <div className="pulse-onboard">
-          <div className="pulse-onboard-icon">{kind === "own" ? "★" : "⊞"}</div>
           <div className="pulse-onboard-title">{emptyTitle}</div>
           <div className="pulse-onboard-sub">{emptySub}</div>
           <div className="pulse-onboard-sub" style={{ marginTop: 8, fontSize: "var(--fs-11)", color: "var(--t3)" }}>

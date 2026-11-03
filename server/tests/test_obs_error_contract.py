@@ -170,3 +170,20 @@ def test_third_party_logs_do_not_crash_on_missing_request_id():
     assert obs._RequestIdFilter().filter(record) is True
     assert record.request_id == "-"
     assert logging.Formatter(obs._LOG_FORMAT).format(record).endswith("外部库的日志")
+
+
+def test_agents_paths_keep_string_error_contract():
+    """claudecodeui 移植前端把 data.error 当字符串渲染；/api/agents/* 必须给字符串。"""
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.core.security import ADMIN_ID, issue_session
+    from app.core.config import settings
+    c = TestClient(app)
+    c.cookies.set(settings.session_cookie_name, issue_session(ADMIN_ID, "admin"))
+    r = c.get("/api/agents/definitely-not-a-route")
+    assert r.status_code == 404
+    body = r.json()
+    assert isinstance(body["error"], str) and body["error"]
+    assert body["error_info"]["code"] == "NOT_FOUND"
+    # 插件接口：列表为空、其它动作明确 501 字符串错误
+    assert c.get("/api/agents/plugins").json() == {"plugins": []}

@@ -20,6 +20,8 @@ import "./styles/quiet-skin.css";
 // （都是 0,1,1），谁覆盖谁只由顺序决定。调换的后果不是报错，是琉璃的
 // 半径刻度、焦点环、卡片阴影全部静默失效，看起来"和静谧一模一样"。
 import "./styles/lucent-skin.css";
+// 视觉整理层（页标题 / 驾驶舱排版），排在所有皮肤之后。见 polish.css 顶部说明。
+import "./styles/polish.css";
 import { applyAppearance } from "./lib/appearance";
 import { DEFAULT_THEME, THEME_KEY, applyThemeAttrs, isThemeId, migrateTheme } from "./lib/themes";
 

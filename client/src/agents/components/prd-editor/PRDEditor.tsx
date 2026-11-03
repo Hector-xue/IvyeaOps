@@ -9,6 +9,7 @@ import { ensurePrdExtension } from './utils/fileName';
 import OverwriteConfirmModal from './view/OverwriteConfirmModal';
 import PrdEditorLoadingState from './view/PrdEditorLoadingState';
 import PrdEditorWorkspace from './view/PrdEditorWorkspace';
+import { saveBlob } from '../../../lib/saveBlob';
 
 type PRDEditorProps = {
   file?: PrdFile | null;
@@ -58,17 +59,7 @@ export default function PRDEditor({
   });
 
   const handleDownload = useCallback(() => {
-    const blob = new Blob([content], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    const downloadedFileName = ensurePrdExtension(fileName || 'prd');
-
-    anchor.href = url;
-    anchor.download = downloadedFileName;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
+    saveBlob(new Blob([content], { type: 'text/markdown' }), ensurePrdExtension(fileName || 'prd'));
   }, [content, fileName]);
 
   const handleSave = useCallback(
