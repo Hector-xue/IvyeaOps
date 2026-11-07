@@ -372,6 +372,14 @@ html:is([data-skin="quiet"],[data-skin="lucent"]) .cc-stats { gap: 4px 18px; opa
 html:is([data-skin="quiet"],[data-skin="lucent"]) .cc-hero { gap: 22px; }
 html:is([data-skin="quiet"],[data-skin="lucent"]) .cc-hero-brand { gap: 16px; }
 html:is([data-skin="quiet"],[data-skin="lucent"]) .cc-hero-title { font-size: 32px; letter-spacing: -.015em; }
+/* 上面这条没有限定宽度，特异性又比 workbench.css 的手机档(24px)高，手机上照样是
+   32px；标题左边还有 logo，400px 宽放不下这 9 个字，最后一个字被挤到第二行。
+   这里把手机档还回来。keep-all：再窄或调大了界面字号时，也只在逗号处断开。 */
+@media (max-width: 900px) {
+  html:is([data-skin="quiet"],[data-skin="lucent"]) .cc-hero-title { font-size: 24px; word-break: keep-all; }
+}
+/* 悬浮球面板里的 Hero 只要一行小字（见 ivyea-agent-dock.css），同理会被上面的 32px 盖掉。 */
+html:is([data-skin="quiet"],[data-skin="lucent"]) .ivyea-agent-body .cc-hero-title { font-size: var(--fs-14); }
 html:is([data-skin="quiet"],[data-skin="lucent"]) .cc-hero-composer { max-width: 760px; }
 
 /* 首屏输入器：半径再大一档（会话态那只仍是 22px），并且**允许它有投影**。

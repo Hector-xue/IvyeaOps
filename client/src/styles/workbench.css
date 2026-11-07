@@ -3973,7 +3973,7 @@ button.af-line:hover{background:var(--bg2)}
 @media (max-width:900px){
   /* 手机上标题小一档，行高给足 —— 1.25 时中文的行盒比 clientHeight 高 3px，
      会被裁掉一线笔画。 */
-  .cc-hero-title{font-size:24px;line-height:1.35}
+  .cc-hero-title{font-size:24px;line-height:1.35;word-break:keep-all}
   /* 底栏在 390px 宽下装不下"附件+工作区+档位+模型+发送"——**前提是它们都带字**。
      以前的解法是折行，代价是输入框下面吃掉两行、第一行右边空一大片。
      现在换解法：把带字的都收成图标，一行就装得下（实测 ~190px / 可用 316px），
