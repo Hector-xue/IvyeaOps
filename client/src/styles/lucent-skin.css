@@ -418,6 +418,14 @@ html[data-skin="lucent"] .cc-hero-title {
   font-weight: 500 !important;
   letter-spacing: .01em !important;
 }
+/* 上面的 34px 带 !important 又不分宽度，会盖掉手机档：标题左边还有 logo，400px 宽
+   放不下这 9 个字，最后一个字被挤到第二行。手机上还回 24px；keep-all 让它再窄
+   或调大界面字号时也只在逗号处断开，不单独甩出一个字。 */
+@media (max-width: 900px) {
+  html[data-skin="lucent"] .cc-hero-title { font-size: 24px !important; word-break: keep-all; }
+}
+/* 悬浮球面板里的 Hero 只要一行小字（见 ivyea-agent-dock.css），同理被 34px 盖掉。 */
+html[data-skin="lucent"] .ivyea-agent-body .cc-hero-title { font-size: var(--fs-14) !important; }
 /* 卡片/分组的小标题：不靠字号，靠字重和墨色站住（尺寸留给大标题）。 */
 html[data-skin="lucent"] .hs-section-title,
 html[data-skin="lucent"] .m-title,
