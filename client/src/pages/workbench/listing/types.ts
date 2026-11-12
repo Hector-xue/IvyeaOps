@@ -50,6 +50,8 @@ export interface ScrapeSummary {
   bullets: string[];
   description: string;
   images: string[];
+  /** Amazon Item Highlights（2026-07-27 新规，≤125 字符短语串）；无则空字符串 */
+  highlights: string;
   source: string;
   fullImagesAvailable: boolean;
   browserMissing: boolean;

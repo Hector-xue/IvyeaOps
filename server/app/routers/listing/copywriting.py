@@ -355,6 +355,8 @@ def _compose_project_notes(row, scrape_data: dict) -> str:
         manual.get("selling_points") and f"卖点: {manual['selling_points']}",
         manual.get("description") and f"描述: {manual['description']}",
         scrape_data.get("title") and f"参考标题: {scrape_data['title']}",
+        # 竞品 Item Highlights（≤125 字符新规字段）：给 highlights 输出提供事实对齐
+        scrape_data.get("highlights") and f"竞品 Item Highlights: {scrape_data['highlights']}",
         bullets and "参考五点:\n" + "\n".join(str(b) for b in bullets[:5]),
     ]
     return "\n".join(str(p) for p in parts if p)

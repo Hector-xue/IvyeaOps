@@ -1036,6 +1036,7 @@ const ROUTES: Array<[string, Canned | ((url: string) => Canned)]> = [
     // 触发条件（Docker 按钮拆掉后，这里要能验出取代它的是重试 + 浏览器提示）。
     scrape_data: JSON.stringify({
       title: "便携旅行收纳箱", bullets: ["硬壳防摔", "可扩容 8L"], images: [],
+      highlights: "Hard Shell, Expandable 8L, TSA Lock, 360° Wheels",
       reference_images: ["/art/bg.png"], scrape_source: "sorftime",
       full_images_available: false, browser_available: false,
     }),

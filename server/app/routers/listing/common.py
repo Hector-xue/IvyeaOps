@@ -266,6 +266,10 @@ def _build_product_context(row, scrape_data: dict, analysis_data: dict) -> str:
     if scrape_data:
         if scrape_data.get("title"):
             parts.append(f"Current Title: {scrape_data['title']}")
+        # Item Highlights（2026-07-27 新规字段）：竞品页面上标题下方那行 ≤125 字符的
+        # 短语串。喂进上下文，文案生成器的 highlights 输出才有竞品事实可对齐。
+        if _clean_text(scrape_data.get("highlights")):
+            parts.append(f"Current Item Highlights: {_clean_text(scrape_data['highlights'])}")
         if scrape_data.get("bullets"):
             bullets = scrape_data["bullets"]
             if isinstance(bullets, list):
