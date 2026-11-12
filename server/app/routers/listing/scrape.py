@@ -116,6 +116,28 @@ def _parse_amazon_html(html_text: str) -> dict:
     tm = re.search(r'id="productTitle"[^>]*>(.*?)</', html_text, re.S)
     title = _html.unescape(re.sub(r"\s+", " ", tm.group(1)).strip()) if tm else ""
 
+    # Item Highlights（2026-07-27 新规字段，≤125 字符短语串）：展示在标题下方 /
+    # 搜索结果里，同时在 PDP 规格表带一行。桌面实测（B09XS7JWHH）：规格表
+    # <th class="...prodDetSectionEntry"> Item Highlight </th>
+    # <td class="...prodDetAttrValue"> 亮点串 </td>
+    # 另有 detailBullets 无序列表形态（"Item Highlight" 后跟 ‑ 值），两种都解析。
+    highlights = ""
+    hm = re.search(
+        r'<th[^>]*>\s*Item Highlights?\s*</th>\s*<td[^>]*>(.*?)</td>',
+        html_text, re.S)
+    if hm:
+        highlights = _html.unescape(re.sub(r"<[^>]+>", " ", hm.group(1)))
+        highlights = re.sub(r"\s+", " ", highlights).strip()
+    if not highlights:
+        # detailBullets 形态："Item Highlight ‑ </span>值"（‑ 是 U+2011）
+        hm = re.search(
+            r'Item Highlights?\s*[‑‐:\-–]\s*</[^>]+>\s*<[^>]*>([^<\n]{4,200})',
+            html_text)
+        if hm:
+            highlights = _html.unescape(re.sub(r"\s+", " ", hm.group(1)).strip())
+    # 与文案生成端的 125 字符契约对齐：页面值超长时截断（页面侧罕见，防御性截断）
+    highlights = highlights[:125]
+
     bullets: list[str] = []
     fb = re.search(r'id="feature-bullets"(.*?)</ul>', html_text, re.S)
     if fb:
@@ -125,7 +147,8 @@ def _parse_amazon_html(html_text: str) -> dict:
             if t and t not in bullets:
                 bullets.append(t)
 
-    return {"title": title, "bullets": bullets[:5], "description": "", "imageUrls": images}
+    return {"title": title, "bullets": bullets[:5], "description": "",
+            "imageUrls": images, "highlights": highlights}
 
 
 async def _scrape_amazon_native(asin: str, marketplace: str, attempts: int = 5,

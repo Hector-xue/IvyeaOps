@@ -66,6 +66,7 @@ export default function ProductStep({ state }: { state: ListingState }) {
               <span className="tag tg">标题 {summary.title ? 1 : 0}</span>
               <span className="tag tg">五点 {summary.bullets.length}</span>
               <span className="tag tg">图片 {summary.images.length}</span>
+              {summary.highlights && <span className="tag tg">亮点 1</span>}
               {summary.description && <span className="tag tg">描述 1</span>}
               {summary.source && <span className="tag">来源 {summary.source}</span>}
             </div>
@@ -81,6 +82,12 @@ export default function ProductStep({ state }: { state: ListingState }) {
             )}
             {summary.title && (
               <div className="lst-fact"><span>采集标题</span><div>{summary.title}</div></div>
+            )}
+            {summary.highlights && (
+              <div className="lst-fact">
+                <span>采集亮点（Item Highlights，≤125 字符）</span>
+                <div>{summary.highlights}</div>
+              </div>
             )}
             {summary.bullets.length > 0 && (
               <div className="lst-fact">
